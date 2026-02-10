@@ -87,6 +87,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     const progressWriteTimerRef = useRef<number | null>(null)
     const renderLockRef = useRef(false)
     const renderUnlockTimerRef = useRef<number | null>(null)
+    const displayQueueRef = useRef<Promise<void>>(Promise.resolve())
 
     const [isReady, setIsReady] = useState(false)
     const [bookTitleText, setBookTitleText] = useState('Reading')
@@ -117,6 +118,29 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     const setRenderLock = (locked: boolean) => {
         renderLockRef.current = locked
         setRenderLocked(locked)
+    }
+
+    const queueDisplay = (target?: string) => {
+        const run = async () => {
+            const rendition = renditionRef.current
+            if (!rendition) return
+            setRenderLock(true)
+            try {
+                await rendition.display(target)
+            } catch (error) {
+                console.warn('Queue display failed:', error)
+            } finally {
+                if (renderUnlockTimerRef.current) {
+                    window.clearTimeout(renderUnlockTimerRef.current)
+                }
+                renderUnlockTimerRef.current = window.setTimeout(() => {
+                    setRenderLock(false)
+                    renderUnlockTimerRef.current = null
+                }, 80)
+            }
+        }
+        displayQueueRef.current = displayQueueRef.current.then(run, run)
+        return displayQueueRef.current
     }
 
     const isTocItemActive = (itemHref: string) => {
@@ -323,7 +347,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             updateRenditionStyles(rendition)
 
             // 5. Display
-            await rendition.display(initialCfi)
+            await queueDisplay(initialCfi)
 
             // 6. Load TOC & Highlights
             const nav = await book.loaded.navigation
@@ -490,7 +514,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             } else {
                 renditionRef.current.flow('paginated')
                 // Only re-display for paginated mode
-                renditionRef.current.display(currentCfi)
+                void queueDisplay(currentCfi)
             }
         }
     }, [settings.fontSize, settings.fontFamily, settings.lineHeight, settings.letterSpacing, settings.paragraphSpacing, settings.pageWidth, settings.textAlign])
@@ -631,7 +655,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     }
 
     const handleTocClick = (href: string) => {
-        renditionRef.current?.display(href)
+        void queueDisplay(href)
         if (window.innerWidth < 768) setLeftPanelOpen(false)
     }
 
@@ -668,7 +692,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         if (activeSearchHitCfi) {
             rendition.annotations.remove(activeSearchHitCfi, 'highlight')
         }
-        rendition.display(cfi).then(() => {
+        queueDisplay(cfi).then(() => {
             rendition.annotations.add(
                 'highlight',
                 cfi,

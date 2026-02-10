@@ -11,7 +11,7 @@ Vitra Reader 是一个专注于 **本地优先、阅读体验、同步可控** �
 
 ![Vitra Reader 主界面](./docs/showcase-main.png)
 
-> 建议将展示图保存到 `docs/showcase-main.png`，仓库首页会自动展示。
+
 
 ---
 

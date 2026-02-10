@@ -11,7 +11,6 @@ Built with Electron + React + TypeScript, it aims to be a practical long-term re
 
 ![Vitra Reader Main UI](./docs/showcase-main.png)
 
-> Save your screenshot as `docs/showcase-main.png` to display it on the GitHub homepage.
 
 ---
 
