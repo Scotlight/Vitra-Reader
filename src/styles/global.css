@@ -1,0 +1,78 @@
+/* ─── CSS Reset & Global Styles ──────────────────────────── */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html,
+body {
+    height: 100%;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: var(--font-family);
+    font-size: 14px;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    line-height: 1.5;
+    transition: background var(--ui-transition-speed),
+        color var(--ui-transition-speed);
+}
+
+#root {
+    height: 100%;
+}
+
+/* ─── Scrollbar (Windows Custom) ─────────────────────────── */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* ─── Selection ──────────────────────────────────────────── */
+::selection {
+    background: var(--accent-color);
+    color: #fff;
+}
+
+/* ─── Glass Panel Utility ────────────────────────────────── */
+.glass-panel {
+    background: var(--panel-bg);
+    backdrop-filter: blur(var(--ui-blur));
+    -webkit-backdrop-filter: blur(var(--ui-blur));
+    border: 1px solid var(--border-color);
+    border-radius: var(--ui-roundness);
+}
+
+/* ─── Focus Visible ──────────────────────────────────────── */
+:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
+/* ─── Utility: No drag ───────────────────────────────────── */
+button,
+a,
+input,
+select,
+textarea {
+    -webkit-app-region: no-drag;
+}

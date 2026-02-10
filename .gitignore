@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-electron/
+
+# Environment
+.env
+.env.local
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local reverse-engineering / external extracted assets
+extracted/
+
+# Local planning / notes (do not publish)
+WORKLOG.md
+DEV_STATUS.md
+advanced_features_plan.md
+main menu.md
+Scrolled Continuous.md
+icon.md
+
+# Local run artifacts
+dev_error_log.txt
+npm_install_log.txt
+*.tsbuildinfo
+
+# Local icon files (root-level temporary)
+1w2ze-5r6yb-001.ico
+6010d-l3wuw-001.ico

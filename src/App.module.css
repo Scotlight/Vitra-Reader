@@ -1,0 +1,139 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  overflow: hidden;
+}
+
+/* ─── Main ─────────────────────────────────────────────── */
+.main {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ─── Library ──────────────────────────────────────────── */
+.library {
+  padding: 24px 32px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.libraryHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.libraryHeader h1 {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.importBtn {
+  padding: 8px 20px;
+  border-radius: var(--ui-roundness, 8px);
+  border: 1px solid var(--border-color);
+  background: var(--accent-color);
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+.importBtn:hover {
+  opacity: 0.9;
+}
+
+.importBtn:active {
+  transform: scale(0.96);
+}
+
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60%;
+  opacity: 0.5;
+  font-size: 16px;
+}
+
+.bookGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 24px;
+}
+
+.bookCard {
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.2s;
+}
+
+.bookCard:hover {
+  transform: translateY(-4px);
+}
+
+.bookCover {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--ui-roundness, 8px);
+  overflow: hidden;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: var(--text-secondary);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.bookCover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bookTitle {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookAuthor {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+/* ─── Reader ───────────────────────────────────────────── */
+.reader {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.backBtn {
+  padding: 6px 16px;
+  margin: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--accent-color);
+  cursor: pointer;
+  font-size: 14px;
+  align-self: flex-start;
+}
+
+.readerContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.5;
+}

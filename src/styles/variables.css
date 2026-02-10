@@ -1,0 +1,71 @@
+/* ─── Theme Variables (Root) ─────────────────────────────── */
+:root {
+    /* Colors */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f5f5f5;
+    --text-primary: #1a1a1a;
+    --text-secondary: #666666;
+    --accent-color: #4a90d9;
+    --border-color: rgba(0, 0, 0, 0.08);
+
+    /* Reader */
+    --reader-bg: #ffffff;
+    --reader-text: #333333;
+
+    /* Typography */
+    --font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --font-size: 18px;
+    --line-height: 1.6;
+    --letter-spacing: 0px;
+    --paragraph-spacing: 16px;
+    --page-padding: 40px;
+
+    /* UI Appearance */
+    --ui-roundness: 8px;
+    --ui-blur: 20px;
+    --ui-opacity: 0.85;
+    --ui-transition-speed: 0.25s;
+
+    /* Panel */
+    --panel-bg: rgba(255, 255, 255, var(--ui-opacity));
+    --panel-width: 280px;
+}
+
+/* ─── Dark Theme ─────────────────────────────────────────── */
+[data-theme='dark'] {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0a0;
+    --accent-color: #6c9bd2;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --reader-bg: #16213e;
+    --reader-text: #e0e0e0;
+    --panel-bg: rgba(22, 33, 62, var(--ui-opacity));
+}
+
+/* ─── Sepia Theme ────────────────────────────────────────── */
+[data-theme='sepia'] {
+    --bg-primary: #f4ecd8;
+    --bg-secondary: #ede4cc;
+    --text-primary: #5b4636;
+    --text-secondary: #8a7560;
+    --accent-color: #b8860b;
+    --border-color: rgba(91, 70, 54, 0.12);
+    --reader-bg: #f4ecd8;
+    --reader-text: #5b4636;
+    --panel-bg: rgba(244, 236, 216, var(--ui-opacity));
+}
+
+/* ─── Green Theme ────────────────────────────────────────── */
+[data-theme='green'] {
+    --bg-primary: #c7edcc;
+    --bg-secondary: #b5e0ba;
+    --text-primary: #2d4a3e;
+    --text-secondary: #4a6b5d;
+    --accent-color: #2e8b57;
+    --border-color: rgba(45, 74, 62, 0.1);
+    --reader-bg: #c7edcc;
+    --reader-text: #2d4a3e;
+    --panel-bg: rgba(199, 237, 204, var(--ui-opacity));
+}

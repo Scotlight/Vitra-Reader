@@ -1,0 +1,26 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradBack" x1="12" y1="4" x2="12" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6366F1" />
+      <stop offset="100%" stop-color="#4338CA" />
+    </linearGradient>
+    <linearGradient id="gradFront" x1="36" y1="4" x2="20" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#A78BFA" />
+      <stop offset="50%" stop-color="#818CF8" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#2DD4BF" stop-opacity="0.9" />
+    </linearGradient>
+    <filter id="inner-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
+      <feComposite in2="SourceAlpha" operator="arithmetic" k2="-1" k3="1" result="shadowDiff"/>
+      <feFlood flood-color="#C4F9FF" flood-opacity="0.8" result="flood"/>
+      <feComposite in="flood" in2="shadowDiff" operator="in" result="innerGlow"/>
+      <feComposite in="innerGlow" in2="SourceGraphic" operator="over" result="final"/>
+    </filter>
+  </defs>
+  <ellipse cx="24" cy="42" rx="14" ry="4" fill="#6366F1" fill-opacity="0.5" filter="blur(8px)"/>
+  <g filter="url(#inner-glow)">
+    <path d="M10 8C10 5.79 11.79 4 14 4H18C20.21 4 22 5.79 22 8V34L10 20V8Z" fill="url(#gradBack)"/>
+    <path d="M38 8C38 5.79 36.21 4 34 4H30C27.79 4 26 5.79 26 8V38C26 40.21 27.79 42 30 42H34C36.21 42 38 40.21 38 38V8Z" fill="url(#gradFront)"/>
+  </g>
+  <path d="M38 8V16L26 30V8C26 5.79 27.79 4 30 4H34C36.21 4 38 5.79 38 8Z" fill="white" fill-opacity="0.15"/>
+</svg>
