@@ -6,7 +6,6 @@
 
 ![Vitra Reader 主界面](./docs/showcase-main.png)
 
-> 请把你刚才这张截图保存为 `docs/showcase-main.png`（路径和文件名保持一致）。
 
 ## 主要功能
 
