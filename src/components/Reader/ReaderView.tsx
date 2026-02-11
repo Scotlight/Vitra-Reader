@@ -87,6 +87,8 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     const progressWriteTimerRef = useRef<number | null>(null)
     const renderLockRef = useRef(false)
     const renderUnlockTimerRef = useRef<number | null>(null)
+    const upwardStabilizeTimerRef = useRef<number | null>(null)
+    const lastWheelEventAtRef = useRef(0)
     const displayQueueRef = useRef<Promise<void>>(Promise.resolve())
     const preloadedSectionsRef = useRef<Set<string>>(new Set())
     const locationsReadyRef = useRef(false)
@@ -214,12 +216,12 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         if (settings.pageTurnMode !== 'scrolled-continuous') return
         const bookAny = bookRef.current as any
         const spineItems = bookAny?.spine?.spineItems as any[] | undefined
-        if (!Array.isArray(spineItems) || spineItems.length === 0) return
+        if (!Array.isArray(spineItems) || spineItems.length === 0) return false
 
         const currentHref = normalizeHref(location?.start?.href)
-        if (!currentHref) return
+        if (!currentHref) return false
         const currentIndex = spineItems.findIndex((item) => normalizeHref(item?.href) === currentHref)
-        if (currentIndex < 0) return
+        if (currentIndex < 0) return false
         const currentLocationNumber = Number(location?.start?.location)
         const previousLocationNumber = previousLocationNumberRef.current
         const isFastUpward =
@@ -248,6 +250,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                 preloadedSectionsRef.current.delete(key)
             }
         }
+        return isFastUpward
     }
 
     const isTocItemActive = (itemHref: string) => {
@@ -512,7 +515,17 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                 if (hrefFromLocation) {
                     setCurrentSectionHref(hrefFromLocation)
                 }
-                preloadNearbySections(location)
+                const isFastUpward = preloadNearbySections(location)
+                if (isFastUpward && settings.pageTurnMode === 'scrolled-continuous') {
+                    setRenderLock(true)
+                    if (upwardStabilizeTimerRef.current) {
+                        window.clearTimeout(upwardStabilizeTimerRef.current)
+                    }
+                    upwardStabilizeTimerRef.current = window.setTimeout(() => {
+                        setRenderLock(false)
+                        upwardStabilizeTimerRef.current = null
+                    }, 220)
+                }
 
                 setSelectionMenu(prev => ({ ...prev, visible: false }))
 
@@ -557,6 +570,22 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                 wheelGuardHandler = (event: WheelEvent) => {
                     if (!mounted) return
                     if (settings.pageTurnMode !== 'scrolled-continuous') return
+                    const now = Date.now()
+                    const isRapidUpward = event.deltaY < -24 && now - lastWheelEventAtRef.current < 50
+                    lastWheelEventAtRef.current = now
+                    if (isRapidUpward) {
+                        setRenderLock(true)
+                        if (upwardStabilizeTimerRef.current) {
+                            window.clearTimeout(upwardStabilizeTimerRef.current)
+                        }
+                        upwardStabilizeTimerRef.current = window.setTimeout(() => {
+                            setRenderLock(false)
+                            upwardStabilizeTimerRef.current = null
+                        }, 180)
+                        event.preventDefault()
+                        event.stopPropagation()
+                        return
+                    }
                     if (!renderLockRef.current) return
                     event.preventDefault()
                     event.stopPropagation()
@@ -619,6 +648,10 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             if (renderUnlockTimerRef.current) {
                 window.clearTimeout(renderUnlockTimerRef.current)
                 renderUnlockTimerRef.current = null
+            }
+            if (upwardStabilizeTimerRef.current) {
+                window.clearTimeout(upwardStabilizeTimerRef.current)
+                upwardStabilizeTimerRef.current = null
             }
             if (wheelGuardHandler && viewerRef.current) {
                 viewerRef.current.removeEventListener('wheel', wheelGuardHandler, true)
