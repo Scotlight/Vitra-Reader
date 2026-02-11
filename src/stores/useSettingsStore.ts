@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type PageTurnMode = 'paginated' | 'scrolled' | 'scrolled-continuous'
+export type PageTurnMode = 'paginated-single' | 'paginated-double' | 'scrolled-continuous'
 export type UIMaterial = 'default' | 'mica' | 'acrylic'
 
 export interface ReaderSettings {
@@ -21,6 +21,11 @@ export interface ReaderSettings {
     pageWidth: number
     brightness: number
     textAlign: 'left' | 'justify' | 'center'
+    headerHeight: number
+    footerHeight: number
+    showFooterProgress: boolean
+    showFooterChapter: boolean
+    showFooterTime: boolean
 
     // Page Turn
     pageTurnMode: PageTurnMode
@@ -52,7 +57,12 @@ const DEFAULT_SETTINGS: ReaderSettings = {
     pageWidth: 3,
     brightness: 1,
     textAlign: 'left',
-    pageTurnMode: 'paginated',
+    headerHeight: 48,
+    footerHeight: 32,
+    showFooterProgress: true,
+    showFooterChapter: true,
+    showFooterTime: true,
+    pageTurnMode: 'paginated-single',
     pageTurnAnimation: 'slide',
     uiMaterial: 'mica',
     uiBlurStrength: 20,

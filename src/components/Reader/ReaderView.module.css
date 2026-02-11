@@ -94,16 +94,58 @@
     height: 100%;
 }
 
+.footerBar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    background: var(--panel-bg);
+    border-top: 1px solid var(--border-color);
+    backdrop-filter: blur(var(--ui-blur));
+    -webkit-backdrop-filter: blur(var(--ui-blur));
+}
+
+.footerMeta {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .epubViewer {
     width: 100%;
     height: 100%;
 }
 
-.loading {
+.viewerHidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.blockingLoadingOverlay {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    inset: 0;
+    z-index: 13;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--reader-bg);
+}
+
+.loading {
+    position: static;
+    transform: none;
     opacity: 0.5;
 }
 

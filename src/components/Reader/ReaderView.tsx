@@ -88,6 +88,11 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     const renderLockRef = useRef(false)
     const renderUnlockTimerRef = useRef<number | null>(null)
     const displayQueueRef = useRef<Promise<void>>(Promise.resolve())
+    const preloadedSectionsRef = useRef<Set<string>>(new Set())
+    const locationsReadyRef = useRef(false)
+    const lastRelocatedAtRef = useRef(0)
+    const previousLocationNumberRef = useRef<number | null>(null)
+    const lastLocationRef = useRef<{ cfi: string; href: string; percentage: number } | null>(null)
 
     const [isReady, setIsReady] = useState(false)
     const [bookTitleText, setBookTitleText] = useState('Reading')
@@ -98,6 +103,8 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     const [toc, setToc] = useState<TocItem[]>([])
     const [currentCfi, setCurrentCfi] = useState<string>('')
     const [currentSectionHref, setCurrentSectionHref] = useState<string>('')
+    const [currentProgress, setCurrentProgress] = useState(0)
+    const [clockText, setClockText] = useState('')
 
     const [searchQuery, setSearchQuery] = useState('')
     const [searchResults, setSearchResults] = useState<SearchResult[]>([])
@@ -105,6 +112,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     const [systemFonts, setSystemFonts] = useState<string[]>([])
     const [loadingFonts, setLoadingFonts] = useState(false)
     const [renderLocked, setRenderLocked] = useState(false)
+    const [styleSyncing, setStyleSyncing] = useState(false)
 
     // Temporary color states for picker (only text color needs delay)
     const [tempTextColor, setTempTextColor] = useState<string | null>(null)
@@ -113,6 +121,23 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     const [activeSearchHitCfi, setActiveSearchHitCfi] = useState<string | null>(null)
 
     const settings = useSettingsStore()
+    const readerColors = (() => {
+        const fallbackByTheme: Record<string, { text: string; bg: string }> = {
+            light: { text: '#1a1a1a', bg: '#ffffff' },
+            dark: { text: '#e0e0e0', bg: '#16213e' },
+            sepia: { text: '#5b4636', bg: '#f4ecd8' },
+            green: { text: '#2d4a3e', bg: '#c7edcc' },
+        }
+        const base = fallbackByTheme[settings.themeId] || fallbackByTheme.light
+        const candidateText = settings.customTextColor || base.text
+        const candidateBg = settings.customBgColor || base.bg
+        const ratio = contrastRatio(candidateText, candidateBg)
+        const safeText = ratio < 3 ? (settings.themeId === 'dark' ? '#e0e0e0' : '#1a1a1a') : candidateText
+        return {
+            textColor: safeText,
+            bgColor: candidateBg,
+        }
+    })()
 
     const normalizeHref = (href?: string) => (href || '').split('#')[0].split('?')[0]
     const setRenderLock = (locked: boolean) => {
@@ -143,10 +168,103 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         return displayQueueRef.current
     }
 
+    const ensureLocationsReady = async (book: Book) => {
+        if (locationsReadyRef.current) return
+        try {
+            const locations = (book as any)?.locations
+            const hasLocations =
+                (typeof locations?.length === 'function' && Number(locations.length()) > 0) ||
+                (typeof locations?.total === 'number' && locations.total > 0) ||
+                (Array.isArray(locations?._locations) && locations._locations.length > 0)
+            if (!hasLocations && typeof locations?.generate === 'function') {
+                await locations.generate(1200)
+            }
+            locationsReadyRef.current = true
+        } catch (error) {
+            console.warn('Generate locations failed:', error)
+        }
+    }
+
+    const calculateProgress = (location: any) => {
+        const fromLocation = Number(location?.start?.percentage)
+        if (Number.isFinite(fromLocation) && fromLocation > 0) {
+            return Math.max(0, Math.min(1, fromLocation))
+        }
+
+        const cfi = String(location?.start?.cfi || '')
+        const bookAny = bookRef.current as any
+        const fromCfi = Number(bookAny?.locations?.percentageFromCfi?.(cfi))
+        if (Number.isFinite(fromCfi) && fromCfi > 0) {
+            return Math.max(0, Math.min(1, fromCfi))
+        }
+
+        const startLocation = Number(location?.start?.location)
+        const locations = bookAny?.locations
+        const total =
+            (typeof locations?.length === 'function' ? Number(locations.length()) : 0) ||
+            (typeof locations?.total === 'number' ? Number(locations.total) : 0) ||
+            (Array.isArray(locations?._locations) ? locations._locations.length : 0)
+        if (Number.isFinite(startLocation) && startLocation >= 0 && total > 0) {
+            return Math.max(0, Math.min(1, startLocation / total))
+        }
+        return 0
+    }
+
+    const preloadNearbySections = (location: any) => {
+        if (settings.pageTurnMode !== 'scrolled-continuous') return
+        const bookAny = bookRef.current as any
+        const spineItems = bookAny?.spine?.spineItems as any[] | undefined
+        if (!Array.isArray(spineItems) || spineItems.length === 0) return
+
+        const currentHref = normalizeHref(location?.start?.href)
+        if (!currentHref) return
+        const currentIndex = spineItems.findIndex((item) => normalizeHref(item?.href) === currentHref)
+        if (currentIndex < 0) return
+        const currentLocationNumber = Number(location?.start?.location)
+        const previousLocationNumber = previousLocationNumberRef.current
+        const isFastUpward =
+            Number.isFinite(currentLocationNumber) &&
+            Number.isFinite(previousLocationNumber as number) &&
+            currentLocationNumber < (previousLocationNumber as number)
+        previousLocationNumberRef.current = Number.isFinite(currentLocationNumber) ? currentLocationNumber : previousLocationNumber
+
+        const backwardWindow = isFastUpward ? 8 : 4
+        const forwardWindow = isFastUpward ? 4 : 3
+        const from = Math.max(0, currentIndex - backwardWindow)
+        const to = Math.min(spineItems.length - 1, currentIndex + forwardWindow)
+        for (let index = from; index <= to; index += 1) {
+            if (index === currentIndex) continue
+            const item = spineItems[index]
+            const key = normalizeHref(item?.href)
+            if (!key || preloadedSectionsRef.current.has(key)) continue
+            preloadedSectionsRef.current.add(key)
+            try {
+                if (typeof item?.load === 'function') {
+                    void item.load(bookAny.load.bind(bookAny)).catch(() => {
+                        preloadedSectionsRef.current.delete(key)
+                    })
+                }
+            } catch {
+                preloadedSectionsRef.current.delete(key)
+            }
+        }
+    }
+
     const isTocItemActive = (itemHref: string) => {
         const normalizedItemHref = normalizeHref(itemHref)
         if (!normalizedItemHref || !currentSectionHref) return false
         return currentSectionHref === normalizedItemHref || currentSectionHref.startsWith(normalizedItemHref)
+    }
+
+    const findCurrentChapterLabel = (items: TocItem[]): string => {
+        for (const item of items) {
+            if (isTocItemActive(item.href)) return item.label
+            if (item.subitems && item.subitems.length > 0) {
+                const nested = findCurrentChapterLabel(item.subitems)
+                if (nested) return nested
+            }
+        }
+        return ''
     }
 
     const resolveReaderColors = () => {
@@ -211,6 +329,41 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         }
     }
 
+    const buildReaderContentCss = (textColor: string, bgColor: string) => `
+        body, html {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: ${bgColor} !important;
+            color: ${textColor} !important;
+        }
+        p, div, section, article {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            color: ${textColor} !important;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            margin-top: 1em !important;
+            margin-bottom: 0.5em !important;
+            color: ${textColor} !important;
+        }
+        hr, .break, [style*="page-break"] {
+            display: none !important;
+        }
+        .vitra-search-hit {
+            background: rgba(255, 209, 102, 0.45) !important;
+            border-radius: 2px !important;
+        }
+    `
+
+    const applyStylesToMountedContents = (rendition: Rendition) => {
+        const { textColor, bgColor } = resolveReaderColors()
+        const cssText = buildReaderContentCss(textColor, bgColor)
+        const renditionAny = rendition as any
+        const contentsList = typeof renditionAny.getContents === 'function' ? renditionAny.getContents() : []
+        if (!Array.isArray(contentsList)) return
+        contentsList.forEach((content: any) => injectContentStyle(content, cssText))
+    }
+
     // Load Book
     useEffect(() => {
         let mounted = true
@@ -218,6 +371,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         let wheelGuardHandler: ((e: WheelEvent) => void) | null = null
 
         const loadBook = async () => {
+            previousLocationNumberRef.current = null
             const bookMeta = await db.books.get(bookId)
             if (bookMeta?.title) {
                 setBookTitleText(bookMeta.title)
@@ -232,28 +386,31 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             // Corrected: use db.progress instead of db.readingProgress
             const progress = await db.progress.get(bookId)
             const initialCfi = progress?.location || undefined
+            setCurrentProgress(Number(progress?.percentage || 0))
 
             // 2. Initialize Book
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const book = ePub(file.data as any)
             bookRef.current = book
+            void ensureLocationsReady(book)
 
             // 3. Render configuration for 3 page-turn modes (按 epub_reader_dev_doc.md)
             const isContinuous = settings.pageTurnMode === 'scrolled-continuous'
-            const isScrolled = settings.pageTurnMode === 'scrolled'
             const manager = isContinuous ? 'continuous' : 'default'
-            const flow = isContinuous ? 'scrolled' : isScrolled ? 'scrolled-doc' : 'paginated'
+            const flow = isContinuous ? 'scrolled' : 'paginated'
             setRenderLock(isContinuous)
-            const rendition = book.renderTo(viewerRef.current, {
+            const renditionOptions: any = {
                 width: '100%',
                 height: '100vh',
                 manager,
                 flow,
-                spread: settings.pageTurnMode === 'paginated' ? 'none' : 'auto',
+                spread: settings.pageTurnMode === 'paginated-single' ? 'none' : 'auto',
                 snap: false,
+                offset: 1400,
                 minSpreadWidth: 0,
                 allowScriptedContent: false,
-            })
+            }
+            const rendition = book.renderTo(viewerRef.current, renditionOptions)
             renditionRef.current = rendition
 
             console.log('Rendition created:', {
@@ -273,31 +430,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             // 4. Register Hook - 使用 addStyle 注入 CSS（按文档推荐）
             rendition.hooks.content.register((contents: any) => {
                 const { textColor, bgColor } = resolveReaderColors()
-                injectContentStyle(contents, `
-                    body, html {
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        background: ${bgColor} !important;
-                        color: ${textColor} !important;
-                    }
-                    p, div, section, article {
-                        margin-top: 0 !important;
-                        margin-bottom: 0 !important;
-                        color: ${textColor} !important;
-                    }
-                    h1, h2, h3, h4, h5, h6 {
-                        margin-top: 1em !important;
-                        margin-bottom: 0.5em !important;
-                        color: ${textColor} !important;
-                    }
-                    hr, .break, [style*="page-break"] {
-                        display: none !important;
-                    }
-                    .vitra-search-hit {
-                        background: rgba(255, 209, 102, 0.45) !important;
-                        border-radius: 2px !important;
-                    }
-                `)
+                injectContentStyle(contents, buildReaderContentCss(textColor, bgColor))
 
                 try {
                     const doc = contents.document as Document | undefined
@@ -370,38 +503,40 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             // 7. Event Listeners + 智能预加载（按文档推荐）
             rendition.on('relocated', (location: any) => {
                 if (!mounted) return
+                const now = Date.now()
+                if (now - lastRelocatedAtRef.current < 20) return
+                lastRelocatedAtRef.current = now
+
                 setCurrentCfi(location.start.cfi)
                 const hrefFromLocation = normalizeHref(location?.start?.href)
                 if (hrefFromLocation) {
                     setCurrentSectionHref(hrefFromLocation)
                 }
+                preloadNearbySections(location)
 
                 setSelectionMenu(prev => ({ ...prev, visible: false }))
-                if (settings.pageTurnMode === 'scrolled-continuous') {
-                    setRenderLock(true)
-                    if (renderUnlockTimerRef.current) {
-                        window.clearTimeout(renderUnlockTimerRef.current)
-                    }
-                    renderUnlockTimerRef.current = window.setTimeout(() => {
-                        setRenderLock(false)
-                        renderUnlockTimerRef.current = null
-                    }, 180)
-                }
 
                 if (progressWriteTimerRef.current) {
                     window.clearTimeout(progressWriteTimerRef.current)
                 }
                 progressWriteTimerRef.current = window.setTimeout(() => {
+                    const progressValue = calculateProgress(location)
+                    setCurrentProgress(progressValue)
+                    lastLocationRef.current = {
+                        cfi: location.start.cfi,
+                        href: normalizeHref(location?.start?.href) || '',
+                        percentage: progressValue,
+                    }
                     db.progress.put({
                         bookId,
                         location: location.start.cfi,
-                        percentage: location.start.percentage || 0,
-                        currentChapter: '',
+                        percentage: progressValue,
+                        currentChapter: normalizeHref(location?.start?.href) || '',
                         updatedAt: Date.now()
                     }).catch((error) => {
                         console.warn('Persist reading progress failed:', error)
                     })
-                }, 120)
+                }, 160)
 
             })
 
@@ -465,6 +600,18 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
 
         return () => {
             mounted = false
+            preloadedSectionsRef.current.clear()
+            if (lastLocationRef.current) {
+                void db.progress.put({
+                    bookId,
+                    location: lastLocationRef.current.cfi,
+                    percentage: lastLocationRef.current.percentage,
+                    currentChapter: lastLocationRef.current.href,
+                    updatedAt: Date.now(),
+                }).catch((error) => {
+                    console.warn('Persist progress on cleanup failed:', error)
+                })
+            }
             if (progressWriteTimerRef.current) {
                 window.clearTimeout(progressWriteTimerRef.current)
                 progressWriteTimerRef.current = null
@@ -496,6 +643,20 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     }, [bookId, settings.pageTurnMode])
 
     useEffect(() => {
+        const formatClock = () => {
+            const now = new Date()
+            const hh = String(now.getHours()).padStart(2, '0')
+            const mm = String(now.getMinutes()).padStart(2, '0')
+            setClockText(`${hh}:${mm}`)
+        }
+        formatClock()
+        const timer = window.setInterval(formatClock, 30000)
+        return () => {
+            window.clearInterval(timer)
+        }
+    }, [])
+
+    useEffect(() => {
         return () => {
             if (activeSearchHitCfi) {
                 renditionRef.current?.annotations.remove(activeSearchHitCfi, 'highlight')
@@ -509,8 +670,6 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             updateRenditionStyles(renditionRef.current)
             if (settings.pageTurnMode === 'scrolled-continuous') {
                 renditionRef.current.flow('scrolled')
-            } else if (settings.pageTurnMode === 'scrolled') {
-                renditionRef.current.flow('scrolled-doc')
             } else {
                 renditionRef.current.flow('paginated')
                 // Only re-display for paginated mode
@@ -521,10 +680,16 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
 
     // Separate effect for colors to avoid re-display and improve performance
     useEffect(() => {
-        if (renditionRef.current) {
-            updateRenditionStyles(renditionRef.current)
+        if (!renditionRef.current) return
+        setStyleSyncing(true)
+        updateRenditionStyles(renditionRef.current)
+        const timer = window.setTimeout(() => {
+            setStyleSyncing(false)
+        }, 120)
+        return () => {
+            window.clearTimeout(timer)
         }
-    }, [settings.customTextColor, settings.customBgColor])
+    }, [settings.themeId, settings.customTextColor, settings.customBgColor])
 
     const updateRenditionStyles = (rendition: Rendition) => {
         const { textColor, bgColor: readerBackground } = resolveReaderColors()
@@ -569,12 +734,14 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                 ...alignStyle,
             },
         })
+        rendition.themes.select('default')
         rendition.themes.font(settings.fontFamily)
         rendition.themes.fontSize(`${settings.fontSize}px`)
         rendition.themes.override('line-height', String(settings.lineHeight))
         rendition.themes.override('letter-spacing', `${settings.letterSpacing}px`)
         rendition.themes.override('color', textColor)
         rendition.themes.override('text-align', settings.textAlign)
+        applyStylesToMountedContents(rendition)
     }
 
     const handleCopy = () => {
@@ -816,11 +983,24 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         })
     }
 
+    const currentChapterLabel = findCurrentChapterLabel(toc)
+    const headerHeight = Math.max(36, Math.min(96, Number(settings.headerHeight) || 48))
+    const footerHeight = Math.max(0, Math.min(96, Number(settings.footerHeight) || 32))
+    const footerEnabled = footerHeight > 0
+    const progressLabel = `${Math.round(Math.max(0, Math.min(1, currentProgress)) * 100)}%`
+
     return (
-        <div className={styles.readerContainer}>
+        <div
+            className={styles.readerContainer}
+            style={{
+                background: readerColors.bgColor,
+                color: readerColors.textColor,
+            }}
+        >
             {/* Top Toolbar */}
             <motion.div
                 className={styles.toolbar}
+                style={{ height: `${headerHeight}px` }}
                 initial={{ y: -50 }}
                 animate={{ y: 0 }}
             >
@@ -892,7 +1072,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             </AnimatePresence>
 
             {/* Main Content Area */}
-            <div className={styles.contentArea}>
+            <div className={styles.contentArea} style={{ paddingTop: `${headerHeight}px`, paddingBottom: `${footerEnabled ? footerHeight : 0}px` }}>
                 {(leftPanelOpen || settingsOpen) && (
                     <div className={styles.panelBackdrop} onClick={closePanels} />
                 )}
@@ -963,24 +1143,49 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
 
                 {/* Center Reader */}
                 <div className={styles.readerWrapper}>
-                    {!isReady && <div className={styles.loading}>Loading...</div>}
+                    {(!isReady || styleSyncing) && (
+                        <div className={styles.blockingLoadingOverlay}>
+                            <div className={styles.loading}>Loading...</div>
+                        </div>
+                    )}
                     {settings.pageTurnMode === 'scrolled-continuous' && renderLocked && (
-                        <div className={styles.renderLockOverlay} title="章节渲染中，请稍候" />
+                        <div className={styles.renderLockOverlay} style={{ inset: `${headerHeight}px 0 ${footerEnabled ? footerHeight : 0}px 0` }} title="章节渲染中，请稍候" />
                     )}
 
                     <div
-                        className={styles.epubViewer}
+                        className={`${styles.epubViewer} ${(!isReady || styleSyncing) ? styles.viewerHidden : ''}`}
                         ref={viewerRef}
-                        style={{ filter: `brightness(${Math.min(1, Math.max(0.3, Number(settings.brightness) || 1))})` }}
+                        style={{
+                            filter: `brightness(${Math.min(1, Math.max(0.3, Number(settings.brightness) || 1))})`,
+                            background: readerColors.bgColor,
+                        }}
                     />
 
-                    {!leftPanelOpen && !settingsOpen && settings.pageTurnMode === 'paginated' && (
+                    {!leftPanelOpen && !settingsOpen && settings.pageTurnMode !== 'scrolled-continuous' && (
                         <>
                             <div className={styles.prevZone} onClick={prevPage} title="Previous" />
                             <div className={styles.nextZone} onClick={nextPage} title="Next" />
                         </>
                     )}
                 </div>
+
+                {footerEnabled && (
+                    <div
+                        className={styles.footerBar}
+                        style={{
+                            height: `${footerHeight}px`,
+                            background: readerColors.bgColor,
+                            color: readerColors.textColor,
+                            borderTop: `1px solid ${settings.themeId === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'}`,
+                        }}
+                    >
+                        <div className={styles.footerMeta}>
+                            {settings.showFooterProgress && <span>{`进度 ${progressLabel}`}</span>}
+                            {settings.showFooterChapter && <span>{currentChapterLabel || '章节加载中'}</span>}
+                            {settings.showFooterTime && <span>{clockText}</span>}
+                        </div>
+                    </div>
+                )}
 
                 {/* Right Settings Panel */}
                 <AnimatePresence>
@@ -1018,11 +1223,15 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                                         <input
                                             type="color"
                                             value={tempTextColor ?? settings.customTextColor ?? (settings.themeId === 'dark' ? '#e0e0e0' : '#1a1a1a')}
-                                            onChange={(e) => setTempTextColor(e.target.value)}
-                                            onMouseUp={(e) => {
+                                            onInput={(e) => {
                                                 const target = e.target as HTMLInputElement
+                                                setTempTextColor(target.value)
                                                 settings.updateSetting('customTextColor', target.value)
-                                                setTempTextColor(null)
+                                            }}
+                                            onChange={(e) => {
+                                                const target = e.target as HTMLInputElement
+                                                setTempTextColor(target.value)
+                                                settings.updateSetting('customTextColor', target.value)
                                             }}
                                         />
                                         <button className={styles.smallActionBtn} onClick={() => {
@@ -1038,6 +1247,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                                         <input
                                             type="color"
                                             value={settings.customBgColor ?? '#ffffff'}
+                                            onInput={(e) => settings.updateSetting('customBgColor', (e.target as HTMLInputElement).value)}
                                             onChange={(e) => settings.updateSetting('customBgColor', e.target.value)}
                                         />
                                         <button className={styles.smallActionBtn} onClick={() => {
@@ -1118,6 +1328,45 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                                     />
                                 </div>
                                 <div className={styles.settingsGroup}>
+                                    <label>页眉高度: {headerHeight}px</label>
+                                    <input
+                                        type="range" min="36" max="96" step="2"
+                                        value={headerHeight}
+                                        onChange={(e) => settings.updateSetting('headerHeight', Number(e.target.value))}
+                                    />
+                                </div>
+                                <div className={styles.settingsGroup}>
+                                    <label>页脚高度: {footerHeight}px</label>
+                                    <input
+                                        type="range" min="0" max="96" step="2"
+                                        value={footerHeight}
+                                        onChange={(e) => settings.updateSetting('footerHeight', Number(e.target.value))}
+                                    />
+                                </div>
+                                <div className={styles.settingsGroup}>
+                                    <label>页脚信息</label>
+                                    <div className={styles.toggleRow}>
+                                        <button
+                                            className={`${styles.toggleBtn} ${settings.showFooterProgress ? styles.active : ''}`}
+                                            onClick={() => settings.updateSetting('showFooterProgress', !settings.showFooterProgress)}
+                                        >
+                                            进度
+                                        </button>
+                                        <button
+                                            className={`${styles.toggleBtn} ${settings.showFooterChapter ? styles.active : ''}`}
+                                            onClick={() => settings.updateSetting('showFooterChapter', !settings.showFooterChapter)}
+                                        >
+                                            章节
+                                        </button>
+                                        <button
+                                            className={`${styles.toggleBtn} ${settings.showFooterTime ? styles.active : ''}`}
+                                            onClick={() => settings.updateSetting('showFooterTime', !settings.showFooterTime)}
+                                        >
+                                            时间
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className={styles.settingsGroup}>
                                     <label>文字对齐</label>
                                     <select
                                         className={styles.fontSelect}
@@ -1134,16 +1383,16 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                                     <label>翻页模式</label>
                                     <div className={styles.toggleRow}>
                                         <button
-                                            className={`${styles.toggleBtn} ${settings.pageTurnMode === 'paginated' ? styles.active : ''}`}
-                                            onClick={() => settings.updateSetting('pageTurnMode', 'paginated')}
+                                            className={`${styles.toggleBtn} ${settings.pageTurnMode === 'paginated-single' ? styles.active : ''}`}
+                                            onClick={() => settings.updateSetting('pageTurnMode', 'paginated-single')}
                                         >
-                                            分页
+                                            单页
                                         </button>
                                         <button
-                                            className={`${styles.toggleBtn} ${settings.pageTurnMode === 'scrolled' ? styles.active : ''}`}
-                                            onClick={() => settings.updateSetting('pageTurnMode', 'scrolled')}
+                                            className={`${styles.toggleBtn} ${settings.pageTurnMode === 'paginated-double' ? styles.active : ''}`}
+                                            onClick={() => settings.updateSetting('pageTurnMode', 'paginated-double')}
                                         >
-                                            滚动
+                                            双页
                                         </button>
                                         <button
                                             className={`${styles.toggleBtn} ${settings.pageTurnMode === 'scrolled-continuous' ? styles.active : ''}`}

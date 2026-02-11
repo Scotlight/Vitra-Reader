@@ -131,6 +131,15 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string) => void }
             setProgressMap(map)
         }
         void loadProgress()
+        const handleFocus = () => {
+            void loadProgress()
+        }
+        document.addEventListener('visibilitychange', handleFocus)
+        window.addEventListener('focus', handleFocus)
+        return () => {
+            document.removeEventListener('visibilitychange', handleFocus)
+            window.removeEventListener('focus', handleFocus)
+        }
     }, [books])
 
     useEffect(() => {
@@ -933,8 +942,8 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string) => void }
                                         value={settings.pageTurnMode}
                                         onChange={(event) => settings.updateSetting('pageTurnMode', event.target.value as typeof settings.pageTurnMode)}
                                     >
-                                        <option value="paginated">分页</option>
-                                        <option value="scrolled">滚动</option>
+                                        <option value="paginated-single">单页</option>
+                                        <option value="paginated-double">双页</option>
                                         <option value="scrolled-continuous">连续滚动</option>
                                     </select>
                                 </label>

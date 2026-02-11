@@ -37,6 +37,26 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
     return bytes.buffer
 }
 
+type WebdavAction = 'test' | 'upload' | 'download'
+
+async function webdavSyncWithRetry(
+    action: WebdavAction,
+    payload: { url: string; username: string; password: string; data?: string },
+    retries = 2
+) {
+    let lastError: string | null = null
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+        const result = await window.electronAPI.webdavSync(action, payload)
+        if (result.success) return result
+        lastError = result.error || `WebDAV ${action} failed`
+        if (attempt < retries) {
+            const backoffMs = 500 * (attempt + 1)
+            await new Promise((resolve) => setTimeout(resolve, backoffMs))
+        }
+    }
+    return { success: false, error: lastError || `WebDAV ${action} failed` }
+}
+
 interface SyncState {
     webdavUrl: string
     webdavPath: string
@@ -79,7 +99,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
         try {
             if (reason === 'startup') {
-                const downloadRes = await window.electronAPI.webdavSync('download', {
+                const downloadRes = await webdavSyncWithRetry('download', {
                     url: buildBackupUrl(webdavUrl, webdavPath),
                     username: webdavUser,
                     password: webdavPass,
@@ -157,7 +177,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
                 }))
             }
 
-            const uploadRes = await window.electronAPI.webdavSync('upload', {
+            const uploadRes = await webdavSyncWithRetry('upload', {
                 url: buildBackupUrl(webdavUrl, webdavPath),
                 username: webdavUser,
                 password: webdavPass,
@@ -215,7 +235,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         set({ isTesting: true, syncStatus: '测试连接中...' })
         try {
             const targetUrl = `${webdavUrl.replace(/\/$/, '')}/${normalizeFolderPath(webdavPath)}`
-            const testRes = await window.electronAPI.webdavSync('test', {
+            const testRes = await webdavSyncWithRetry('test', {
                 url: targetUrl,
                 username: webdavUser,
                 password: webdavPass,
@@ -277,7 +297,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
             // 2. Upload
             set({ syncStatus: `Uploading (${syncMode})...` })
-            const uploadRes = await window.electronAPI.webdavSync('upload', {
+            const uploadRes = await webdavSyncWithRetry('upload', {
                 url: buildBackupUrl(webdavUrl, webdavPath),
                 username: webdavUser,
                 password: webdavPass,
@@ -307,7 +327,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
         set({ isRestoring: true, syncStatus: '下载备份中...' })
         try {
-            const downloadRes = await window.electronAPI.webdavSync('download', {
+            const downloadRes = await webdavSyncWithRetry('download', {
                 url: buildBackupUrl(webdavUrl, webdavPath),
                 username: webdavUser,
                 password: webdavPass,
