@@ -82,19 +82,32 @@ function contrastRatio(a: string, b: string): number {
 
 export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     const viewerRef = useRef<HTMLDivElement>(null)
+    const tocListRef = useRef<HTMLDivElement>(null)
     const bookRef = useRef<Book | null>(null)
     const renditionRef = useRef<Rendition | null>(null)
     const progressWriteTimerRef = useRef<number | null>(null)
     const renderLockRef = useRef(false)
     const renderUnlockTimerRef = useRef<number | null>(null)
-    const upwardStabilizeTimerRef = useRef<number | null>(null)
-    const lastWheelEventAtRef = useRef(0)
+    const scrollGateTimerRef = useRef<number | null>(null)
+    const scrollGateUntilRef = useRef(0)
+    const scrollGateDirectionRef = useRef<-1 | 0 | 1>(0)
+    const scrollGateLastPassAtRef = useRef(0)
+    const scrollGateVelocityRef = useRef(0)
+    const chapterSwitchPendingRef = useRef(false)
+    const chapterSwitchTimerRef = useRef<number | null>(null)
+    const manualProgressBypassUntilRef = useRef(0)
+    const styleSyncingRef = useRef(false)
     const displayQueueRef = useRef<Promise<void>>(Promise.resolve())
     const preloadedSectionsRef = useRef<Set<string>>(new Set())
+    const preloadQueueRef = useRef<Array<{ key: string; item: any; bookAny: any }>>([])
+    const preloadIdleHandleRef = useRef<number | null>(null)
+    const preloadTimerHandleRef = useRef<number | null>(null)
     const locationsReadyRef = useRef(false)
     const lastRelocatedAtRef = useRef(0)
-    const previousLocationNumberRef = useRef<number | null>(null)
+    const lastProgressCommitAtRef = useRef(0)
+    const lastSectionHrefRef = useRef('')
     const lastLocationRef = useRef<{ cfi: string; href: string; percentage: number } | null>(null)
+    const currentProgressRef = useRef(0)
 
     const [isReady, setIsReady] = useState(false)
     const [bookTitleText, setBookTitleText] = useState('Reading')
@@ -121,6 +134,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
 
     const [selectionMenu, setSelectionMenu] = useState<SelectionMenuState>({ visible: false, x: 0, y: 0, text: '', cfiRange: '' })
     const [activeSearchHitCfi, setActiveSearchHitCfi] = useState<string | null>(null)
+    const allowScriptedContentInDev = import.meta.env.DEV
 
     const settings = useSettingsStore()
     const readerColors = (() => {
@@ -147,11 +161,63 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         setRenderLocked(locked)
     }
 
+    const getScrollPhysics = (deltaY: number) => {
+        const absDelta = Math.min(480, Math.abs(deltaY))
+        const acceleration = 0.42
+        const friction = 0.78
+        const prevVelocity = scrollGateVelocityRef.current
+        const velocity = prevVelocity * friction + absDelta * acceleration
+        scrollGateVelocityRef.current = velocity
+
+        const normalized = Math.min(1, velocity / 320)
+        const eased = 1 - (1 - normalized) ** 2.2
+        const holdMs = Math.round(55 + eased * 130)
+        const pulseMs = Math.round(40 + eased * 75)
+        return { holdMs, pulseMs, absDelta }
+    }
+
+    const schedulePreloadDrain = () => {
+        if (preloadIdleHandleRef.current || preloadTimerHandleRef.current) return
+        const run = (deadline?: { timeRemaining: () => number }) => {
+            preloadIdleHandleRef.current = null
+            preloadTimerHandleRef.current = null
+            let processed = 0
+            while (preloadQueueRef.current.length > 0) {
+                if (deadline && deadline.timeRemaining() < 3 && processed > 0) break
+                const task = preloadQueueRef.current.shift()
+                if (!task) break
+                processed += 1
+                try {
+                    if (typeof task.item?.load === 'function') {
+                        void task.item.load(task.bookAny.load.bind(task.bookAny)).catch(() => {
+                            preloadedSectionsRef.current.delete(task.key)
+                        })
+                    }
+                } catch {
+                    preloadedSectionsRef.current.delete(task.key)
+                }
+            }
+            if (preloadQueueRef.current.length > 0) {
+                schedulePreloadDrain()
+            }
+        }
+        const requestIdle = (window as any).requestIdleCallback
+        if (typeof requestIdle === 'function') {
+            preloadIdleHandleRef.current = requestIdle((deadline: any) => run(deadline), { timeout: 120 })
+            return
+        }
+        preloadTimerHandleRef.current = window.setTimeout(() => run(), 16)
+    }
+
     const queueDisplay = (target?: string) => {
         const run = async () => {
             const rendition = renditionRef.current
             if (!rendition) return
-            setRenderLock(true)
+            if (target) {
+                manualProgressBypassUntilRef.current = Date.now() + 1200
+            }
+            const shouldLock = settings.pageTurnMode !== 'scrolled-continuous'
+            if (shouldLock) setRenderLock(true)
             try {
                 await rendition.display(target)
             } catch (error) {
@@ -159,6 +225,10 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             } finally {
                 if (renderUnlockTimerRef.current) {
                     window.clearTimeout(renderUnlockTimerRef.current)
+                }
+                if (!shouldLock) {
+                    setRenderLock(false)
+                    return
                 }
                 renderUnlockTimerRef.current = window.setTimeout(() => {
                     setRenderLock(false)
@@ -188,16 +258,34 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     }
 
     const calculateProgress = (location: any) => {
-        const fromLocation = Number(location?.start?.percentage)
-        if (Number.isFinite(fromLocation) && fromLocation > 0) {
-            return Math.max(0, Math.min(1, fromLocation))
-        }
-
         const cfi = String(location?.start?.cfi || '')
         const bookAny = bookRef.current as any
         const fromCfi = Number(bookAny?.locations?.percentageFromCfi?.(cfi))
-        if (Number.isFinite(fromCfi) && fromCfi > 0) {
+        if (Number.isFinite(fromCfi) && fromCfi >= 0) {
             return Math.max(0, Math.min(1, fromCfi))
+        }
+
+        const startPercentage = Number(location?.start?.percentage)
+        if (Number.isFinite(startPercentage) && startPercentage >= 0) {
+            return Math.max(0, Math.min(1, startPercentage))
+        }
+
+        const spineItems = bookAny?.spine?.spineItems as any[] | undefined
+        const currentHref = normalizeHref(location?.start?.href)
+        if (Array.isArray(spineItems) && spineItems.length > 0 && currentHref) {
+            const index = spineItems.findIndex((item) => normalizeHref(item?.href) === currentHref)
+            if (index >= 0) {
+                const displayedPage = Number(location?.start?.displayed?.page)
+                const displayedTotal = Number(location?.start?.displayed?.total)
+                const localProgress =
+                    Number.isFinite(displayedPage) &&
+                    Number.isFinite(displayedTotal) &&
+                    displayedTotal > 0
+                        ? Math.max(0, Math.min(1, displayedPage / displayedTotal))
+                        : 0
+                const progressFromSpine = (index + localProgress) / spineItems.length
+                return Math.max(0, Math.min(1, progressFromSpine))
+            }
         }
 
         const startLocation = Number(location?.start?.location)
@@ -209,6 +297,14 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         if (Number.isFinite(startLocation) && startLocation >= 0 && total > 0) {
             return Math.max(0, Math.min(1, startLocation / total))
         }
+        const fallbackFromLast = Number(lastLocationRef.current?.percentage)
+        if (Number.isFinite(fallbackFromLast) && fallbackFromLast >= 0) {
+            return Math.max(0, Math.min(1, fallbackFromLast))
+        }
+        const fallbackFromCurrent = Number(currentProgressRef.current)
+        if (Number.isFinite(fallbackFromCurrent) && fallbackFromCurrent >= 0) {
+            return Math.max(0, Math.min(1, fallbackFromCurrent))
+        }
         return 0
     }
 
@@ -216,41 +312,34 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         if (settings.pageTurnMode !== 'scrolled-continuous') return
         const bookAny = bookRef.current as any
         const spineItems = bookAny?.spine?.spineItems as any[] | undefined
-        if (!Array.isArray(spineItems) || spineItems.length === 0) return false
+        if (!Array.isArray(spineItems) || spineItems.length === 0) return
 
         const currentHref = normalizeHref(location?.start?.href)
-        if (!currentHref) return false
+        if (!currentHref) return
         const currentIndex = spineItems.findIndex((item) => normalizeHref(item?.href) === currentHref)
-        if (currentIndex < 0) return false
-        const currentLocationNumber = Number(location?.start?.location)
-        const previousLocationNumber = previousLocationNumberRef.current
-        const isFastUpward =
-            Number.isFinite(currentLocationNumber) &&
-            Number.isFinite(previousLocationNumber as number) &&
-            currentLocationNumber < (previousLocationNumber as number)
-        previousLocationNumberRef.current = Number.isFinite(currentLocationNumber) ? currentLocationNumber : previousLocationNumber
-
-        const backwardWindow = isFastUpward ? 8 : 4
-        const forwardWindow = isFastUpward ? 4 : 3
-        const from = Math.max(0, currentIndex - backwardWindow)
-        const to = Math.min(spineItems.length - 1, currentIndex + forwardWindow)
-        for (let index = from; index <= to; index += 1) {
-            if (index === currentIndex) continue
+        if (currentIndex < 0) return
+        const windowSize = 8
+        const direction = scrollGateDirectionRef.current
+        const offsets: number[] = []
+        if (direction < 0) {
+            for (let step = 1; step <= windowSize; step += 1) offsets.push(-step)
+            for (let step = 1; step <= Math.ceil(windowSize / 2); step += 1) offsets.push(step)
+        } else if (direction > 0) {
+            for (let step = 1; step <= windowSize; step += 1) offsets.push(step)
+            for (let step = 1; step <= Math.ceil(windowSize / 2); step += 1) offsets.push(-step)
+        } else {
+            for (let step = 1; step <= windowSize; step += 1) offsets.push(step, -step)
+        }
+        offsets.forEach((offset) => {
+            const index = currentIndex + offset
+            if (index < 0 || index >= spineItems.length) return
             const item = spineItems[index]
             const key = normalizeHref(item?.href)
-            if (!key || preloadedSectionsRef.current.has(key)) continue
+            if (!key || preloadedSectionsRef.current.has(key)) return
             preloadedSectionsRef.current.add(key)
-            try {
-                if (typeof item?.load === 'function') {
-                    void item.load(bookAny.load.bind(bookAny)).catch(() => {
-                        preloadedSectionsRef.current.delete(key)
-                    })
-                }
-            } catch {
-                preloadedSectionsRef.current.delete(key)
-            }
-        }
-        return isFastUpward
+            preloadQueueRef.current.push({ key, item, bookAny })
+        })
+        schedulePreloadDrain()
     }
 
     const isTocItemActive = (itemHref: string) => {
@@ -288,6 +377,14 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         }
     }
 
+    useEffect(() => {
+        styleSyncingRef.current = styleSyncing
+    }, [styleSyncing])
+
+    useEffect(() => {
+        currentProgressRef.current = currentProgress
+    }, [currentProgress])
+
     // Load system fonts on mount
     useEffect(() => {
         const loadFonts = async () => {
@@ -313,11 +410,6 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     const injectContentStyle = (contents: any, cssText: string) => {
         if (!contents) return
         try {
-            if (typeof contents.addStylesheet === 'function') {
-                const dataUrl = `data:text/css;charset=utf-8,${encodeURIComponent(cssText)}`
-                contents.addStylesheet(dataUrl)
-                return
-            }
             const doc = contents.document as Document | undefined
             if (!doc?.head) return
             let styleEl = doc.getElementById('vitra-content-style') as HTMLStyleElement | null
@@ -326,9 +418,42 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                 styleEl.id = 'vitra-content-style'
                 doc.head.appendChild(styleEl)
             }
-            styleEl.textContent = cssText
+            if (styleEl.textContent !== cssText) {
+                styleEl.textContent = cssText
+            }
+            if (doc.body) {
+                doc.body.style.margin = '0'
+                doc.body.style.padding = '0'
+            }
         } catch (error) {
             console.warn('Inject content style failed:', error)
+        }
+    }
+
+    const sanitizeContentDocument = (contents: any) => {
+        try {
+            const doc = contents?.document as Document | undefined
+            if (!doc) return
+            const scripts = Array.from(doc.querySelectorAll('script'))
+            scripts.forEach((node) => node.remove())
+
+            const allNodes = Array.from(doc.querySelectorAll('*'))
+            allNodes.forEach((element) => {
+                const attrs = Array.from(element.attributes)
+                attrs.forEach((attr) => {
+                    const name = attr.name.toLowerCase()
+                    const value = attr.value
+                    if (name.startsWith('on')) {
+                        element.removeAttribute(attr.name)
+                        return
+                    }
+                    if ((name === 'href' || name === 'src') && /^javascript:/i.test(value.trim())) {
+                        element.removeAttribute(attr.name)
+                    }
+                })
+            })
+        } catch (error) {
+            console.warn('Sanitize EPUB content failed:', error)
         }
     }
 
@@ -337,6 +462,9 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             margin: 0 !important;
             padding: 0 !important;
             background: ${bgColor} !important;
+            color: ${textColor} !important;
+        }
+        body *:not(img):not(svg):not(path):not(video):not(canvas) {
             color: ${textColor} !important;
         }
         p, div, section, article {
@@ -374,7 +502,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         let wheelGuardHandler: ((e: WheelEvent) => void) | null = null
 
         const loadBook = async () => {
-            previousLocationNumberRef.current = null
+            scrollGateUntilRef.current = 0
             const bookMeta = await db.books.get(bookId)
             if (bookMeta?.title) {
                 setBookTitleText(bookMeta.title)
@@ -389,7 +517,9 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             // Corrected: use db.progress instead of db.readingProgress
             const progress = await db.progress.get(bookId)
             const initialCfi = progress?.location || undefined
-            setCurrentProgress(Number(progress?.percentage || 0))
+            const initialProgress = Number(progress?.percentage || 0)
+            setCurrentProgress(initialProgress)
+            currentProgressRef.current = initialProgress
 
             // 2. Initialize Book
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -402,6 +532,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             const manager = isContinuous ? 'continuous' : 'default'
             const flow = isContinuous ? 'scrolled' : 'paginated'
             setRenderLock(isContinuous)
+            const continuousOffset = isContinuous ? 6000 : 1400
             const renditionOptions: any = {
                 width: '100%',
                 height: '100vh',
@@ -409,9 +540,9 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                 flow,
                 spread: settings.pageTurnMode === 'paginated-single' ? 'none' : 'auto',
                 snap: false,
-                offset: 1400,
+                offset: continuousOffset,
                 minSpreadWidth: 0,
-                allowScriptedContent: false,
+                allowScriptedContent: allowScriptedContentInDev,
             }
             const rendition = book.renderTo(viewerRef.current, renditionOptions)
             renditionRef.current = rendition
@@ -419,19 +550,36 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             console.log('Rendition created:', {
                 mode: settings.pageTurnMode,
                 manager,
-                flow
+                flow,
+                allowScriptedContent: allowScriptedContentInDev,
             })
             rendition.on('rendered', () => {
                 if (!mounted) return
-                setRenderLock(false)
+                chapterSwitchPendingRef.current = false
+                if (chapterSwitchTimerRef.current) {
+                    window.clearTimeout(chapterSwitchTimerRef.current)
+                    chapterSwitchTimerRef.current = null
+                }
                 if (renderUnlockTimerRef.current) {
                     window.clearTimeout(renderUnlockTimerRef.current)
                     renderUnlockTimerRef.current = null
                 }
+                const lockRemainMs = Math.max(0, scrollGateUntilRef.current - Date.now())
+                if (lockRemainMs > 0) {
+                    renderUnlockTimerRef.current = window.setTimeout(() => {
+                        setRenderLock(false)
+                        renderUnlockTimerRef.current = null
+                    }, lockRemainMs)
+                    return
+                }
+                setRenderLock(false)
             })
 
             // 4. Register Hook - 使用 addStyle 注入 CSS（按文档推荐）
             rendition.hooks.content.register((contents: any) => {
+                if (!allowScriptedContentInDev) {
+                    sanitizeContentDocument(contents)
+                }
                 const { textColor, bgColor } = resolveReaderColors()
                 injectContentStyle(contents, buildReaderContentCss(textColor, bgColor))
 
@@ -514,18 +662,17 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                 const hrefFromLocation = normalizeHref(location?.start?.href)
                 if (hrefFromLocation) {
                     setCurrentSectionHref(hrefFromLocation)
-                }
-                const isFastUpward = preloadNearbySections(location)
-                if (isFastUpward && settings.pageTurnMode === 'scrolled-continuous') {
-                    setRenderLock(true)
-                    if (upwardStabilizeTimerRef.current) {
-                        window.clearTimeout(upwardStabilizeTimerRef.current)
+                    const previousHref = lastSectionHrefRef.current
+                    if (
+                        settings.pageTurnMode === 'scrolled-continuous' &&
+                        previousHref &&
+                        previousHref !== hrefFromLocation
+                    ) {
+                        chapterSwitchPendingRef.current = true
                     }
-                    upwardStabilizeTimerRef.current = window.setTimeout(() => {
-                        setRenderLock(false)
-                        upwardStabilizeTimerRef.current = null
-                    }, 220)
+                    lastSectionHrefRef.current = hrefFromLocation
                 }
+                preloadNearbySections(location)
 
                 setSelectionMenu(prev => ({ ...prev, visible: false }))
 
@@ -533,8 +680,33 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                     window.clearTimeout(progressWriteTimerRef.current)
                 }
                 progressWriteTimerRef.current = window.setTimeout(() => {
-                    const progressValue = calculateProgress(location)
+                    const rawProgress = calculateProgress(location)
+                    const prevProgress = currentProgressRef.current
+                    const nowCommit = Date.now()
+                    let progressValue = rawProgress
+
+                    if (
+                        settings.pageTurnMode === 'scrolled-continuous' &&
+                        Number.isFinite(prevProgress) &&
+                        prevProgress >= 0
+                    ) {
+                        const delta = rawProgress - prevProgress
+                        const elapsed = nowCommit - lastProgressCommitAtRef.current
+                        const isManualJump = nowCommit < manualProgressBypassUntilRef.current
+                        if (!isManualJump) {
+                            if (Math.abs(delta) > 0.22 && elapsed < 520) {
+                                progressValue = prevProgress
+                            } else if (elapsed < 900) {
+                                const maxStep = 0.015 + (Math.min(900, Math.max(0, elapsed)) / 900) * 0.065
+                                const boundedDelta = Math.max(-maxStep, Math.min(maxStep, delta))
+                                progressValue = prevProgress + boundedDelta
+                            }
+                        }
+                    }
+
                     setCurrentProgress(progressValue)
+                    currentProgressRef.current = progressValue
+                    lastProgressCommitAtRef.current = nowCommit
                     lastLocationRef.current = {
                         cfi: location.start.cfi,
                         href: normalizeHref(location?.start?.href) || '',
@@ -545,7 +717,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                         location: location.start.cfi,
                         percentage: progressValue,
                         currentChapter: normalizeHref(location?.start?.href) || '',
-                        updatedAt: Date.now()
+                        updatedAt: nowCommit
                     }).catch((error) => {
                         console.warn('Persist reading progress failed:', error)
                     })
@@ -571,24 +743,73 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                     if (!mounted) return
                     if (settings.pageTurnMode !== 'scrolled-continuous') return
                     const now = Date.now()
-                    const isRapidUpward = event.deltaY < -24 && now - lastWheelEventAtRef.current < 50
-                    lastWheelEventAtRef.current = now
-                    if (isRapidUpward) {
-                        setRenderLock(true)
-                        if (upwardStabilizeTimerRef.current) {
-                            window.clearTimeout(upwardStabilizeTimerRef.current)
+                    const direction: -1 | 0 | 1 = event.deltaY > 0 ? 1 : event.deltaY < 0 ? -1 : 0
+                    if (direction === 0) return
+                    const { holdMs, pulseMs, absDelta } = getScrollPhysics(event.deltaY)
+                    if (absDelta < 8) return
+                    const gateActive = now < scrollGateUntilRef.current
+                    const hardBlock = styleSyncingRef.current
+                    const gentleWheel = absDelta <= 92
+
+                    // Upward chapter-edge damping: no white lock, only gentle throttle during unresolved chapter switch.
+                    if (!hardBlock && direction < 0 && chapterSwitchPendingRef.current) {
+                        const elapsed = now - scrollGateLastPassAtRef.current
+                        if (elapsed < 90) {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            return
                         }
-                        upwardStabilizeTimerRef.current = window.setTimeout(() => {
-                            setRenderLock(false)
-                            upwardStabilizeTimerRef.current = null
-                        }, 180)
+                        scrollGateLastPassAtRef.current = now
+                    }
+
+                    if (gateActive) {
+                        if (hardBlock) {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            return
+                        }
+                        if (gentleWheel) {
+                            scrollGateDirectionRef.current = direction
+                            scrollGateLastPassAtRef.current = now
+                            return
+                        }
+                        const sameDirection = direction === scrollGateDirectionRef.current
+                        const reversedDirection = scrollGateDirectionRef.current !== 0 && direction !== scrollGateDirectionRef.current
+                        const elapsedSincePass = now - scrollGateLastPassAtRef.current
+                        const pulsePass = sameDirection && elapsedSincePass >= pulseMs
+                        const reversePass = reversedDirection && elapsedSincePass >= pulseMs
+                        if (pulsePass || reversePass) {
+                            scrollGateDirectionRef.current = direction
+                            scrollGateLastPassAtRef.current = now
+                            scrollGateUntilRef.current = now + holdMs
+                            if (scrollGateTimerRef.current) {
+                                window.clearTimeout(scrollGateTimerRef.current)
+                            }
+                            scrollGateTimerRef.current = window.setTimeout(() => {
+                                scrollGateTimerRef.current = null
+                            }, holdMs)
+                            return
+                        }
                         event.preventDefault()
                         event.stopPropagation()
                         return
                     }
-                    if (!renderLockRef.current) return
-                    event.preventDefault()
-                    event.stopPropagation()
+
+                    if (hardBlock) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        return
+                    }
+
+                    scrollGateDirectionRef.current = direction
+                    scrollGateLastPassAtRef.current = now
+                    scrollGateUntilRef.current = now + holdMs
+                    if (scrollGateTimerRef.current) {
+                        window.clearTimeout(scrollGateTimerRef.current)
+                    }
+                    scrollGateTimerRef.current = window.setTimeout(() => {
+                        scrollGateTimerRef.current = null
+                    }, holdMs)
                 }
                 viewerEl.addEventListener('wheel', wheelGuardHandler, { passive: false, capture: true })
             }
@@ -649,10 +870,26 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                 window.clearTimeout(renderUnlockTimerRef.current)
                 renderUnlockTimerRef.current = null
             }
-            if (upwardStabilizeTimerRef.current) {
-                window.clearTimeout(upwardStabilizeTimerRef.current)
-                upwardStabilizeTimerRef.current = null
+            if (scrollGateTimerRef.current) {
+                window.clearTimeout(scrollGateTimerRef.current)
+                scrollGateTimerRef.current = null
             }
+            if (chapterSwitchTimerRef.current) {
+                window.clearTimeout(chapterSwitchTimerRef.current)
+                chapterSwitchTimerRef.current = null
+            }
+            if (preloadIdleHandleRef.current) {
+                const cancelIdle = (window as any).cancelIdleCallback
+                if (typeof cancelIdle === 'function') {
+                    cancelIdle(preloadIdleHandleRef.current)
+                }
+                preloadIdleHandleRef.current = null
+            }
+            if (preloadTimerHandleRef.current) {
+                window.clearTimeout(preloadTimerHandleRef.current)
+                preloadTimerHandleRef.current = null
+            }
+            preloadQueueRef.current = []
             if (wheelGuardHandler && viewerRef.current) {
                 viewerRef.current.removeEventListener('wheel', wheelGuardHandler, true)
             }
@@ -671,6 +908,12 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                 bookRef.current.destroy()
                 bookRef.current = null
             }
+            scrollGateUntilRef.current = 0
+            scrollGateDirectionRef.current = 0
+            scrollGateLastPassAtRef.current = 0
+            scrollGateVelocityRef.current = 0
+            chapterSwitchPendingRef.current = false
+            manualProgressBypassUntilRef.current = 0
             setRenderLock(false)
         }
     }, [bookId, settings.pageTurnMode])
@@ -987,11 +1230,13 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     const renderTocItems = (items: TocItem[], level = 0): JSX.Element[] => {
         return items.flatMap((item, index) => {
             const key = `${level}-${index}-${item.href}`
+            const active = isTocItemActive(item.href)
             const children = item.subitems ? renderTocItems(item.subitems, level + 1) : []
             return [
                 <button
                     key={key}
-                    className={`${styles.tocItem} ${isTocItemActive(item.href) ? styles.tocItemActive : ''}`}
+                    className={`${styles.tocItem} ${active ? styles.tocItemActive : ''}`}
+                    data-toc-active={active ? 'true' : 'false'}
                     onClick={() => handleTocClick(item.href)}
                     style={{ paddingLeft: `${12 + level * 14}px` }}
                 >
@@ -1015,6 +1260,30 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             return <span key={`${part}-${index}`}>{part}</span>
         })
     }
+
+    useEffect(() => {
+        if (!leftPanelOpen || activeTab !== 'toc') return
+        const timer = window.setTimeout(() => {
+            const container = tocListRef.current
+            if (!container) return
+            const activeItem = container.querySelector('button[data-toc-active="true"]') as HTMLButtonElement | null
+            if (!activeItem) return
+            const containerRect = container.getBoundingClientRect()
+            const itemRect = activeItem.getBoundingClientRect()
+            const targetTop =
+                container.scrollTop +
+                (itemRect.top - containerRect.top) -
+                containerRect.height / 2 +
+                itemRect.height / 2
+            container.scrollTo({
+                top: Math.max(0, targetTop),
+                behavior: 'auto',
+            })
+        }, 120)
+        return () => {
+            window.clearTimeout(timer)
+        }
+    }, [leftPanelOpen, activeTab, currentSectionHref, toc.length])
 
     const currentChapterLabel = findCurrentChapterLabel(toc)
     const headerHeight = Math.max(36, Math.min(96, Number(settings.headerHeight) || 48))
@@ -1135,7 +1404,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                             </div>
 
                             {activeTab === 'toc' ? (
-                                <div className={styles.tocList}>
+                                <div ref={tocListRef} className={styles.tocList}>
                                     {toc.length === 0 ? <p className={styles.emptyText}>无目录信息</p> :
                                         renderTocItems(toc)
                                     }
