@@ -82,6 +82,7 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
         await db.bookFiles.delete(id)
         await db.progress.delete(id)
         await db.bookmarks.where('bookId').equals(id).delete()
+        await db.highlights.where('bookId').equals(id).delete()
         await get().loadBooks()
     },
 }))

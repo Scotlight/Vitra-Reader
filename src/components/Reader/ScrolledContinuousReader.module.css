@@ -1,0 +1,114 @@
+/**
+ * ScrolledContinuousReader 样式
+ */
+
+.viewport {
+  width: 100%;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  background: var(--bg-color);
+  color: var(--text-color);
+  
+  /* 性能优化 */
+  will-change: scroll-position;
+  contain: layout style paint;
+  
+  /* 平滑滚动（可选，如果使用物理引擎则禁用） */
+  /* scroll-behavior: smooth; */
+}
+
+.viewport[data-locked="true"] {
+  /* 锁定状态：禁止用户交互 */
+  pointer-events: none;
+  user-select: none;
+  overflow: hidden;
+}
+
+.chapterContent {
+  /* 性能优化 */
+  contain: layout paint;
+  position: relative;
+  padding: 2rem 1rem;
+  max-width: var(--page-width, 80%);
+  margin: 0 auto;
+}
+
+.chapterContent :global(p) {
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  letter-spacing: var(--letter-spacing);
+  margin-bottom: var(--paragraph-spacing);
+  text-align: var(--text-align);
+  color: var(--text-color) !important;
+}
+
+.chapterContent :global(h1),
+.chapterContent :global(h2),
+.chapterContent :global(h3),
+.chapterContent :global(h4),
+.chapterContent :global(h5),
+.chapterContent :global(h6) {
+  font-family: var(--font-family);
+  color: var(--text-color) !important;
+  margin-top: 1.5em;
+  margin-bottom: 0.75em;
+}
+
+.chapterContent :global(img) {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1rem auto;
+}
+
+.chapterContent :global(a) {
+  color: var(--text-color);
+  text-decoration: underline;
+}
+
+.loadingIndicator {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 1rem 2rem;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* 章节分隔线（可选） */
+.chapterContent + .chapterContent::before {
+  content: '';
+  display: block;
+  width: 60%;
+  height: 1px;
+  background: var(--text-color);
+  opacity: 0.2;
+  margin: 3rem auto;
+}
+
+/* 滚动条样式（Windows） */
+.viewport::-webkit-scrollbar {
+  width: 12px;
+}
+
+.viewport::-webkit-scrollbar-track {
+  background: var(--bg-color);
+}
+
+.viewport::-webkit-scrollbar-thumb {
+  background: var(--text-color);
+  opacity: 0.3;
+  border-radius: 6px;
+}
+
+.viewport::-webkit-scrollbar-thumb:hover {
+  opacity: 0.5;
+}

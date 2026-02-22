@@ -3,13 +3,8 @@ import ePub, { Book, Rendition } from 'epubjs'
 import { motion, AnimatePresence } from 'framer-motion'
 import { db } from '../../services/storageService'
 import { useSettingsStore } from '../../stores/useSettingsStore'
-import noteActionIcon from '../../assets/icons/reader-note.svg'
-import highlightActionIcon from '../../assets/icons/reader-highlight.svg'
-import copyActionIcon from '../../assets/icons/reader-copy.svg'
-import searchActionIcon from '../../assets/icons/reader-search.svg'
-import webSearchActionIcon from '../../assets/icons/reader-web-search.svg'
-import speakActionIcon from '../../assets/icons/reader-speak.svg'
-import translateActionIcon from '../../assets/icons/reader-translate.svg'
+import { ScrollReaderView, ScrollReaderHandle } from './ScrollReaderView'
+import { SelectionMenu, HIGHLIGHT_PRESETS } from './SelectionMenu'
 import styles from './ReaderView.module.css'
 
 interface ReaderViewProps {
@@ -36,17 +31,6 @@ interface SelectionMenuState {
     text: string
     cfiRange: string
 }
-
-type HighlightPreset = {
-    key: string
-    color: string
-}
-
-const HIGHLIGHT_PRESETS: HighlightPreset[] = [
-    { key: 'cream', color: 'rgba(255, 243, 205, 0.55)' },
-    { key: 'mint', color: 'rgba(209, 250, 229, 0.55)' },
-    { key: 'sky', color: 'rgba(219, 234, 254, 0.55)' },
-]
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
     const normalized = hex.trim().replace('#', '')
@@ -102,6 +86,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     const preloadQueueRef = useRef<Array<{ key: string; item: any; bookAny: any }>>([])
     const preloadIdleHandleRef = useRef<number | null>(null)
     const preloadTimerHandleRef = useRef<number | null>(null)
+    const preloadInFlightRef = useRef(0)
     const locationsReadyRef = useRef(false)
     const lastRelocatedAtRef = useRef(0)
     const lastProgressCommitAtRef = useRef(0)
@@ -128,6 +113,9 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     const [loadingFonts, setLoadingFonts] = useState(false)
     const [renderLocked, setRenderLocked] = useState(false)
     const [styleSyncing, setStyleSyncing] = useState(false)
+    const [bookInstance, setBookInstance] = useState<Book | null>(null)
+    const [bdiseParams, setBdiseParams] = useState({ initialSpineIndex: 0, initialScrollOffset: 0 })
+    const scrollReaderRef = useRef<ScrollReaderHandle>(null)
 
     // Temporary color states for picker (only text color needs delay)
     const [tempTextColor, setTempTextColor] = useState<string | null>(null)
@@ -137,6 +125,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     const allowScriptedContentInDev = import.meta.env.DEV
 
     const settings = useSettingsStore()
+    const isBdiseMode = settings.pageTurnMode === 'scrolled-continuous'
     const readerColors = (() => {
         const fallbackByTheme: Record<string, { text: string; bg: string }> = {
             light: { text: '#1a1a1a', bg: '#ffffff' },
@@ -181,22 +170,35 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         const run = (deadline?: { timeRemaining: () => number }) => {
             preloadIdleHandleRef.current = null
             preloadTimerHandleRef.current = null
-            let processed = 0
-            while (preloadQueueRef.current.length > 0) {
-                if (deadline && deadline.timeRemaining() < 3 && processed > 0) break
+            const maxInFlight = 2
+            const maxPerTick = deadline ? 2 : 1
+            let started = 0
+
+            while (
+                preloadQueueRef.current.length > 0 &&
+                preloadInFlightRef.current < maxInFlight &&
+                started < maxPerTick
+            ) {
+                if (deadline && deadline.timeRemaining() < 4 && started > 0) break
                 const task = preloadQueueRef.current.shift()
                 if (!task) break
-                processed += 1
-                try {
-                    if (typeof task.item?.load === 'function') {
-                        void task.item.load(task.bookAny.load.bind(task.bookAny)).catch(() => {
-                            preloadedSectionsRef.current.delete(task.key)
-                        })
-                    }
-                } catch {
-                    preloadedSectionsRef.current.delete(task.key)
-                }
+                started += 1
+                preloadInFlightRef.current += 1
+                Promise.resolve()
+                    .then(async () => {
+                        if (typeof task.item?.load === 'function') {
+                            await task.item.load(task.bookAny.load.bind(task.bookAny))
+                        }
+                    })
+                    .catch(() => {
+                        preloadedSectionsRef.current.delete(task.key)
+                    })
+                    .finally(() => {
+                        preloadInFlightRef.current = Math.max(0, preloadInFlightRef.current - 1)
+                        schedulePreloadDrain()
+                    })
             }
+
             if (preloadQueueRef.current.length > 0) {
                 schedulePreloadDrain()
             }
@@ -206,7 +208,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             preloadIdleHandleRef.current = requestIdle((deadline: any) => run(deadline), { timeout: 120 })
             return
         }
-        preloadTimerHandleRef.current = window.setTimeout(() => run(), 16)
+        preloadTimerHandleRef.current = window.setTimeout(() => run(), 24)
     }
 
     const queueDisplay = (target?: string) => {
@@ -279,8 +281,8 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                 const displayedTotal = Number(location?.start?.displayed?.total)
                 const localProgress =
                     Number.isFinite(displayedPage) &&
-                    Number.isFinite(displayedTotal) &&
-                    displayedTotal > 0
+                        Number.isFinite(displayedTotal) &&
+                        displayedTotal > 0
                         ? Math.max(0, Math.min(1, displayedPage / displayedTotal))
                         : 0
                 const progressFromSpine = (index + localProgress) / spineItems.length
@@ -318,17 +320,18 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         if (!currentHref) return
         const currentIndex = spineItems.findIndex((item) => normalizeHref(item?.href) === currentHref)
         if (currentIndex < 0) return
-        const windowSize = 8
+        const primaryWindow = 5
+        const secondaryWindow = 2
         const direction = scrollGateDirectionRef.current
         const offsets: number[] = []
         if (direction < 0) {
-            for (let step = 1; step <= windowSize; step += 1) offsets.push(-step)
-            for (let step = 1; step <= Math.ceil(windowSize / 2); step += 1) offsets.push(step)
+            for (let step = 1; step <= primaryWindow; step += 1) offsets.push(-step)
+            for (let step = 1; step <= secondaryWindow; step += 1) offsets.push(step)
         } else if (direction > 0) {
-            for (let step = 1; step <= windowSize; step += 1) offsets.push(step)
-            for (let step = 1; step <= Math.ceil(windowSize / 2); step += 1) offsets.push(-step)
+            for (let step = 1; step <= primaryWindow; step += 1) offsets.push(step)
+            for (let step = 1; step <= secondaryWindow; step += 1) offsets.push(-step)
         } else {
-            for (let step = 1; step <= windowSize; step += 1) offsets.push(step, -step)
+            for (let step = 1; step <= primaryWindow; step += 1) offsets.push(step, -step)
         }
         offsets.forEach((offset) => {
             const index = currentIndex + offset
@@ -502,6 +505,10 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         let wheelGuardHandler: ((e: WheelEvent) => void) | null = null
 
         const loadBook = async () => {
+            // Reset state so stale UI doesn't render with a destroyed book
+            setIsReady(false)
+            setBookInstance(null)
+
             scrollGateUntilRef.current = 0
             const bookMeta = await db.books.get(bookId)
             if (bookMeta?.title) {
@@ -525,14 +532,42 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const book = ePub(file.data as any)
             bookRef.current = book
+            setBookInstance(book)
             void ensureLocationsReady(book)
 
             // 3. Render configuration for 3 page-turn modes (按 epub_reader_dev_doc.md)
-            const isContinuous = settings.pageTurnMode === 'scrolled-continuous'
-            const manager = isContinuous ? 'continuous' : 'default'
-            const flow = isContinuous ? 'scrolled' : 'paginated'
-            setRenderLock(isContinuous)
-            const continuousOffset = isContinuous ? 6000 : 1400
+            const isBdise = settings.pageTurnMode === 'scrolled-continuous'
+            // We lock rendering for BDISE mode initially to prevent flash
+            setRenderLock(isBdise)
+
+            // BDISE Mode Initialization
+            if (isBdise) {
+                let sIndex = 0
+                let sOffset = 0
+
+                // Always wait for book to be ready so spine is populated
+                await book.ready
+
+                if (initialCfi && initialCfi.startsWith('bdise:')) {
+                    const parts = initialCfi.split(':')
+                    sIndex = parseInt(parts[1], 10) || 0
+                    sOffset = parseInt(parts[2], 10) || 0
+                } else if (initialCfi) {
+                    // Try to resolve standard CFI to spine index
+                    const spineItem = book.spine?.get(initialCfi)
+                    if (spineItem) {
+                        sIndex = spineItem.index
+                    }
+                }
+                setBdiseParams({ initialSpineIndex: sIndex, initialScrollOffset: sOffset })
+                setIsReady(true) // BDISE is ready to mount
+                return // Skip standard rendition init
+            }
+
+            // Standard Paginated Mode Initialization
+            const manager = 'default'
+            const flow = 'paginated'
+            const continuousOffset = 1400
             const renditionOptions: any = {
                 width: '100%',
                 height: '100vh',
@@ -638,7 +673,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             setToc(nav.toc as TocItem[])
 
             const highlights = await db.highlights.where('bookId').equals(bookId).toArray()
-            highlights.forEach(h => {
+            highlights.filter(h => !h.cfiRange.startsWith('bdise:')).forEach(h => {
                 rendition.annotations.add(
                     'highlight',
                     h.cfiRange,
@@ -690,19 +725,26 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                         Number.isFinite(prevProgress) &&
                         prevProgress >= 0
                     ) {
-                        const delta = rawProgress - prevProgress
                         const elapsed = nowCommit - lastProgressCommitAtRef.current
                         const isManualJump = nowCommit < manualProgressBypassUntilRef.current
                         if (!isManualJump) {
-                            if (Math.abs(delta) > 0.22 && elapsed < 520) {
+                            const directionHint = scrollGateDirectionRef.current
+                            if (directionHint > 0 && progressValue < prevProgress) {
+                                progressValue = prevProgress
+                            } else if (directionHint < 0 && progressValue > prevProgress) {
+                                progressValue = prevProgress
+                            }
+                            const adjustedDelta = progressValue - prevProgress
+                            if (Math.abs(adjustedDelta) > 0.22 && elapsed < 520) {
                                 progressValue = prevProgress
                             } else if (elapsed < 900) {
                                 const maxStep = 0.015 + (Math.min(900, Math.max(0, elapsed)) / 900) * 0.065
-                                const boundedDelta = Math.max(-maxStep, Math.min(maxStep, delta))
+                                const boundedDelta = Math.max(-maxStep, Math.min(maxStep, adjustedDelta))
                                 progressValue = prevProgress + boundedDelta
                             }
                         }
                     }
+                    progressValue = Math.max(0, Math.min(1, progressValue))
 
                     setCurrentProgress(progressValue)
                     currentProgressRef.current = progressValue
@@ -751,10 +793,11 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                     const hardBlock = styleSyncingRef.current
                     const gentleWheel = absDelta <= 92
 
-                    // Upward chapter-edge damping: no white lock, only gentle throttle during unresolved chapter switch.
-                    if (!hardBlock && direction < 0 && chapterSwitchPendingRef.current) {
+                    // Chapter-edge damping in pending state uses mirrored thresholds for both directions.
+                    if (!hardBlock && chapterSwitchPendingRef.current) {
                         const elapsed = now - scrollGateLastPassAtRef.current
-                        if (elapsed < 90) {
+                        const pendingPulseMs = Math.max(78, pulseMs + 20)
+                        if (elapsed < pendingPulseMs) {
                             event.preventDefault()
                             event.stopPropagation()
                             return
@@ -890,6 +933,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                 preloadTimerHandleRef.current = null
             }
             preloadQueueRef.current = []
+            preloadInFlightRef.current = 0
             if (wheelGuardHandler && viewerRef.current) {
                 viewerRef.current.removeEventListener('wheel', wheelGuardHandler, true)
             }
@@ -959,12 +1003,22 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         if (!renditionRef.current) return
         setStyleSyncing(true)
         updateRenditionStyles(renditionRef.current)
-        const timer = window.setTimeout(() => {
-            setStyleSyncing(false)
-        }, 120)
-        return () => {
-            window.clearTimeout(timer)
+
+        // Force immediate background update on all mounted iframes
+        const { bgColor } = resolveReaderColors()
+        const viewer = viewerRef.current
+        if (viewer) {
+            const iframes = viewer.querySelectorAll('iframe')
+            iframes.forEach(iframe => {
+                try {
+                    const doc = iframe.contentDocument
+                    if (doc?.body) {
+                        doc.body.style.background = bgColor
+                    }
+                } catch { /* cross-origin */ }
+            })
         }
+        setStyleSyncing(false)
     }, [settings.themeId, settings.customTextColor, settings.customBgColor])
 
     const updateRenditionStyles = (rendition: Rendition) => {
@@ -1097,8 +1151,17 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         setSelectionMenu(prev => ({ ...prev, visible: false }))
     }
 
-    const handleTocClick = (href: string) => {
-        void queueDisplay(href)
+    const handleTocClick = async (href: string) => {
+        if (isBdiseMode) {
+            if (bookRef.current) {
+                const spineItem = bookRef.current.spine?.get(href)
+                if (spineItem && scrollReaderRef.current) {
+                    await scrollReaderRef.current.jumpToSpine(spineItem.index)
+                }
+            }
+        } else {
+            void queueDisplay(href)
+        }
         if (window.innerWidth < 768) setLeftPanelOpen(false)
     }
 
@@ -1201,13 +1264,13 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     // Get current font name for select value
     const getCurrentFontName = (): string => {
         if (settings.fontFamily === 'inherit') return '系统默认'
-        
+
         // Extract font name from "FontName", sans-serif format
         const match = settings.fontFamily.match(/^"?([^",]+)"?/)
         if (!match) return '系统默认'
-        
+
         const cssName = match[1].trim()
-        
+
         // Map CSS names back to Chinese display names
         const displayNameMap: Record<string, string> = {
             'Microsoft YaHei': '微软雅黑',
@@ -1223,7 +1286,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             'FangSong_GB2312': '仿宋_GB2312',
             'KaiTi_GB2312': '楷体_GB2312',
         }
-        
+
         return displayNameMap[cssName] || cssName
     }
 
@@ -1327,51 +1390,19 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             </motion.div>
 
             {/* Selection Context Menu */}
-            <AnimatePresence>
-                {selectionMenu.visible && (
-                    <motion.div
-                        className={styles.selectionMenu}
-                        style={{ top: selectionMenu.y, left: selectionMenu.x }}
-                        initial={{ opacity: 0, scale: 0.8, y: 10 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.8 }}
-                    >
-                        <button className={styles.menuIconBtn} onClick={handleAddNote} title="笔记">
-                            <img className={styles.menuActionIcon} src={noteActionIcon} alt="" />
-                        </button>
-                        <button className={styles.menuIconBtn} onClick={() => handleHighlight(HIGHLIGHT_PRESETS[0].color)} title="高亮">
-                            <img className={styles.menuActionIcon} src={highlightActionIcon} alt="" />
-                        </button>
-                        <button className={styles.menuIconBtn} onClick={handleCopy} title="复制">
-                            <img className={styles.menuActionIcon} src={copyActionIcon} alt="" />
-                        </button>
-                        <button className={styles.menuIconBtn} onClick={handleFullTextSearch} title="全文搜索">
-                            <img className={styles.menuActionIcon} src={searchActionIcon} alt="" />
-                        </button>
-                        <button className={styles.menuIconBtn} onClick={handleOnlineSearch} title="在线搜索">
-                            <img className={styles.menuActionIcon} src={webSearchActionIcon} alt="" />
-                        </button>
-                        <button className={styles.menuIconBtn} onClick={handleReadAloud} title="朗读">
-                            <img className={styles.menuActionIcon} src={speakActionIcon} alt="" />
-                        </button>
-                        <div className={styles.menuDivider} />
-                        <button className={styles.menuIconBtn} onClick={handleTranslate} title="翻译">
-                            <img className={styles.menuActionIcon} src={translateActionIcon} alt="" />
-                        </button>
-                        <div className={styles.highlightSwatches}>
-                            {HIGHLIGHT_PRESETS.map((preset) => (
-                                <button
-                                    key={preset.key}
-                                    className={styles.swatchBtn}
-                                    style={{ background: preset.color }}
-                                    onClick={() => handleHighlight(preset.color)}
-                                    title="高亮颜色"
-                                />
-                            ))}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            <SelectionMenu
+                visible={selectionMenu.visible}
+                x={selectionMenu.x}
+                y={selectionMenu.y}
+                onCopy={handleCopy}
+                onHighlight={handleHighlight}
+                onNote={handleAddNote}
+                onSearch={handleFullTextSearch}
+                onWebSearch={handleOnlineSearch}
+                onReadAloud={handleReadAloud}
+                onTranslate={handleTranslate}
+                onDismiss={() => setSelectionMenu(prev => ({ ...prev, visible: false }))}
+            />
 
             {/* Main Content Area */}
             <div className={styles.contentArea} style={{ paddingTop: `${headerHeight}px`, paddingBottom: `${footerEnabled ? footerHeight : 0}px` }}>
@@ -1450,23 +1481,62 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                             <div className={styles.loading}>Loading...</div>
                         </div>
                     )}
-                    {settings.pageTurnMode === 'scrolled-continuous' && renderLocked && (
-                        <div className={styles.renderLockOverlay} style={{ inset: `${headerHeight}px 0 ${footerEnabled ? footerHeight : 0}px 0` }} title="章节渲染中，请稍候" />
-                    )}
 
-                    <div
-                        className={`${styles.epubViewer} ${(!isReady || styleSyncing) ? styles.viewerHidden : ''}`}
-                        ref={viewerRef}
-                        style={{
-                            filter: `brightness(${Math.min(1, Math.max(0.3, Number(settings.brightness) || 1))})`,
-                            background: readerColors.bgColor,
-                        }}
-                    />
-
-                    {!leftPanelOpen && !settingsOpen && settings.pageTurnMode !== 'scrolled-continuous' && (
+                    {/* BDISE Scroll Mode */}
+                    {isBdiseMode && bookInstance && isReady ? (
+                        <ScrollReaderView
+                            ref={scrollReaderRef}
+                            book={bookInstance}
+                            bookId={bookId}
+                            initialSpineIndex={bdiseParams.initialSpineIndex}
+                            initialScrollOffset={bdiseParams.initialScrollOffset}
+                            readerStyles={{
+                                textColor: readerColors.textColor,
+                                bgColor: readerColors.bgColor,
+                                fontSize: settings.fontSize,
+                                fontFamily: settings.fontFamily,
+                                lineHeight: settings.lineHeight,
+                                paragraphSpacing: settings.paragraphSpacing,
+                                letterSpacing: settings.letterSpacing,
+                                textAlign: settings.textAlign,
+                                pageWidth: settings.pageWidth,
+                            }}
+                            onProgressChange={(p) => {
+                                setCurrentProgress(p)
+                                currentProgressRef.current = p
+                            }}
+                            onChapterChange={(_label, href) => {
+                                setCurrentSectionHref(href)
+                            }}
+                            onSelectionSearch={(keyword) => {
+                                setSearchQuery(keyword)
+                                setActiveTab('search')
+                                setLeftPanelOpen(true)
+                                setSettingsOpen(false)
+                                handleSearchWithKeyword(keyword)
+                            }}
+                        />
+                    ) : (
                         <>
-                            <div className={styles.prevZone} onClick={prevPage} title="Previous" />
-                            <div className={styles.nextZone} onClick={nextPage} title="Next" />
+                            {settings.pageTurnMode === 'scrolled-continuous' && renderLocked && (
+                                <div className={styles.renderLockOverlay} style={{ inset: `${headerHeight}px 0 ${footerEnabled ? footerHeight : 0}px 0` }} title="章节渲染中，请稍候" />
+                            )}
+
+                            <div
+                                className={`${styles.epubViewer} ${(!isReady || styleSyncing) ? styles.viewerHidden : ''}`}
+                                ref={viewerRef}
+                                style={{
+                                    filter: `brightness(${Math.min(1, Math.max(0.3, Number(settings.brightness) || 1))})`,
+                                    background: readerColors.bgColor,
+                                }}
+                            />
+
+                            {!leftPanelOpen && !settingsOpen && settings.pageTurnMode !== 'scrolled-continuous' && (
+                                <>
+                                    <div className={styles.prevZone} onClick={prevPage} title="Previous" />
+                                    <div className={styles.nextZone} onClick={nextPage} title="Next" />
+                                </>
+                            )}
                         </>
                     )}
                 </div>
@@ -1563,14 +1633,14 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                                     {loadingFonts ? (
                                         <div className={styles.fontLoading}>加载字体列表中...</div>
                                     ) : (
-                                        <select 
+                                        <select
                                             className={styles.fontSelect}
                                             value={getCurrentFontName()}
                                             onChange={(e) => handleFontChange(e.target.value)}
                                         >
                                             {systemFonts.map((fontName) => (
-                                                <option 
-                                                    key={fontName} 
+                                                <option
+                                                    key={fontName}
                                                     value={fontName}
                                                     style={{ fontFamily: fontName === '系统默认' ? 'inherit' : fontName }}
                                                 >

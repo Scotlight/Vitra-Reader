@@ -1,0 +1,81 @@
+/* ─── Selection Menu (shared between paginated & scroll modes) ─── */
+.selectionMenu {
+    position: fixed;
+    z-index: 100;
+    background: var(--panel-bg);
+    backdrop-filter: blur(10px);
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    padding: 10px;
+    transform: translateX(-50%) translateY(-100%);
+    border: 1px solid var(--border-color);
+    min-width: 220px;
+}
+
+/* When near top edge, flip menu below the selection */
+.below {
+    transform: translateX(-50%) translateY(0);
+}
+
+.selectionMenu button {
+    background: transparent;
+    border: none;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.selectionMenu button:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.selectionMenu button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.menuIconBtn {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.menuActionIcon {
+    width: 22px;
+    height: 22px;
+    display: block;
+}
+
+.menuDivider {
+    grid-column: 1 / -1;
+    width: 100%;
+    height: 1px;
+    background: var(--border-color);
+    margin: 2px 0;
+}
+
+.highlightSwatches {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.swatchBtn {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.2) !important;
+    padding: 0 !important;
+}

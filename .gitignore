@@ -36,6 +36,7 @@ Scrolled Continuous.md
 icon.md
 BUG.md
 COMPONENTS_USED.md
+scroll.md
 
 # Local run artifacts
 dev_error_log.txt
@@ -45,3 +46,13 @@ npm_install_log.txt
 # Local icon files (root-level temporary)
 1w2ze-5r6yb-001.ico
 6010d-l3wuw-001.ico
+BDISE_README.md
+COMPLETION_REPORT.md
+FINAL_CHECKLIST.md
+IMPLEMENTATION_SUMMARY.md
+INTEGRATION_GUIDE.md
+QUICK_REFERENCE.md
+.kiro/specs/bi-directional-infinite-scroll/design.md
+.kiro/specs/bi-directional-infinite-scroll/requirements.md
+.kiro/specs/bi-directional-infinite-scroll/tasks.md
+.kiro/specs/bidirectional-infinite-scroll/requirements.md

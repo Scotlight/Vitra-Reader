@@ -1,0 +1,40 @@
+/**
+ * Shadow Realm 容器样式
+ * 关键：使用 visibility: hidden 而非 display: none
+ * 原因：display: none 会导致无法计算元素高度
+ */
+.shadowContainer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: -1;
+  overflow: hidden;
+}
+
+/**
+ * 强制覆盖 EPUB 内置的分栏样式
+ */
+.shadowContainer :global(html),
+.shadowContainer :global(body) {
+  height: auto !important;
+  width: 100% !important;
+  overflow-y: visible !important;
+  overflow-x: hidden !important;
+  column-count: auto !important;
+  column-width: auto !important;
+  display: block !important;
+  position: relative !important;
+}
+
+/**
+ * 修复图片在垂直滚动下的尺寸问题
+ */
+.shadowContainer :global(img),
+.shadowContainer :global(svg) {
+  max-width: 100% !important;
+  height: auto !important;
+  page-break-inside: auto !important;
+}
