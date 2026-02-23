@@ -33,7 +33,7 @@
     overflow: hidden;
 }
 
-/* Page turn click zones */
+/* Page turn click zones — allow text selection to pass through during drag */
 .prevZone,
 .nextZone {
     position: absolute;
@@ -41,7 +41,6 @@
     bottom: 0;
     width: 15%;
     z-index: 5;
-    cursor: pointer;
 }
 
 .prevZone {

@@ -28,10 +28,33 @@ export function findTextInDOM(
         accumulated += tn.textContent ?? ''
     }
 
-    const idx = accumulated.indexOf(searchText)
-    if (idx === -1) return null
+    // Try exact match first
+    let idx = accumulated.indexOf(searchText)
+    let endIdx = idx === -1 ? -1 : idx + searchText.length
 
-    const endIdx = idx + searchText.length
+    // Fallback: normalized whitespace match
+    if (idx === -1) {
+        // Build mapping from normalized index -> original index
+        const origIndices: number[] = []
+        let prevWasSpace = false
+        for (let i = 0; i < accumulated.length; i++) {
+            const isSpace = /\s/.test(accumulated[i])
+            if (isSpace && prevWasSpace) continue
+            origIndices.push(i)
+            prevWasSpace = isSpace
+        }
+        const normalizedAccum = accumulated.replace(/\s+/g, ' ')
+        const normalizedSearch = searchText.replace(/\s+/g, ' ')
+        const normIdx = normalizedAccum.indexOf(normalizedSearch)
+        if (normIdx === -1) return null
+
+        idx = origIndices[normIdx] ?? 0
+        const normEnd = normIdx + normalizedSearch.length
+        // endIdx: if normEnd is past the mapping, use accumulated.length
+        endIdx = normEnd < origIndices.length
+            ? origIndices[normEnd] ?? accumulated.length
+            : accumulated.length
+    }
 
     // Find start node/offset
     let startNode: Text | null = null

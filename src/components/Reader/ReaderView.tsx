@@ -10,6 +10,7 @@ import styles from './ReaderView.module.css'
 interface ReaderViewProps {
     bookId: string
     onBack: () => void
+    jumpTarget?: { location: string; searchText?: string } | null
 }
 
 interface TocItem {
@@ -56,7 +57,7 @@ function contrastRatio(a: string, b: string): number {
     return (lighter + 0.05) / (darker + 0.05)
 }
 
-export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
+export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const tocListRef = useRef<HTMLDivElement>(null)
     const bookRef = useRef<Book | null>(null)
     const progressWriteTimerRef = useRef<number | null>(null)
@@ -304,11 +305,19 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
 
     // Jump to annotation location
     const jumpToAnnotation = async (location: string, searchText?: string) => {
-        // location format: bdise:{spineIndex} or bdise:{spineIndex}:{page/offset}
-        const parts = location.split(':')
-        if (parts[0] !== 'bdise') return
-        const spineIndex = parseInt(parts[1], 10)
-        if (isNaN(spineIndex)) return
+        let spineIndex: number | null = null
+
+        if (location.startsWith('bdise:')) {
+            spineIndex = parseInt(location.split(':')[1], 10)
+        } else if (location.startsWith('epubcfi(')) {
+            // epubcfi(/6/6!/4/4/28,...) — second number /6 = spine position, (pos/2 - 1) = spineIndex
+            const match = location.match(/^epubcfi\(\/(\d+)\/(\d+)/)
+            if (match) {
+                spineIndex = Math.max(0, Math.floor(parseInt(match[2], 10) / 2) - 1)
+            }
+        }
+
+        if (spineIndex === null || isNaN(spineIndex)) return
 
         if (isBdiseMode) {
             await scrollReaderRef.current?.jumpToSpine(spineIndex, searchText)
@@ -317,6 +326,18 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         }
         if (window.innerWidth < 768) setLeftPanelOpen(false)
     }
+
+    // Jump to target from library page
+    const jumpTargetDone = useRef(false)
+    useEffect(() => {
+        if (!jumpTarget || !isReady || jumpTargetDone.current) return
+        jumpTargetDone.current = true
+        // Small delay to ensure reader sub-component is mounted
+        const timer = setTimeout(() => {
+            jumpToAnnotation(jumpTarget.location, jumpTarget.searchText)
+        }, 500)
+        return () => clearTimeout(timer)
+    }, [isReady, jumpTarget])
 
     // Delete highlight
     const deleteHighlight = async (id: string) => {

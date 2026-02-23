@@ -651,11 +651,17 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         spineIndex: number,
     ) => {
         db.highlights.where('bookId').equals(bookId).toArray().then(highlights => {
-            const bdiseHighlights = highlights.filter(h =>
-                h.cfiRange.startsWith('bdise:') &&
-                parseInt(h.cfiRange.split(':')[1], 10) === spineIndex
-            );
-            for (const h of bdiseHighlights) {
+            const matching = highlights.filter(h => {
+                if (h.cfiRange.startsWith('bdise:')) {
+                    return parseInt(h.cfiRange.split(':')[1], 10) === spineIndex;
+                }
+                if (h.cfiRange.startsWith('epubcfi(')) {
+                    const m = h.cfiRange.match(/^epubcfi\(\/\d+\/(\d+)/);
+                    return m ? Math.max(0, Math.floor(parseInt(m[1], 10) / 2) - 1) === spineIndex : false;
+                }
+                return false;
+            });
+            for (const h of matching) {
                 if (renderedHighlightsRef.current.has(h.id)) continue;
                 const range = findTextInDOM(chapterEl, h.text);
                 if (range) {

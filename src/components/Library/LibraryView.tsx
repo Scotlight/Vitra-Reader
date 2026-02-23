@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useLibraryStore } from '../../stores/useLibraryStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { useSyncStore } from '../../stores/useSyncStore'
-import { db } from '../../services/storageService'
+import { db, type Highlight, type Bookmark } from '../../services/storageService'
 import heartIcon from '../../assets/icons/heart.svg'
 import noteIcon from '../../assets/icons/note.svg'
 import highlightIcon from '../../assets/icons/highlight.svg'
@@ -25,7 +25,7 @@ type ShelfItem = {
     name: string
 }
 
-export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string) => void }) => {
+export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { location: string; searchText?: string }) => void }) => {
     const { books, importBook, isLoading, loadBooks, removeBook } = useLibraryStore()
     const settings = useSettingsStore()
     const [keyword, setKeyword] = useState('')
@@ -40,6 +40,8 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string) => void }
     const [trashBookIds, setTrashBookIds] = useState<string[]>([])
     const [noteBookIds, setNoteBookIds] = useState<string[]>([])
     const [highlightBookIds, setHighlightBookIds] = useState<string[]>([])
+    const [allHighlights, setAllHighlights] = useState<Highlight[]>([])
+    const [allBookmarks, setAllBookmarks] = useState<Bookmark[]>([])
     const [shelves, setShelves] = useState<ShelfItem[]>([])
     const [shelfBookMap, setShelfBookMap] = useState<Record<string, string[]>>({})
     const [activeShelfId, setActiveShelfId] = useState<string | null>(null)
@@ -180,6 +182,8 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string) => void }
             ])
             setNoteBookIds(Array.from(new Set(bookmarks.map((item) => item.bookId))))
             setHighlightBookIds(Array.from(new Set(highlights.map((item) => item.bookId))))
+            setAllHighlights(highlights)
+            setAllBookmarks(bookmarks)
         }
         void loadBookUsage()
     }, [books])
@@ -342,6 +346,36 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string) => void }
         books.forEach((book) => map.set(book.id, book))
         return map
     }, [books])
+
+    const groupedHighlights = useMemo(() => {
+        const map = new Map<string, Highlight[]>()
+        allHighlights.forEach((h) => {
+            if (!map.has(h.bookId)) map.set(h.bookId, [])
+            map.get(h.bookId)!.push(h)
+        })
+        return Array.from(map.entries())
+            .map(([bookId, items]) => ({
+                bookId,
+                bookTitle: bookById.get(bookId)?.title ?? '未知书籍',
+                items: items.sort((a, b) => b.createdAt - a.createdAt),
+            }))
+            .sort((a, b) => b.items[0].createdAt - a.items[0].createdAt)
+    }, [allHighlights, bookById])
+
+    const groupedBookmarks = useMemo(() => {
+        const map = new Map<string, Bookmark[]>()
+        allBookmarks.forEach((b) => {
+            if (!map.has(b.bookId)) map.set(b.bookId, [])
+            map.get(b.bookId)!.push(b)
+        })
+        return Array.from(map.entries())
+            .map(([bookId, items]) => ({
+                bookId,
+                bookTitle: bookById.get(bookId)?.title ?? '未知书籍',
+                items: items.sort((a, b) => b.createdAt - a.createdAt),
+            }))
+            .sort((a, b) => b.items[0].createdAt - a.items[0].createdAt)
+    }, [allBookmarks, bookById])
 
     const shelfGroups = useMemo(() => {
         return shelves
@@ -1153,10 +1187,54 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string) => void }
                 )}
 
                 <div className={styles.statusLine}>
-                    <span>{visibleBooks.length} 本书</span>
+                    <span>{activeNav === 'highlight' ? `${allHighlights.length} 条高亮` : activeNav === 'notes' ? `${allBookmarks.length} 条笔记` : `${visibleBooks.length} 本书`}</span>
                 </div>
 
                 <div className={styles.scrollArea}>
+                    {(activeNav === 'highlight' || activeNav === 'notes') ? (
+                        <div className={styles.annotationGroups}>
+                            {(activeNav === 'highlight' ? groupedHighlights : groupedBookmarks).length === 0 ? (
+                                <div className={styles.emptyState}>
+                                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.5 }} transition={{ delay: 0.2 }}>
+                                        {activeNav === 'highlight' ? '还没有高亮标注。' : '还没有笔记。'}
+                                    </motion.p>
+                                </div>
+                            ) : (activeNav === 'highlight' ? groupedHighlights : []).map((group) => (
+                                <div key={group.bookId} className={styles.annotationGroup}>
+                                    <button className={styles.annotationGroupTitle} onClick={() => onOpenBook(group.bookId)}>
+                                        <span>{group.bookTitle}</span>
+                                        <span className={styles.annotationCount}>{group.items.length}</span>
+                                    </button>
+                                    {group.items.map((h) => (
+                                        <div key={h.id} className={styles.annotationEntry} onClick={() => onOpenBook(group.bookId, { location: h.cfiRange, searchText: h.text })} style={{ cursor: 'pointer' }}>
+                                            <span className={styles.highlightBar} style={{ background: h.color }} />
+                                            <span className={styles.annotationText}>{h.text}</span>
+                                            <span className={styles.annotationDate}>{new Date(h.createdAt).toLocaleDateString()}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                            {activeNav === 'notes' && groupedBookmarks.map((group) => (
+                                <div key={group.bookId} className={styles.annotationGroup}>
+                                    <button className={styles.annotationGroupTitle} onClick={() => onOpenBook(group.bookId)}>
+                                        <span>{group.bookTitle}</span>
+                                        <span className={styles.annotationCount}>{group.items.length}</span>
+                                    </button>
+                                    {group.items.map((b) => (
+                                        <div key={b.id} className={styles.annotationEntry} onClick={() => onOpenBook(group.bookId, { location: b.location, searchText: b.title })} style={{ cursor: 'pointer' }}>
+                                            <span className={styles.noteIcon}>📝</span>
+                                            <div className={styles.noteContent}>
+                                                {b.title && <span className={styles.noteQuote}>{b.title}</span>}
+                                                {b.note && <span className={styles.noteBody}>{b.note}</span>}
+                                            </div>
+                                            <span className={styles.annotationDate}>{new Date(b.createdAt).toLocaleDateString()}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                    <>
                     {activeNav === 'all' && !activeShelfId && shelfGroups.length > 0 && (
                         <div className={styles.shelfGroups}>
                             {shelfGroups.map((group) => (
@@ -1237,6 +1315,8 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string) => void }
                                 ))}
                             </AnimatePresence>
                         </motion.div>
+                    )}
+                    </>
                     )}
                 </div>
                 {contextMenu.visible && contextMenu.bookId && (

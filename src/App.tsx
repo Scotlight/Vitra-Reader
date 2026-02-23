@@ -10,11 +10,13 @@ type View = 'library' | 'reader'
 function App() {
     const [currentView, setCurrentView] = useState<View>('library')
     const [currentBookId, setCurrentBookId] = useState<string | null>(null)
+    const [jumpTarget, setJumpTarget] = useState<{ location: string; searchText?: string } | null>(null)
     const settings = useSettingsStore()
     const syncStore = useSyncStore()
 
-    const handleOpenBook = (bookId: string) => {
+    const handleOpenBook = (bookId: string, jump?: { location: string; searchText?: string }) => {
         setCurrentBookId(bookId)
+        setJumpTarget(jump ?? null)
         setCurrentView('reader')
     }
 
@@ -78,7 +80,7 @@ function App() {
                 {currentView === 'library' ? (
                     <LibraryView onOpenBook={handleOpenBook} />
                 ) : (
-                    <ReaderView bookId={currentBookId!} onBack={handleBackToLibrary} />
+                    <ReaderView bookId={currentBookId!} onBack={handleBackToLibrary} jumpTarget={jumpTarget} />
                 )}
             </main>
         </div>

@@ -363,11 +363,17 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     // ── Highlights ──
     const applyHighlights = useCallback((el: HTMLElement, spineIndex: number) => {
         db.highlights.where('bookId').equals(bookId).toArray().then(highlights => {
-            const bdise = highlights.filter(h =>
-                h.cfiRange.startsWith('bdise:') &&
-                parseInt(h.cfiRange.split(':')[1], 10) === spineIndex
-            );
-            for (const h of bdise) {
+            const matching = highlights.filter(h => {
+                if (h.cfiRange.startsWith('bdise:')) {
+                    return parseInt(h.cfiRange.split(':')[1], 10) === spineIndex;
+                }
+                if (h.cfiRange.startsWith('epubcfi(')) {
+                    const m = h.cfiRange.match(/^epubcfi\(\/\d+\/(\d+)/);
+                    return m ? Math.max(0, Math.floor(parseInt(m[1], 10) / 2) - 1) === spineIndex : false;
+                }
+                return false;
+            });
+            for (const h of matching) {
                 if (renderedHighlightsRef.current.has(h.id)) continue;
                 const range = findTextInDOM(el, h.text);
                 if (range) {
@@ -506,9 +512,25 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 }}
             />
 
-            {/* Page turn zones */}
-            <div className={styles.prevZone} onClick={prevPage} title="Previous" />
-            <div className={styles.nextZone} onClick={nextPage} title="Next" />
+            {/* Page turn zones — click only, no drag interference */}
+            <div
+                className={styles.prevZone}
+                onMouseDown={(e) => { (e.currentTarget as HTMLElement).dataset.downX = String(e.clientX); (e.currentTarget as HTMLElement).dataset.downY = String(e.clientY); }}
+                onMouseUp={(e) => {
+                    const dx = Math.abs(e.clientX - Number((e.currentTarget as HTMLElement).dataset.downX || 0));
+                    const dy = Math.abs(e.clientY - Number((e.currentTarget as HTMLElement).dataset.downY || 0));
+                    if (dx < 5 && dy < 5 && !window.getSelection()?.toString()) prevPage();
+                }}
+            />
+            <div
+                className={styles.nextZone}
+                onMouseDown={(e) => { (e.currentTarget as HTMLElement).dataset.downX = String(e.clientX); (e.currentTarget as HTMLElement).dataset.downY = String(e.clientY); }}
+                onMouseUp={(e) => {
+                    const dx = Math.abs(e.clientX - Number((e.currentTarget as HTMLElement).dataset.downX || 0));
+                    const dy = Math.abs(e.clientY - Number((e.currentTarget as HTMLElement).dataset.downY || 0));
+                    if (dx < 5 && dy < 5 && !window.getSelection()?.toString()) nextPage();
+                }}
+            />
 
             {/* Loading */}
             {isLoading && (
