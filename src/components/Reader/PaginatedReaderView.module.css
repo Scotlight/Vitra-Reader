@@ -33,32 +33,6 @@
     overflow: hidden;
 }
 
-/* Page turn click zones — allow text selection to pass through during drag */
-.prevZone,
-.nextZone {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 15%;
-    z-index: 5;
-}
-
-.prevZone {
-    left: 0;
-}
-
-.prevZone:hover {
-    background: linear-gradient(to right, rgba(0, 0, 0, 0.03), transparent);
-}
-
-.nextZone {
-    right: 0;
-}
-
-.nextZone:hover {
-    background: linear-gradient(to left, rgba(0, 0, 0, 0.03), transparent);
-}
-
 .emptyState {
     display: flex;
     align-items: center;

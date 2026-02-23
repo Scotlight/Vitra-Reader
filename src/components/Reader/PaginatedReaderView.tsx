@@ -325,6 +325,25 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         return () => document.removeEventListener('keydown', handler);
     }, [prevPage, nextPage]);
 
+    // ── Click-to-turn on viewport edges ──
+    useEffect(() => {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        let downX = 0, downY = 0;
+        const onDown = (e: MouseEvent) => { downX = e.clientX; downY = e.clientY; };
+        const onUp = (e: MouseEvent) => {
+            if (Math.abs(e.clientX - downX) > 5 || Math.abs(e.clientY - downY) > 5) return;
+            if (window.getSelection()?.toString()) return;
+            const rect = viewport.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            if (x < rect.width * 0.15) prevPage();
+            else if (x > rect.width * 0.85) nextPage();
+        };
+        viewport.addEventListener('mousedown', onDown);
+        viewport.addEventListener('mouseup', onUp);
+        return () => { viewport.removeEventListener('mousedown', onDown); viewport.removeEventListener('mouseup', onUp); };
+    }, [prevPage, nextPage]);
+
     // ── Selection detection ──
     useEffect(() => {
         const viewport = viewportRef.current;
@@ -509,26 +528,6 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 style={{
                     columnWidth: `${colW}px`,
                     transform: `translateX(${translateX}px)`,
-                }}
-            />
-
-            {/* Page turn zones — click only, no drag interference */}
-            <div
-                className={styles.prevZone}
-                onMouseDown={(e) => { (e.currentTarget as HTMLElement).dataset.downX = String(e.clientX); (e.currentTarget as HTMLElement).dataset.downY = String(e.clientY); }}
-                onMouseUp={(e) => {
-                    const dx = Math.abs(e.clientX - Number((e.currentTarget as HTMLElement).dataset.downX || 0));
-                    const dy = Math.abs(e.clientY - Number((e.currentTarget as HTMLElement).dataset.downY || 0));
-                    if (dx < 5 && dy < 5 && !window.getSelection()?.toString()) prevPage();
-                }}
-            />
-            <div
-                className={styles.nextZone}
-                onMouseDown={(e) => { (e.currentTarget as HTMLElement).dataset.downX = String(e.clientX); (e.currentTarget as HTMLElement).dataset.downY = String(e.clientY); }}
-                onMouseUp={(e) => {
-                    const dx = Math.abs(e.clientX - Number((e.currentTarget as HTMLElement).dataset.downX || 0));
-                    const dy = Math.abs(e.clientY - Number((e.currentTarget as HTMLElement).dataset.downY || 0));
-                    if (dx < 5 && dy < 5 && !window.getSelection()?.toString()) nextPage();
                 }}
             />
 
