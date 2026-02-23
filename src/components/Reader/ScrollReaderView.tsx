@@ -26,6 +26,7 @@ import { useScrollEvents } from '../../hooks/useScrollEvents';
 import { db } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
 import { SelectionMenu } from './SelectionMenu';
+import { NoteDialog } from './NoteDialog';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
@@ -59,7 +60,7 @@ interface ScrollReaderViewProps {
 }
 
 export interface ScrollReaderHandle {
-    jumpToSpine: (spineIndex: number) => Promise<void>;
+    jumpToSpine: (spineIndex: number, searchText?: string) => Promise<void>;
 }
 
 // ── Constants ──
@@ -87,6 +88,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     const loadingLockRef = useRef<Set<number>>(new Set());
     const progressTimerRef = useRef<number | null>(null);
     const initialScrollDone = useRef(false);
+    const pendingSearchTextRef = useRef<string | null>(null);
 
     const [chapters, setChapters] = useState<LoadedChapter[]>([]);
     const chaptersRef = useRef<LoadedChapter[]>([]);
@@ -100,6 +102,9 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     const [selectionMenu, setSelectionMenu] = useState<{
         visible: boolean; x: number; y: number; text: string; spineIndex: number;
     }>({ visible: false, x: 0, y: 0, text: '', spineIndex: -1 });
+    const [noteDialog, setNoteDialog] = useState<{
+        visible: boolean; text: string; spineIndex: number;
+    }>({ visible: false, text: '', spineIndex: -1 });
     const renderedHighlightsRef = useRef<Set<string>>(new Set());
 
     // Keep refs in sync with state
@@ -327,6 +332,25 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             initialScrollDone.current = true;
         }
 
+        // Handle pending search text after chapter mount
+        const searchText = pendingSearchTextRef.current;
+        if (searchText) {
+            pendingSearchTextRef.current = null;
+            const mountedChapters = chapters.filter(ch => ch.status === 'ready' || ch.status === 'mounted');
+            for (const ch of mountedChapters) {
+                const el = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
+                if (el) {
+                    const range = findTextInDOM(el, searchText);
+                    if (range) {
+                        const rect = range.getBoundingClientRect();
+                        const vpRect = viewport.getBoundingClientRect();
+                        viewport.scrollTop += rect.top - vpRect.top;
+                        break;
+                    }
+                }
+            }
+        }
+
         if (!isInitialized && chapters.some(ch => ch.status === 'ready' || ch.status === 'mounted')) {
             setIsInitialized(true);
         }
@@ -502,8 +526,9 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
     // ── TOC Jump ──
 
-    const jumpToSpine = useCallback(async (targetSpineIndex: number) => {
+    const jumpToSpine = useCallback(async (targetSpineIndex: number, searchText?: string) => {
         if (targetSpineIndex < 0 || targetSpineIndex >= spineItemsRef.current.length) return;
+        pendingSearchTextRef.current = searchText || null;
 
         // Check if already mounted
         const existing = chaptersRef.current.find(ch =>
@@ -515,9 +540,19 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             const listEl = chapterListRef.current;
             const viewport = viewportRef.current;
             if (listEl && viewport) {
-                const domEl = listEl.querySelector(`[data-chapter-id="ch-${targetSpineIndex}"]`);
+                const domEl = listEl.querySelector(`[data-chapter-id="ch-${targetSpineIndex}"]`) as HTMLElement | null;
                 if (domEl) {
-                    viewport.scrollTop = (domEl as HTMLElement).offsetTop;
+                    viewport.scrollTop = domEl.offsetTop;
+                    // If searchText, find and scroll to it
+                    if (searchText) {
+                        pendingSearchTextRef.current = null;
+                        const range = findTextInDOM(domEl, searchText);
+                        if (range) {
+                            const rect = range.getBoundingClientRect();
+                            const vpRect = viewport.getBoundingClientRect();
+                            viewport.scrollTop += rect.top - vpRect.top;
+                        }
+                    }
                 }
             }
             return;
@@ -687,15 +722,24 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     }, [selectionMenu, bookId, dismissMenu]);
 
     const handleAddNote = useCallback(async () => {
-        await db.bookmarks.add({
-            id: crypto.randomUUID(),
-            bookId,
-            location: `bdise:${selectionMenu.spineIndex}`,
-            title: selectionMenu.text.slice(0, 40),
-            createdAt: Date.now(),
+        setNoteDialog({
+            visible: true,
+            text: selectionMenu.text,
+            spineIndex: selectionMenu.spineIndex,
         });
         dismissMenu();
-    }, [selectionMenu, bookId, dismissMenu]);
+    }, [selectionMenu, dismissMenu]);
+
+    const handleNoteSave = useCallback(async (note: string) => {
+        await db.bookmarks.add({
+            id: crypto.randomUUID(), bookId,
+            location: `bdise:${noteDialog.spineIndex}`,
+            title: noteDialog.text.slice(0, 80),
+            note,
+            createdAt: Date.now(),
+        });
+        setNoteDialog({ visible: false, text: '', spineIndex: -1 });
+    }, [noteDialog, bookId]);
 
     const handleSearch = useCallback(() => {
         const keyword = selectionMenu.text.trim();
@@ -798,6 +842,13 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 onReadAloud={handleReadAloud}
                 onTranslate={handleTranslate}
                 onDismiss={dismissMenu}
+            />
+
+            <NoteDialog
+                visible={noteDialog.visible}
+                selectedText={noteDialog.text}
+                onSave={handleNoteSave}
+                onCancel={() => setNoteDialog({ visible: false, text: '', spineIndex: -1 })}
             />
         </div>
     );

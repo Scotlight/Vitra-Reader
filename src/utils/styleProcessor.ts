@@ -1,5 +1,5 @@
 /**
- * 生成 CSS Override 样式
+ * 生成 CSS Override 样式（滚动模式专用）
  * 用于强制覆盖 EPUB 的 multi-column 布局
  */
 export function generateCSSOverride(chapterId: string): string {
@@ -15,12 +15,36 @@ export function generateCSSOverride(chapterId: string): string {
       display: block !important;
       position: relative !important;
     }
-    
+
     [data-chapter-id="${chapterId}"] img,
     [data-chapter-id="${chapterId}"] svg {
       max-width: 100% !important;
       height: auto !important;
       page-break-inside: auto !important;
+    }
+  `;
+}
+
+/**
+ * 生成翻页模式专用的 CSS Override
+ * 不禁用 column 属性，允许父容器使用 CSS multi-column 分页
+ */
+export function generatePaginatedCSSOverride(chapterId: string): string {
+  return `
+    [data-chapter-id="${chapterId}"] img,
+    [data-chapter-id="${chapterId}"] svg {
+      max-width: 100% !important;
+      height: auto !important;
+      break-inside: avoid !important;
+    }
+    [data-chapter-id="${chapterId}"] p,
+    [data-chapter-id="${chapterId}"] h1,
+    [data-chapter-id="${chapterId}"] h2,
+    [data-chapter-id="${chapterId}"] h3,
+    [data-chapter-id="${chapterId}"] li {
+      break-inside: avoid !important;
+      orphans: 2 !important;
+      widows: 2 !important;
     }
   `;
 }

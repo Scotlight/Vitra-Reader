@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react';
 import styles from './ShadowRenderer.module.css';
 import { waitForAssetLoad, getContainerHeight } from '../../utils/assetLoader';
-import { generateCSSOverride, scopeStyles, extractStyles, removeStyleTags } from '../../utils/styleProcessor';
+import { generateCSSOverride, generatePaginatedCSSOverride, scopeStyles, extractStyles, removeStyleTags } from '../../utils/styleProcessor';
 
 export interface ReaderStyleConfig {
   textColor: string;
@@ -28,11 +28,13 @@ export interface ShadowRendererProps {
   onError?: (error: Error) => void;
   /** 阅读器样式配置 */
   readerStyles: ReaderStyleConfig;
+  /** 渲染模式：scroll（滚动）或 paginated（翻页），默认 scroll */
+  mode?: 'scroll' | 'paginated';
 }
 
 /**
  * ShadowRenderer — 离屏渲染组件 (The Shadow Realm)
- * 
+ *
  * 核心职责：
  * 1. 在 visibility:hidden 容器中渲染章节 HTML
  * 2. 注入 CSS Override（强制覆盖 EPUB multi-column 布局）
@@ -48,6 +50,7 @@ export function ShadowRenderer({
   onReady,
   onError,
   readerStyles,
+  mode = 'scroll',
 }: ShadowRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const hasReportedRef = useRef(false);
@@ -124,7 +127,9 @@ export function ShadowRenderer({
 
         // 3. Build combined scoped stylesheet
         const styleEl = document.createElement('style');
-        const cssOverride = generateCSSOverride(chapterId);
+        const cssOverride = mode === 'paginated'
+          ? generatePaginatedCSSOverride(chapterId)
+          : generateCSSOverride(chapterId);
         const allStyles = [...externalStyles, ...inlineStyles];
         const scopedCss = allStyles
           .map(css => scopeStyles(css, chapterId))

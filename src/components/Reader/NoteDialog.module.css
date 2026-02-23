@@ -1,0 +1,113 @@
+.backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 100;
+}
+
+.dialog {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 400px;
+    background: var(--bg-primary, #fff);
+    border-radius: 12px;
+    padding: 20px;
+    z-index: 101;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.title {
+    margin: 0 0 16px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary, #1a1a1a);
+}
+
+.quote {
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.quoteLabel {
+    font-size: 11px;
+    color: var(--text-secondary, #666);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.quoteText {
+    margin: 6px 0 0 0;
+    font-size: 13px;
+    font-style: italic;
+    color: var(--text-primary, #1a1a1a);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.textarea {
+    width: 100%;
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 100px;
+    background: var(--bg-primary, #fff);
+    color: var(--text-primary, #1a1a1a);
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.textarea:focus {
+    border-color: var(--accent-color, #007bff);
+}
+
+.textarea::placeholder {
+    color: var(--text-secondary, #999);
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.cancelBtn,
+.saveBtn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, opacity 0.2s;
+}
+
+.cancelBtn {
+    background: transparent;
+    border: 1px solid var(--border-color, #ddd);
+    color: var(--text-secondary, #666);
+}
+
+.cancelBtn:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.saveBtn {
+    background: var(--accent-color, #007bff);
+    border: none;
+    color: #fff;
+}
+
+.saveBtn:hover {
+    opacity: 0.9;
+}

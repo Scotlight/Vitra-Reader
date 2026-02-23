@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__ace-tool-rs__search_context",
+      "Bash(cd \"D:\\\\0010\\\\.A_project\\\\epub reader\" && npx tsc --noEmit 2>&1)"
+    ]
+  }
+}

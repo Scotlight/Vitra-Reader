@@ -31,7 +31,8 @@ export interface Bookmark {
     id: string
     bookId: string
     location: string
-    title: string
+    title: string       // 选中的文本（引用内容）
+    note: string        // 用户写的笔记
     createdAt: number
 }
 

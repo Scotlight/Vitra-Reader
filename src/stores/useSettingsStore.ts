@@ -40,7 +40,10 @@ export interface ReaderSettings {
 }
 
 interface SettingsStore extends ReaderSettings {
+    savedTextColors: string[]
+    savedBgColors: string[]
     updateSetting: <K extends keyof ReaderSettings>(key: K, value: ReaderSettings[K]) => void
+    addSavedColor: (type: 'text' | 'bg', color: string) => void
     resetToDefaults: () => void
 }
 
@@ -73,9 +76,19 @@ const DEFAULT_SETTINGS: ReaderSettings = {
 
 export const useSettingsStore = create<SettingsStore>((set) => ({
     ...DEFAULT_SETTINGS,
+    savedTextColors: [],
+    savedBgColors: [],
 
     updateSetting: (key, value) =>
         set((state) => ({ ...state, [key]: value })),
+
+    addSavedColor: (type, color) =>
+        set((state) => {
+            const key = type === 'text' ? 'savedTextColors' : 'savedBgColors'
+            const existing = state[key]
+            const filtered = existing.filter(c => c.toLowerCase() !== color.toLowerCase())
+            return { ...state, [key]: [color, ...filtered].slice(0, 6) }
+        }),
 
     resetToDefaults: () =>
         set(DEFAULT_SETTINGS),

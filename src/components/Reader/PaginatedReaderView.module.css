@@ -1,0 +1,70 @@
+/* PaginatedReaderView — CSS column-based pagination */
+
+.viewport {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.columnContainer {
+    column-fill: auto;
+    column-gap: 0;
+    box-sizing: border-box;
+    transition: transform 0.25s ease-out, opacity 0.15s ease-out;
+    opacity: 1;
+    /* height 由 JS 动态设置 */
+}
+
+.columnContainer.fading {
+    opacity: 0;
+    pointer-events: none; /* 淡出时禁用交互 */
+}
+
+/* Shadow rendering area (offscreen) */
+.shadowArea {
+    position: absolute;
+    top: 0;
+    left: -9999px;
+    width: 100%;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: -1;
+    overflow: hidden;
+}
+
+/* Page turn click zones */
+.prevZone,
+.nextZone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 15%;
+    z-index: 5;
+    cursor: pointer;
+}
+
+.prevZone {
+    left: 0;
+}
+
+.prevZone:hover {
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.03), transparent);
+}
+
+.nextZone {
+    right: 0;
+}
+
+.nextZone:hover {
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.03), transparent);
+}
+
+.emptyState {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    opacity: 0.5;
+    font-size: 16px;
+}

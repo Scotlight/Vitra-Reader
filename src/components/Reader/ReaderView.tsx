@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import ePub, { Book, Rendition } from 'epubjs'
+import ePub, { Book } from 'epubjs'
 import { motion, AnimatePresence } from 'framer-motion'
-import { db } from '../../services/storageService'
+import { db, Highlight, Bookmark } from '../../services/storageService'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { ScrollReaderView, ScrollReaderHandle } from './ScrollReaderView'
-import { SelectionMenu, HIGHLIGHT_PRESETS } from './SelectionMenu'
+import { PaginatedReaderView, PaginatedReaderHandle } from './PaginatedReaderView'
 import styles from './ReaderView.module.css'
 
 interface ReaderViewProps {
@@ -22,14 +22,6 @@ interface TocItem {
 interface SearchResult {
     cfi: string
     excerpt: string
-}
-
-interface SelectionMenuState {
-    visible: boolean
-    x: number
-    y: number
-    text: string
-    cfiRange: string
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
@@ -65,43 +57,20 @@ function contrastRatio(a: string, b: string): number {
 }
 
 export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
-    const viewerRef = useRef<HTMLDivElement>(null)
     const tocListRef = useRef<HTMLDivElement>(null)
     const bookRef = useRef<Book | null>(null)
-    const renditionRef = useRef<Rendition | null>(null)
     const progressWriteTimerRef = useRef<number | null>(null)
-    const renderLockRef = useRef(false)
-    const renderUnlockTimerRef = useRef<number | null>(null)
-    const scrollGateTimerRef = useRef<number | null>(null)
-    const scrollGateUntilRef = useRef(0)
-    const scrollGateDirectionRef = useRef<-1 | 0 | 1>(0)
-    const scrollGateLastPassAtRef = useRef(0)
-    const scrollGateVelocityRef = useRef(0)
-    const chapterSwitchPendingRef = useRef(false)
-    const chapterSwitchTimerRef = useRef<number | null>(null)
-    const manualProgressBypassUntilRef = useRef(0)
-    const styleSyncingRef = useRef(false)
-    const displayQueueRef = useRef<Promise<void>>(Promise.resolve())
     const preloadedSectionsRef = useRef<Set<string>>(new Set())
-    const preloadQueueRef = useRef<Array<{ key: string; item: any; bookAny: any }>>([])
-    const preloadIdleHandleRef = useRef<number | null>(null)
-    const preloadTimerHandleRef = useRef<number | null>(null)
-    const preloadInFlightRef = useRef(0)
     const locationsReadyRef = useRef(false)
-    const lastRelocatedAtRef = useRef(0)
-    const lastProgressCommitAtRef = useRef(0)
-    const lastSectionHrefRef = useRef('')
-    const lastLocationRef = useRef<{ cfi: string; href: string; percentage: number } | null>(null)
     const currentProgressRef = useRef(0)
 
     const [isReady, setIsReady] = useState(false)
     const [bookTitleText, setBookTitleText] = useState('Reading')
     const [leftPanelOpen, setLeftPanelOpen] = useState(false)
     const [settingsOpen, setSettingsOpen] = useState(false)
-    const [activeTab, setActiveTab] = useState<'toc' | 'search'>('toc')
+    const [activeTab, setActiveTab] = useState<'toc' | 'search' | 'annotations'>('toc')
 
     const [toc, setToc] = useState<TocItem[]>([])
-    const [currentCfi, setCurrentCfi] = useState<string>('')
     const [currentSectionHref, setCurrentSectionHref] = useState<string>('')
     const [currentProgress, setCurrentProgress] = useState(0)
     const [clockText, setClockText] = useState('')
@@ -111,18 +80,22 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     const [isSearching, setIsSearching] = useState(false)
     const [systemFonts, setSystemFonts] = useState<string[]>([])
     const [loadingFonts, setLoadingFonts] = useState(false)
-    const [renderLocked, setRenderLocked] = useState(false)
-    const [styleSyncing, setStyleSyncing] = useState(false)
     const [bookInstance, setBookInstance] = useState<Book | null>(null)
     const [bdiseParams, setBdiseParams] = useState({ initialSpineIndex: 0, initialScrollOffset: 0 })
+    const [paginatedParams, setPaginatedParams] = useState({ initialSpineIndex: 0, initialPage: 0 })
     const scrollReaderRef = useRef<ScrollReaderHandle>(null)
+    const paginatedReaderRef = useRef<PaginatedReaderHandle>(null)
+
+    // Annotations state
+    const [highlights, setHighlights] = useState<Highlight[]>([])
+    const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
+    const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null)
 
     // Temporary color states for picker (only text color needs delay)
     const [tempTextColor, setTempTextColor] = useState<string | null>(null)
-
-    const [selectionMenu, setSelectionMenu] = useState<SelectionMenuState>({ visible: false, x: 0, y: 0, text: '', cfiRange: '' })
-    const [activeSearchHitCfi, setActiveSearchHitCfi] = useState<string | null>(null)
-    const allowScriptedContentInDev = import.meta.env.DEV
+    const [textPickerDirty, setTextPickerDirty] = useState(false)
+    const [bgPickerDirty, setBgPickerDirty] = useState(false)
+    const [tempBgColor, setTempBgColor] = useState<string | null>(null)
 
     const settings = useSettingsStore()
     const isBdiseMode = settings.pageTurnMode === 'scrolled-continuous'
@@ -147,102 +120,6 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
     })()
 
     const normalizeHref = (href?: string) => (href || '').split('#')[0].split('?')[0]
-    const setRenderLock = (locked: boolean) => {
-        renderLockRef.current = locked
-        setRenderLocked(locked)
-    }
-
-    const getScrollPhysics = (deltaY: number) => {
-        const absDelta = Math.min(480, Math.abs(deltaY))
-        const acceleration = 0.42
-        const friction = 0.78
-        const prevVelocity = scrollGateVelocityRef.current
-        const velocity = prevVelocity * friction + absDelta * acceleration
-        scrollGateVelocityRef.current = velocity
-
-        const normalized = Math.min(1, velocity / 320)
-        const eased = 1 - (1 - normalized) ** 2.2
-        const holdMs = Math.round(55 + eased * 130)
-        const pulseMs = Math.round(40 + eased * 75)
-        return { holdMs, pulseMs, absDelta }
-    }
-
-    const schedulePreloadDrain = () => {
-        if (preloadIdleHandleRef.current || preloadTimerHandleRef.current) return
-        const run = (deadline?: { timeRemaining: () => number }) => {
-            preloadIdleHandleRef.current = null
-            preloadTimerHandleRef.current = null
-            const maxInFlight = 2
-            const maxPerTick = deadline ? 2 : 1
-            let started = 0
-
-            while (
-                preloadQueueRef.current.length > 0 &&
-                preloadInFlightRef.current < maxInFlight &&
-                started < maxPerTick
-            ) {
-                if (deadline && deadline.timeRemaining() < 4 && started > 0) break
-                const task = preloadQueueRef.current.shift()
-                if (!task) break
-                started += 1
-                preloadInFlightRef.current += 1
-                Promise.resolve()
-                    .then(async () => {
-                        if (typeof task.item?.load === 'function') {
-                            await task.item.load(task.bookAny.load.bind(task.bookAny))
-                        }
-                    })
-                    .catch(() => {
-                        preloadedSectionsRef.current.delete(task.key)
-                    })
-                    .finally(() => {
-                        preloadInFlightRef.current = Math.max(0, preloadInFlightRef.current - 1)
-                        schedulePreloadDrain()
-                    })
-            }
-
-            if (preloadQueueRef.current.length > 0) {
-                schedulePreloadDrain()
-            }
-        }
-        const requestIdle = (window as any).requestIdleCallback
-        if (typeof requestIdle === 'function') {
-            preloadIdleHandleRef.current = requestIdle((deadline: any) => run(deadline), { timeout: 120 })
-            return
-        }
-        preloadTimerHandleRef.current = window.setTimeout(() => run(), 24)
-    }
-
-    const queueDisplay = (target?: string) => {
-        const run = async () => {
-            const rendition = renditionRef.current
-            if (!rendition) return
-            if (target) {
-                manualProgressBypassUntilRef.current = Date.now() + 1200
-            }
-            const shouldLock = settings.pageTurnMode !== 'scrolled-continuous'
-            if (shouldLock) setRenderLock(true)
-            try {
-                await rendition.display(target)
-            } catch (error) {
-                console.warn('Queue display failed:', error)
-            } finally {
-                if (renderUnlockTimerRef.current) {
-                    window.clearTimeout(renderUnlockTimerRef.current)
-                }
-                if (!shouldLock) {
-                    setRenderLock(false)
-                    return
-                }
-                renderUnlockTimerRef.current = window.setTimeout(() => {
-                    setRenderLock(false)
-                    renderUnlockTimerRef.current = null
-                }, 80)
-            }
-        }
-        displayQueueRef.current = displayQueueRef.current.then(run, run)
-        return displayQueueRef.current
-    }
 
     const ensureLocationsReady = async (book: Book) => {
         if (locationsReadyRef.current) return
@@ -261,92 +138,6 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         }
     }
 
-    const calculateProgress = (location: any) => {
-        const cfi = String(location?.start?.cfi || '')
-        const bookAny = bookRef.current as any
-        const fromCfi = Number(bookAny?.locations?.percentageFromCfi?.(cfi))
-        if (Number.isFinite(fromCfi) && fromCfi >= 0) {
-            return Math.max(0, Math.min(1, fromCfi))
-        }
-
-        const startPercentage = Number(location?.start?.percentage)
-        if (Number.isFinite(startPercentage) && startPercentage >= 0) {
-            return Math.max(0, Math.min(1, startPercentage))
-        }
-
-        const spineItems = bookAny?.spine?.spineItems as any[] | undefined
-        const currentHref = normalizeHref(location?.start?.href)
-        if (Array.isArray(spineItems) && spineItems.length > 0 && currentHref) {
-            const index = spineItems.findIndex((item) => normalizeHref(item?.href) === currentHref)
-            if (index >= 0) {
-                const displayedPage = Number(location?.start?.displayed?.page)
-                const displayedTotal = Number(location?.start?.displayed?.total)
-                const localProgress =
-                    Number.isFinite(displayedPage) &&
-                        Number.isFinite(displayedTotal) &&
-                        displayedTotal > 0
-                        ? Math.max(0, Math.min(1, displayedPage / displayedTotal))
-                        : 0
-                const progressFromSpine = (index + localProgress) / spineItems.length
-                return Math.max(0, Math.min(1, progressFromSpine))
-            }
-        }
-
-        const startLocation = Number(location?.start?.location)
-        const locations = bookAny?.locations
-        const total =
-            (typeof locations?.length === 'function' ? Number(locations.length()) : 0) ||
-            (typeof locations?.total === 'number' ? Number(locations.total) : 0) ||
-            (Array.isArray(locations?._locations) ? locations._locations.length : 0)
-        if (Number.isFinite(startLocation) && startLocation >= 0 && total > 0) {
-            return Math.max(0, Math.min(1, startLocation / total))
-        }
-        const fallbackFromLast = Number(lastLocationRef.current?.percentage)
-        if (Number.isFinite(fallbackFromLast) && fallbackFromLast >= 0) {
-            return Math.max(0, Math.min(1, fallbackFromLast))
-        }
-        const fallbackFromCurrent = Number(currentProgressRef.current)
-        if (Number.isFinite(fallbackFromCurrent) && fallbackFromCurrent >= 0) {
-            return Math.max(0, Math.min(1, fallbackFromCurrent))
-        }
-        return 0
-    }
-
-    const preloadNearbySections = (location: any) => {
-        if (settings.pageTurnMode !== 'scrolled-continuous') return
-        const bookAny = bookRef.current as any
-        const spineItems = bookAny?.spine?.spineItems as any[] | undefined
-        if (!Array.isArray(spineItems) || spineItems.length === 0) return
-
-        const currentHref = normalizeHref(location?.start?.href)
-        if (!currentHref) return
-        const currentIndex = spineItems.findIndex((item) => normalizeHref(item?.href) === currentHref)
-        if (currentIndex < 0) return
-        const primaryWindow = 5
-        const secondaryWindow = 2
-        const direction = scrollGateDirectionRef.current
-        const offsets: number[] = []
-        if (direction < 0) {
-            for (let step = 1; step <= primaryWindow; step += 1) offsets.push(-step)
-            for (let step = 1; step <= secondaryWindow; step += 1) offsets.push(step)
-        } else if (direction > 0) {
-            for (let step = 1; step <= primaryWindow; step += 1) offsets.push(step)
-            for (let step = 1; step <= secondaryWindow; step += 1) offsets.push(-step)
-        } else {
-            for (let step = 1; step <= primaryWindow; step += 1) offsets.push(step, -step)
-        }
-        offsets.forEach((offset) => {
-            const index = currentIndex + offset
-            if (index < 0 || index >= spineItems.length) return
-            const item = spineItems[index]
-            const key = normalizeHref(item?.href)
-            if (!key || preloadedSectionsRef.current.has(key)) return
-            preloadedSectionsRef.current.add(key)
-            preloadQueueRef.current.push({ key, item, bookAny })
-        })
-        schedulePreloadDrain()
-    }
-
     const isTocItemActive = (itemHref: string) => {
         const normalizedItemHref = normalizeHref(itemHref)
         if (!normalizedItemHref || !currentSectionHref) return false
@@ -363,30 +154,6 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         }
         return ''
     }
-
-    const resolveReaderColors = () => {
-        const fallbackByTheme: Record<string, { text: string; bg: string }> = {
-            light: { text: '#1a1a1a', bg: '#ffffff' },
-            dark: { text: '#e0e0e0', bg: '#16213e' },
-            sepia: { text: '#5b4636', bg: '#f4ecd8' },
-            green: { text: '#2d4a3e', bg: '#c7edcc' },
-        }
-        const base = fallbackByTheme[settings.themeId] || fallbackByTheme.light
-        const candidateText = settings.customTextColor || base.text
-        const candidateBg = settings.customBgColor || base.bg
-        // Only apply contrast safety when using theme defaults, not user-chosen colors
-        const safeText = settings.customTextColor
-            ? candidateText
-            : (contrastRatio(candidateText, candidateBg) < 3 ? (settings.themeId === 'dark' ? '#e0e0e0' : '#1a1a1a') : candidateText)
-        return {
-            textColor: safeText,
-            bgColor: candidateBg,
-        }
-    }
-
-    useEffect(() => {
-        styleSyncingRef.current = styleSyncing
-    }, [styleSyncing])
 
     useEffect(() => {
         currentProgressRef.current = currentProgress
@@ -414,106 +181,15 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         loadFonts()
     }, [])
 
-    const injectContentStyle = (contents: any, cssText: string) => {
-        if (!contents) return
-        try {
-            const doc = contents.document as Document | undefined
-            if (!doc?.head) return
-            let styleEl = doc.getElementById('vitra-content-style') as HTMLStyleElement | null
-            if (!styleEl) {
-                styleEl = doc.createElement('style')
-                styleEl.id = 'vitra-content-style'
-                doc.head.appendChild(styleEl)
-            }
-            if (styleEl.textContent !== cssText) {
-                styleEl.textContent = cssText
-            }
-            if (doc.body) {
-                doc.body.style.margin = '0'
-                doc.body.style.padding = '0'
-            }
-        } catch (error) {
-            console.warn('Inject content style failed:', error)
-        }
-    }
-
-    const sanitizeContentDocument = (contents: any) => {
-        try {
-            const doc = contents?.document as Document | undefined
-            if (!doc) return
-            const scripts = Array.from(doc.querySelectorAll('script'))
-            scripts.forEach((node) => node.remove())
-
-            const allNodes = Array.from(doc.querySelectorAll('*'))
-            allNodes.forEach((element) => {
-                const attrs = Array.from(element.attributes)
-                attrs.forEach((attr) => {
-                    const name = attr.name.toLowerCase()
-                    const value = attr.value
-                    if (name.startsWith('on')) {
-                        element.removeAttribute(attr.name)
-                        return
-                    }
-                    if ((name === 'href' || name === 'src') && /^javascript:/i.test(value.trim())) {
-                        element.removeAttribute(attr.name)
-                    }
-                })
-            })
-        } catch (error) {
-            console.warn('Sanitize EPUB content failed:', error)
-        }
-    }
-
-    const buildReaderContentCss = (textColor: string, bgColor: string) => `
-        body, html {
-            margin: 0 !important;
-            padding: 0 !important;
-            background: ${bgColor} !important;
-            color: ${textColor} !important;
-        }
-        body *:not(img):not(svg):not(path):not(video):not(canvas) {
-            color: ${textColor} !important;
-        }
-        p, div, section, article {
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
-            color: ${textColor} !important;
-        }
-        h1, h2, h3, h4, h5, h6 {
-            margin-top: 1em !important;
-            margin-bottom: 0.5em !important;
-            color: ${textColor} !important;
-        }
-        hr, .break, [style*="page-break"] {
-            display: none !important;
-        }
-        .vitra-search-hit {
-            background: rgba(255, 209, 102, 0.45) !important;
-            border-radius: 2px !important;
-        }
-    `
-
-    const applyStylesToMountedContents = (rendition: Rendition) => {
-        const { textColor, bgColor } = resolveReaderColors()
-        const cssText = buildReaderContentCss(textColor, bgColor)
-        const renditionAny = rendition as any
-        const contentsList = typeof renditionAny.getContents === 'function' ? renditionAny.getContents() : []
-        if (!Array.isArray(contentsList)) return
-        contentsList.forEach((content: any) => injectContentStyle(content, cssText))
-    }
-
     // Load Book
     useEffect(() => {
         let mounted = true
-        let keyDownHandler: ((e: KeyboardEvent) => void) | null = null
-        let wheelGuardHandler: ((e: WheelEvent) => void) | null = null
 
         const loadBook = async () => {
             // Reset state so stale UI doesn't render with a destroyed book
             setIsReady(false)
             setBookInstance(null)
 
-            scrollGateUntilRef.current = 0
             const bookMeta = await db.books.get(bookId)
             if (bookMeta?.title) {
                 setBookTitleText(bookMeta.title)
@@ -523,9 +199,9 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
 
             // 1. Fetch book data
             const file = await db.bookFiles.get(bookId)
-            if (!file || !mounted || !viewerRef.current) return
+            if (!file || !mounted) return
 
-            // Corrected: use db.progress instead of db.readingProgress
+            // Load saved progress
             const progress = await db.progress.get(bookId)
             const initialCfi = progress?.location || undefined
             const initialProgress = Number(progress?.percentage || 0)
@@ -533,362 +209,51 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
             currentProgressRef.current = initialProgress
 
             // 2. Initialize Book
+            // Clone ArrayBuffer to prevent detachment conflicts in React StrictMode double-invoke
+            const bookData = file.data instanceof ArrayBuffer ? file.data.slice(0) : file.data
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const book = ePub(file.data as any)
+            const book = ePub(bookData as any)
             bookRef.current = book
             setBookInstance(book)
             void ensureLocationsReady(book)
 
-            // 3. Render configuration for 3 page-turn modes (按 epub_reader_dev_doc.md)
-            const isBdise = settings.pageTurnMode === 'scrolled-continuous'
-            // We lock rendering for BDISE mode initially to prevent flash
-            setRenderLock(isBdise)
-
-            // BDISE Mode Initialization
-            if (isBdise) {
-                let sIndex = 0
-                let sOffset = 0
-
-                // Always wait for book to be ready so spine is populated
+            // Always wait for book to be ready so spine is populated
+            try {
                 await book.ready
-
-                if (initialCfi && initialCfi.startsWith('bdise:')) {
-                    const parts = initialCfi.split(':')
-                    sIndex = parseInt(parts[1], 10) || 0
-                    sOffset = parseInt(parts[2], 10) || 0
-                } else if (initialCfi) {
-                    // Try to resolve standard CFI to spine index
-                    const spineItem = book.spine?.get(initialCfi)
-                    if (spineItem) {
-                        sIndex = spineItem.index
-                    }
-                }
-                setBdiseParams({ initialSpineIndex: sIndex, initialScrollOffset: sOffset })
-                setIsReady(true) // BDISE is ready to mount
-                return // Skip standard rendition init
+            } catch (err) {
+                if (!mounted) return // cleanup already ran, second mount will handle it
+                console.error('[ReaderView] book.ready failed:', err)
+                return
             }
+            if (!mounted) return
 
-            // Standard Paginated Mode Initialization
-            const manager = 'default'
-            const flow = 'paginated'
-            const continuousOffset = 1400
-            const renditionOptions: any = {
-                width: '100%',
-                height: '100vh',
-                manager,
-                flow,
-                spread: settings.pageTurnMode === 'paginated-single' ? 'none' : 'auto',
-                snap: false,
-                offset: continuousOffset,
-                minSpreadWidth: 0,
-                allowScriptedContent: allowScriptedContentInDev,
-            }
-            const rendition = book.renderTo(viewerRef.current, renditionOptions)
-            renditionRef.current = rendition
-
-            console.log('Rendition created:', {
-                mode: settings.pageTurnMode,
-                manager,
-                flow,
-                allowScriptedContent: allowScriptedContentInDev,
-            })
-            rendition.on('rendered', () => {
-                if (!mounted) return
-                chapterSwitchPendingRef.current = false
-                if (chapterSwitchTimerRef.current) {
-                    window.clearTimeout(chapterSwitchTimerRef.current)
-                    chapterSwitchTimerRef.current = null
-                }
-                if (renderUnlockTimerRef.current) {
-                    window.clearTimeout(renderUnlockTimerRef.current)
-                    renderUnlockTimerRef.current = null
-                }
-                const lockRemainMs = Math.max(0, scrollGateUntilRef.current - Date.now())
-                if (lockRemainMs > 0) {
-                    renderUnlockTimerRef.current = window.setTimeout(() => {
-                        setRenderLock(false)
-                        renderUnlockTimerRef.current = null
-                    }, lockRemainMs)
-                    return
-                }
-                setRenderLock(false)
-            })
-
-            // 4. Register Hook - 使用 addStyle 注入 CSS（按文档推荐）
-            rendition.hooks.content.register((contents: any) => {
-                if (!allowScriptedContentInDev) {
-                    sanitizeContentDocument(contents)
-                }
-                const { textColor, bgColor } = resolveReaderColors()
-                injectContentStyle(contents, buildReaderContentCss(textColor, bgColor))
-
-                try {
-                    const doc = contents.document as Document | undefined
-                    const win = contents.window as Window | undefined
-                    if (!doc || !win) return
-                    const root = doc.documentElement as HTMLElement
-                    if (root.dataset.vitraContextmenuBound === '1') return
-                    root.dataset.vitraContextmenuBound = '1'
-
-                    doc.addEventListener('contextmenu', (event) => {
-                        const selection = win.getSelection()
-                        const text = selection?.toString().trim() || ''
-                        if (!text) return
-
-                        event.preventDefault()
-                        event.stopPropagation()
-
-                        const range = selection?.rangeCount ? selection.getRangeAt(0) : null
-                        let cfiRange = currentCfi
-                        if (range && typeof contents.cfiFromRange === 'function') {
-                            try {
-                                cfiRange = contents.cfiFromRange(range) || currentCfi
-                            } catch {
-                                cfiRange = currentCfi
-                            }
-                        }
-
-                        const iframe = viewerRef.current?.querySelector('iframe')
-                        const iframeRect = iframe?.getBoundingClientRect()
-                        const x = (iframeRect?.left || 0) + event.clientX
-                        const y = (iframeRect?.top || 0) + event.clientY
-
-                        setSelectionMenu({
-                            visible: true,
-                            x,
-                            y,
-                            text,
-                            cfiRange,
-                        })
-                    })
-                } catch (error) {
-                    console.warn('Bind context menu failed:', error)
-                }
-            })
-
-            // 在首次 display 前先应用主题样式，减少章节切换/回滚时的闪烁
-            updateRenditionStyles(rendition)
-
-            // 5. Display
-            await queueDisplay(initialCfi)
-
-            // 6. Load TOC & Highlights
+            // Load TOC
             const nav = await book.loaded.navigation
             setToc(nav.toc as TocItem[])
 
-            const highlights = await db.highlights.where('bookId').equals(bookId).toArray()
-            highlights.filter(h => !h.cfiRange.startsWith('bdise:')).forEach(h => {
-                rendition.annotations.add(
-                    'highlight',
-                    h.cfiRange,
-                    {},
-                    (e: any) => {
-                        console.log('Highlight clicked', e)
-                    },
-                    'vitra-user-highlight',
-                    { fill: h.color, 'fill-opacity': '0.55' }
-                )
-            })
+            // 3. Parse initial position from saved progress (bdise:{spineIndex}:{pageOrOffset})
+            let sIndex = 0
+            let sOffset = 0
 
-            // 7. Event Listeners + 智能预加载（按文档推荐）
-            rendition.on('relocated', (location: any) => {
-                if (!mounted) return
-                const now = Date.now()
-                if (now - lastRelocatedAtRef.current < 20) return
-                lastRelocatedAtRef.current = now
-
-                setCurrentCfi(location.start.cfi)
-                const hrefFromLocation = normalizeHref(location?.start?.href)
-                if (hrefFromLocation) {
-                    setCurrentSectionHref(hrefFromLocation)
-                    const previousHref = lastSectionHrefRef.current
-                    if (
-                        settings.pageTurnMode === 'scrolled-continuous' &&
-                        previousHref &&
-                        previousHref !== hrefFromLocation
-                    ) {
-                        chapterSwitchPendingRef.current = true
-                    }
-                    lastSectionHrefRef.current = hrefFromLocation
-                }
-                preloadNearbySections(location)
-
-                setSelectionMenu(prev => ({ ...prev, visible: false }))
-
-                if (progressWriteTimerRef.current) {
-                    window.clearTimeout(progressWriteTimerRef.current)
-                }
-                progressWriteTimerRef.current = window.setTimeout(() => {
-                    const rawProgress = calculateProgress(location)
-                    const prevProgress = currentProgressRef.current
-                    const nowCommit = Date.now()
-                    let progressValue = rawProgress
-
-                    if (
-                        settings.pageTurnMode === 'scrolled-continuous' &&
-                        Number.isFinite(prevProgress) &&
-                        prevProgress >= 0
-                    ) {
-                        const elapsed = nowCommit - lastProgressCommitAtRef.current
-                        const isManualJump = nowCommit < manualProgressBypassUntilRef.current
-                        if (!isManualJump) {
-                            const directionHint = scrollGateDirectionRef.current
-                            if (directionHint > 0 && progressValue < prevProgress) {
-                                progressValue = prevProgress
-                            } else if (directionHint < 0 && progressValue > prevProgress) {
-                                progressValue = prevProgress
-                            }
-                            const adjustedDelta = progressValue - prevProgress
-                            if (Math.abs(adjustedDelta) > 0.22 && elapsed < 520) {
-                                progressValue = prevProgress
-                            } else if (elapsed < 900) {
-                                const maxStep = 0.015 + (Math.min(900, Math.max(0, elapsed)) / 900) * 0.065
-                                const boundedDelta = Math.max(-maxStep, Math.min(maxStep, adjustedDelta))
-                                progressValue = prevProgress + boundedDelta
-                            }
-                        }
-                    }
-                    progressValue = Math.max(0, Math.min(1, progressValue))
-
-                    setCurrentProgress(progressValue)
-                    currentProgressRef.current = progressValue
-                    lastProgressCommitAtRef.current = nowCommit
-                    lastLocationRef.current = {
-                        cfi: location.start.cfi,
-                        href: normalizeHref(location?.start?.href) || '',
-                        percentage: progressValue,
-                    }
-                    db.progress.put({
-                        bookId,
-                        location: location.start.cfi,
-                        percentage: progressValue,
-                        currentChapter: normalizeHref(location?.start?.href) || '',
-                        updatedAt: nowCommit
-                    }).catch((error) => {
-                        console.warn('Persist reading progress failed:', error)
-                    })
-                }, 160)
-
-            })
-
-            // Keyboard navigation
-            keyDownHandler = (e: KeyboardEvent) => {
-                if (!mounted || !renditionRef.current) return
-                if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
-                    e.preventDefault()
-                    renditionRef.current.prev()
-                } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
-                    e.preventDefault()
-                    renditionRef.current.next()
+            if (initialCfi && initialCfi.startsWith('bdise:')) {
+                const parts = initialCfi.split(':')
+                sIndex = parseInt(parts[1], 10) || 0
+                sOffset = parseInt(parts[2], 10) || 0
+            } else if (initialCfi) {
+                // Try to resolve standard CFI to spine index
+                const spineItem = book.spine?.get(initialCfi)
+                if (spineItem) {
+                    sIndex = spineItem.index
                 }
             }
-            document.addEventListener('keydown', keyDownHandler)
-            const viewerEl = viewerRef.current
-            if (viewerEl) {
-                wheelGuardHandler = (event: WheelEvent) => {
-                    if (!mounted) return
-                    if (settings.pageTurnMode !== 'scrolled-continuous') return
-                    const now = Date.now()
-                    const direction: -1 | 0 | 1 = event.deltaY > 0 ? 1 : event.deltaY < 0 ? -1 : 0
-                    if (direction === 0) return
-                    const { holdMs, pulseMs, absDelta } = getScrollPhysics(event.deltaY)
-                    if (absDelta < 8) return
-                    const gateActive = now < scrollGateUntilRef.current
-                    const hardBlock = styleSyncingRef.current
-                    const gentleWheel = absDelta <= 92
 
-                    // Chapter-edge damping in pending state uses mirrored thresholds for both directions.
-                    if (!hardBlock && chapterSwitchPendingRef.current) {
-                        const elapsed = now - scrollGateLastPassAtRef.current
-                        const pendingPulseMs = Math.max(78, pulseMs + 20)
-                        if (elapsed < pendingPulseMs) {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            return
-                        }
-                        scrollGateLastPassAtRef.current = now
-                    }
-
-                    if (gateActive) {
-                        if (hardBlock) {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            return
-                        }
-                        if (gentleWheel) {
-                            scrollGateDirectionRef.current = direction
-                            scrollGateLastPassAtRef.current = now
-                            return
-                        }
-                        const sameDirection = direction === scrollGateDirectionRef.current
-                        const reversedDirection = scrollGateDirectionRef.current !== 0 && direction !== scrollGateDirectionRef.current
-                        const elapsedSincePass = now - scrollGateLastPassAtRef.current
-                        const pulsePass = sameDirection && elapsedSincePass >= pulseMs
-                        const reversePass = reversedDirection && elapsedSincePass >= pulseMs
-                        if (pulsePass || reversePass) {
-                            scrollGateDirectionRef.current = direction
-                            scrollGateLastPassAtRef.current = now
-                            scrollGateUntilRef.current = now + holdMs
-                            if (scrollGateTimerRef.current) {
-                                window.clearTimeout(scrollGateTimerRef.current)
-                            }
-                            scrollGateTimerRef.current = window.setTimeout(() => {
-                                scrollGateTimerRef.current = null
-                            }, holdMs)
-                            return
-                        }
-                        event.preventDefault()
-                        event.stopPropagation()
-                        return
-                    }
-
-                    if (hardBlock) {
-                        event.preventDefault()
-                        event.stopPropagation()
-                        return
-                    }
-
-                    scrollGateDirectionRef.current = direction
-                    scrollGateLastPassAtRef.current = now
-                    scrollGateUntilRef.current = now + holdMs
-                    if (scrollGateTimerRef.current) {
-                        window.clearTimeout(scrollGateTimerRef.current)
-                    }
-                    scrollGateTimerRef.current = window.setTimeout(() => {
-                        scrollGateTimerRef.current = null
-                    }, holdMs)
-                }
-                viewerEl.addEventListener('wheel', wheelGuardHandler, { passive: false, capture: true })
+            // 4. Set params based on mode
+            if (settings.pageTurnMode === 'scrolled-continuous') {
+                setBdiseParams({ initialSpineIndex: sIndex, initialScrollOffset: sOffset })
+            } else {
+                // Paginated modes use PaginatedReaderView
+                setPaginatedParams({ initialSpineIndex: sIndex, initialPage: sOffset })
             }
-
-            // Selection Handler
-            rendition.on('selected', (cfiRange: string, contents: any) => {
-                if (!mounted) return
-                const range = contents.range(cfiRange)
-                const text = range.toString()
-
-                if (text) {
-                    const rect = range.getBoundingClientRect()
-                    const iframe = viewerRef.current?.querySelector('iframe')
-                    const iframeRect = iframe?.getBoundingClientRect()
-
-                    const x = (iframeRect?.left || 0) + rect.left + (rect.width / 2)
-                    const y = (iframeRect?.top || 0) + rect.top - 10
-
-                    setSelectionMenu({
-                        visible: true,
-                        x,
-                        y,
-                        text,
-                        cfiRange
-                    })
-                }
-            })
-
-            // Click outside to clear selection
-            rendition.on('click', () => {
-                setSelectionMenu(prev => ({ ...prev, visible: false }))
-            })
 
             if (mounted) setIsReady(true)
         }
@@ -898,71 +263,14 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         return () => {
             mounted = false
             preloadedSectionsRef.current.clear()
-            if (lastLocationRef.current) {
-                void db.progress.put({
-                    bookId,
-                    location: lastLocationRef.current.cfi,
-                    percentage: lastLocationRef.current.percentage,
-                    currentChapter: lastLocationRef.current.href,
-                    updatedAt: Date.now(),
-                }).catch((error) => {
-                    console.warn('Persist progress on cleanup failed:', error)
-                })
-            }
             if (progressWriteTimerRef.current) {
                 window.clearTimeout(progressWriteTimerRef.current)
                 progressWriteTimerRef.current = null
-            }
-            if (renderUnlockTimerRef.current) {
-                window.clearTimeout(renderUnlockTimerRef.current)
-                renderUnlockTimerRef.current = null
-            }
-            if (scrollGateTimerRef.current) {
-                window.clearTimeout(scrollGateTimerRef.current)
-                scrollGateTimerRef.current = null
-            }
-            if (chapterSwitchTimerRef.current) {
-                window.clearTimeout(chapterSwitchTimerRef.current)
-                chapterSwitchTimerRef.current = null
-            }
-            if (preloadIdleHandleRef.current) {
-                const cancelIdle = (window as any).cancelIdleCallback
-                if (typeof cancelIdle === 'function') {
-                    cancelIdle(preloadIdleHandleRef.current)
-                }
-                preloadIdleHandleRef.current = null
-            }
-            if (preloadTimerHandleRef.current) {
-                window.clearTimeout(preloadTimerHandleRef.current)
-                preloadTimerHandleRef.current = null
-            }
-            preloadQueueRef.current = []
-            preloadInFlightRef.current = 0
-            if (wheelGuardHandler && viewerRef.current) {
-                viewerRef.current.removeEventListener('wheel', wheelGuardHandler, true)
-            }
-            if (keyDownHandler) {
-                document.removeEventListener('keydown', keyDownHandler)
-            }
-            if (renditionRef.current) {
-                try {
-                    renditionRef.current.destroy()
-                } catch (error) {
-                    console.warn('Rendition destroy failed:', error)
-                }
-                renditionRef.current = null
             }
             if (bookRef.current) {
                 bookRef.current.destroy()
                 bookRef.current = null
             }
-            scrollGateUntilRef.current = 0
-            scrollGateDirectionRef.current = 0
-            scrollGateLastPassAtRef.current = 0
-            scrollGateVelocityRef.current = 0
-            chapterSwitchPendingRef.current = false
-            manualProgressBypassUntilRef.current = 0
-            setRenderLock(false)
         }
     }, [bookId, settings.pageTurnMode])
 
@@ -980,191 +288,63 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         }
     }, [])
 
+    // Load highlights and bookmarks when panel opens
     useEffect(() => {
-        return () => {
-            if (activeSearchHitCfi) {
-                renditionRef.current?.annotations.remove(activeSearchHitCfi, 'highlight')
-            }
+        if (!leftPanelOpen || activeTab !== 'annotations') return
+        const loadAnnotations = async () => {
+            const [hl, bm] = await Promise.all([
+                db.highlights.where('bookId').equals(bookId).toArray(),
+                db.bookmarks.where('bookId').equals(bookId).toArray(),
+            ])
+            setHighlights(hl.sort((a, b) => b.createdAt - a.createdAt))
+            setBookmarks(bm.sort((a, b) => b.createdAt - a.createdAt))
         }
-    }, [activeSearchHitCfi])
+        loadAnnotations()
+    }, [leftPanelOpen, activeTab, bookId])
 
-    // React to settings changes
-    useEffect(() => {
-        if (renditionRef.current) {
-            updateRenditionStyles(renditionRef.current)
-            if (settings.pageTurnMode === 'scrolled-continuous') {
-                renditionRef.current.flow('scrolled')
-            } else {
-                renditionRef.current.flow('paginated')
-                // Only re-display for paginated mode
-                void queueDisplay(currentCfi)
-            }
+    // Jump to annotation location
+    const jumpToAnnotation = async (location: string, searchText?: string) => {
+        // location format: bdise:{spineIndex} or bdise:{spineIndex}:{page/offset}
+        const parts = location.split(':')
+        if (parts[0] !== 'bdise') return
+        const spineIndex = parseInt(parts[1], 10)
+        if (isNaN(spineIndex)) return
+
+        if (isBdiseMode) {
+            await scrollReaderRef.current?.jumpToSpine(spineIndex, searchText)
+        } else {
+            await paginatedReaderRef.current?.jumpToSpine(spineIndex, searchText)
         }
-    }, [settings.fontSize, settings.fontFamily, settings.lineHeight, settings.letterSpacing, settings.paragraphSpacing, settings.pageWidth, settings.textAlign])
-
-    // Separate effect for colors to avoid re-display and improve performance
-    useEffect(() => {
-        if (!renditionRef.current) return
-        setStyleSyncing(true)
-        updateRenditionStyles(renditionRef.current)
-
-        // Force immediate background update on all mounted iframes
-        const { bgColor } = resolveReaderColors()
-        const viewer = viewerRef.current
-        if (viewer) {
-            const iframes = viewer.querySelectorAll('iframe')
-            iframes.forEach(iframe => {
-                try {
-                    const doc = iframe.contentDocument
-                    if (doc?.body) {
-                        doc.body.style.background = bgColor
-                    }
-                } catch { /* cross-origin */ }
-            })
-        }
-        setStyleSyncing(false)
-    }, [settings.themeId, settings.customTextColor, settings.customBgColor])
-
-    const updateRenditionStyles = (rendition: Rendition) => {
-        const { textColor, bgColor: readerBackground } = resolveReaderColors()
-        const maxWidthPercent = Math.round((Math.max(0.5, Math.min(3, settings.pageWidth)) / 3) * 100)
-        const alignStyle =
-            settings.textAlign === 'justify'
-                ? {
-                    'text-align': 'justify',
-                    'text-justify': 'inter-ideograph',
-                    'word-break': 'normal',
-                }
-                : settings.textAlign === 'center'
-                    ? {
-                        'text-align': 'center',
-                    }
-                    : {
-                        'text-align': 'left',
-                    }
-
-        rendition.themes.default({
-            'p': {
-                'font-family': settings.fontFamily,
-                'font-size': `${settings.fontSize}px`,
-                'line-height': settings.lineHeight,
-                'letter-spacing': `${settings.letterSpacing}px`,
-                'margin-bottom': `${settings.paragraphSpacing}px`,
-                ...alignStyle,
-                'color': `${textColor} !important`,
-            },
-            'body': {
-                'color': `${textColor} !important`,
-                'font-family': settings.fontFamily,
-                'background': `${readerBackground} !important`,
-                'letter-spacing': `${settings.letterSpacing}px`,
-                'max-width': `${maxWidthPercent}%`,
-                'margin': '0 auto',
-                ...alignStyle,
-            },
-            'div, span, li, a, h1, h2, h3, h4, h5, h6': {
-                'color': `${textColor} !important`,
-                'font-family': settings.fontFamily,
-                ...alignStyle,
-            },
-        })
-        rendition.themes.select('default')
-        rendition.themes.font(settings.fontFamily)
-        rendition.themes.fontSize(`${settings.fontSize}px`)
-        rendition.themes.override('line-height', String(settings.lineHeight))
-        rendition.themes.override('letter-spacing', `${settings.letterSpacing}px`)
-        rendition.themes.override('color', textColor)
-        rendition.themes.override('text-align', settings.textAlign)
-        applyStylesToMountedContents(rendition)
+        if (window.innerWidth < 768) setLeftPanelOpen(false)
     }
 
-    const handleCopy = () => {
-        navigator.clipboard.writeText(selectionMenu.text)
-        setSelectionMenu(prev => ({ ...prev, visible: false }))
+    // Delete highlight
+    const deleteHighlight = async (id: string) => {
+        await db.highlights.delete(id)
+        setHighlights(prev => prev.filter(h => h.id !== id))
     }
 
-    const handleHighlight = async (color = HIGHLIGHT_PRESETS[0].color) => {
-        const { cfiRange, text } = selectionMenu
-
-        await db.highlights.add({
-            id: crypto.randomUUID(),
-            bookId,
-            cfiRange,
-            color,
-            text,
-            createdAt: Date.now()
-        })
-
-        renditionRef.current?.annotations.add(
-            'highlight',
-            cfiRange,
-            {},
-            undefined,
-            'vitra-user-highlight',
-            { fill: color, 'fill-opacity': '0.55' }
-        )
-        setSelectionMenu(prev => ({ ...prev, visible: false }))
-
-        const selection = window.getSelection()
-        selection?.removeAllRanges()
-    }
-
-    const handleAddNote = async () => {
-        await db.bookmarks.add({
-            id: crypto.randomUUID(),
-            bookId,
-            location: currentCfi || selectionMenu.cfiRange,
-            title: selectionMenu.text.slice(0, 40),
-            createdAt: Date.now(),
-        })
-        setSelectionMenu(prev => ({ ...prev, visible: false }))
-    }
-
-    const handleFullTextSearch = async () => {
-        const keyword = selectionMenu.text.trim()
-        if (!keyword) return
-        setSearchQuery(keyword)
-        setActiveTab('search')
-        setLeftPanelOpen(true)
-        setSettingsOpen(false)
-        setSelectionMenu(prev => ({ ...prev, visible: false }))
-        await handleSearchWithKeyword(keyword)
-    }
-
-    const handleOnlineSearch = () => {
-        const q = encodeURIComponent(selectionMenu.text.trim())
-        if (!q) return
-        window.electronAPI.openExternal(`https://www.google.com/search?q=${q}`)
-        setSelectionMenu(prev => ({ ...prev, visible: false }))
-    }
-
-    const handleReadAloud = () => {
-        const text = selectionMenu.text.trim()
-        if (!text) return
-        window.speechSynthesis.cancel()
-        const utter = new SpeechSynthesisUtterance(text)
-        utter.lang = 'zh-CN'
-        utter.rate = 1
-        window.speechSynthesis.speak(utter)
-        setSelectionMenu(prev => ({ ...prev, visible: false }))
-    }
-
-    const handleTranslate = () => {
-        const url = `https://translate.google.com/?sl=auto&tl=zh-CN&text=${encodeURIComponent(selectionMenu.text)}`
-        window.electronAPI.openExternal(url)
-        setSelectionMenu(prev => ({ ...prev, visible: false }))
+    // Delete bookmark/note
+    const deleteBookmark = async (id: string) => {
+        await db.bookmarks.delete(id)
+        setBookmarks(prev => prev.filter(b => b.id !== id))
     }
 
     const handleTocClick = async (href: string) => {
-        if (isBdiseMode) {
-            if (bookRef.current) {
-                const spineItem = bookRef.current.spine?.get(href)
-                if (spineItem && scrollReaderRef.current) {
-                    await scrollReaderRef.current.jumpToSpine(spineItem.index)
+        if (bookRef.current) {
+            const spineItem = bookRef.current.spine?.get(href)
+            if (spineItem) {
+                if (isBdiseMode) {
+                    if (scrollReaderRef.current) {
+                        await scrollReaderRef.current.jumpToSpine(spineItem.index)
+                    }
+                } else {
+                    // Paginated modes use PaginatedReaderView
+                    if (paginatedReaderRef.current) {
+                        await paginatedReaderRef.current.jumpToSpine(spineItem.index)
+                    }
                 }
             }
-        } else {
-            void queueDisplay(href)
         }
         if (window.innerWidth < 768) setLeftPanelOpen(false)
     }
@@ -1196,29 +376,6 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         await handleSearchWithKeyword(searchQuery)
     }
 
-    const handleResultClick = (cfi: string) => {
-        const rendition = renditionRef.current
-        if (!rendition) return
-        if (activeSearchHitCfi) {
-            rendition.annotations.remove(activeSearchHitCfi, 'highlight')
-        }
-        queueDisplay(cfi).then(() => {
-            rendition.annotations.add(
-                'highlight',
-                cfi,
-                {},
-                undefined,
-                'vitra-search-hit',
-                { 'fill': '#ffd166', 'fill-opacity': '0.35' }
-            )
-            setActiveSearchHitCfi(cfi)
-        }).catch((error) => {
-            console.error('Jump to search result failed:', error)
-        })
-    }
-
-    const prevPage = () => renditionRef.current?.prev()
-    const nextPage = () => renditionRef.current?.next()
     const toggleLeftPanel = () => {
         setLeftPanelOpen((prev) => {
             const next = !prev
@@ -1393,21 +550,6 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                 </div>
             </motion.div>
 
-            {/* Selection Context Menu */}
-            <SelectionMenu
-                visible={selectionMenu.visible}
-                x={selectionMenu.x}
-                y={selectionMenu.y}
-                onCopy={handleCopy}
-                onHighlight={handleHighlight}
-                onNote={handleAddNote}
-                onSearch={handleFullTextSearch}
-                onWebSearch={handleOnlineSearch}
-                onReadAloud={handleReadAloud}
-                onTranslate={handleTranslate}
-                onDismiss={() => setSelectionMenu(prev => ({ ...prev, visible: false }))}
-            />
-
             {/* Main Content Area */}
             <div className={styles.contentArea} style={{ paddingTop: `${headerHeight}px`, paddingBottom: `${footerEnabled ? footerHeight : 0}px` }}>
                 {(leftPanelOpen || settingsOpen) && (
@@ -1436,15 +578,23 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                                 >
                                     搜索
                                 </button>
+                                <button
+                                    className={`${styles.tabBtn} ${activeTab === 'annotations' ? styles.activeTab : ''}`}
+                                    onClick={() => setActiveTab('annotations')}
+                                >
+                                    标注
+                                </button>
                             </div>
 
-                            {activeTab === 'toc' ? (
+                            {activeTab === 'toc' && (
                                 <div ref={tocListRef} className={styles.tocList}>
                                     {toc.length === 0 ? <p className={styles.emptyText}>无目录信息</p> :
                                         renderTocItems(toc)
                                     }
                                 </div>
-                            ) : (
+                            )}
+
+                            {activeTab === 'search' && (
                                 <div className={styles.searchContainer}>
                                     <div className={styles.searchBox}>
                                         <input
@@ -1462,8 +612,7 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                                         {searchResults.map((res, i) => (
                                             <div
                                                 key={i}
-                                                className={`${styles.resultItem} ${activeSearchHitCfi === res.cfi ? styles.resultItemActive : ''}`}
-                                                onClick={() => handleResultClick(res.cfi)}
+                                                className={styles.resultItem}
                                             >
                                                 <p className={styles.excerpt}>...{renderSearchExcerpt(res.excerpt)}...</p>
                                             </div>
@@ -1474,20 +623,104 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                                     </div>
                                 </div>
                             )}
+
+                            {activeTab === 'annotations' && (
+                                <div className={styles.annotationsContainer}>
+                                    {/* Highlights Section */}
+                                    <div className={styles.annotationSection}>
+                                        <h4 className={styles.annotationSectionTitle}>高亮 ({highlights.length})</h4>
+                                        {highlights.length === 0 ? (
+                                            <p className={styles.emptyText}>暂无高亮</p>
+                                        ) : (
+                                            <div className={styles.annotationList}>
+                                                {highlights.map(h => (
+                                                    <div
+                                                        key={h.id}
+                                                        className={styles.annotationItem}
+                                                        onClick={() => jumpToAnnotation(h.cfiRange, h.text)}
+                                                    >
+                                                        <div
+                                                            className={styles.highlightColor}
+                                                            style={{ background: h.color }}
+                                                        />
+                                                        <div className={styles.annotationContent}>
+                                                            <p className={styles.annotationText}>{h.text}</p>
+                                                            <span className={styles.annotationTime}>
+                                                                {new Date(h.createdAt).toLocaleDateString()}
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            className={styles.deleteBtn}
+                                                            onClick={(e) => { e.stopPropagation(); deleteHighlight(h.id); }}
+                                                            title="删除"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Notes Section */}
+                                    <div className={styles.annotationSection}>
+                                        <h4 className={styles.annotationSectionTitle}>笔记 ({bookmarks.length})</h4>
+                                        {bookmarks.length === 0 ? (
+                                            <p className={styles.emptyText}>暂无笔记</p>
+                                        ) : (
+                                            <div className={styles.annotationList}>
+                                                {bookmarks.map(b => (
+                                                    <div
+                                                        key={b.id}
+                                                        className={styles.annotationItem}
+                                                        onClick={() => jumpToAnnotation(b.location, b.title)}
+                                                    >
+                                                        <div className={styles.noteIcon}>📝</div>
+                                                        <div className={styles.annotationContent}>
+                                                            <p className={styles.annotationQuote}>"{b.title}"</p>
+                                                            {b.note && (
+                                                                <p
+                                                                    className={`${styles.noteText} ${expandedNoteId === b.id ? styles.expanded : ''}`}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setExpandedNoteId(expandedNoteId === b.id ? null : b.id);
+                                                                    }}
+                                                                >
+                                                                    {b.note}
+                                                                </p>
+                                                            )}
+                                                            <span className={styles.annotationTime}>
+                                                                {new Date(b.createdAt).toLocaleDateString()}
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            className={styles.deleteBtn}
+                                                            onClick={(e) => { e.stopPropagation(); deleteBookmark(b.id); }}
+                                                            title="删除"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </motion.div>
                     )}
                 </AnimatePresence>
 
                 {/* Center Reader */}
                 <div className={styles.readerWrapper}>
-                    {(!isReady || styleSyncing) && (
+                    {!isReady && (
                         <div className={styles.blockingLoadingOverlay}>
                             <div className={styles.loading}>Loading...</div>
                         </div>
                     )}
 
-                    {/* BDISE Scroll Mode */}
-                    {isBdiseMode && bookInstance && isReady ? (
+                    {/* Scroll Mode */}
+                    {isBdiseMode && bookInstance && isReady && (
                         <ScrollReaderView
                             ref={scrollReaderRef}
                             book={bookInstance}
@@ -1520,28 +753,43 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                                 handleSearchWithKeyword(keyword)
                             }}
                         />
-                    ) : (
-                        <>
-                            {settings.pageTurnMode === 'scrolled-continuous' && renderLocked && (
-                                <div className={styles.renderLockOverlay} style={{ inset: `${headerHeight}px 0 ${footerEnabled ? footerHeight : 0}px 0` }} title="章节渲染中，请稍候" />
-                            )}
+                    )}
 
-                            <div
-                                className={`${styles.epubViewer} ${(!isReady || styleSyncing) ? styles.viewerHidden : ''}`}
-                                ref={viewerRef}
-                                style={{
-                                    filter: `brightness(${Math.min(1, Math.max(0.3, Number(settings.brightness) || 1))})`,
-                                    background: readerColors.bgColor,
-                                }}
-                            />
-
-                            {!leftPanelOpen && !settingsOpen && settings.pageTurnMode !== 'scrolled-continuous' && (
-                                <>
-                                    <div className={styles.prevZone} onClick={prevPage} title="Previous" />
-                                    <div className={styles.nextZone} onClick={nextPage} title="Next" />
-                                </>
-                            )}
-                        </>
+                    {/* Paginated Mode (single or double) */}
+                    {!isBdiseMode && bookInstance && isReady && (
+                        <PaginatedReaderView
+                            ref={paginatedReaderRef}
+                            book={bookInstance}
+                            bookId={bookId}
+                            initialSpineIndex={paginatedParams.initialSpineIndex}
+                            initialPage={paginatedParams.initialPage}
+                            pageTurnMode={settings.pageTurnMode as 'paginated-single' | 'paginated-double'}
+                            readerStyles={{
+                                textColor: readerColors.textColor,
+                                bgColor: readerColors.bgColor,
+                                fontSize: settings.fontSize,
+                                fontFamily: settings.fontFamily,
+                                lineHeight: settings.lineHeight,
+                                paragraphSpacing: settings.paragraphSpacing,
+                                letterSpacing: settings.letterSpacing,
+                                textAlign: settings.textAlign,
+                                pageWidth: settings.pageWidth,
+                            }}
+                            onProgressChange={(p) => {
+                                setCurrentProgress(p)
+                                currentProgressRef.current = p
+                            }}
+                            onChapterChange={(_label, href) => {
+                                setCurrentSectionHref(href)
+                            }}
+                            onSelectionSearch={(keyword) => {
+                                setSearchQuery(keyword)
+                                setActiveTab('search')
+                                setLeftPanelOpen(true)
+                                setSettingsOpen(false)
+                                handleSearchWithKeyword(keyword)
+                            }}
+                        />
                     )}
                 </div>
 
@@ -1593,42 +841,133 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
                                     </div>
                                 </div>
 
+                                <div className={styles.divider} />
+
                                 <div className={styles.settingsGroup}>
                                     <label>文字颜色</label>
-                                    <div className={styles.colorRow}>
-                                        <input
-                                            type="color"
-                                            value={tempTextColor ?? settings.customTextColor ?? (settings.themeId === 'dark' ? '#e0e0e0' : '#1a1a1a')}
-                                            onInput={(e) => {
-                                                const target = e.target as HTMLInputElement
-                                                setTempTextColor(target.value)
-                                                settings.updateSetting('customTextColor', target.value)
-                                            }}
-                                            onChange={(e) => {
-                                                const target = e.target as HTMLInputElement
-                                                setTempTextColor(target.value)
-                                                settings.updateSetting('customTextColor', target.value)
-                                            }}
-                                        />
-                                        <button className={styles.smallActionBtn} onClick={() => {
-                                            settings.updateSetting('customTextColor', null)
-                                            setTempTextColor(null)
-                                        }}>默认</button>
+                                    <div className={styles.colorPalette}>
+                                        <label className={styles.colorPickerCircle} style={tempTextColor ? { borderColor: tempTextColor } : undefined} title="自定义颜色">
+                                            <input
+                                                type="color"
+                                                value={tempTextColor ?? settings.customTextColor ?? (settings.themeId === 'dark' ? '#e0e0e0' : '#1a1a1a')}
+                                                onInput={(e) => {
+                                                    setTempTextColor((e.target as HTMLInputElement).value)
+                                                    setTextPickerDirty(true)
+                                                }}
+                                                onChange={() => {}}
+                                            />
+                                            {textPickerDirty ? (
+                                                <span className={styles.pickerPreview} style={{ background: tempTextColor! }} />
+                                            ) : (
+                                                <span>+</span>
+                                            )}
+                                        </label>
+                                        {textPickerDirty && (
+                                            <button
+                                                className={styles.confirmBtn}
+                                                title="确认颜色"
+                                                onClick={() => {
+                                                    if (tempTextColor) {
+                                                        settings.updateSetting('customTextColor', tempTextColor)
+                                                        settings.addSavedColor('text', tempTextColor)
+                                                    }
+                                                    setTextPickerDirty(false)
+                                                }}
+                                            >✓</button>
+                                        )}
+                                        {textPickerDirty && (
+                                            <button
+                                                className={styles.cancelBtn}
+                                                title="取消"
+                                                onClick={() => {
+                                                    setTempTextColor(settings.customTextColor)
+                                                    setTextPickerDirty(false)
+                                                }}
+                                            >✕</button>
+                                        )}
+                                        <button
+                                            className={`${styles.colorCircle} ${!settings.customTextColor ? styles.colorCircleActive : ''}`}
+                                            title="默认"
+                                            onClick={() => { settings.updateSetting('customTextColor', null); setTempTextColor(null); setTextPickerDirty(false) }}
+                                        >
+                                            <span className={styles.circleInner} style={{ background: settings.themeId === 'dark' ? '#e0e0e0' : '#1a1a1a' }} />
+                                            {!settings.customTextColor && <span className={styles.checkMark}>✓</span>}
+                                        </button>
+                                        {settings.savedTextColors.map((c) => (
+                                            <button
+                                                key={c}
+                                                className={`${styles.colorCircle} ${settings.customTextColor?.toLowerCase() === c.toLowerCase() ? styles.colorCircleActive : ''}`}
+                                                title={c}
+                                                onClick={() => { setTempTextColor(c); settings.updateSetting('customTextColor', c); setTextPickerDirty(false) }}
+                                            >
+                                                <span className={styles.circleInner} style={{ background: c }} />
+                                                {settings.customTextColor?.toLowerCase() === c.toLowerCase() && <span className={styles.checkMark}>✓</span>}
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
 
                                 <div className={styles.settingsGroup}>
                                     <label>背景颜色</label>
-                                    <div className={styles.colorRow}>
-                                        <input
-                                            type="color"
-                                            value={settings.customBgColor ?? '#ffffff'}
-                                            onInput={(e) => settings.updateSetting('customBgColor', (e.target as HTMLInputElement).value)}
-                                            onChange={(e) => settings.updateSetting('customBgColor', e.target.value)}
-                                        />
-                                        <button className={styles.smallActionBtn} onClick={() => {
-                                            settings.updateSetting('customBgColor', null)
-                                        }}>默认</button>
+                                    <div className={styles.colorPalette}>
+                                        <label className={styles.colorPickerCircle} style={tempBgColor ? { borderColor: tempBgColor } : undefined} title="自定义颜色">
+                                            <input
+                                                type="color"
+                                                value={tempBgColor ?? settings.customBgColor ?? '#ffffff'}
+                                                onInput={(e) => {
+                                                    setTempBgColor((e.target as HTMLInputElement).value)
+                                                    setBgPickerDirty(true)
+                                                }}
+                                                onChange={() => {}}
+                                            />
+                                            {bgPickerDirty ? (
+                                                <span className={styles.pickerPreview} style={{ background: tempBgColor! }} />
+                                            ) : (
+                                                <span>+</span>
+                                            )}
+                                        </label>
+                                        {bgPickerDirty && (
+                                            <button
+                                                className={styles.confirmBtn}
+                                                title="确认颜色"
+                                                onClick={() => {
+                                                    if (tempBgColor) {
+                                                        settings.updateSetting('customBgColor', tempBgColor)
+                                                        settings.addSavedColor('bg', tempBgColor)
+                                                    }
+                                                    setBgPickerDirty(false)
+                                                }}
+                                            >✓</button>
+                                        )}
+                                        {bgPickerDirty && (
+                                            <button
+                                                className={styles.cancelBtn}
+                                                title="取消"
+                                                onClick={() => {
+                                                    setTempBgColor(settings.customBgColor)
+                                                    setBgPickerDirty(false)
+                                                }}
+                                            >✕</button>
+                                        )}
+                                        <button
+                                            className={`${styles.colorCircle} ${!settings.customBgColor ? styles.colorCircleActive : ''}`}
+                                            title="默认"
+                                            onClick={() => { settings.updateSetting('customBgColor', null); setTempBgColor(null); setBgPickerDirty(false) }}
+                                        >
+                                            <span className={styles.circleInner} style={{ background: '#ffffff' }} />
+                                            {!settings.customBgColor && <span className={styles.checkMark}>✓</span>}
+                                        </button>
+                                        {settings.savedBgColors.map((c) => (
+                                            <button
+                                                key={c}
+                                                className={`${styles.colorCircle} ${settings.customBgColor?.toLowerCase() === c.toLowerCase() ? styles.colorCircleActive : ''}`}
+                                                title={c}
+                                                onClick={() => { settings.updateSetting('customBgColor', c); setTempBgColor(null); setBgPickerDirty(false) }}
+                                            >
+                                                <span className={styles.circleInner} style={{ background: c }} />
+                                                {settings.customBgColor?.toLowerCase() === c.toLowerCase() && <span className={styles.checkMark}>✓</span>}
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
 
