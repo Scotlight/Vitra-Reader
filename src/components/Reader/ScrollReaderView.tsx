@@ -2,14 +2,7 @@ import {
     useRef, useEffect, useState, useCallback, useLayoutEffect,
     forwardRef, useImperativeHandle, useMemo
 } from 'react';
-import { Book } from 'epubjs';
-import {
-    extractChapterHtml,
-    extractChapterStyles,
-    getSpineItems,
-    unloadChapter,
-    SpineItemInfo,
-} from '../../services/epubContentExtractor';
+import type { ContentProvider, SpineItemInfo } from '../../services/contentProvider';
 import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
 import {
     shouldPreloadChapter,
@@ -49,7 +42,7 @@ type PipelineState =
     | 'committing';
 
 interface ScrollReaderViewProps {
-    book: Book;
+    provider: ContentProvider;
     bookId: string;
     initialSpineIndex?: number;
     initialScrollOffset?: number;
@@ -72,7 +65,7 @@ const UNLOAD_DISTANCE = 3;
 // ── Component ──
 
 export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewProps>(({
-    book,
+    provider,
     bookId,
     initialSpineIndex = 0,
     initialScrollOffset = 0,
@@ -148,10 +141,10 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     // ── Spine Initialization ──
 
     useEffect(() => {
-        const items = getSpineItems(book);
+        const items = provider.getSpineItems();
         spineItemsRef.current = items;
         setSpineItems(items);
-    }, [book]);
+    }, [provider]);
 
     // Load initial chapter once spineItems are available
     useEffect(() => {
@@ -198,10 +191,10 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         });
 
         try {
-            const html = await extractChapterHtml(book, spineIndex);
+            const html = await provider.extractChapterHtml(spineIndex);
             let chapterStyles: string[] = [];
             try {
-                chapterStyles = await extractChapterStyles(book, spineIndex);
+                chapterStyles = await provider.extractChapterStyles(spineIndex);
             } catch {
                 // Styles are optional
             }
@@ -227,7 +220,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         } finally {
             loadingLockRef.current.delete(spineIndex);
         }
-    }, [book]);
+    }, [provider]);
 
     // ── Shadow Render Complete Handler ──
 
@@ -436,15 +429,15 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 const domEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`);
                 domEl?.remove();
             }
-            // Free epub.js resources
-            unloadChapter(book, ch.spineIndex);
+            // Free resources
+            provider.unloadChapter(ch.spineIndex);
         });
 
         const unloadIds = new Set(toUnload.map(ch => ch.spineIndex));
         setChapters(prev => prev.filter(ch => !unloadIds.has(ch.spineIndex)));
 
         console.log(`[ScrollReader] Unloaded chapters: ${toUnload.map(ch => ch.spineIndex).join(', ')}`);
-    }, [currentSpineIndex, chapters, book]);
+    }, [currentSpineIndex, chapters, provider]);
 
     // ── Current Chapter Detection ──
 

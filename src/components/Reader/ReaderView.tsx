@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import ePub, { Book } from 'epubjs'
 import { motion, AnimatePresence } from 'framer-motion'
 import { db, Highlight, Bookmark } from '../../services/storageService'
 import { useSettingsStore } from '../../stores/useSettingsStore'
+import type { ContentProvider, TocItem, SearchResult } from '../../services/contentProvider'
+import { createContentProvider } from '../../services/contentProviderFactory'
 import { ScrollReaderView, ScrollReaderHandle } from './ScrollReaderView'
 import { PaginatedReaderView, PaginatedReaderHandle } from './PaginatedReaderView'
 import styles from './ReaderView.module.css'
@@ -11,18 +12,6 @@ interface ReaderViewProps {
     bookId: string
     onBack: () => void
     jumpTarget?: { location: string; searchText?: string } | null
-}
-
-interface TocItem {
-    id: string
-    href: string
-    label: string
-    subitems?: TocItem[]
-}
-
-interface SearchResult {
-    cfi: string
-    excerpt: string
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
@@ -59,10 +48,9 @@ function contrastRatio(a: string, b: string): number {
 
 export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const tocListRef = useRef<HTMLDivElement>(null)
-    const bookRef = useRef<Book | null>(null)
+    const providerRef = useRef<ContentProvider | null>(null)
     const progressWriteTimerRef = useRef<number | null>(null)
     const preloadedSectionsRef = useRef<Set<string>>(new Set())
-    const locationsReadyRef = useRef(false)
     const currentProgressRef = useRef(0)
 
     const [isReady, setIsReady] = useState(false)
@@ -81,7 +69,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const [isSearching, setIsSearching] = useState(false)
     const [systemFonts, setSystemFonts] = useState<string[]>([])
     const [loadingFonts, setLoadingFonts] = useState(false)
-    const [bookInstance, setBookInstance] = useState<Book | null>(null)
+    const [provider, setProvider] = useState<ContentProvider | null>(null)
     const [bdiseParams, setBdiseParams] = useState({ initialSpineIndex: 0, initialScrollOffset: 0 })
     const [paginatedParams, setPaginatedParams] = useState({ initialSpineIndex: 0, initialPage: 0 })
     const scrollReaderRef = useRef<ScrollReaderHandle>(null)
@@ -121,23 +109,6 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     })()
 
     const normalizeHref = (href?: string) => (href || '').split('#')[0].split('?')[0]
-
-    const ensureLocationsReady = async (book: Book) => {
-        if (locationsReadyRef.current) return
-        try {
-            const locations = (book as any)?.locations
-            const hasLocations =
-                (typeof locations?.length === 'function' && Number(locations.length()) > 0) ||
-                (typeof locations?.total === 'number' && locations.total > 0) ||
-                (Array.isArray(locations?._locations) && locations._locations.length > 0)
-            if (!hasLocations && typeof locations?.generate === 'function') {
-                await locations.generate(1200)
-            }
-            locationsReadyRef.current = true
-        } catch (error) {
-            console.warn('Generate locations failed:', error)
-        }
-    }
 
     const isTocItemActive = (itemHref: string) => {
         const normalizedItemHref = normalizeHref(itemHref)
@@ -189,7 +160,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         const loadBook = async () => {
             // Reset state so stale UI doesn't render with a destroyed book
             setIsReady(false)
-            setBookInstance(null)
+            setProvider(null)
 
             const bookMeta = await db.books.get(bookId)
             if (bookMeta?.title) {
@@ -209,28 +180,24 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             setCurrentProgress(initialProgress)
             currentProgressRef.current = initialProgress
 
-            // 2. Initialize Book
-            // Clone ArrayBuffer to prevent detachment conflicts in React StrictMode double-invoke
+            // 2. Initialize ContentProvider
             const bookData = file.data instanceof ArrayBuffer ? file.data.slice(0) : file.data
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const book = ePub(bookData as any)
-            bookRef.current = book
-            setBookInstance(book)
-            void ensureLocationsReady(book)
-
-            // Always wait for book to be ready so spine is populated
+            const format = bookMeta?.format || 'epub'
+            let cp: ContentProvider
             try {
-                await book.ready
+                cp = await createContentProvider(format, bookData as ArrayBuffer)
+                await cp.init()
             } catch (err) {
-                if (!mounted) return // cleanup already ran, second mount will handle it
-                console.error('[ReaderView] book.ready failed:', err)
+                if (!mounted) return
+                console.error('[ReaderView] provider init failed:', err)
                 return
             }
-            if (!mounted) return
+            if (!mounted) { cp.destroy(); return }
+            providerRef.current = cp
+            setProvider(cp)
 
             // Load TOC
-            const nav = await book.loaded.navigation
-            setToc(nav.toc as TocItem[])
+            setToc(cp.getToc())
 
             // 3. Parse initial position from saved progress (bdise:{spineIndex}:{pageOrOffset})
             let sIndex = 0
@@ -242,10 +209,8 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                 sOffset = parseInt(parts[2], 10) || 0
             } else if (initialCfi) {
                 // Try to resolve standard CFI to spine index
-                const spineItem = book.spine?.get(initialCfi)
-                if (spineItem) {
-                    sIndex = spineItem.index
-                }
+                const idx = cp.getSpineIndexByHref(initialCfi)
+                if (idx >= 0) sIndex = idx
             }
 
             // 4. Set params based on mode
@@ -268,9 +233,9 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                 window.clearTimeout(progressWriteTimerRef.current)
                 progressWriteTimerRef.current = null
             }
-            if (bookRef.current) {
-                bookRef.current.destroy()
-                bookRef.current = null
+            if (providerRef.current) {
+                providerRef.current.destroy()
+                providerRef.current = null
             }
         }
     }, [bookId, settings.pageTurnMode])
@@ -352,18 +317,13 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     }
 
     const handleTocClick = async (href: string) => {
-        if (bookRef.current) {
-            const spineItem = bookRef.current.spine?.get(href)
-            if (spineItem) {
+        if (providerRef.current) {
+            const spineIndex = providerRef.current.getSpineIndexByHref(href)
+            if (spineIndex >= 0) {
                 if (isBdiseMode) {
-                    if (scrollReaderRef.current) {
-                        await scrollReaderRef.current.jumpToSpine(spineItem.index)
-                    }
+                    await scrollReaderRef.current?.jumpToSpine(spineIndex)
                 } else {
-                    // Paginated modes use PaginatedReaderView
-                    if (paginatedReaderRef.current) {
-                        await paginatedReaderRef.current.jumpToSpine(spineItem.index)
-                    }
+                    await paginatedReaderRef.current?.jumpToSpine(spineIndex)
                 }
             }
         }
@@ -371,21 +331,12 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     }
 
     const handleSearchWithKeyword = async (keyword: string) => {
-        if (!keyword.trim() || !bookRef.current) return
+        if (!keyword.trim() || !providerRef.current) return
         setIsSearching(true)
         setSearchResults([])
         try {
-            const results = await Promise.all(
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (bookRef.current.spine as any).spineItems.map((item: any) =>
-                    item.load(bookRef.current!.load.bind(bookRef.current))
-                        .then(item.find.bind(item, keyword))
-                        .finally(item.unload.bind(item, bookRef.current!.load.bind(bookRef.current)))
-                )
-            )
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const flat: SearchResult[] = [].concat(...results as any)
-            setSearchResults(flat)
+            const results = await providerRef.current.search(keyword)
+            setSearchResults(results)
         } catch (e) {
             console.error('Search failed', e)
         } finally {
@@ -741,10 +692,10 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                     )}
 
                     {/* Scroll Mode */}
-                    {isBdiseMode && bookInstance && isReady && (
+                    {isBdiseMode && provider && isReady && (
                         <ScrollReaderView
                             ref={scrollReaderRef}
-                            book={bookInstance}
+                            provider={provider}
                             bookId={bookId}
                             initialSpineIndex={bdiseParams.initialSpineIndex}
                             initialScrollOffset={bdiseParams.initialScrollOffset}
@@ -777,10 +728,10 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                     )}
 
                     {/* Paginated Mode (single or double) */}
-                    {!isBdiseMode && bookInstance && isReady && (
+                    {!isBdiseMode && provider && isReady && (
                         <PaginatedReaderView
                             ref={paginatedReaderRef}
-                            book={bookInstance}
+                            provider={provider}
                             bookId={bookId}
                             initialSpineIndex={paginatedParams.initialSpineIndex}
                             initialPage={paginatedParams.initialPage}

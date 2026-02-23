@@ -2,13 +2,7 @@ import {
     useRef, useEffect, useState, useCallback,
     forwardRef, useImperativeHandle,
 } from 'react';
-import { Book } from 'epubjs';
-import {
-    extractChapterHtml,
-    extractChapterStyles,
-    getSpineItems,
-    SpineItemInfo,
-} from '../../services/epubContentExtractor';
+import type { ContentProvider, SpineItemInfo } from '../../services/contentProvider';
 import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
 import { db } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
@@ -17,7 +11,7 @@ import { NoteDialog } from './NoteDialog';
 import styles from './PaginatedReaderView.module.css';
 
 interface PaginatedReaderViewProps {
-    book: Book;
+    provider: ContentProvider;
     bookId: string;
     initialSpineIndex?: number;
     initialPage?: number;
@@ -33,7 +27,7 @@ export interface PaginatedReaderHandle {
 }
 
 export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedReaderViewProps>(({
-    book,
+    provider,
     bookId,
     initialSpineIndex = 0,
     initialPage = 0,
@@ -84,10 +78,10 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
 
     // ── Init spine ──
     useEffect(() => {
-        const items = getSpineItems(book);
+        const items = provider.getSpineItems();
         spineItemsRef.current = items;
         setSpineItems(items);
-    }, [book]);
+    }, [provider]);
 
     // ── Load chapter into shadow queue ──
     const loadChapter = useCallback(async (spineIndex: number, goToLastPage = false) => {
@@ -104,9 +98,9 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         setIsLoading(true);
         renderedHighlightsRef.current.clear();
         try {
-            const html = await extractChapterHtml(book, spineIndex);
+            const html = await provider.extractChapterHtml(spineIndex);
             let chapterStyles: string[] = [];
-            try { chapterStyles = await extractChapterStyles(book, spineIndex); } catch { /* optional */ }
+            try { chapterStyles = await provider.extractChapterStyles(spineIndex); } catch { /* optional */ }
             setShadowData({
                 htmlContent: html,
                 externalStyles: chapterStyles,
@@ -117,7 +111,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
             setIsLoading(false);
             setChapterFading(false);
         }
-    }, [book]);
+    }, [provider]);
 
     // ── Load initial chapter ──
     useEffect(() => {

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { db, type BookMeta } from '../services/storageService'
+import { detectFormat, stripBookExtension } from '../services/contentProvider'
 
 type BinaryPayload = ArrayBuffer | Uint8Array
 type ImportedFile = { name: string; path: string; data: BinaryPayload }
@@ -43,28 +44,30 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
         // 2. Parse metadata
         let meta: BookMeta
         try {
-            // Lazy load the parser to avoid circular deps if any
-            const { parseEpub } = await import('../services/epubService')
-            const parsed = await parseEpub(fileData)
+            const format = detectFormat(file.name)
+            const { parseBookMetadata } = await import('../services/contentProviderFactory')
+            const parsed = await parseBookMetadata(format, fileData, file.name)
 
             meta = {
                 id,
-                title: parsed.title || file.name.replace(/\.epub$/i, ''),
+                title: parsed.title || stripBookExtension(file.name),
                 author: parsed.author || '未知作者',
-                cover: parsed.cover,
-                publisher: parsed.publisher,
-                language: parsed.language,
+                cover: (parsed as any).cover,
+                publisher: (parsed as any).publisher,
+                language: (parsed as any).language,
+                format,
                 fileSize: fileData.byteLength,
                 addedAt: now,
                 lastReadAt: now,
             }
         } catch (e) {
-            console.error('Failed to parse EPUB:', e)
-            // Fallback metadata
+            console.error('Failed to parse book:', e)
+            const format = detectFormat(file.name)
             meta = {
                 id,
-                title: file.name.replace(/\.epub$/i, ''),
+                title: stripBookExtension(file.name),
                 author: '解析失败',
+                format,
                 fileSize: fileData.byteLength,
                 addedAt: now,
                 lastReadAt: now,

@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import type { BookFormat } from './contentProvider'
 
 // ─── Data Models ────────────────────────────────────────────
 
@@ -9,6 +10,7 @@ export interface BookMeta {
     cover?: string            // Base64 cover image
     publisher?: string
     language?: string
+    format?: BookFormat
     fileSize: number
     addedAt: number
     lastReadAt?: number
@@ -64,6 +66,18 @@ class ReaderDatabase extends Dexie {
             bookmarks: 'id, bookId, createdAt',
             highlights: 'id, bookId, cfiRange, createdAt',
             settings: 'key',
+        })
+        this.version(3).stores({
+            books: 'id, title, author, addedAt, lastReadAt',
+            bookFiles: 'id',
+            progress: 'bookId',
+            bookmarks: 'id, bookId, createdAt',
+            highlights: 'id, bookId, cfiRange, createdAt',
+            settings: 'key',
+        }).upgrade(tx => {
+            return tx.table('books').toCollection().modify(book => {
+                if (!book.format) book.format = 'epub'
+            })
         })
     }
 }

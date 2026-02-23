@@ -138,7 +138,7 @@ function createTray() {
 // Open file dialog to import .epub files
 ipcMain.handle('dialog:openEpub', async () => {
     const result = await dialog.showOpenDialog({
-        filters: [{ name: 'EPUB Files', extensions: ['epub'] }],
+        filters: [{ name: '电子书文件', extensions: ['epub', 'pdf', 'txt', 'mobi', 'azw', 'azw3', 'htm', 'html', 'xml', 'xhtml', 'md', 'fb2'] }],
         properties: ['openFile', 'multiSelections'],
     })
     if (result.canceled) return []
