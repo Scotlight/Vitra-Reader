@@ -10,14 +10,8 @@
     grid-template-columns: repeat(4, 1fr);
     gap: 8px;
     padding: 10px;
-    transform: translateX(-50%) translateY(-100%);
     border: 1px solid var(--border-color);
     min-width: 220px;
-}
-
-/* When near top edge, flip menu below the selection */
-.below {
-    transform: translateX(-50%) translateY(0);
 }
 
 .selectionMenu button {

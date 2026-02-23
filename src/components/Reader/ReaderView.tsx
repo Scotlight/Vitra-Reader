@@ -136,8 +136,10 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         const base = fallbackByTheme[settings.themeId] || fallbackByTheme.light
         const candidateText = settings.customTextColor || base.text
         const candidateBg = settings.customBgColor || base.bg
-        const ratio = contrastRatio(candidateText, candidateBg)
-        const safeText = ratio < 3 ? (settings.themeId === 'dark' ? '#e0e0e0' : '#1a1a1a') : candidateText
+        // Only apply contrast safety when using theme defaults, not user-chosen colors
+        const safeText = settings.customTextColor
+            ? candidateText
+            : (contrastRatio(candidateText, candidateBg) < 3 ? (settings.themeId === 'dark' ? '#e0e0e0' : '#1a1a1a') : candidateText)
         return {
             textColor: safeText,
             bgColor: candidateBg,
@@ -372,8 +374,10 @@ export const ReaderView = ({ bookId, onBack }: ReaderViewProps) => {
         const base = fallbackByTheme[settings.themeId] || fallbackByTheme.light
         const candidateText = settings.customTextColor || base.text
         const candidateBg = settings.customBgColor || base.bg
-        const ratio = contrastRatio(candidateText, candidateBg)
-        const safeText = ratio < 3 ? (settings.themeId === 'dark' ? '#e0e0e0' : '#1a1a1a') : candidateText
+        // Only apply contrast safety when using theme defaults, not user-chosen colors
+        const safeText = settings.customTextColor
+            ? candidateText
+            : (contrastRatio(candidateText, candidateBg) < 3 ? (settings.themeId === 'dark' ? '#e0e0e0' : '#1a1a1a') : candidateText)
         return {
             textColor: safeText,
             bgColor: candidateBg,

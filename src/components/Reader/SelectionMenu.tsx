@@ -36,7 +36,7 @@ export interface SelectionMenuProps {
 
 const MENU_HEIGHT_ESTIMATE = 160
 const MENU_WIDTH_ESTIMATE = 240
-const EDGE_PADDING = 8
+const OFFSET = 12
 
 export const SelectionMenu = ({
     visible,
@@ -61,7 +61,6 @@ export const SelectionMenu = ({
                 onDismiss()
             }
         }
-        // Delay to avoid catching the same mouseup that opened the menu
         const timer = setTimeout(() => document.addEventListener('mousedown', handler), 50)
         return () => {
             clearTimeout(timer)
@@ -69,22 +68,26 @@ export const SelectionMenu = ({
         }
     }, [visible, onDismiss])
 
-    // Flip below if too close to top; flip above if too close to bottom
-    const flipBelow = y < MENU_HEIGHT_ESTIMATE + EDGE_PADDING
-    const flipAbove = !flipBelow && y > window.innerHeight - MENU_HEIGHT_ESTIMATE - EDGE_PADDING
-    const clampedX = Math.max(MENU_WIDTH_ESTIMATE / 2 + EDGE_PADDING, Math.min(x, window.innerWidth - MENU_WIDTH_ESTIMATE / 2 - EDGE_PADDING))
-    const adjustedY = flipBelow ? y + 30 : flipAbove ? y - 30 : y
+    // Horizontal: prefer right side of cursor; flip to left if near right edge
+    const nearRight = x + MENU_WIDTH_ESTIMATE + OFFSET > window.innerWidth
+    const menuLeft = nearRight ? x - MENU_WIDTH_ESTIMATE - OFFSET : x + OFFSET
+
+    // Vertical: top/middle/bottom zone
+    const nearTop = y < MENU_HEIGHT_ESTIMATE / 2
+    const nearBottom = y > window.innerHeight - MENU_HEIGHT_ESTIMATE / 2
+    // near top: align menu top to cursor; near bottom: align menu bottom to cursor; else: center
+    const menuTop = nearTop ? y : nearBottom ? y - MENU_HEIGHT_ESTIMATE : y - MENU_HEIGHT_ESTIMATE / 2
 
     return (
         <AnimatePresence>
             {visible && (
                 <motion.div
                     ref={menuRef}
-                    className={`${styles.selectionMenu} ${flipBelow ? styles.below : ''}`}
-                    style={{ top: adjustedY, left: clampedX }}
-                    initial={{ opacity: 0, scale: 0.8, y: flipBelow ? -10 : 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
+                    className={styles.selectionMenu}
+                    style={{ top: menuTop, left: menuLeft }}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
                 >
                     <button className={styles.menuIconBtn} onClick={onNote} title="笔记">
                         <img className={styles.menuActionIcon} src={noteActionIcon} alt="" />
