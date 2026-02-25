@@ -108,12 +108,32 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         }
     })()
 
-    const normalizeHref = (href?: string) => (href || '').split('#')[0].split('?')[0]
+    const normalizeHref = (href?: string) => {
+        const raw = (href || '').split('#')[0].split('?')[0].trim()
+        if (!raw) return ''
+        return raw
+            .replace(/\\/g, '/')
+            .replace(/^\.\//, '')
+            .replace(/\/{2,}/g, '/')
+            .replace(/\/+$/, '')
+            .toLowerCase()
+    }
+
+    const getHrefTail = (normalizedHref: string) => {
+        const lastSlash = normalizedHref.lastIndexOf('/')
+        return lastSlash >= 0 ? normalizedHref.slice(lastSlash + 1) : normalizedHref
+    }
 
     const isTocItemActive = (itemHref: string) => {
         const normalizedItemHref = normalizeHref(itemHref)
-        if (!normalizedItemHref || !currentSectionHref) return false
-        return currentSectionHref === normalizedItemHref || currentSectionHref.startsWith(normalizedItemHref)
+        const normalizedCurrentHref = normalizeHref(currentSectionHref)
+        if (!normalizedItemHref || !normalizedCurrentHref) return false
+        if (normalizedCurrentHref === normalizedItemHref) return true
+
+        const itemTail = getHrefTail(normalizedItemHref)
+        const currentTail = getHrefTail(normalizedCurrentHref)
+        if (!itemTail || !currentTail) return false
+        return itemTail === currentTail
     }
 
     const findCurrentChapterLabel = (items: TocItem[]): string => {
