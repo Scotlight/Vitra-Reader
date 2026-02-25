@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useLibraryStore } from '../../stores/useLibraryStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { useSyncStore } from '../../stores/useSyncStore'
-import { db, type Highlight, type Bookmark } from '../../services/storageService'
+import { db, type Highlight, type Bookmark, type BookMeta } from '../../services/storageService'
 import {
     DEFAULT_TRANSLATE_CONFIG,
     clearTranslationCache,
@@ -648,6 +648,62 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         }
     }
 
+    const getDefaultBookProperties = (book: BookMeta) => {
+        return {
+            title: (book.originalTitle || book.title || '').trim(),
+            author: (book.originalAuthor || book.author || '未知作者').trim() || '未知作者',
+            description: book.originalDescription ?? book.description ?? '',
+            cover: book.originalCover ?? book.cover ?? '',
+        }
+    }
+
+    const handleRestoreBookProperties = async () => {
+        if (!bookPropertiesDraft.id) return
+        const book = books.find((item) => item.id === bookPropertiesDraft.id)
+        if (!book) {
+            setBookPropertiesStatus('未找到图书，无法恢复默认')
+            return
+        }
+
+        setBookPropertiesStatus('恢复默认中...')
+
+        let defaults = getDefaultBookProperties(book)
+        const hasOriginalSnapshot = Boolean(
+            book.originalTitle
+            || book.originalAuthor
+            || book.originalDescription !== undefined
+            || book.originalCover !== undefined
+        )
+
+        if (!hasOriginalSnapshot) {
+            try {
+                const file = await db.bookFiles.get(book.id)
+                if (file?.data) {
+                    const format = book.format || 'epub'
+                    const { parseBookMetadata } = await import('../../services/contentProviderFactory')
+                    const parsed = await parseBookMetadata(format, file.data, `${book.title || 'book'}.${format}`)
+                    defaults = {
+                        title: (parsed.title || defaults.title || '').trim(),
+                        author: (parsed.author || defaults.author || '未知作者').trim() || '未知作者',
+                        description: (parsed as any).description || '',
+                        cover: (parsed as any).cover || '',
+                    }
+                }
+            } catch {
+                // fallback to current/original snapshot
+            }
+        }
+
+        setBookPropertiesDraft((prev) => ({
+            ...prev,
+            title: defaults.title,
+            author: defaults.author,
+            description: defaults.description,
+            cover: defaults.cover,
+        }))
+        setBookPropertiesStatus('已恢复默认值（点击“保存属性”生效）')
+    }
+
     const fileToDataUrl = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader()
@@ -689,16 +745,24 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
 
         const author = bookPropertiesDraft.author.trim() || '未知作者'
         const description = bookPropertiesDraft.description.trim()
+        const currentBook = books.find((item) => item.id === bookPropertiesDraft.id)
+        const patch: Partial<BookMeta> = {
+            title,
+            author,
+            cover: bookPropertiesDraft.cover,
+            description,
+        }
+        if (currentBook) {
+            if (!currentBook.originalTitle) patch.originalTitle = currentBook.title || title
+            if (!currentBook.originalAuthor) patch.originalAuthor = currentBook.author || author
+            if (currentBook.originalDescription === undefined) patch.originalDescription = currentBook.description || ''
+            if (currentBook.originalCover === undefined) patch.originalCover = currentBook.cover || ''
+        }
 
         setBookPropertiesSaving(true)
         setBookPropertiesStatus('保存中...')
         try {
-            await db.books.update(bookPropertiesDraft.id, {
-                title,
-                author,
-                cover: bookPropertiesDraft.cover,
-                description,
-            })
+            await db.books.update(bookPropertiesDraft.id, patch)
             await loadBooks()
             closeBookPropertiesModal(true)
         } catch (error: any) {
@@ -1585,6 +1649,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
 
                             {bookPropertiesStatus && <div className={styles.syncStatus}>{bookPropertiesStatus}</div>}
                             <div className={styles.rowActions}>
+                                <button className={styles.smallBtn} onClick={() => void handleRestoreBookProperties()} disabled={bookPropertiesSaving}>恢复默认</button>
                                 <button className={styles.smallBtn} onClick={() => closeBookPropertiesModal()} disabled={bookPropertiesSaving}>取消</button>
                                 <button className={styles.syncPrimaryBtn} onClick={() => void handleSaveBookProperties()} disabled={bookPropertiesSaving}>
                                     {bookPropertiesSaving ? '保存中...' : '保存属性'}

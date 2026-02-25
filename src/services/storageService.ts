@@ -9,6 +9,10 @@ export interface BookMeta {
     author: string
     description?: string
     cover?: string            // Base64 cover image
+    originalTitle?: string
+    originalAuthor?: string
+    originalDescription?: string
+    originalCover?: string
     publisher?: string
     language?: string
     format?: BookFormat
@@ -101,6 +105,22 @@ class ReaderDatabase extends Dexie {
             highlights: 'id, bookId, cfiRange, createdAt',
             translationCache: 'key, provider, createdAt, lastAccessAt, expiresAt',
             settings: 'key',
+        })
+        this.version(5).stores({
+            books: 'id, title, author, addedAt, lastReadAt',
+            bookFiles: 'id',
+            progress: 'bookId',
+            bookmarks: 'id, bookId, createdAt',
+            highlights: 'id, bookId, cfiRange, createdAt',
+            translationCache: 'key, provider, createdAt, lastAccessAt, expiresAt',
+            settings: 'key',
+        }).upgrade(tx => {
+            return tx.table('books').toCollection().modify((book: any) => {
+                if (!book.originalTitle) book.originalTitle = book.title || ''
+                if (!book.originalAuthor) book.originalAuthor = book.author || '未知作者'
+                if (book.originalDescription === undefined) book.originalDescription = book.description || ''
+                if (book.originalCover === undefined) book.originalCover = book.cover || ''
+            })
         })
     }
 }

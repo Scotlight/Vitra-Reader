@@ -47,13 +47,21 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
             const format = detectFormat(file.name)
             const { parseBookMetadata } = await import('../services/contentProviderFactory')
             const parsed = await parseBookMetadata(format, fileData, file.name)
+            const title = parsed.title || stripBookExtension(file.name)
+            const author = parsed.author || '未知作者'
+            const description = (parsed as any).description || ''
+            const cover = (parsed as any).cover || ''
 
             meta = {
                 id,
-                title: parsed.title || stripBookExtension(file.name),
-                author: parsed.author || '未知作者',
-                description: (parsed as any).description,
-                cover: (parsed as any).cover,
+                title,
+                author,
+                description,
+                cover,
+                originalTitle: title,
+                originalAuthor: author,
+                originalDescription: description,
+                originalCover: cover,
                 publisher: (parsed as any).publisher,
                 language: (parsed as any).language,
                 format,
@@ -68,6 +76,12 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
                 id,
                 title: stripBookExtension(file.name),
                 author: '解析失败',
+                description: '',
+                cover: '',
+                originalTitle: stripBookExtension(file.name),
+                originalAuthor: '解析失败',
+                originalDescription: '',
+                originalCover: '',
                 format,
                 fileSize: fileData.byteLength,
                 addedAt: now,
