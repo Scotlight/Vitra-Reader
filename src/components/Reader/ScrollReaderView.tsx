@@ -289,6 +289,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
             let anchorBefore: ReturnType<typeof captureAnchorInfo> | null = null;
             let oldScrollTop = 0;
+            let oldListHeight = 0;
 
             if (needsCompensation) {
                 // Snapshot phase — capture anchor before DOM mutation
@@ -296,6 +297,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 const anchor = findBestAnchor(viewport);
                 anchorBefore = captureAnchorInfo(anchor);
                 oldScrollTop = viewport.scrollTop;
+                oldListHeight = listEl.scrollHeight;
             }
 
             // Mutation phase — mount DOM
@@ -322,12 +324,19 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             }
 
             // Compensation phase — fix scroll position after prepend
-            if (needsCompensation && anchorBefore) {
-                const anchorAfter = captureAnchorInfo(anchorBefore.element);
-                const deltaY = calculateAnchorDelta(anchorBefore, anchorAfter);
-                viewport.scrollTop = oldScrollTop + deltaY;
-
-                console.log(`[ScrollReader] Scroll compensated: ${deltaY}px`);
+            if (needsCompensation) {
+                const heightDelta = listEl.scrollHeight - oldListHeight;
+                if (Math.abs(heightDelta) > 0.5) {
+                    viewport.scrollTop = Math.max(0, oldScrollTop + heightDelta);
+                    lastScrollTopRef.current = viewport.scrollTop;
+                    console.log(`[ScrollReader] Scroll compensated by height delta: ${heightDelta}px`);
+                } else if (anchorBefore) {
+                    const anchorAfter = captureAnchorInfo(anchorBefore.element);
+                    const deltaY = calculateAnchorDelta(anchorBefore, anchorAfter);
+                    viewport.scrollTop = Math.max(0, oldScrollTop + deltaY);
+                    lastScrollTopRef.current = viewport.scrollTop;
+                    console.log(`[ScrollReader] Scroll compensated by anchor delta: ${deltaY}px`);
+                }
             }
 
             pipelineRef.current = 'idle';
@@ -343,6 +352,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         // Handle initial scroll
         if (!initialScrollDone.current && initialScrollOffset > 0) {
             viewport.scrollTop = initialScrollOffset;
+            lastScrollTopRef.current = viewport.scrollTop;
             initialScrollDone.current = true;
         }
 
@@ -359,6 +369,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                         const rect = range.getBoundingClientRect();
                         const vpRect = viewport.getBoundingClientRect();
                         viewport.scrollTop += rect.top - vpRect.top;
+                        lastScrollTopRef.current = viewport.scrollTop;
                         break;
                     }
                 }
@@ -380,7 +391,9 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             const scrollTop = viewport.scrollTop;
             const viewportHeight = viewport.clientHeight;
             const contentHeight = viewport.scrollHeight;
-            const direction: ScrollDirection = detectScrollDirection(scrollTop, lastScrollTopRef.current);
+            const previousScrollTop = lastScrollTopRef.current;
+            const rawDirection = detectScrollDirection(scrollTop, previousScrollTop);
+            const direction: ScrollDirection = Math.abs(scrollTop - previousScrollTop) < 0.5 ? 'none' : rawDirection;
             lastScrollTopRef.current = scrollTop;
 
             if (pipelineRef.current === 'anchoring-locked') return;
@@ -588,11 +601,13 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 const domEl = listEl.querySelector(`[data-chapter-id="ch-${targetSpineIndex}"]`) as HTMLElement | null;
                 if (domEl) {
                     viewport.scrollTop = domEl.offsetTop;
+                    lastScrollTopRef.current = viewport.scrollTop;
                     updateCurrentChapter(viewport.scrollTop, viewport.clientHeight);
                     updateProgress(viewport.scrollTop, viewport.clientHeight);
 
                     requestAnimationFrame(() => {
                         viewport.scrollTop = domEl.offsetTop;
+                        lastScrollTopRef.current = viewport.scrollTop;
                         updateCurrentChapter(viewport.scrollTop, viewport.clientHeight);
                         updateProgress(viewport.scrollTop, viewport.clientHeight);
                     });
@@ -605,6 +620,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                             const rect = range.getBoundingClientRect();
                             const vpRect = viewport.getBoundingClientRect();
                             viewport.scrollTop += rect.top - vpRect.top;
+                            lastScrollTopRef.current = viewport.scrollTop;
                         }
                     }
                 }
@@ -613,6 +629,11 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         }
 
         // Clear all chapters and load from the target
+        const viewport = viewportRef.current;
+        if (viewport) {
+            viewport.scrollTop = 0;
+            lastScrollTopRef.current = 0;
+        }
         const listEl = chapterListRef.current;
         if (listEl) listEl.innerHTML = '';
 

@@ -6,6 +6,12 @@ interface InertiaCallbacks {
   onStop?: () => void;
 }
 
+const MAX_ABS_VELOCITY = 140;
+
+function clampVelocity(value: number): number {
+  return Math.max(-MAX_ABS_VELOCITY, Math.min(MAX_ABS_VELOCITY, value));
+}
+
 /**
  * useScrollInertia Hook
  * 统一物理引擎：滚轮冲量 + 触摸惯性 + 阻尼衰减
@@ -94,13 +100,13 @@ export function useScrollInertia(
     // 将像素位移转换为速度冲量
     // 系数 0.35 经验值：一格滚轮 (~100px deltaY) → ~35 px/frame 初速度
     // 配合 friction 0.12 → 总滚动距离 ≈ 35/0.12 ≈ 290px，手感接近 macOS
-    velocity.current += delta * 0.35;
+    velocity.current = clampVelocity(velocity.current + delta * 0.35);
     ensureRunning();
   }, [ensureRunning]);
 
   /** fling — 触摸释放时注入速度 */
   const fling = useCallback((initialVelocity: number) => {
-    velocity.current = initialVelocity;
+    velocity.current = clampVelocity(initialVelocity);
     ensureRunning();
   }, [ensureRunning]);
 
