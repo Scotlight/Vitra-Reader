@@ -794,7 +794,12 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
             let failed = 0
             for (const file of files) {
                 try {
-                    await importBook(file, { skipRefresh: true })
+                    const binary = await window.electronAPI.readFile(file.path)
+                    await importBook({
+                        name: file.name,
+                        path: file.path,
+                        data: binary,
+                    }, { skipRefresh: true })
                 } catch (error) {
                     failed += 1
                     console.error(`Failed to import book: ${file.name}`, error)

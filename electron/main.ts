@@ -144,11 +144,14 @@ ipcMain.handle('dialog:openEpub', async () => {
     if (result.canceled) return []
 
     const files = await Promise.all(
-        result.filePaths.map(async (filePath) => ({
-            name: path.basename(filePath),
-            path: filePath,
-            data: await fs.promises.readFile(filePath),
-        }))
+        result.filePaths.map(async (filePath) => {
+            const stat = await fs.promises.stat(filePath)
+            return {
+                name: path.basename(filePath),
+                path: filePath,
+                size: stat.size,
+            }
+        })
     )
     return files
 })
@@ -247,6 +250,36 @@ ipcMain.handle('system:listFonts', async () => {
     })
 
     return unique
+})
+
+ipcMain.handle('system:getProcessMemoryInfo', async () => {
+    try {
+        const mainMemory = await process.getProcessMemoryInfo()
+        const processMetrics = app.getAppMetrics().map((metric) => ({
+            pid: metric.pid,
+            type: metric.type,
+            memory: metric.memory
+                ? {
+                    workingSetSize: metric.memory.workingSetSize,
+                    peakWorkingSetSize: metric.memory.peakWorkingSetSize,
+                    privateBytes: metric.memory.privateBytes,
+                }
+                : null,
+        }))
+
+        return {
+            success: true,
+            timestamp: Date.now(),
+            mainMemory,
+            processMetrics,
+        }
+    } catch (error: any) {
+        return {
+            success: false,
+            error: error?.message || String(error),
+            timestamp: Date.now(),
+        }
+    }
 })
 
 // ─── WebDAV Sync ────────────────────────────────────────────

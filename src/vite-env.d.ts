@@ -3,7 +3,25 @@
 interface ImportedEpubFile {
     name: string
     path: string
-    data: ArrayBuffer | Uint8Array
+    size: number
+}
+
+interface ElectronProcessMetricMemory {
+    workingSetSize: number
+    peakWorkingSetSize: number
+    privateBytes: number
+}
+
+interface ElectronProcessMetric {
+    pid: number
+    type: string
+    memory: ElectronProcessMetricMemory | null
+}
+
+interface ElectronMainProcessMemory {
+    private: number
+    residentSet: number
+    shared: number
 }
 
 interface Window {
@@ -11,6 +29,13 @@ interface Window {
         openEpub: () => Promise<ImportedEpubFile[]>
         readFile: (path: string) => Promise<Uint8Array>
         listSystemFonts: () => Promise<string[]>
+        getProcessMemoryInfo: () => Promise<{
+            success: boolean
+            timestamp: number
+            mainMemory?: ElectronMainProcessMemory
+            processMetrics?: ElectronProcessMetric[]
+            error?: string
+        }>
         setWindowTheme: (payload: { themeId: string; customBgColor?: string | null; customTextColor?: string | null }) => void
         openExternal: (url: string) => Promise<void>
         webdavSync: (
