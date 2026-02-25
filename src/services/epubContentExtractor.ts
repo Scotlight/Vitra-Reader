@@ -167,10 +167,16 @@ async function resolveResourceUrls(doc: Document, spineItem: any, bookAny: any):
         const rawSrc = el.getAttribute(attr);
         if (!rawSrc || rawSrc.startsWith('data:') || rawSrc.startsWith('blob:') || rawSrc.startsWith('http')) return;
 
+        const normalizedSrc = rawSrc
+            .replace(/\\+/g, '/')
+            .replace(/^\.\//, '')
+            .trim();
+        if (!normalizedSrc) return;
+
         try {
             // Resolve relative path against chapter's ZIP-root directory
             // e.g. "../Images/cover.jpg" + "/OEBPS/Text/" → "/OEBPS/Images/cover.jpg"
-            const resolved = new URL(rawSrc, 'http://x' + baseDir).pathname;
+            const resolved = new URL(normalizedSrc, 'http://x' + baseDir).pathname;
             // resolved already has leading "/", which is what archive.createUrl() expects
             const blobUrl = await archive.createUrl(resolved);
             if (blobUrl) {
@@ -181,7 +187,7 @@ async function resolveResourceUrls(doc: Document, spineItem: any, bookAny: any):
 
         // Fallback: try book.resolve() which handles all epub.js path logic
         try {
-            const resolvedPath = bookAny.resolve?.(rawSrc);
+            const resolvedPath = bookAny.resolve?.(normalizedSrc);
             if (resolvedPath) {
                 const blobUrl = await archive.createUrl(resolvedPath);
                 if (blobUrl) {

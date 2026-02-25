@@ -10,7 +10,49 @@ import { SelectionMenu } from './SelectionMenu';
 import { NoteDialog } from './NoteDialog';
 import { TranslationDialog } from './TranslationDialog';
 import { getProviderLabel, translateText } from '../../services/translateService';
+import { preprocessChapterContent } from '../../services/chapterPreprocessService';
 import styles from './PaginatedReaderView.module.css';
+
+function revokeBlobUrl(rawUrl: string | null) {
+    if (!rawUrl || !rawUrl.startsWith('blob:')) return
+    try {
+        URL.revokeObjectURL(rawUrl)
+    } catch {
+        // ignore revoke errors
+    }
+}
+
+function releaseContainerMediaResources(container: HTMLElement) {
+    container.querySelectorAll('img').forEach((img) => {
+        revokeBlobUrl(img.getAttribute('src'))
+        const srcSet = img.getAttribute('srcset')
+        if (srcSet) {
+            srcSet.split(',').forEach((entry) => {
+                const url = entry.trim().split(/\s+/)[0]
+                revokeBlobUrl(url || null)
+            })
+        }
+        img.removeAttribute('srcset')
+        img.removeAttribute('src')
+    })
+
+    container.querySelectorAll('source').forEach((sourceEl) => {
+        revokeBlobUrl(sourceEl.getAttribute('src'))
+        sourceEl.removeAttribute('srcset')
+        sourceEl.removeAttribute('src')
+    })
+
+    container.querySelectorAll('video,audio').forEach((mediaEl) => {
+        revokeBlobUrl(mediaEl.getAttribute('src'))
+        mediaEl.removeAttribute('src')
+        mediaEl.querySelectorAll('source').forEach((sourceEl) => {
+            revokeBlobUrl(sourceEl.getAttribute('src'))
+            sourceEl.removeAttribute('src')
+        })
+    })
+
+    container.replaceChildren()
+}
 
 interface PaginatedReaderViewProps {
     provider: ContentProvider;
@@ -123,7 +165,20 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         setIsLoading(true);
         renderedHighlightsRef.current.clear();
         try {
-            const html = await provider.extractChapterHtml(spineIndex);
+            const rawHtml = await provider.extractChapterHtml(spineIndex);
+
+            let chapterStyles: string[] = [];
+            try { chapterStyles = await provider.extractChapterStyles(spineIndex); } catch { /* optional */ }
+
+            const preprocessed = await preprocessChapterContent({
+                chapterId: `pch-${spineIndex}`,
+                spineIndex,
+                chapterHref: spineItemsRef.current[spineIndex]?.href,
+                htmlContent: rawHtml,
+                externalStyles: chapterStyles,
+            });
+
+            const html = preprocessed.htmlContent;
 
             const plainText = html
                 .replace(/<script[\s\S]*?<\/script>/gi, '')
@@ -144,11 +199,9 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 }
             }
 
-            let chapterStyles: string[] = [];
-            try { chapterStyles = await provider.extractChapterStyles(spineIndex); } catch { /* optional */ }
             setShadowData({
                 htmlContent: html,
-                externalStyles: chapterStyles,
+                externalStyles: preprocessed.externalStyles,
                 chapterId: `pch-${spineIndex}`,
             });
         } catch (err) {
@@ -188,7 +241,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         container.style.transform = 'translateX(0)';
 
         // 替换内容
-        container.innerHTML = '';
+        releaseContainerMediaResources(container);
         container.appendChild(chapterNode);
 
         // 强制重排，确保上面的样式生效
@@ -256,17 +309,49 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
 
         let resizeTimer: number | null = null;
         const recalc = () => {
+            const oldWidth = Math.max(1, viewport.clientWidth);
+            const fallbackAnchorX = currentPageRef.current * oldWidth + oldWidth * 0.35;
+
+            const viewportRect = viewport.getBoundingClientRect();
+            const probeX = viewportRect.left + viewportRect.width * 0.5;
+            const probeY = viewportRect.top + Math.min(viewportRect.height * 0.32, 220);
+            const probeElement = document.elementFromPoint(probeX, probeY) as HTMLElement | null;
+            const containerRect = container.getBoundingClientRect();
+
+            let anchorX = fallbackAnchorX;
+            if (probeElement && container.contains(probeElement)) {
+                const probeRect = probeElement.getBoundingClientRect();
+                const probeOffsetX = probeRect.left - containerRect.left + container.scrollLeft;
+                if (Number.isFinite(probeOffsetX) && probeOffsetX >= 0) {
+                    anchorX = probeOffsetX;
+                }
+            }
+
             // 防抖
             if (resizeTimer) window.clearTimeout(resizeTimer);
             resizeTimer = window.setTimeout(() => {
                 const w = viewport.clientWidth;
                 const h = viewport.clientHeight;
                 if (w <= 0 || h <= 0) return;
+
                 container.style.height = `${h}px`;
                 const pages = Math.max(1, Math.ceil(container.scrollWidth / w));
+
+                const anchorBasedPage = Math.floor(anchorX / w);
+                const nextPage = Math.max(0, Math.min(anchorBasedPage, pages - 1));
+
                 setTotalPages(pages);
                 totalPagesRef.current = pages;
-                setCurrentPage(p => Math.min(p, pages - 1));
+
+                setCurrentPage(nextPage);
+                currentPageRef.current = nextPage;
+                setDisplayPage(nextPage);
+
+                container.style.transition = 'none';
+                container.style.transform = `translateX(${-nextPage * w}px)`;
+                requestAnimationFrame(() => {
+                    container.style.transition = '';
+                });
             }, 100);
         };
 

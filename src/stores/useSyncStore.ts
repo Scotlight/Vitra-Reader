@@ -37,13 +37,38 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
     return bytes.buffer
 }
 
-type WebdavAction = 'test' | 'upload' | 'download'
+type WebdavAction = 'test' | 'upload' | 'download' | 'head'
+
+interface WebdavPayload {
+    url: string
+    username: string
+    password: string
+    data?: string
+    ifMatch?: string
+    ifNoneMatch?: string
+}
+
+interface WebdavResult {
+    success: boolean
+    data?: string
+    error?: string
+    statusCode?: number
+    etag?: string
+    lastModified?: string
+    exists?: boolean
+}
+
+function normalizeEtag(value: string | null | undefined): string | null {
+    if (!value) return null
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : null
+}
 
 async function webdavSyncWithRetry(
     action: WebdavAction,
-    payload: { url: string; username: string; password: string; data?: string },
+    payload: WebdavPayload,
     retries = 2
-) {
+): Promise<WebdavResult> {
     let lastError: string | null = null
     for (let attempt = 0; attempt <= retries; attempt += 1) {
         const result = await window.electronAPI.webdavSync(action, payload)
@@ -66,6 +91,7 @@ interface SyncState {
     restoreMode: RestoreMode
     replaceBeforeRestore: boolean
     lastSyncTime: number | null
+    remoteEtag: string | null
     isSyncing: boolean
     isRestoring: boolean
     isTesting: boolean
@@ -87,20 +113,23 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     restoreMode: 'auto',
     replaceBeforeRestore: true,
     lastSyncTime: null,
+    remoteEtag: null,
     isSyncing: false,
     isRestoring: false,
     isTesting: false,
     syncStatus: '',
 
     autoSync: async (reason) => {
-        const { webdavUrl, webdavUser, webdavPass, webdavPath, isSyncing, isRestoring, syncMode } = get()
+        const { webdavUrl, webdavUser, webdavPass, webdavPath, isSyncing, isRestoring, syncMode, remoteEtag } = get()
         if (!webdavUrl || !webdavUser || !webdavPass) return
         if (isSyncing || isRestoring) return
+
+        const backupUrl = buildBackupUrl(webdavUrl, webdavPath)
 
         try {
             if (reason === 'startup') {
                 const downloadRes = await webdavSyncWithRetry('download', {
-                    url: buildBackupUrl(webdavUrl, webdavPath),
+                    url: backupUrl,
                     username: webdavUser,
                     password: webdavPass,
                 })
@@ -138,7 +167,17 @@ export const useSyncStore = create<SyncState>((set, get) => ({
                     await db.bookFiles.bulkPut(decodedFiles as any)
                 }
 
-                set({ syncMode: resolvedMode, lastSyncTime: remoteLast, syncStatus: '已自动拉取最新云端数据' })
+                const downloadedEtag = normalizeEtag(downloadRes.etag)
+                if (downloadedEtag) {
+                    await db.settings.put({ key: 'webdavRemoteEtag', value: downloadedEtag })
+                }
+
+                set({
+                    syncMode: resolvedMode,
+                    lastSyncTime: remoteLast,
+                    remoteEtag: downloadedEtag,
+                    syncStatus: '已自动拉取最新云端数据',
+                })
                 await db.settings.put({ key: 'lastSyncTime', value: remoteLast })
                 return
             }
@@ -177,14 +216,57 @@ export const useSyncStore = create<SyncState>((set, get) => ({
                 }))
             }
 
+            let ifMatch: string | undefined
+            let ifNoneMatch: string | undefined
+            let headEtag: string | null = null
+
+            const headRes = await webdavSyncWithRetry('head', {
+                url: backupUrl,
+                username: webdavUser,
+                password: webdavPass,
+            }, 1)
+
+            if (headRes.success) {
+                if (headRes.exists === false || headRes.statusCode === 404) {
+                    ifNoneMatch = '*'
+                } else {
+                    headEtag = normalizeEtag(headRes.etag)
+                    if (headEtag) {
+                        ifMatch = headEtag
+                        if (remoteEtag && remoteEtag !== headEtag) {
+                            set({ syncStatus: '检测到云端更新，自动同步已跳过（避免覆盖）' })
+                            return
+                        }
+                    }
+                }
+            }
+
             const uploadRes = await webdavSyncWithRetry('upload', {
-                url: buildBackupUrl(webdavUrl, webdavPath),
+                url: backupUrl,
                 username: webdavUser,
                 password: webdavPass,
                 data: JSON.stringify(payload),
+                ifMatch,
+                ifNoneMatch,
             })
-            if (!uploadRes.success) return
-            set({ lastSyncTime: now, syncStatus: reason === 'interval' ? '自动同步完成' : '退出前同步完成' })
+
+            if (!uploadRes.success) {
+                if (uploadRes.statusCode === 412) {
+                    set({ syncStatus: '自动同步冲突（云端已变更），请先恢复后再同步' })
+                }
+                return
+            }
+
+            const nextEtag = normalizeEtag(uploadRes.etag) || headEtag || remoteEtag
+            if (nextEtag) {
+                await db.settings.put({ key: 'webdavRemoteEtag', value: nextEtag })
+            }
+
+            set({
+                lastSyncTime: now,
+                remoteEtag: nextEtag,
+                syncStatus: reason === 'interval' ? '自动同步完成' : '退出前同步完成',
+            })
             await db.settings.put({ key: 'lastSyncTime', value: now })
         } catch (error) {
             console.error('Auto sync failed:', error)
@@ -212,6 +294,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         const restoreMode = await db.settings.get('webdavRestoreMode')
         const replaceBeforeRestore = await db.settings.get('webdavReplaceBeforeRestore')
         const time = await db.settings.get('lastSyncTime')
+        const remoteEtag = await db.settings.get('webdavRemoteEtag')
 
         set({
             webdavUrl: (url?.value as string) || '',
@@ -221,7 +304,8 @@ export const useSyncStore = create<SyncState>((set, get) => ({
             syncMode: ((syncMode?.value as SyncMode) || 'data'),
             restoreMode: ((restoreMode?.value as RestoreMode) || 'auto'),
             replaceBeforeRestore: (replaceBeforeRestore?.value as boolean) ?? true,
-            lastSyncTime: (time?.value as number) || null
+            lastSyncTime: (time?.value as number) || null,
+            remoteEtag: normalizeEtag(remoteEtag?.value as string | null | undefined)
         })
     },
 
@@ -251,7 +335,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     },
 
     syncData: async () => {
-        const { webdavUrl, webdavPath, webdavUser, webdavPass, syncMode } = get()
+        const { webdavUrl, webdavPath, webdavUser, webdavPass, syncMode, remoteEtag } = get()
         if (!webdavUrl || !webdavUser || !webdavPass) {
             set({ syncStatus: 'Missing configuration' })
             return
@@ -261,6 +345,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
         try {
             const now = Date.now()
+            const backupUrl = buildBackupUrl(webdavUrl, webdavPath)
             const payload: Record<string, unknown> = {
                 mode: syncMode,
                 timestamp: now,
@@ -295,18 +380,54 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
             const backupData = JSON.stringify(payload)
 
+            let ifMatch: string | undefined
+            let ifNoneMatch: string | undefined
+            let headEtag: string | null = null
+
+            const headRes = await webdavSyncWithRetry('head', {
+                url: backupUrl,
+                username: webdavUser,
+                password: webdavPass,
+            }, 1)
+
+            if (headRes.success) {
+                if (headRes.exists === false || headRes.statusCode === 404) {
+                    ifNoneMatch = '*'
+                } else {
+                    headEtag = normalizeEtag(headRes.etag)
+                    if (headEtag) {
+                        ifMatch = headEtag
+                        if (remoteEtag && remoteEtag !== headEtag) {
+                            throw new Error('云端备份已在其他设备更新，请先恢复或重新拉取后再同步')
+                        }
+                    }
+                }
+            }
+
             // 2. Upload
             set({ syncStatus: `Uploading (${syncMode})...` })
             const uploadRes = await webdavSyncWithRetry('upload', {
-                url: buildBackupUrl(webdavUrl, webdavPath),
+                url: backupUrl,
                 username: webdavUser,
                 password: webdavPass,
-                data: backupData
+                data: backupData,
+                ifMatch,
+                ifNoneMatch,
             })
 
-            if (!uploadRes.success) throw new Error(uploadRes.error)
+            if (!uploadRes.success) {
+                if (uploadRes.statusCode === 412) {
+                    throw new Error('同步冲突：云端文件已被更新，请先恢复后再同步')
+                }
+                throw new Error(uploadRes.error)
+            }
 
-            set({ syncStatus: 'Sync Complete', lastSyncTime: now })
+            const nextEtag = normalizeEtag(uploadRes.etag) || headEtag || remoteEtag
+            if (nextEtag) {
+                await db.settings.put({ key: 'webdavRemoteEtag', value: nextEtag })
+            }
+
+            set({ syncStatus: 'Sync Complete', lastSyncTime: now, remoteEtag: nextEtag })
             await db.settings.put({ key: 'lastSyncTime', value: now })
 
         } catch (e: any) {
@@ -333,6 +454,11 @@ export const useSyncStore = create<SyncState>((set, get) => ({
                 password: webdavPass,
             })
             if (!downloadRes.success || !downloadRes.data) throw new Error(downloadRes.error || '备份文件不存在或不可读')
+
+            const downloadedEtag = normalizeEtag(downloadRes.etag)
+            if (downloadedEtag) {
+                await db.settings.put({ key: 'webdavRemoteEtag', value: downloadedEtag })
+            }
 
             const payload = JSON.parse(downloadRes.data) as {
                 mode?: SyncMode
@@ -376,7 +502,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
             }
 
             await db.settings.put({ key: 'webdavSyncMode', value: resolvedMode })
-            set({ syncMode: resolvedMode, syncStatus: `恢复完成（${resolvedMode}）` })
+            set({ syncMode: resolvedMode, remoteEtag: downloadedEtag, syncStatus: `恢复完成（${resolvedMode}）` })
         } catch (error: any) {
             console.error('Restore failed:', error)
             set({ syncStatus: `恢复失败: ${error?.message || error}` })

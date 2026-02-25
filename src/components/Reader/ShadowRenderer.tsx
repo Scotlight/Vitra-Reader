@@ -2,6 +2,8 @@ import { useRef, useEffect, useCallback } from 'react';
 import styles from './ShadowRenderer.module.css';
 import { waitForAssetLoad, getContainerHeight } from '../../utils/assetLoader';
 import { generateCSSOverride, generatePaginatedCSSOverride, scopeStyles, extractStyles, removeStyleTags } from '../../utils/styleProcessor';
+import { sanitizeChapterHtml, sanitizeStyleSheets } from '../../utils/contentSanitizer';
+import { buildFontFamilyWithFallback } from '../../utils/fontFallback';
 
 export interface ReaderStyleConfig {
   textColor: string;
@@ -62,6 +64,7 @@ export function ShadowRenderer({
       textColor, bgColor, fontSize, fontFamily,
       lineHeight, paragraphSpacing, letterSpacing, textAlign,
     } = readerStyles;
+    const resolvedFontFamily = buildFontFamilyWithFallback(fontFamily);
 
     const scope = `[data-chapter-id="${chapterId}"]`;
 
@@ -71,7 +74,7 @@ export function ShadowRenderer({
         margin: 0 !important; padding: 0 !important;
         background: var(--reader-bg-color, ${bgColor}) !important;
         color: var(--reader-text-color, ${textColor}) !important;
-        font-family: var(--reader-font-family, ${fontFamily}) !important;
+        font-family: var(--reader-font-family, ${resolvedFontFamily}) !important;
         font-size: var(--reader-font-size, ${fontSize}px) !important;
         line-height: var(--reader-line-height, ${lineHeight}) !important;
         letter-spacing: var(--reader-letter-spacing, ${letterSpacing}px) !important;
@@ -121,16 +124,18 @@ export function ShadowRenderer({
         chapterWrapper.style.width = '100%';
         chapterWrapper.style.position = 'relative';
 
-        // 2. Extract and scope inline styles from HTML
-        const inlineStyles = extractStyles(htmlContent);
-        const cleanedHtml = removeStyleTags(htmlContent);
+        // 2. Centralized sanitize + scope styles
+        const sanitizedHtml = sanitizeChapterHtml(htmlContent).htmlContent;
+        const inlineStyles = sanitizeStyleSheets(extractStyles(sanitizedHtml));
+        const cleanedHtml = removeStyleTags(sanitizedHtml);
+        const sanitizedExternalStyles = sanitizeStyleSheets(externalStyles);
 
         // 3. Build combined scoped stylesheet
         const styleEl = document.createElement('style');
         const cssOverride = mode === 'paginated'
           ? generatePaginatedCSSOverride(chapterId)
           : generateCSSOverride(chapterId);
-        const allStyles = [...externalStyles, ...inlineStyles];
+        const allStyles = [...sanitizedExternalStyles, ...inlineStyles];
         const scopedCss = allStyles
           .map(css => scopeStyles(css, chapterId))
           .join('\n');
@@ -148,21 +153,17 @@ export function ShadowRenderer({
         contentDiv.innerHTML = cleanedHtml;
         chapterWrapper.appendChild(contentDiv);
 
-        // 5. Sanitize — remove scripts and dangerous attributes
-        chapterWrapper.querySelectorAll('script').forEach(s => s.remove());
-        chapterWrapper.querySelectorAll('*').forEach(el => {
-          Array.from(el.attributes).forEach(attr => {
-            const name = attr.name.toLowerCase();
-            if (name.startsWith('on')) {
-              el.removeAttribute(attr.name);
-            }
-            if (
-              (name === 'href' || name === 'src') &&
-              /^javascript:/i.test(attr.value.trim())
-            ) {
-              el.removeAttribute(attr.name);
-            }
-          });
+        // 5. Memory-conscious media hints
+        chapterWrapper.querySelectorAll('img').forEach((img) => {
+          if (!img.getAttribute('loading')) {
+            img.setAttribute('loading', 'lazy');
+          }
+          if (!img.getAttribute('decoding')) {
+            img.setAttribute('decoding', 'async');
+          }
+          if (!img.getAttribute('fetchpriority')) {
+            img.setAttribute('fetchpriority', 'low');
+          }
         });
 
         // 6. Mount into shadow container

@@ -13,8 +13,25 @@ interface Window {
         listSystemFonts: () => Promise<string[]>
         setWindowTheme: (payload: { themeId: string; customBgColor?: string | null; customTextColor?: string | null }) => void
         openExternal: (url: string) => Promise<void>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        webdavSync: (method: 'upload' | 'download' | 'test', config: any) => Promise<{ success: boolean; data?: string; error?: string }>
+        webdavSync: (
+            method: 'upload' | 'download' | 'test' | 'head',
+            config: {
+                url: string
+                username: string
+                password: string
+                data?: string
+                ifMatch?: string
+                ifNoneMatch?: string
+            }
+        ) => Promise<{
+            success: boolean
+            data?: string
+            error?: string
+            statusCode?: number
+            etag?: string
+            lastModified?: string
+            exists?: boolean
+        }>
         translateRequest: (payload: {
             url: string
             method?: 'GET' | 'POST'

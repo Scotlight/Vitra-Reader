@@ -22,6 +22,7 @@ import { SelectionMenu } from './SelectionMenu';
 import { NoteDialog } from './NoteDialog';
 import { TranslationDialog } from './TranslationDialog';
 import { getProviderLabel, translateText } from '../../services/translateService';
+import { preprocessChapterContent } from '../../services/chapterPreprocessService';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
@@ -85,6 +86,52 @@ const DEFAULT_SMOOTH_CONFIG: NonNullable<ScrollReaderViewProps['smoothConfig']> 
     easing: true,
     reverseWheelDirection: false,
 };
+
+function revokeBlobUrl(rawUrl: string | null) {
+    if (!rawUrl) return;
+    if (!rawUrl.startsWith('blob:')) return;
+    try {
+        URL.revokeObjectURL(rawUrl);
+    } catch {
+        // Ignore revoke failures
+    }
+}
+
+function releaseChapterDomResources(chapterNode: HTMLElement | null) {
+    if (!chapterNode) return;
+
+    chapterNode.querySelectorAll('img').forEach((img) => {
+        revokeBlobUrl(img.getAttribute('src'));
+        const srcSet = img.getAttribute('srcset');
+        if (srcSet) {
+            srcSet.split(',').forEach((part) => {
+                const url = part.trim().split(/\s+/)[0];
+                revokeBlobUrl(url || null);
+            });
+        }
+        img.removeAttribute('srcset');
+        img.removeAttribute('src');
+        img.loading = 'lazy';
+        img.decoding = 'async';
+    });
+
+    chapterNode.querySelectorAll('source').forEach((sourceEl) => {
+        revokeBlobUrl(sourceEl.getAttribute('src'));
+        sourceEl.removeAttribute('srcset');
+        sourceEl.removeAttribute('src');
+    });
+
+    chapterNode.querySelectorAll('video,audio').forEach((mediaEl) => {
+        revokeBlobUrl(mediaEl.getAttribute('src'));
+        mediaEl.removeAttribute('src');
+        mediaEl.querySelectorAll('source').forEach((sourceEl) => {
+            revokeBlobUrl(sourceEl.getAttribute('src'));
+            sourceEl.removeAttribute('src');
+        });
+    });
+
+    chapterNode.replaceChildren();
+}
 
 function clampNumber(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
@@ -300,10 +347,18 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 // Styles are optional
             }
 
-            const loaded: LoadedChapter = {
-                ...placeholder,
+            const preprocessed = await preprocessChapterContent({
+                chapterId,
+                spineIndex,
+                chapterHref: currentSpineItems[spineIndex]?.href,
                 htmlContent: html,
                 externalStyles: chapterStyles,
+            });
+
+            const loaded: LoadedChapter = {
+                ...placeholder,
+                htmlContent: preprocessed.htmlContent,
+                externalStyles: preprocessed.externalStyles,
                 status: 'shadow-rendering',
             };
 
@@ -548,7 +603,8 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         toUnload.forEach(ch => {
             // Remove DOM
             if (listEl) {
-                const domEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`);
+                const domEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
+                releaseChapterDomResources(domEl);
                 domEl?.remove();
             }
             // Free resources
@@ -647,6 +703,57 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             updatedAt: Date.now(),
         }).catch(err => console.warn('[ScrollReader] Progress save failed:', err));
     }, [spineItems, bookId, currentSpineIndex, onProgressChange]);
+
+    // ── Resize Anchor Restore ──
+
+    useEffect(() => {
+        const viewport = viewportRef.current;
+        const listEl = chapterListRef.current;
+        if (!viewport || !listEl) return;
+
+        let resizeTimer: number | null = null;
+
+        const observer = new ResizeObserver(() => {
+            const oldScrollTop = viewport.scrollTop;
+            const oldViewportHeight = viewport.clientHeight;
+            const oldScrollable = Math.max(1, listEl.scrollHeight - oldViewportHeight);
+            const oldProgressRatio = oldScrollTop / oldScrollable;
+
+            const anchorElement = findBestAnchor(viewport);
+            const anchorBefore = captureAnchorInfo(anchorElement);
+
+            if (resizeTimer) {
+                window.clearTimeout(resizeTimer);
+            }
+
+            resizeTimer = window.setTimeout(() => {
+                requestAnimationFrame(() => {
+                    if (anchorBefore.element.isConnected) {
+                        const anchorAfter = captureAnchorInfo(anchorBefore.element);
+                        const deltaY = calculateAnchorDelta(anchorBefore, anchorAfter);
+                        if (Number.isFinite(deltaY) && Math.abs(deltaY) > 0.5) {
+                            viewport.scrollTop = Math.max(0, oldScrollTop + deltaY);
+                        }
+                    } else {
+                        const newScrollable = Math.max(1, listEl.scrollHeight - viewport.clientHeight);
+                        viewport.scrollTop = Math.max(0, Math.min(newScrollable, oldProgressRatio * newScrollable));
+                    }
+
+                    lastScrollTopRef.current = viewport.scrollTop;
+                    updateCurrentChapter(viewport.scrollTop, viewport.clientHeight);
+                    updateProgress(viewport.scrollTop, viewport.clientHeight);
+                });
+            }, 110);
+        });
+
+        observer.observe(viewport);
+        return () => {
+            observer.disconnect();
+            if (resizeTimer) {
+                window.clearTimeout(resizeTimer);
+            }
+        };
+    }, [updateCurrentChapter, updateProgress]);
 
     // ── TOC Jump ──
 

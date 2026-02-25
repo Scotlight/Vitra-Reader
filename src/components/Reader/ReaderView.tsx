@@ -6,6 +6,7 @@ import type { ContentProvider, TocItem, SearchResult } from '../../services/cont
 import { createContentProvider } from '../../services/contentProviderFactory'
 import { ScrollReaderView, ScrollReaderHandle } from './ScrollReaderView'
 import { PaginatedReaderView, PaginatedReaderHandle } from './PaginatedReaderView'
+import { buildFontFamilyWithFallback } from '../../utils/fontFallback'
 import styles from './ReaderView.module.css'
 
 interface ReaderViewProps {
@@ -88,6 +89,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
 
     const settings = useSettingsStore()
     const isBdiseMode = settings.pageTurnMode === 'scrolled-continuous'
+    const resolvedReaderFontFamily = buildFontFamilyWithFallback(settings.fontFamily)
     const readerColors = (() => {
         const fallbackByTheme: Record<string, { text: string; bg: string }> = {
             light: { text: '#1a1a1a', bg: '#ffffff' },
@@ -516,7 +518,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                 color: readerColors.textColor,
                 ['--reader-bg-color' as any]: readerColors.bgColor,
                 ['--reader-text-color' as any]: readerColors.textColor,
-                ['--reader-font-family' as any]: settings.fontFamily,
+                ['--reader-font-family' as any]: resolvedReaderFontFamily,
                 ['--reader-font-size' as any]: `${settings.fontSize}px`,
                 ['--reader-line-height' as any]: String(settings.lineHeight),
                 ['--reader-letter-spacing' as any]: `${settings.letterSpacing}px`,
@@ -742,7 +744,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                                 textColor: readerColors.textColor,
                                 bgColor: readerColors.bgColor,
                                 fontSize: settings.fontSize,
-                                fontFamily: settings.fontFamily,
+                                fontFamily: resolvedReaderFontFamily,
                                 lineHeight: settings.lineHeight,
                                 paragraphSpacing: settings.paragraphSpacing,
                                 letterSpacing: settings.letterSpacing,
@@ -779,7 +781,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                                 textColor: readerColors.textColor,
                                 bgColor: readerColors.bgColor,
                                 fontSize: settings.fontSize,
-                                fontFamily: settings.fontFamily,
+                                fontFamily: resolvedReaderFontFamily,
                                 lineHeight: settings.lineHeight,
                                 paragraphSpacing: settings.paragraphSpacing,
                                 letterSpacing: settings.letterSpacing,

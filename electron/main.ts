@@ -253,7 +253,12 @@ ipcMain.handle('system:listFonts', async () => {
 
 import { net } from 'electron'
 
-ipcMain.handle('webdav:upload', async (_, { url, username, password, data }) => {
+function firstHeaderValue(value: string | string[] | undefined): string | undefined {
+    if (Array.isArray(value)) return value[0]
+    return value
+}
+
+ipcMain.handle('webdav:upload', async (_, { url, username, password, data, ifMatch, ifNoneMatch }) => {
     return new Promise((resolve) => {
         const request = net.request({
             method: 'PUT',
@@ -261,12 +266,22 @@ ipcMain.handle('webdav:upload', async (_, { url, username, password, data }) => 
         })
         request.setHeader('Authorization', 'Basic ' + Buffer.from(username + ':' + password).toString('base64'))
         request.setHeader('Content-Type', 'application/json')
+        if (ifMatch) {
+            request.setHeader('If-Match', ifMatch)
+        }
+        if (ifNoneMatch) {
+            request.setHeader('If-None-Match', ifNoneMatch)
+        }
 
         request.on('response', (response) => {
-            if (response.statusCode >= 200 && response.statusCode < 300) {
-                resolve({ success: true })
+            const statusCode = response.statusCode || 0
+            const etag = firstHeaderValue(response.headers['etag'])
+            const lastModified = firstHeaderValue(response.headers['last-modified'])
+
+            if (statusCode >= 200 && statusCode < 300) {
+                resolve({ success: true, statusCode, etag, lastModified })
             } else {
-                resolve({ success: false, error: `Status ${response.statusCode}` })
+                resolve({ success: false, statusCode, etag, lastModified, error: `Status ${statusCode}` })
             }
         })
         request.on('error', (error) => resolve({ success: false, error: error.message }))
@@ -281,14 +296,46 @@ ipcMain.handle('webdav:download', async (_, { url, username, password }) => {
         request.setHeader('Authorization', 'Basic ' + Buffer.from(username + ':' + password).toString('base64'))
 
         request.on('response', (response) => {
-            if (response.statusCode !== 200) {
-                resolve({ success: false, error: `Status ${response.statusCode}` })
+            const statusCode = response.statusCode || 0
+            const etag = firstHeaderValue(response.headers['etag'])
+            const lastModified = firstHeaderValue(response.headers['last-modified'])
+
+            if (statusCode !== 200) {
+                resolve({ success: false, statusCode, etag, lastModified, error: `Status ${statusCode}` })
                 return
             }
             let body = ''
             response.on('data', (chunk) => body += chunk.toString())
-            response.on('end', () => resolve({ success: true, data: body }))
+            response.on('end', () => resolve({ success: true, statusCode, data: body, etag, lastModified }))
         })
+        request.on('error', (error) => resolve({ success: false, error: error.message }))
+        request.end()
+    })
+})
+
+ipcMain.handle('webdav:head', async (_, { url, username, password }) => {
+    return new Promise((resolve) => {
+        const request = net.request({ method: 'HEAD', url })
+        request.setHeader('Authorization', 'Basic ' + Buffer.from(username + ':' + password).toString('base64'))
+
+        request.on('response', (response) => {
+            const statusCode = response.statusCode || 0
+            const etag = firstHeaderValue(response.headers['etag'])
+            const lastModified = firstHeaderValue(response.headers['last-modified'])
+
+            if (statusCode === 404) {
+                resolve({ success: true, statusCode, exists: false, etag, lastModified })
+                return
+            }
+
+            if (statusCode >= 200 && statusCode < 400) {
+                resolve({ success: true, statusCode, exists: true, etag, lastModified })
+                return
+            }
+
+            resolve({ success: false, statusCode, etag, lastModified, error: `Status ${statusCode}` })
+        })
+
         request.on('error', (error) => resolve({ success: false, error: error.message }))
         request.end()
     })
