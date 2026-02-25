@@ -7,11 +7,120 @@ import { buildFontFamilyWithFallback } from '../../utils/fontFallback';
 
 const LARGE_CHAPTER_HTML_THRESHOLD = 450_000;
 const CHUNK_APPEND_BATCH_SIZE = 120;
+const VECTOR_SEGMENT_CHAR_BUDGET = 16_000;
+const VECTOR_MIN_SEGMENT_EST_HEIGHT = 96;
+
+interface ChapterVectorSegment {
+  index: number;
+  nodes: ChildNode[];
+  charCount: number;
+  estimatedHeight: number;
+}
 
 async function yieldToBrowser(): Promise<void> {
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve());
   });
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function estimateNodeCharWeight(node: ChildNode): number {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return Math.max(24, (node.textContent || '').trim().length);
+  }
+
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const element = node as HTMLElement;
+    const textLength = (element.textContent || '').length;
+    const mediaBoost = element.matches('img,svg,video,table,pre,code') ? 260 : 0;
+    return Math.max(40, textLength + 32 + mediaBoost);
+  }
+
+  return 32;
+}
+
+function estimateSegmentHeight(charCount: number, readerStyles: ReaderStyleConfig): number {
+  const fontSize = Math.max(11, readerStyles.fontSize || 16);
+  const width = Math.max(360, Math.min(1400, readerStyles.pageWidth || 900));
+  const charsPerLine = Math.max(18, Math.floor((width / fontSize) * 1.75));
+  const estimatedLines = Math.max(2, Math.ceil(Math.max(1, charCount) / charsPerLine));
+  const lineHeightPx = Math.max(fontSize * 1.25, fontSize * (readerStyles.lineHeight || 1.6));
+  const paragraphFactor = Math.max(1.04, 1 + (readerStyles.paragraphSpacing || 0) / 220);
+
+  return Math.max(
+    VECTOR_MIN_SEGMENT_EST_HEIGHT,
+    Math.ceil(estimatedLines * lineHeightPx * paragraphFactor),
+  );
+}
+
+function computeInitialSegmentCount(segmentCount: number, chapterSize: number): number {
+  if (segmentCount <= 1) return segmentCount;
+  if (chapterSize >= 1_200_000) return Math.min(2, segmentCount);
+  if (chapterSize >= 750_000) return Math.min(3, segmentCount);
+  return Math.min(4, segmentCount);
+}
+
+function vectorizeChapterContent(
+  html: string,
+  readerStyles: ReaderStyleConfig,
+  targetChars: number = VECTOR_SEGMENT_CHAR_BUDGET,
+): ChapterVectorSegment[] {
+  const parser = new DOMParser();
+  const parsed = parser.parseFromString(`<body>${html}</body>`, 'text/html');
+  const sourceBody = parsed.body;
+
+  if (!sourceBody || sourceBody.childNodes.length === 0) {
+    return [];
+  }
+
+  const segments: ChapterVectorSegment[] = [];
+  let currentNodes: ChildNode[] = [];
+  let currentChars = 0;
+
+  const flush = () => {
+    if (currentNodes.length === 0) return;
+
+    segments.push({
+      index: segments.length,
+      nodes: currentNodes,
+      charCount: Math.max(1, currentChars),
+      estimatedHeight: estimateSegmentHeight(currentChars, readerStyles),
+    });
+
+    currentNodes = [];
+    currentChars = 0;
+  };
+
+  Array.from(sourceBody.childNodes).forEach((node) => {
+    const weight = estimateNodeCharWeight(node);
+    const shouldSplit = currentNodes.length > 0 && (currentChars + weight > targetChars);
+    if (shouldSplit) {
+      flush();
+    }
+
+    currentNodes.push(node);
+    currentChars += weight;
+  });
+
+  flush();
+  return segments;
+}
+
+function materializeVectorSegment(targetEl: HTMLElement, segment: ChapterVectorSegment): void {
+  const fragment = document.createDocumentFragment();
+  segment.nodes.forEach((node) => {
+    fragment.appendChild(node.cloneNode(true));
+  });
+  targetEl.replaceChildren(fragment);
+}
+
+function applyPlaceholderSizing(segmentEl: HTMLElement, height: number): void {
+  const safeHeight = Math.max(VECTOR_MIN_SEGMENT_EST_HEIGHT, Math.floor(height));
+  segmentEl.style.minHeight = `${safeHeight}px`;
+  segmentEl.style.containIntrinsicSize = `${safeHeight}px`;
 }
 
 async function appendHtmlContentChunked(
@@ -169,6 +278,7 @@ export function ShadowRenderer({
         const cleanedHtml = removeStyleTags(sanitizedHtml);
         const sanitizedExternalStyles = sanitizeStyleSheets(externalStyles);
         const isLargeChapter = cleanedHtml.length >= LARGE_CHAPTER_HTML_THRESHOLD;
+        const useVectorizedFlow = mode === 'scroll' && isLargeChapter;
 
         // 3. Build combined scoped stylesheet
         const styleEl = document.createElement('style');
@@ -190,7 +300,60 @@ export function ShadowRenderer({
 
         // 4. Inject cleaned HTML
         const contentDiv = document.createElement('div');
-        if (isLargeChapter) {
+        const vectorSegments = useVectorizedFlow
+          ? vectorizeChapterContent(cleanedHtml, readerStyles)
+          : [];
+
+        const canUseVectorized = useVectorizedFlow && vectorSegments.length > 1;
+        const segmentEls: HTMLElement[] = [];
+        let initialSegmentCount = 0;
+
+        if (canUseVectorized) {
+          initialSegmentCount = computeInitialSegmentCount(vectorSegments.length, cleanedHtml.length);
+
+          vectorSegments.forEach((segment, segmentIndex) => {
+            const segmentEl = document.createElement('section');
+            segmentEl.setAttribute('data-shadow-segment-index', String(segmentIndex));
+            segmentEl.style.width = '100%';
+            segmentEl.style.position = 'relative';
+            segmentEl.style.contain = 'layout paint';
+            segmentEl.style.contentVisibility = 'auto';
+
+            if (segmentIndex < initialSegmentCount) {
+              materializeVectorSegment(segmentEl, segment);
+              segmentEl.setAttribute('data-shadow-segment-state', 'hydrated');
+              segmentEl.style.containIntrinsicSize = `${Math.max(VECTOR_MIN_SEGMENT_EST_HEIGHT, segment.estimatedHeight)}px`;
+            } else {
+              segmentEl.setAttribute('data-shadow-segment-state', 'placeholder');
+              applyPlaceholderSizing(segmentEl, segment.estimatedHeight);
+            }
+
+            contentDiv.appendChild(segmentEl);
+            segmentEls.push(segmentEl);
+          });
+
+          if (initialSegmentCount > 0 && vectorSegments.length > initialSegmentCount) {
+            void contentDiv.offsetHeight;
+
+            const measuredSeedHeight = segmentEls
+              .slice(0, initialSegmentCount)
+              .reduce((sum, el) => sum + Math.max(1, getContainerHeight(el)), 0);
+            const estimatedSeedHeight = vectorSegments
+              .slice(0, initialSegmentCount)
+              .reduce((sum, seg) => sum + seg.estimatedHeight, 0);
+
+            const correction = estimatedSeedHeight > 0
+              ? clampNumber(measuredSeedHeight / estimatedSeedHeight, 0.62, 2.4)
+              : 1;
+
+            for (let idx = initialSegmentCount; idx < vectorSegments.length; idx += 1) {
+              const placeholderEl = segmentEls[idx];
+              const seg = vectorSegments[idx];
+              if (!placeholderEl || !seg) continue;
+              applyPlaceholderSizing(placeholderEl, seg.estimatedHeight * correction);
+            }
+          }
+        } else if (isLargeChapter) {
           await appendHtmlContentChunked(contentDiv, cleanedHtml);
         } else {
           contentDiv.innerHTML = cleanedHtml;
@@ -219,8 +382,8 @@ export function ShadowRenderer({
         // 7. Wait for all images to finish loading
         await waitForAssetLoad(chapterWrapper, {
           chapterSizeHint: cleanedHtml.length,
-          timeoutMs: isLargeChapter ? 14000 : undefined,
-          maxTrackedImages: isLargeChapter ? 16 : 48,
+          timeoutMs: canUseVectorized ? 9000 : (isLargeChapter ? 14000 : undefined),
+          maxTrackedImages: canUseVectorized ? 10 : (isLargeChapter ? 16 : 48),
           largeChapterThreshold: LARGE_CHAPTER_HTML_THRESHOLD,
         });
 
@@ -234,6 +397,52 @@ export function ShadowRenderer({
 
         hasReportedRef.current = true;
         onReady(chapterWrapper, height);
+
+        if (canUseVectorized && vectorSegments.length > initialSegmentCount) {
+          const hydrateRemainingSegments = async () => {
+            let materializedCount = 0;
+
+            for (let idx = initialSegmentCount; idx < vectorSegments.length; idx += 1) {
+              if (cancelled || !chapterWrapper.isConnected) {
+                return;
+              }
+
+              const targetEl = segmentEls[idx];
+              const segment = vectorSegments[idx];
+              if (!targetEl || !segment) continue;
+
+              materializeVectorSegment(targetEl, segment);
+              targetEl.setAttribute('data-shadow-segment-state', 'hydrated');
+              targetEl.style.minHeight = '0px';
+
+              const measured = Math.max(VECTOR_MIN_SEGMENT_EST_HEIGHT, getContainerHeight(targetEl));
+              targetEl.style.containIntrinsicSize = `${measured}px`;
+
+              if (idx % 3 === 0) {
+                await waitForAssetLoad(targetEl, {
+                  chapterSizeHint: segment.charCount,
+                  timeoutMs: 4000,
+                  maxTrackedImages: 4,
+                  largeChapterThreshold: LARGE_CHAPTER_HTML_THRESHOLD,
+                });
+              }
+
+              materializedCount += 1;
+              if (materializedCount % 2 === 0) {
+                await yieldToBrowser();
+              }
+            }
+
+            if (!cancelled && chapterWrapper.isConnected) {
+              const finalHeight = getContainerHeight(chapterWrapper);
+              console.log(
+                `[ShadowRenderer] Chapter "${chapterId}" vectorized hydration done. Final: ${finalHeight}px`,
+              );
+            }
+          };
+
+          void hydrateRemainingSegments();
+        }
       } catch (error) {
         if (cancelled) return;
         const err = error instanceof Error ? error : new Error(String(error));
@@ -245,7 +454,9 @@ export function ShadowRenderer({
     renderAndMeasure();
 
     return () => {
-      cancelled = true;
+      if (!hasReportedRef.current) {
+        cancelled = true;
+      }
     };
   }, [htmlContent, chapterId, externalStyles, onReady, onError, buildContentCss]);
 
