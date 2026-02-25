@@ -63,6 +63,8 @@ export interface ScrollReaderHandle {
 const MAX_MOUNTED_CHAPTERS = 5;
 const PRELOAD_THRESHOLD_PX = 600;
 const UNLOAD_DISTANCE = 3;
+const CHAPTER_DETECTION_ANCHOR_RATIO = 0.22;
+const CHAPTER_DETECTION_ANCHOR_MAX_PX = 140;
 
 // ── Component ──
 
@@ -472,14 +474,17 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         const listEl = chapterListRef.current;
         if (!listEl) return;
 
-        const viewportMid = scrollTop + viewportHeight / 2;
+        const chapterProbeLine = scrollTop + Math.min(
+            viewportHeight * CHAPTER_DETECTION_ANCHOR_RATIO,
+            CHAPTER_DETECTION_ANCHOR_MAX_PX,
+        );
         const chapterEls = Array.from(listEl.querySelectorAll('[data-chapter-id]')) as HTMLElement[];
 
         for (const el of chapterEls) {
             const top = el.offsetTop;
             const bottom = top + el.offsetHeight;
 
-            if (viewportMid >= top && viewportMid < bottom) {
+            if (chapterProbeLine >= top && chapterProbeLine < bottom) {
                 const chapterIdAttr = el.getAttribute('data-chapter-id') || '';
                 const match = chapterIdAttr.match(/^ch-(\d+)$/);
                 if (match) {
@@ -555,6 +560,20 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     const jumpToSpine = useCallback(async (targetSpineIndex: number, searchText?: string) => {
         if (targetSpineIndex < 0 || targetSpineIndex >= spineItemsRef.current.length) return;
         pendingSearchTextRef.current = searchText || null;
+        initialScrollDone.current = true;
+        stop();
+        if (progressTimerRef.current) {
+            window.clearTimeout(progressTimerRef.current);
+            progressTimerRef.current = null;
+        }
+
+        setCurrentSpineIndex(targetSpineIndex);
+        if (onChapterChange && spineItemsRef.current[targetSpineIndex]) {
+            onChapterChange(
+                spineItemsRef.current[targetSpineIndex].id,
+                spineItemsRef.current[targetSpineIndex].href,
+            );
+        }
 
         // Check if already mounted
         const existing = chaptersRef.current.find(ch =>
@@ -569,6 +588,15 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 const domEl = listEl.querySelector(`[data-chapter-id="ch-${targetSpineIndex}"]`) as HTMLElement | null;
                 if (domEl) {
                     viewport.scrollTop = domEl.offsetTop;
+                    updateCurrentChapter(viewport.scrollTop, viewport.clientHeight);
+                    updateProgress(viewport.scrollTop, viewport.clientHeight);
+
+                    requestAnimationFrame(() => {
+                        viewport.scrollTop = domEl.offsetTop;
+                        updateCurrentChapter(viewport.scrollTop, viewport.clientHeight);
+                        updateProgress(viewport.scrollTop, viewport.clientHeight);
+                    });
+
                     // If searchText, find and scroll to it
                     if (searchText) {
                         pendingSearchTextRef.current = null;
@@ -597,7 +625,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
         // loadChapter uses chaptersRef (always current), so no stale closure issue
         loadChapter(targetSpineIndex, 'initial');
-    }, [loadChapter]);
+    }, [loadChapter, onChapterChange, stop, updateCurrentChapter, updateProgress]);
 
     // Expose jumpToSpine via ref for parent component
     useImperativeHandle(ref, () => ({

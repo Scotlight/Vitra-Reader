@@ -317,6 +317,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     }
 
     const handleTocClick = async (href: string) => {
+        setCurrentSectionHref(normalizeHref(href))
         if (providerRef.current) {
             const spineIndex = providerRef.current.getSpineIndexByHref(href)
             if (spineIndex >= 0) {
@@ -723,7 +724,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                                 currentProgressRef.current = p
                             }}
                             onChapterChange={(_label, href) => {
-                                setCurrentSectionHref(href)
+                                setCurrentSectionHref(normalizeHref(href))
                             }}
                             onSelectionSearch={(keyword) => {
                                 setSearchQuery(keyword)
@@ -760,7 +761,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                                 currentProgressRef.current = p
                             }}
                             onChapterChange={(_label, href) => {
-                                setCurrentSectionHref(href)
+                                setCurrentSectionHref(normalizeHref(href))
                             }}
                             onSelectionSearch={(keyword) => {
                                 setSearchQuery(keyword)
