@@ -24,8 +24,8 @@ export interface PhysicsConfig {
  * 默认物理配置
  */
 export const DEFAULT_PHYSICS_CONFIG: PhysicsConfig = {
-  friction: 0.12,                // 衰减系数，越大减速越快
-  stopThreshold: 0.5,            // 速度低于此值停止动画
-  springStiffness: 0.1,
-  springDamping: 0.8
+  friction: 0.08,                // 衰减系数，适中减速，避免突兀刹停
+  stopThreshold: 0.12,           // 降低停止阈值，减少“顿一下”
+  springStiffness: 0.06,
+  springDamping: 0.6
 };

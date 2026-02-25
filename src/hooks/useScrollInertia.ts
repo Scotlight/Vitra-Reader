@@ -6,7 +6,9 @@ interface InertiaCallbacks {
   onStop?: () => void;
 }
 
-const MAX_ABS_VELOCITY = 140;
+const MAX_ABS_VELOCITY = 96;
+const IMPULSE_GAIN = 0.24;
+const IMPULSE_BLEND = 0.82;
 
 function clampVelocity(value: number): number {
   return Math.max(-MAX_ABS_VELOCITY, Math.min(MAX_ABS_VELOCITY, value));
@@ -46,7 +48,7 @@ export function useScrollInertia(
   /** 物理循环 — 时间无关的阻尼衰减 */
   const physicsLoop = useCallback((now: number) => {
     const cfg = configRef.current;
-    const dt = lastFrameTime.current ? Math.min(now - lastFrameTime.current, 64) : 16;
+    const dt = lastFrameTime.current ? Math.min(now - lastFrameTime.current, 32) : 16;
     lastFrameTime.current = now;
 
     if (Math.abs(velocity.current) < cfg.stopThreshold || isDragging.current) {
@@ -71,12 +73,14 @@ export function useScrollInertia(
     // 应用速度
     viewport.scrollTop += velocity.current * (dt / 16);
 
-    // 边界回弹 (Hooke's law)
-    const maxScroll = viewport.scrollHeight - viewport.clientHeight;
+    // 边界处理：优先稳定，避免“弹一下”
+    const maxScroll = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
     if (viewport.scrollTop < 0) {
-      velocity.current += -cfg.springStiffness * viewport.scrollTop;
+      viewport.scrollTop = 0;
+      velocity.current = Math.min(0, velocity.current) * cfg.springDamping;
     } else if (viewport.scrollTop > maxScroll) {
-      velocity.current += -cfg.springStiffness * (viewport.scrollTop - maxScroll);
+      viewport.scrollTop = maxScroll;
+      velocity.current = Math.max(0, velocity.current) * cfg.springDamping;
     }
 
     animationFrameId.current = requestAnimationFrame(physicsLoop);
@@ -100,7 +104,7 @@ export function useScrollInertia(
     // 将像素位移转换为速度冲量
     // 系数 0.35 经验值：一格滚轮 (~100px deltaY) → ~35 px/frame 初速度
     // 配合 friction 0.12 → 总滚动距离 ≈ 35/0.12 ≈ 290px，手感接近 macOS
-    velocity.current = clampVelocity(velocity.current + delta * 0.35);
+    velocity.current = clampVelocity(velocity.current * IMPULSE_BLEND + delta * IMPULSE_GAIN);
     ensureRunning();
   }, [ensureRunning]);
 

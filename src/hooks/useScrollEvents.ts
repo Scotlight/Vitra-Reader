@@ -37,6 +37,25 @@ interface UseScrollEventsOptions {
   onDragEnd?: () => void;
 }
 
+const LINE_DELTA_PX = 16;
+const PAGE_DELTA_FACTOR = 0.9;
+const MAX_WHEEL_DELTA_PX = 180;
+
+function normalizeWheelDelta(event: WheelEvent, viewport: HTMLElement | null): number {
+  let deltaY = event.deltaY;
+
+  if (event.deltaMode === 1) {
+    deltaY *= LINE_DELTA_PX;
+  } else if (event.deltaMode === 2) {
+    const pageHeight = viewport?.clientHeight || 800;
+    deltaY *= Math.max(1, pageHeight * PAGE_DELTA_FACTOR);
+  }
+
+  if (!Number.isFinite(deltaY)) return 0;
+  if (Math.abs(deltaY) < 0.1) return 0;
+  return Math.sign(deltaY) * Math.min(Math.abs(deltaY), MAX_WHEEL_DELTA_PX);
+}
+
 /**
  * useScrollEvents Hook
  *
@@ -58,8 +77,11 @@ export function useScrollEvents(
   // ── Wheel ──
   const handleWheel = useCallback((event: WheelEvent) => {
     event.preventDefault();
-    optionsRef.current.onWheelImpulse?.(event.deltaY);
-  }, []);
+    const viewport = viewportRef.current;
+    const deltaY = normalizeWheelDelta(event, viewport);
+    if (deltaY === 0) return;
+    optionsRef.current.onWheelImpulse?.(deltaY);
+  }, [viewportRef]);
 
   // ── Touch ──
   const handleTouchStart = useCallback((event: TouchEvent) => {
