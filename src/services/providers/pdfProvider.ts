@@ -1,26 +1,77 @@
-import * as pdfjsLib from 'pdfjs-dist'
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '../contentProvider'
 
-// Worker 路径设置
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url
-).toString()
+type PdfJsRuntime = {
+    GlobalWorkerOptions: { workerSrc: string }
+    getDocument: (src: unknown) => { promise: Promise<any> }
+}
+
+let cachedPdfRuntime: PdfJsRuntime | null = null
+let cachedRuntimeKind: 'modern' | 'legacy' | null = null
+
+async function getPdfRuntime(forceLegacy = false): Promise<PdfJsRuntime> {
+    if (cachedPdfRuntime && cachedRuntimeKind && (!forceLegacy || cachedRuntimeKind === 'legacy')) {
+        return cachedPdfRuntime
+    }
+
+    if (!forceLegacy) {
+        try {
+            const modern = await import('pdfjs-dist') as unknown as PdfJsRuntime
+            modern.GlobalWorkerOptions.workerSrc = new URL(
+                'pdfjs-dist/build/pdf.worker.min.mjs',
+                import.meta.url
+            ).toString()
+            cachedPdfRuntime = modern
+            cachedRuntimeKind = 'modern'
+            return modern
+        } catch (error) {
+            console.warn('[PdfProvider] modern runtime load failed, fallback to legacy:', error)
+        }
+    }
+
+    const legacy = await import('pdfjs-dist/legacy/build/pdf.mjs') as unknown as PdfJsRuntime
+    legacy.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/legacy/build/pdf.worker.mjs',
+        import.meta.url
+    ).toString()
+    cachedPdfRuntime = legacy
+    cachedRuntimeKind = 'legacy'
+    return legacy
+}
+
+function shouldFallbackToLegacy(error: unknown): boolean {
+    const text = String((error as any)?.message || error || '').toLowerCase()
+    return text.includes('tohex is not a function')
+        || text.includes('unknownerrorexception')
+        || text.includes('baseexceptionclosure')
+}
+
+async function openPdfDocument(data: ArrayBuffer, forceLegacy = false): Promise<any> {
+    const runtime = await getPdfRuntime(forceLegacy)
+    return runtime.getDocument({
+        data: new Uint8Array(data.slice(0)),
+        disableAutoFetch: true,
+        disableStream: true,
+    }).promise
+}
 
 export class PdfContentProvider implements ContentProvider {
-    private doc: pdfjsLib.PDFDocumentProxy | null = null
+    private doc: any | null = null
     private pageCount = 0
     private outline: TocItem[] = []
 
     constructor(private data: ArrayBuffer) {}
 
-    private getPdfBinary(): Uint8Array {
-        const cloned = this.data.slice(0)
-        return new Uint8Array(cloned)
-    }
-
     async init() {
-        this.doc = await pdfjsLib.getDocument({ data: this.getPdfBinary() }).promise
+        try {
+            this.doc = await openPdfDocument(this.data, false)
+        } catch (error) {
+            if (!shouldFallbackToLegacy(error)) {
+                throw error
+            }
+            console.warn('[PdfProvider] retry with legacy runtime due to parser error:', error)
+            this.doc = await openPdfDocument(this.data, true)
+        }
+
         this.pageCount = this.doc.numPages
         try {
             const raw = await this.doc.getOutline()
@@ -100,7 +151,15 @@ function escapeHtml(s: string): string {
 }
 
 export async function parsePdfMetadata(data: ArrayBuffer) {
-    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(data.slice(0)) }).promise
+    let doc: any
+    try {
+        doc = await openPdfDocument(data, false)
+    } catch (error) {
+        if (!shouldFallbackToLegacy(error)) {
+            throw error
+        }
+        doc = await openPdfDocument(data, true)
+    }
     const meta = await doc.getMetadata()
     const info = meta?.info as any
     const title = info?.Title || ''
