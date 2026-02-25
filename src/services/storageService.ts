@@ -47,6 +47,18 @@ export interface Highlight {
     createdAt: number
 }
 
+export interface TranslationCacheEntry {
+    key: string
+    provider: string
+    sourceLang: string
+    targetLang: string
+    sourceText: string
+    translatedText: string
+    createdAt: number
+    lastAccessAt: number
+    expiresAt: number
+}
+
 // ─── Database ───────────────────────────────────────────────
 
 class ReaderDatabase extends Dexie {
@@ -55,6 +67,7 @@ class ReaderDatabase extends Dexie {
     progress!: Table<ReadingProgress>
     bookmarks!: Table<Bookmark>
     highlights!: Table<Highlight>
+    translationCache!: Table<TranslationCacheEntry>
     settings!: Table<{ key: string; value: unknown }>
 
     constructor() {
@@ -78,6 +91,15 @@ class ReaderDatabase extends Dexie {
             return tx.table('books').toCollection().modify(book => {
                 if (!book.format) book.format = 'epub'
             })
+        })
+        this.version(4).stores({
+            books: 'id, title, author, addedAt, lastReadAt',
+            bookFiles: 'id',
+            progress: 'bookId',
+            bookmarks: 'id, bookId, createdAt',
+            highlights: 'id, bookId, cfiRange, createdAt',
+            translationCache: 'key, provider, createdAt, lastAccessAt, expiresAt',
+            settings: 'key',
         })
     }
 }

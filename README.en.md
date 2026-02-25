@@ -129,7 +129,7 @@ npm run build
 Current stage: **Alpha (active iteration)**
 
 Next:
-- Translation services (DeepL / OpenAI / Custom API)
+- Translation service UX refinement (OpenAI-compatible / Gemini-compatible / Claude-compatible / Ollama-compatible / DeepL / DeepLX, with local cache)
 - TTS read-aloud (voice/rate configurable)
 - Dictionary support (offline or online)
 - Performance optimization for large EPUBs (Worker-based)

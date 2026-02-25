@@ -69,20 +69,20 @@ export function ShadowRenderer({
       ${scope} * { box-sizing: border-box; }
       ${scope} {
         margin: 0 !important; padding: 0 !important;
-        background: ${bgColor} !important;
-        color: ${textColor} !important;
-        font-family: ${fontFamily} !important;
-        font-size: ${fontSize}px !important;
-        line-height: ${lineHeight} !important;
-        letter-spacing: ${letterSpacing}px !important;
-        text-align: ${textAlign} !important;
+        background: var(--reader-bg-color, ${bgColor}) !important;
+        color: var(--reader-text-color, ${textColor}) !important;
+        font-family: var(--reader-font-family, ${fontFamily}) !important;
+        font-size: var(--reader-font-size, ${fontSize}px) !important;
+        line-height: var(--reader-line-height, ${lineHeight}) !important;
+        letter-spacing: var(--reader-letter-spacing, ${letterSpacing}px) !important;
+        text-align: var(--reader-text-align, ${textAlign}) !important;
       }
       ${scope} *:not(img):not(svg):not(path):not(video):not(canvas) {
-        color: ${textColor} !important;
+        color: var(--reader-text-color, ${textColor}) !important;
       }
       ${scope} p, ${scope} div, ${scope} section, ${scope} article {
         margin-top: 0 !important;
-        margin-bottom: ${paragraphSpacing}px !important;
+        margin-bottom: var(--reader-paragraph-spacing, ${paragraphSpacing}px) !important;
       }
       ${scope} h1, ${scope} h2, ${scope} h3, ${scope} h4, ${scope} h5, ${scope} h6 {
         margin-top: 1em !important;

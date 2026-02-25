@@ -15,5 +15,11 @@ interface Window {
         openExternal: (url: string) => Promise<void>
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         webdavSync: (method: 'upload' | 'download' | 'test', config: any) => Promise<{ success: boolean; data?: string; error?: string }>
+        translateRequest: (payload: {
+            url: string
+            method?: 'GET' | 'POST'
+            headers?: Record<string, string>
+            body?: string
+        }) => Promise<{ success: boolean; status?: number; data?: string; error?: string }>
     }
 }

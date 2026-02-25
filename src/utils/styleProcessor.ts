@@ -31,6 +31,31 @@ export function generateCSSOverride(chapterId: string): string {
  */
 export function generatePaginatedCSSOverride(chapterId: string): string {
   return `
+    [data-chapter-id="${chapterId}"] *,
+    [data-chapter-id="${chapterId}"] *::before,
+    [data-chapter-id="${chapterId}"] *::after {
+      break-before: auto !important;
+      break-after: auto !important;
+      page-break-before: auto !important;
+      page-break-after: auto !important;
+    }
+
+    [data-chapter-id="${chapterId}"] hr,
+    [data-chapter-id="${chapterId}"] .break,
+    [data-chapter-id="${chapterId}"] .pagebreak,
+    [data-chapter-id="${chapterId}"] .page-break,
+    [data-chapter-id="${chapterId}"] [epub\:type*="pagebreak"],
+    [data-chapter-id="${chapterId}"] [role="doc-pagebreak"],
+    [data-chapter-id="${chapterId}"] [style*="page-break"],
+    [data-chapter-id="${chapterId}"] [style*="break-before"],
+    [data-chapter-id="${chapterId}"] [style*="break-after"] {
+      display: none !important;
+      height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+    }
+
     [data-chapter-id="${chapterId}"] img,
     [data-chapter-id="${chapterId}"] svg {
       max-width: 100% !important;

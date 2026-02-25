@@ -130,7 +130,7 @@ npm run build
 当前阶段：**Alpha（持续迭代中）**
 
 下一阶段计划：
-- 翻译服务（DeepL / OpenAI / 自定义 API）
+- 翻译服务体验优化（OpenAI兼容 / Gemini兼容 / Claude兼容 / Ollama兼容 / DeepL / DeepLX，含本地缓存）
 - TTS 文字转语音（可配置语音和语速）
 - 词典能力（离线或在线）
 - 大型 EPUB 搜索与渲染性能优化（Worker）

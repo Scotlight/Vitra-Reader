@@ -493,6 +493,14 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             style={{
                 background: readerColors.bgColor,
                 color: readerColors.textColor,
+                ['--reader-bg-color' as any]: readerColors.bgColor,
+                ['--reader-text-color' as any]: readerColors.textColor,
+                ['--reader-font-family' as any]: settings.fontFamily,
+                ['--reader-font-size' as any]: `${settings.fontSize}px`,
+                ['--reader-line-height' as any]: String(settings.lineHeight),
+                ['--reader-letter-spacing' as any]: `${settings.letterSpacing}px`,
+                ['--reader-paragraph-spacing' as any]: `${settings.paragraphSpacing}px`,
+                ['--reader-text-align' as any]: settings.textAlign,
             }}
         >
             {/* Top Toolbar */}

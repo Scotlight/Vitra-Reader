@@ -20,6 +20,8 @@ import { db } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
 import { SelectionMenu } from './SelectionMenu';
 import { NoteDialog } from './NoteDialog';
+import { TranslationDialog } from './TranslationDialog';
+import { getProviderLabel, translateText } from '../../services/translateService';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
@@ -98,6 +100,23 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     const [noteDialog, setNoteDialog] = useState<{
         visible: boolean; text: string; spineIndex: number;
     }>({ visible: false, text: '', spineIndex: -1 });
+    const [translateDialog, setTranslateDialog] = useState<{
+        visible: boolean;
+        sourceText: string;
+        translatedText: string;
+        loading: boolean;
+        error: string;
+        providerLabel: string;
+        fromCache: boolean;
+    }>({
+        visible: false,
+        sourceText: '',
+        translatedText: '',
+        loading: false,
+        error: '',
+        providerLabel: '-',
+        fromCache: false,
+    });
     const renderedHighlightsRef = useRef<Set<string>>(new Set());
 
     // Keep refs in sync with state
@@ -779,11 +798,56 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         dismissMenu();
     }, [selectionMenu.text, dismissMenu]);
 
+    const runTranslate = useCallback(async (text: string) => {
+        const sourceText = text.trim();
+        if (!sourceText) return;
+
+        setTranslateDialog({
+            visible: true,
+            sourceText,
+            translatedText: '',
+            loading: true,
+            error: '',
+            providerLabel: '-',
+            fromCache: false,
+        });
+
+        try {
+            const result = await translateText(sourceText);
+            if (!result.ok) {
+                setTranslateDialog((prev) => ({
+                    ...prev,
+                    loading: false,
+                    error: result.error || '翻译失败',
+                    providerLabel: getProviderLabel(result.provider),
+                    fromCache: false,
+                }));
+                return;
+            }
+
+            setTranslateDialog((prev) => ({
+                ...prev,
+                loading: false,
+                error: '',
+                translatedText: result.translatedText,
+                providerLabel: getProviderLabel(result.provider),
+                fromCache: result.fromCache,
+            }));
+        } catch (error: any) {
+            setTranslateDialog((prev) => ({
+                ...prev,
+                loading: false,
+                error: error?.message || '翻译请求异常',
+            }));
+        }
+    }, []);
+
     const handleTranslate = useCallback(() => {
-        const url = `https://translate.google.com/?sl=auto&tl=zh-CN&text=${encodeURIComponent(selectionMenu.text)}`;
-        window.electronAPI.openExternal(url);
+        const text = selectionMenu.text.trim();
+        if (!text) return;
+        void runTranslate(text);
         dismissMenu();
-    }, [selectionMenu.text, dismissMenu]);
+    }, [selectionMenu.text, dismissMenu, runTranslate]);
 
     // ── Render ──
 
@@ -862,6 +926,18 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 selectedText={noteDialog.text}
                 onSave={handleNoteSave}
                 onCancel={() => setNoteDialog({ visible: false, text: '', spineIndex: -1 })}
+            />
+
+            <TranslationDialog
+                visible={translateDialog.visible}
+                sourceText={translateDialog.sourceText}
+                translatedText={translateDialog.translatedText}
+                providerLabel={translateDialog.providerLabel}
+                fromCache={translateDialog.fromCache}
+                loading={translateDialog.loading}
+                error={translateDialog.error}
+                onRetry={() => void runTranslate(translateDialog.sourceText)}
+                onClose={() => setTranslateDialog((prev) => ({ ...prev, visible: false }))}
             />
         </div>
     );

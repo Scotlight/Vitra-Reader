@@ -4,6 +4,16 @@ import { useLibraryStore } from '../../stores/useLibraryStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { useSyncStore } from '../../stores/useSyncStore'
 import { db, type Highlight, type Bookmark } from '../../services/storageService'
+import {
+    DEFAULT_TRANSLATE_CONFIG,
+    clearTranslationCache,
+    getProviderLabel,
+    loadTranslateConfig,
+    saveTranslateConfig,
+    translateText,
+    type TranslateConfig,
+    type TranslateProvider,
+} from '../../services/translateService'
 import heartIcon from '../../assets/icons/heart.svg'
 import noteIcon from '../../assets/icons/note.svg'
 import highlightIcon from '../../assets/icons/highlight.svg'
@@ -30,7 +40,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
     const settings = useSettingsStore()
     const [keyword, setKeyword] = useState('')
     const [showSettings, setShowSettings] = useState(false)
-    const [settingsTab, setSettingsTab] = useState<'theme' | 'ui' | 'reading' | 'sync'>('theme')
+    const [settingsTab, setSettingsTab] = useState<'theme' | 'ui' | 'reading' | 'sync' | 'translate'>('theme')
     const [progressMap, setProgressMap] = useState<Record<string, number>>({})
     const [activeNav, setActiveNav] = useState<'all' | 'fav' | 'notes' | 'highlight' | 'trash'>('all')
     const [sortMode, setSortMode] = useState<'lastRead' | 'addedAt' | 'title' | 'author'>('lastRead')
@@ -75,6 +85,10 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         bookId: null,
     })
     const syncStore = useSyncStore()
+    const [translateConfig, setTranslateConfig] = useState<TranslateConfig>(DEFAULT_TRANSLATE_CONFIG)
+    const [translateSaving, setTranslateSaving] = useState(false)
+    const [translateTesting, setTranslateTesting] = useState(false)
+    const [translateStatus, setTranslateStatus] = useState('')
 
     // Temporary color state for text color picker (only text color needs delay)
     const [tempTextColor, setTempTextColor] = useState<string | null>(null)
@@ -146,6 +160,14 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
 
     useEffect(() => {
         void syncStore.loadConfig()
+    }, [])
+
+    useEffect(() => {
+        const loadTranslationConfig = async () => {
+            const config = await loadTranslateConfig()
+            setTranslateConfig(config)
+        }
+        void loadTranslationConfig()
     }, [])
 
     useEffect(() => {
@@ -606,6 +628,46 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         }
     }
 
+    const handleSaveTranslateConfig = async () => {
+        setTranslateSaving(true)
+        setTranslateStatus('保存翻译配置中...')
+        try {
+            const saved = await saveTranslateConfig(translateConfig)
+            setTranslateConfig(saved)
+            setTranslateStatus('翻译配置已保存')
+        } catch (error: any) {
+            setTranslateStatus(`保存失败: ${error?.message || error}`)
+        } finally {
+            setTranslateSaving(false)
+        }
+    }
+
+    const handleTestTranslate = async () => {
+        setTranslateTesting(true)
+        setTranslateStatus('测试翻译中...')
+        try {
+            const result = await translateText('Hello world', translateConfig)
+            if (!result.ok) {
+                setTranslateStatus(`测试失败: ${result.error || '未知错误'}`)
+                return
+            }
+            setTranslateStatus(`测试成功 (${getProviderLabel(result.provider)}${result.fromCache ? '，缓存命中' : ''}): ${result.translatedText}`)
+        } catch (error: any) {
+            setTranslateStatus(`测试失败: ${error?.message || error}`)
+        } finally {
+            setTranslateTesting(false)
+        }
+    }
+
+    const handleClearTranslationCache = async () => {
+        try {
+            await clearTranslationCache()
+            setTranslateStatus('翻译缓存已清空')
+        } catch (error: any) {
+            setTranslateStatus(`清空缓存失败: ${error?.message || error}`)
+        }
+    }
+
     // Animation variants
     const container = {
         hidden: { opacity: 0 },
@@ -754,6 +816,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                             <button className={`${styles.tabBtn} ${settingsTab === 'ui' ? styles.tabBtnActive : ''}`} onClick={() => setSettingsTab('ui')}>界面</button>
                             <button className={`${styles.tabBtn} ${settingsTab === 'reading' ? styles.tabBtnActive : ''}`} onClick={() => setSettingsTab('reading')}>阅读</button>
                             <button className={`${styles.tabBtn} ${settingsTab === 'sync' ? styles.tabBtnActive : ''}`} onClick={() => setSettingsTab('sync')}>同步和备份</button>
+                            <button className={`${styles.tabBtn} ${settingsTab === 'translate' ? styles.tabBtnActive : ''}`} onClick={() => setSettingsTab('translate')}>翻译</button>
                         </div>
 
                         {settingsTab === 'theme' && (
@@ -897,7 +960,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                                     )}
                                 </label>
                                 <label className={styles.settingRow}>
-                                    <span>字号</span>
+                                    <span>{`字号 ${settings.fontSize}px`}</span>
                                     <input
                                         type="range"
                                         min={13}
@@ -907,7 +970,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                                     />
                                 </label>
                                 <label className={styles.settingRow}>
-                                    <span>行距</span>
+                                    <span>{`行距 ${settings.lineHeight.toFixed(1)}`}</span>
                                     <input
                                         type="range"
                                         min={1}
@@ -918,7 +981,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                                     />
                                 </label>
                                 <label className={styles.settingRow}>
-                                    <span>字距</span>
+                                    <span>{`字距 ${settings.letterSpacing}px`}</span>
                                     <input
                                         type="range"
                                         min={0}
@@ -928,7 +991,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                                     />
                                 </label>
                                 <label className={styles.settingRow}>
-                                    <span>段距</span>
+                                    <span>{`段距 ${settings.paragraphSpacing}px`}</span>
                                     <input
                                         type="range"
                                         min={0}
@@ -938,7 +1001,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                                     />
                                 </label>
                                 <label className={styles.settingRow}>
-                                    <span>页面宽度</span>
+                                    <span>{`页面宽度 ${settings.pageWidth.toFixed(1)}x`}</span>
                                     <input
                                         type="range"
                                         min={0.5}
@@ -949,7 +1012,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                                     />
                                 </label>
                                 <label className={styles.settingRow}>
-                                    <span>屏幕亮度</span>
+                                    <span>{`屏幕亮度 ${Math.round(settings.brightness * 100)}%`}</span>
                                     <input
                                         type="range"
                                         min={0.3}
@@ -1087,6 +1150,251 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                                         上次同步: {new Date(syncStore.lastSyncTime).toLocaleString()}
                                     </div>
                                 )}
+
+                            </div>
+                        )}
+
+                        {settingsTab === 'translate' && (
+                            <div className={styles.syncPanel}>
+                                <div className={styles.syncStatus} style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                                    翻译服务配置（OpenAI/Gemini/Claude/Ollama/DeepL/DeepLX 兼容）
+                                </div>
+                                <label className={styles.settingRow}>
+                                    <span>翻译 Provider</span>
+                                    <select
+                                        value={translateConfig.provider}
+                                        onChange={(event) => setTranslateConfig((prev) => ({ ...prev, provider: event.target.value as TranslateProvider }))}
+                                    >
+                                        <option value="openai">OpenAI兼容</option>
+                                        <option value="gemini">Gemini兼容</option>
+                                        <option value="claude">Claude兼容</option>
+                                        <option value="ollama">Ollama兼容</option>
+                                        <option value="deepl">DeepL 官方</option>
+                                        <option value="deeplx">DeepLX兼容</option>
+                                    </select>
+                                </label>
+                                <label className={styles.settingRow}>
+                                    <span>源语言</span>
+                                    <input
+                                        className={styles.textInput}
+                                        type="text"
+                                        value={translateConfig.sourceLang}
+                                        placeholder="auto"
+                                        onChange={(event) => setTranslateConfig((prev) => ({ ...prev, sourceLang: event.target.value }))}
+                                    />
+                                </label>
+                                <label className={styles.settingRow}>
+                                    <span>目标语言</span>
+                                    <input
+                                        className={styles.textInput}
+                                        type="text"
+                                        value={translateConfig.targetLang}
+                                        placeholder="zh-CN"
+                                        onChange={(event) => setTranslateConfig((prev) => ({ ...prev, targetLang: event.target.value }))}
+                                    />
+                                </label>
+
+                                {translateConfig.provider === 'deepl' && (
+                                    <>
+                                        <label className={styles.settingRow}>
+                                            <span>DeepL API Key</span>
+                                            <input
+                                                className={styles.textInput}
+                                                type="password"
+                                                value={translateConfig.deeplApiKey}
+                                                onChange={(event) => setTranslateConfig((prev) => ({ ...prev, deeplApiKey: event.target.value }))}
+                                            />
+                                        </label>
+                                        <label className={styles.settingRow}>
+                                            <span>DeepL Endpoint</span>
+                                            <input
+                                                className={styles.textInput}
+                                                type="text"
+                                                value={translateConfig.deeplEndpoint}
+                                                onChange={(event) => setTranslateConfig((prev) => ({ ...prev, deeplEndpoint: event.target.value }))}
+                                            />
+                                        </label>
+                                    </>
+                                )}
+
+                                {translateConfig.provider === 'openai' && (
+                                    <>
+                                        <label className={styles.settingRow}>
+                                            <span>OpenAI兼容 API Key</span>
+                                            <input
+                                                className={styles.textInput}
+                                                type="password"
+                                                value={translateConfig.openaiApiKey}
+                                                onChange={(event) => setTranslateConfig((prev) => ({ ...prev, openaiApiKey: event.target.value }))}
+                                            />
+                                        </label>
+                                        <label className={styles.settingRow}>
+                                            <span>OpenAI兼容 Endpoint</span>
+                                            <input
+                                                className={styles.textInput}
+                                                type="text"
+                                                value={translateConfig.openaiEndpoint}
+                                                onChange={(event) => setTranslateConfig((prev) => ({ ...prev, openaiEndpoint: event.target.value }))}
+                                            />
+                                        </label>
+                                        <label className={styles.settingRow}>
+                                            <span>Model</span>
+                                            <input
+                                                className={styles.textInput}
+                                                type="text"
+                                                value={translateConfig.openaiModel}
+                                                onChange={(event) => setTranslateConfig((prev) => ({ ...prev, openaiModel: event.target.value }))}
+                                            />
+                                        </label>
+                                    </>
+                                )}
+
+                                {translateConfig.provider === 'gemini' && (
+                                    <>
+                                        <label className={styles.settingRow}>
+                                            <span>Gemini API Key</span>
+                                            <input
+                                                className={styles.textInput}
+                                                type="password"
+                                                value={translateConfig.geminiApiKey}
+                                                onChange={(event) => setTranslateConfig((prev) => ({ ...prev, geminiApiKey: event.target.value }))}
+                                            />
+                                        </label>
+                                        <label className={styles.settingRow}>
+                                            <span>Gemini Endpoint</span>
+                                            <input
+                                                className={styles.textInput}
+                                                type="text"
+                                                value={translateConfig.geminiEndpoint}
+                                                onChange={(event) => setTranslateConfig((prev) => ({ ...prev, geminiEndpoint: event.target.value }))}
+                                            />
+                                        </label>
+                                        <label className={styles.settingRow}>
+                                            <span>Gemini Model</span>
+                                            <input
+                                                className={styles.textInput}
+                                                type="text"
+                                                value={translateConfig.geminiModel}
+                                                onChange={(event) => setTranslateConfig((prev) => ({ ...prev, geminiModel: event.target.value }))}
+                                            />
+                                        </label>
+                                    </>
+                                )}
+
+                                {translateConfig.provider === 'claude' && (
+                                    <>
+                                        <label className={styles.settingRow}>
+                                            <span>Claude API Key</span>
+                                            <input
+                                                className={styles.textInput}
+                                                type="password"
+                                                value={translateConfig.claudeApiKey}
+                                                onChange={(event) => setTranslateConfig((prev) => ({ ...prev, claudeApiKey: event.target.value }))}
+                                            />
+                                        </label>
+                                        <label className={styles.settingRow}>
+                                            <span>Claude Endpoint</span>
+                                            <input
+                                                className={styles.textInput}
+                                                type="text"
+                                                value={translateConfig.claudeEndpoint}
+                                                onChange={(event) => setTranslateConfig((prev) => ({ ...prev, claudeEndpoint: event.target.value }))}
+                                            />
+                                        </label>
+                                        <label className={styles.settingRow}>
+                                            <span>Claude Model</span>
+                                            <input
+                                                className={styles.textInput}
+                                                type="text"
+                                                value={translateConfig.claudeModel}
+                                                onChange={(event) => setTranslateConfig((prev) => ({ ...prev, claudeModel: event.target.value }))}
+                                            />
+                                        </label>
+                                    </>
+                                )}
+
+                                {translateConfig.provider === 'ollama' && (
+                                    <>
+                                        <label className={styles.settingRow}>
+                                            <span>Ollama Endpoint</span>
+                                            <input
+                                                className={styles.textInput}
+                                                type="text"
+                                                value={translateConfig.ollamaEndpoint}
+                                                onChange={(event) => setTranslateConfig((prev) => ({ ...prev, ollamaEndpoint: event.target.value }))}
+                                            />
+                                        </label>
+                                        <label className={styles.settingRow}>
+                                            <span>Ollama Model</span>
+                                            <input
+                                                className={styles.textInput}
+                                                type="text"
+                                                value={translateConfig.ollamaModel}
+                                                onChange={(event) => setTranslateConfig((prev) => ({ ...prev, ollamaModel: event.target.value }))}
+                                            />
+                                        </label>
+                                    </>
+                                )}
+
+                                {translateConfig.provider === 'deeplx' && (
+                                    <>
+                                        <label className={styles.settingRow}>
+                                            <span>DeepLX Endpoint</span>
+                                            <input
+                                                className={styles.textInput}
+                                                type="text"
+                                                value={translateConfig.deeplxEndpoint}
+                                                onChange={(event) => setTranslateConfig((prev) => ({ ...prev, deeplxEndpoint: event.target.value }))}
+                                            />
+                                        </label>
+                                    </>
+                                )}
+
+                                <label className={styles.settingRow}>
+                                    <span>启用缓存</span>
+                                    <label className={styles.checkboxRow}>
+                                        <input
+                                            type="checkbox"
+                                            checked={translateConfig.cacheEnabled}
+                                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, cacheEnabled: event.target.checked }))}
+                                        />
+                                        本地缓存翻译结果
+                                    </label>
+                                </label>
+                                <label className={styles.settingRow}>
+                                    <span>缓存时长(小时)</span>
+                                    <input
+                                        className={styles.textInput}
+                                        type="number"
+                                        min={1}
+                                        max={24 * 365}
+                                        value={translateConfig.cacheTtlHours}
+                                        onChange={(event) => setTranslateConfig((prev) => ({ ...prev, cacheTtlHours: Number(event.target.value) || prev.cacheTtlHours }))}
+                                    />
+                                </label>
+                                <label className={styles.settingRow}>
+                                    <span>缓存上限</span>
+                                    <input
+                                        className={styles.textInput}
+                                        type="number"
+                                        min={50}
+                                        max={5000}
+                                        value={translateConfig.cacheMaxEntries}
+                                        onChange={(event) => setTranslateConfig((prev) => ({ ...prev, cacheMaxEntries: Number(event.target.value) || prev.cacheMaxEntries }))}
+                                    />
+                                </label>
+                                <div className={styles.syncActions}>
+                                    <button className={styles.smallBtn} onClick={handleSaveTranslateConfig} disabled={translateSaving}>
+                                        {translateSaving ? '保存中...' : '保存翻译配置'}
+                                    </button>
+                                    <button className={styles.smallBtn} onClick={handleTestTranslate} disabled={translateTesting}>
+                                        {translateTesting ? '测试中...' : '测试翻译'}
+                                    </button>
+                                    <button className={styles.smallBtn} onClick={() => void handleClearTranslationCache()}>
+                                        清空缓存
+                                    </button>
+                                </div>
+                                {translateStatus && <div className={styles.syncStatus}>{translateStatus}</div>}
                             </div>
                         )}
                         <div className={styles.rowActions}>

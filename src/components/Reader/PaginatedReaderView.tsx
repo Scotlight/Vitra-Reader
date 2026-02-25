@@ -8,6 +8,8 @@ import { db } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
 import { SelectionMenu } from './SelectionMenu';
 import { NoteDialog } from './NoteDialog';
+import { TranslationDialog } from './TranslationDialog';
+import { getProviderLabel, translateText } from '../../services/translateService';
 import styles from './PaginatedReaderView.module.css';
 
 interface PaginatedReaderViewProps {
@@ -67,6 +69,23 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     const [noteDialog, setNoteDialog] = useState<{
         visible: boolean; text: string; spineIndex: number;
     }>({ visible: false, text: '', spineIndex: -1 });
+    const [translateDialog, setTranslateDialog] = useState<{
+        visible: boolean;
+        sourceText: string;
+        translatedText: string;
+        loading: boolean;
+        error: string;
+        providerLabel: string;
+        fromCache: boolean;
+    }>({
+        visible: false,
+        sourceText: '',
+        translatedText: '',
+        loading: false,
+        error: '',
+        providerLabel: '-',
+        fromCache: false,
+    });
 
     const spineItemsRef = useRef<SpineItemInfo[]>([]);
     const currentSpineIndexRef = useRef(currentSpineIndex);
@@ -84,8 +103,14 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     }, [provider]);
 
     // ── Load chapter into shadow queue ──
-    const loadChapter = useCallback(async (spineIndex: number, goToLastPage = false) => {
+    const loadChapter = useCallback(async (
+        spineIndex: number,
+        goToLastPage = false,
+        visited = new Set<number>(),
+    ) => {
         if (spineIndex < 0 || spineIndex >= spineItemsRef.current.length) return;
+        if (visited.has(spineIndex)) return;
+        visited.add(spineIndex);
         pendingLastPageRef.current = goToLastPage;
 
         // 非初始加载：先淡出，等淡出完成后再加载
@@ -99,6 +124,26 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         renderedHighlightsRef.current.clear();
         try {
             const html = await provider.extractChapterHtml(spineIndex);
+
+            const plainText = html
+                .replace(/<script[\s\S]*?<\/script>/gi, '')
+                .replace(/<style[\s\S]*?<\/style>/gi, '')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/&nbsp;/gi, ' ')
+                .trim();
+            const hasMedia = /<(img|svg|video|audio|canvas|table|math|object|embed)\b/i.test(html);
+            const hasRenderableContent = plainText.length > 0 || hasMedia;
+
+            if (!hasRenderableContent) {
+                const fallbackIndex = goToLastPage ? spineIndex - 1 : spineIndex + 1;
+                if (fallbackIndex >= 0 && fallbackIndex < spineItemsRef.current.length) {
+                    setCurrentSpineIndex(fallbackIndex);
+                    currentSpineIndexRef.current = fallbackIndex;
+                    await loadChapter(fallbackIndex, goToLastPage, visited);
+                    return;
+                }
+            }
+
             let chapterStyles: string[] = [];
             try { chapterStyles = await provider.extractChapterStyles(spineIndex); } catch { /* optional */ }
             setShadowData({
@@ -152,14 +197,17 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         // Calculate pagination after DOM settles
         requestAnimationFrame(() => {
             if (w <= 0) return;
-            const pages = Math.max(1, Math.ceil(container.scrollWidth / w));
+            const rawPages = container.scrollWidth / w;
+            const pages = Math.max(1, Math.ceil(rawPages - 0.001));
             setTotalPages(pages);
             totalPagesRef.current = pages;
 
             // 如果需要跳转到最后一页
             let targetPage = 0;
+            let shouldJumpToLastPage = false;
             if (pendingLastPageRef.current) {
                 targetPage = pages - 1;
+                shouldJumpToLastPage = true;
                 pendingLastPageRef.current = false;
             }
 
@@ -175,6 +223,13 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                     targetPage = Math.max(0, Math.min(targetPage, pages - 1));
                 }
             }
+
+            if (shouldJumpToLastPage) {
+                while (targetPage > 0 && isPageLikelyBlank(targetPage)) {
+                    targetPage -= 1;
+                }
+            }
+
             setCurrentPage(targetPage);
             currentPageRef.current = targetPage;
             setDisplayPage(targetPage);
@@ -244,6 +299,43 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         return viewport.clientWidth;
     }, []);
 
+    const isPageLikelyBlank = useCallback((pageIndex: number): boolean => {
+        const container = columnRef.current;
+        const viewport = viewportRef.current;
+        if (!container || !viewport) return false;
+
+        const pageWidth = viewport.clientWidth;
+        if (pageWidth <= 0) return false;
+
+        const pageLeft = pageIndex * pageWidth;
+        const pageRight = pageLeft + pageWidth;
+        const containerRect = container.getBoundingClientRect();
+
+        const candidates = container.querySelectorAll(
+            'p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, table, figure, img, svg, video, canvas'
+        );
+
+        for (const node of Array.from(candidates)) {
+            const element = node as HTMLElement;
+            const style = window.getComputedStyle(element);
+            if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity || 1) === 0) {
+                continue;
+            }
+
+            const rect = element.getBoundingClientRect();
+            if (rect.width < 2 || rect.height < 2) continue;
+
+            const left = rect.left - containerRect.left + container.scrollLeft;
+            const right = rect.right - containerRect.left + container.scrollLeft;
+
+            if (right > pageLeft + 6 && left < pageRight - 6) {
+                return false;
+            }
+        }
+
+        return true;
+    }, []);
+
     // ── Page turning ──
     const goToPage = useCallback((page: number) => {
         setCurrentPage(page);
@@ -254,7 +346,22 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
 
     const nextPage = useCallback(() => {
         if (currentPageRef.current < totalPagesRef.current - 1) {
-            goToPage(currentPageRef.current + 1);
+            let next = currentPageRef.current + 1;
+            while (next < totalPagesRef.current && isPageLikelyBlank(next)) {
+                next += 1;
+            }
+            if (next < totalPagesRef.current) {
+                goToPage(next);
+                return;
+            }
+
+            const nextIdx = currentSpineIndexRef.current + 1;
+            if (nextIdx < spineItemsRef.current.length) {
+                setCurrentSpineIndex(nextIdx);
+                setCurrentPage(0);
+                currentPageRef.current = 0;
+                loadChapter(nextIdx, false);
+            }
         } else {
             // Next chapter
             const nextIdx = currentSpineIndexRef.current + 1;
@@ -265,11 +372,24 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 loadChapter(nextIdx, false); // 去第一页
             }
         }
-    }, [goToPage, loadChapter]);
+    }, [goToPage, loadChapter, isPageLikelyBlank]);
 
     const prevPage = useCallback(() => {
         if (currentPageRef.current > 0) {
-            goToPage(currentPageRef.current - 1);
+            let prev = currentPageRef.current - 1;
+            while (prev >= 0 && isPageLikelyBlank(prev)) {
+                prev -= 1;
+            }
+            if (prev >= 0) {
+                goToPage(prev);
+                return;
+            }
+
+            const prevIdx = currentSpineIndexRef.current - 1;
+            if (prevIdx >= 0) {
+                setCurrentSpineIndex(prevIdx);
+                loadChapter(prevIdx, true);
+            }
         } else {
             // Previous chapter, go to last page
             const prevIdx = currentSpineIndexRef.current - 1;
@@ -278,7 +398,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 loadChapter(prevIdx, true); // 去最后一页
             }
         }
-    }, [goToPage, loadChapter]);
+    }, [goToPage, loadChapter, isPageLikelyBlank]);
 
     // ── Report chapter change ──
     useEffect(() => {
@@ -468,11 +588,56 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         dismissMenu();
     }, [selectionMenu.text, dismissMenu]);
 
+    const runTranslate = useCallback(async (text: string) => {
+        const sourceText = text.trim();
+        if (!sourceText) return;
+
+        setTranslateDialog({
+            visible: true,
+            sourceText,
+            translatedText: '',
+            loading: true,
+            error: '',
+            providerLabel: '-',
+            fromCache: false,
+        });
+
+        try {
+            const result = await translateText(sourceText);
+            if (!result.ok) {
+                setTranslateDialog((prev) => ({
+                    ...prev,
+                    loading: false,
+                    error: result.error || '翻译失败',
+                    providerLabel: getProviderLabel(result.provider),
+                    fromCache: false,
+                }));
+                return;
+            }
+
+            setTranslateDialog((prev) => ({
+                ...prev,
+                loading: false,
+                error: '',
+                translatedText: result.translatedText,
+                providerLabel: getProviderLabel(result.provider),
+                fromCache: result.fromCache,
+            }));
+        } catch (error: any) {
+            setTranslateDialog((prev) => ({
+                ...prev,
+                loading: false,
+                error: error?.message || '翻译请求异常',
+            }));
+        }
+    }, []);
+
     const handleTranslate = useCallback(() => {
-        const url = `https://translate.google.com/?sl=auto&tl=zh-CN&text=${encodeURIComponent(selectionMenu.text)}`;
-        window.electronAPI.openExternal(url);
+        const text = selectionMenu.text.trim();
+        if (!text) return;
+        void runTranslate(text);
         dismissMenu();
-    }, [selectionMenu.text, dismissMenu]);
+    }, [selectionMenu.text, dismissMenu, runTranslate]);
 
     // ── jumpToSpine (exposed via ref) ──
     const jumpToSpine = useCallback(async (targetSpineIndex: number, searchText?: string) => {
@@ -550,6 +715,18 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 selectedText={noteDialog.text}
                 onSave={handleNoteSave}
                 onCancel={() => setNoteDialog({ visible: false, text: '', spineIndex: -1 })}
+            />
+
+            <TranslationDialog
+                visible={translateDialog.visible}
+                sourceText={translateDialog.sourceText}
+                translatedText={translateDialog.translatedText}
+                providerLabel={translateDialog.providerLabel}
+                fromCache={translateDialog.fromCache}
+                loading={translateDialog.loading}
+                error={translateDialog.error}
+                onRetry={() => void runTranslate(translateDialog.sourceText)}
+                onClose={() => setTranslateDialog((prev) => ({ ...prev, visible: false }))}
             />
         </div>
     );

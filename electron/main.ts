@@ -312,6 +312,62 @@ ipcMain.handle('webdav:test', async (_, { url, username, password }) => {
     })
 })
 
+ipcMain.handle('translate:request', async (_, payload: {
+    url: string
+    method?: 'GET' | 'POST'
+    headers?: Record<string, string>
+    body?: string
+}) => {
+    return new Promise((resolve) => {
+        try {
+            const method = payload?.method || 'POST'
+            const url = payload?.url
+            if (!url || typeof url !== 'string') {
+                resolve({ success: false, error: 'Missing request url' })
+                return
+            }
+
+            const request = net.request({ method, url })
+            const headers = payload?.headers || {}
+            Object.entries(headers).forEach(([key, value]) => {
+                if (!key) return
+                request.setHeader(key, value)
+            })
+
+            request.on('response', (response) => {
+                let body = ''
+                response.on('data', (chunk) => {
+                    body += chunk.toString()
+                })
+                response.on('end', () => {
+                    const status = response.statusCode || 0
+                    if (status >= 200 && status < 300) {
+                        resolve({ success: true, status, data: body })
+                    } else {
+                        resolve({
+                            success: false,
+                            status,
+                            data: body,
+                            error: `Status ${status}`,
+                        })
+                    }
+                })
+            })
+
+            request.on('error', (error) => {
+                resolve({ success: false, error: error.message })
+            })
+
+            if (payload?.body && method !== 'GET') {
+                request.write(payload.body)
+            }
+            request.end()
+        } catch (error: any) {
+            resolve({ success: false, error: error?.message || String(error) })
+        }
+    })
+})
+
 // ─── App Lifecycle ──────────────────────────────────────────
 
 app.on('window-all-closed', () => {

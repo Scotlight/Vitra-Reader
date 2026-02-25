@@ -404,24 +404,48 @@ class WebDavService {
 **目标**：用户自行配置翻译 API，选中文本后即时翻译。
 
 ```typescript
-// translateService.ts (规划)
+// translateService.ts（当前实现概念）
 interface TranslateConfig {
-  provider: 'deepl' | 'openai' | 'custom';
-  apiKey: string;
-  endpoint?: string;       // 自定义 API 端点
-  targetLang: string;      // 目标语言
-  model?: string;          // OpenAI 模型选择
+  provider: 'openai' | 'gemini' | 'claude' | 'ollama' | 'deepl' | 'deeplx';
+  sourceLang: string;
+  targetLang: string;
+  cacheEnabled: boolean;
+  cacheTtlHours: number;
+  cacheMaxEntries: number;
+
+  openaiApiKey: string;
+  openaiEndpoint: string;
+  openaiModel: string;
+
+  geminiApiKey: string;
+  geminiEndpoint: string;
+  geminiModel: string;
+
+  claudeApiKey: string;
+  claudeEndpoint: string;
+  claudeModel: string;
+
+  ollamaEndpoint: string;
+  ollamaModel: string;
+
+  deeplApiKey: string;
+  deeplEndpoint: string;
+  deeplxEndpoint: string;
 }
 
 class TranslateService {
   async translate(text: string, config: TranslateConfig): Promise<string> {
     switch (config.provider) {
+      case 'openai':
+      case 'gemini':
+      case 'ollama':
+        return this.callOpenAICompatible(text, config);
+      case 'claude':
+        return this.callClaude(text, config);
       case 'deepl':
         return this.callDeepL(text, config);
-      case 'openai':
-        return this.callOpenAI(text, config);
-      case 'custom':
-        return this.callCustom(text, config);
+      case 'deeplx':
+        return this.callDeepLX(text, config);
     }
   }
 }
