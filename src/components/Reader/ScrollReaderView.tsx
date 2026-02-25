@@ -406,7 +406,15 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 window.clearTimeout(progressTimerRef.current);
             }
         };
-    }, [chapters, spineItems, loadChapter]);
+    }, [
+        chapters,
+        spineItems,
+        loadChapter,
+        currentSpineIndex,
+        onChapterChange,
+        onProgressChange,
+        bookId,
+    ]);
 
     // ── Chapter Unloading ──
 
@@ -486,6 +494,8 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         const chapterEls = Array.from(listEl.querySelectorAll('[data-chapter-id]')) as HTMLElement[];
 
         let chapterProgress = 0;
+        let resolvedSpineIndex = currentSpineIndex;
+        let hasMatchedChapter = false;
 
         for (const el of chapterEls) {
             const top = el.offsetTop;
@@ -499,10 +509,14 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                     ? Math.max(0, Math.min(1, (viewportMid - top) / el.offsetHeight))
                     : 0;
 
+                resolvedSpineIndex = spineIdx;
                 chapterProgress = (spineIdx + localProgress) / spineItems.length;
+                hasMatchedChapter = true;
                 break;
             }
         }
+
+        if (!hasMatchedChapter) return;
 
         const progress = Math.max(0, Math.min(1, chapterProgress));
         onProgressChange?.(progress);
@@ -510,9 +524,9 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         // Persist progress
         db.progress.put({
             bookId,
-            location: `bdise:${currentSpineIndex}:${scrollTop}`,
+            location: `bdise:${resolvedSpineIndex}:${scrollTop}`,
             percentage: progress,
-            currentChapter: spineItems[currentSpineIndex]?.href || '',
+            currentChapter: spineItems[resolvedSpineIndex]?.href || '',
             updatedAt: Date.now(),
         }).catch(err => console.warn('[ScrollReader] Progress save failed:', err));
     }, [spineItems, bookId, currentSpineIndex, onProgressChange]);
