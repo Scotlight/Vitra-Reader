@@ -16,11 +16,6 @@ interface LibraryStore {
 
 function toArrayBuffer(data: BinaryPayload): ArrayBuffer {
     if (data instanceof ArrayBuffer) return data
-
-    if (data.byteOffset === 0 && data.byteLength === data.buffer.byteLength) {
-        return data.buffer
-    }
-
     return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
 }
 

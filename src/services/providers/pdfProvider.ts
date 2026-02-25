@@ -14,8 +14,13 @@ export class PdfContentProvider implements ContentProvider {
 
     constructor(private data: ArrayBuffer) {}
 
+    private getPdfBinary(): Uint8Array {
+        const cloned = this.data.slice(0)
+        return new Uint8Array(cloned)
+    }
+
     async init() {
-        this.doc = await pdfjsLib.getDocument({ data: this.data.slice(0) }).promise
+        this.doc = await pdfjsLib.getDocument({ data: this.getPdfBinary() }).promise
         this.pageCount = this.doc.numPages
         try {
             const raw = await this.doc.getOutline()
@@ -95,7 +100,7 @@ function escapeHtml(s: string): string {
 }
 
 export async function parsePdfMetadata(data: ArrayBuffer) {
-    const doc = await pdfjsLib.getDocument({ data: data.slice(0) }).promise
+    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(data.slice(0)) }).promise
     const meta = await doc.getMetadata()
     const info = meta?.info as any
     const title = info?.Title || ''
