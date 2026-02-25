@@ -1,15 +1,52 @@
 /**
  * 等待容器内所有图片加载完成
  * @param container - DOM 容器
- * @param timeout - 超时时间（毫秒），默认 5000ms
+ * @param options - 等待策略（支持动态超时/限量追踪）
  * @returns Promise<void>
  */
+export interface AssetLoadOptions {
+  timeoutMs?: number;
+  maxTrackedImages?: number;
+  chapterSizeHint?: number;
+  largeChapterThreshold?: number;
+}
+
+function computeDynamicTimeout(
+  imageCount: number,
+  chapterSizeHint: number,
+  explicitTimeoutMs?: number,
+): number {
+  if (explicitTimeoutMs && explicitTimeoutMs > 0) {
+    return explicitTimeoutMs;
+  }
+
+  const base = 5000;
+  const imageCost = Math.min(12000, imageCount * 240);
+  const textCost = Math.min(6000, Math.floor(chapterSizeHint / 30000) * 180);
+  return Math.max(2500, Math.min(24000, base + imageCost + textCost));
+}
+
 export async function waitForAssetLoad(
   container: HTMLElement,
-  timeout: number = 5000
+  options: AssetLoadOptions = {}
 ): Promise<void> {
-  const images = Array.from(container.querySelectorAll('img'));
-  
+  const {
+    timeoutMs,
+    maxTrackedImages = 48,
+    chapterSizeHint = 0,
+    largeChapterThreshold = 450_000,
+  } = options;
+
+  const allImages = Array.from(container.querySelectorAll('img'));
+  const isLargeChapter = chapterSizeHint >= largeChapterThreshold;
+
+  const effectiveMaxTracked = isLargeChapter
+    ? Math.max(8, Math.min(maxTrackedImages, 18))
+    : Math.max(8, maxTrackedImages);
+
+  const images = allImages.slice(0, effectiveMaxTracked);
+  const resolvedTimeout = computeDynamicTimeout(images.length, chapterSizeHint, timeoutMs);
+
   // 如果没有图片，直接返回
   if (images.length === 0) {
     return Promise.resolve();
@@ -18,14 +55,20 @@ export async function waitForAssetLoad(
   // 创建超时 Promise
   const timeoutPromise = new Promise<void>((resolve) => {
     setTimeout(() => {
-      console.warn(`[AssetLoader] Timeout after ${timeout}ms, forcing continue`);
+      console.warn(`[AssetLoader] Timeout after ${resolvedTimeout}ms, forcing continue`);
       resolve();
-    }, timeout);
+    }, resolvedTimeout);
   });
 
   // 创建图片加载 Promise 数组
   const imagePromises = images.map((img) => {
     return new Promise<void>((resolve) => {
+      const src = img.getAttribute('src') || '';
+      if (!src || src.startsWith('data:text/html')) {
+        resolve();
+        return;
+      }
+
       // 如果图片已经加载完成
       if (img.complete) {
         resolve();
@@ -60,6 +103,10 @@ export async function waitForAssetLoad(
     Promise.all(imagePromises),
     timeoutPromise
   ]);
+
+  if (allImages.length > images.length) {
+    console.warn(`[AssetLoader] Only tracked ${images.length}/${allImages.length} images for this chapter`);
+  }
 }
 
 /**

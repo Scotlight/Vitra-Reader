@@ -5,6 +5,24 @@
  */
 import { Book } from 'epubjs';
 
+const resourceWarningCache = new Set<string>();
+const MAX_RESOURCE_WARNING_CACHE = 200;
+
+function warnResourceOnce(message: string): void {
+    if (resourceWarningCache.has(message)) return;
+    resourceWarningCache.add(message);
+    if (resourceWarningCache.size > MAX_RESOURCE_WARNING_CACHE) {
+        const first = resourceWarningCache.values().next().value;
+        if (first) resourceWarningCache.delete(first);
+    }
+    console.warn(message);
+}
+
+function clearUnresolvedResource(el: Element, attrName: string, rawValue: string): void {
+    el.removeAttribute(attrName);
+    el.setAttribute('data-missing-resource', rawValue);
+}
+
 export interface SpineItemInfo {
     index: number;
     href: string;
@@ -165,13 +183,25 @@ async function resolveResourceUrls(doc: Document, spineItem: any, bookAny: any):
             : el.hasAttribute('href') ? 'href'
             : 'xlink:href';
         const rawSrc = el.getAttribute(attr);
-        if (!rawSrc || rawSrc.startsWith('data:') || rawSrc.startsWith('blob:') || rawSrc.startsWith('http')) return;
+        if (!rawSrc) return;
+
+        const normalizedRaw = rawSrc.trim();
+        if (/^(data:|blob:|https?:)/i.test(normalizedRaw)) return;
+
+        if (/^(file:|javascript:|vbscript:)/i.test(normalizedRaw)) {
+            clearUnresolvedResource(el, attr, rawSrc);
+            warnResourceOnce(`[ContentExtractor] Blocked unsafe resource protocol: ${normalizedRaw}`);
+            return;
+        }
 
         const normalizedSrc = rawSrc
             .replace(/\\+/g, '/')
             .replace(/^\.\//, '')
             .trim();
-        if (!normalizedSrc) return;
+        if (!normalizedSrc) {
+            clearUnresolvedResource(el, attr, rawSrc);
+            return;
+        }
 
         try {
             // Resolve relative path against chapter's ZIP-root directory
@@ -197,6 +227,7 @@ async function resolveResourceUrls(doc: Document, spineItem: any, bookAny: any):
             }
         } catch { /* fall through */ }
 
-        console.warn(`[ContentExtractor] Could not resolve resource: ${rawSrc} (chapter: ${chapterUrl})`);
+        clearUnresolvedResource(el, attr, rawSrc);
+        warnResourceOnce(`[ContentExtractor] Could not resolve resource: ${rawSrc} (chapter: ${chapterUrl})`);
     }));
 }

@@ -5,6 +5,45 @@ import { generateCSSOverride, generatePaginatedCSSOverride, scopeStyles, extract
 import { sanitizeChapterHtml, sanitizeStyleSheets } from '../../utils/contentSanitizer';
 import { buildFontFamilyWithFallback } from '../../utils/fontFallback';
 
+const LARGE_CHAPTER_HTML_THRESHOLD = 450_000;
+const CHUNK_APPEND_BATCH_SIZE = 120;
+
+async function yieldToBrowser(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+}
+
+async function appendHtmlContentChunked(
+  container: HTMLElement,
+  html: string,
+  batchSize: number = CHUNK_APPEND_BATCH_SIZE,
+): Promise<void> {
+  const parser = new DOMParser();
+  const parsed = parser.parseFromString(`<body>${html}</body>`, 'text/html');
+  const sourceBody = parsed.body;
+
+  if (!sourceBody || sourceBody.childNodes.length === 0) {
+    container.innerHTML = html;
+    return;
+  }
+
+  const nodes = Array.from(sourceBody.childNodes);
+  const limit = Math.max(40, batchSize);
+
+  for (let offset = 0; offset < nodes.length; offset += limit) {
+    const fragment = document.createDocumentFragment();
+    const chunk = nodes.slice(offset, offset + limit);
+    chunk.forEach((node) => {
+      fragment.appendChild(node.cloneNode(true));
+    });
+    container.appendChild(fragment);
+    if (offset + limit < nodes.length) {
+      await yieldToBrowser();
+    }
+  }
+}
+
 export interface ReaderStyleConfig {
   textColor: string;
   bgColor: string;
@@ -129,6 +168,7 @@ export function ShadowRenderer({
         const inlineStyles = sanitizeStyleSheets(extractStyles(sanitizedHtml));
         const cleanedHtml = removeStyleTags(sanitizedHtml);
         const sanitizedExternalStyles = sanitizeStyleSheets(externalStyles);
+        const isLargeChapter = cleanedHtml.length >= LARGE_CHAPTER_HTML_THRESHOLD;
 
         // 3. Build combined scoped stylesheet
         const styleEl = document.createElement('style');
@@ -150,7 +190,11 @@ export function ShadowRenderer({
 
         // 4. Inject cleaned HTML
         const contentDiv = document.createElement('div');
-        contentDiv.innerHTML = cleanedHtml;
+        if (isLargeChapter) {
+          await appendHtmlContentChunked(contentDiv, cleanedHtml);
+        } else {
+          contentDiv.innerHTML = cleanedHtml;
+        }
         chapterWrapper.appendChild(contentDiv);
 
         // 5. Memory-conscious media hints
@@ -173,7 +217,12 @@ export function ShadowRenderer({
         if (cancelled) return;
 
         // 7. Wait for all images to finish loading
-        await waitForAssetLoad(chapterWrapper, 8000);
+        await waitForAssetLoad(chapterWrapper, {
+          chapterSizeHint: cleanedHtml.length,
+          timeoutMs: isLargeChapter ? 14000 : undefined,
+          maxTrackedImages: isLargeChapter ? 16 : 48,
+          largeChapterThreshold: LARGE_CHAPTER_HTML_THRESHOLD,
+        });
 
         if (cancelled) return;
 

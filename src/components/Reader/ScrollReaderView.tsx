@@ -440,6 +440,8 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             chapterEl.setAttribute('data-chapter-id', ch.id);
             chapterEl.className = styles.chapterBlock;
             chapterEl.style.contain = 'layout paint';
+            chapterEl.style.contentVisibility = 'auto';
+            chapterEl.style.containIntrinsicSize = `${Math.max(240, Math.floor(ch.height || 800))}px`;
 
             // Move the shadow-rendered node into the chapter element
             if (ch.domNode) {
