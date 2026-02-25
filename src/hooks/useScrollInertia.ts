@@ -6,12 +6,26 @@ interface InertiaCallbacks {
   onStop?: () => void;
 }
 
-const MAX_ABS_VELOCITY = 96;
-const IMPULSE_GAIN = 0.24;
-const IMPULSE_BLEND = 0.82;
+export interface InertiaTuning {
+  maxAbsVelocity: number;
+  impulseGain: number;
+  impulseBlend: number;
+  frameCapMs: number;
+}
 
-function clampVelocity(value: number): number {
-  return Math.max(-MAX_ABS_VELOCITY, Math.min(MAX_ABS_VELOCITY, value));
+const DEFAULT_INERTIA_TUNING: InertiaTuning = {
+  maxAbsVelocity: 96,
+  impulseGain: 0.24,
+  impulseBlend: 0.82,
+  frameCapMs: 32,
+};
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function clampVelocity(value: number, maxAbsVelocity: number): number {
+  return Math.max(-maxAbsVelocity, Math.min(maxAbsVelocity, value));
 }
 
 /**
@@ -24,7 +38,8 @@ function clampVelocity(value: number): number {
 export function useScrollInertia(
   viewportRef: RefObject<HTMLElement>,
   config: PhysicsConfig = DEFAULT_PHYSICS_CONFIG,
-  callbacks: InertiaCallbacks = {}
+  callbacks: InertiaCallbacks = {},
+  tuning: Partial<InertiaTuning> = {}
 ) {
   const velocity = useRef(0);
   const isDragging = useRef(false);
@@ -34,6 +49,13 @@ export function useScrollInertia(
   callbacksRef.current = callbacks;
   const configRef = useRef(config);
   configRef.current = config;
+  const tuningRef = useRef<InertiaTuning>(DEFAULT_INERTIA_TUNING);
+  tuningRef.current = {
+    maxAbsVelocity: clampNumber(Number(tuning.maxAbsVelocity ?? DEFAULT_INERTIA_TUNING.maxAbsVelocity), 32, 256),
+    impulseGain: clampNumber(Number(tuning.impulseGain ?? DEFAULT_INERTIA_TUNING.impulseGain), 0.05, 0.6),
+    impulseBlend: clampNumber(Number(tuning.impulseBlend ?? DEFAULT_INERTIA_TUNING.impulseBlend), 0.2, 0.98),
+    frameCapMs: clampNumber(Number(tuning.frameCapMs ?? DEFAULT_INERTIA_TUNING.frameCapMs), 8, 64),
+  };
 
   /** 停止动画 */
   const stop = useCallback(() => {
@@ -48,7 +70,8 @@ export function useScrollInertia(
   /** 物理循环 — 时间无关的阻尼衰减 */
   const physicsLoop = useCallback((now: number) => {
     const cfg = configRef.current;
-    const dt = lastFrameTime.current ? Math.min(now - lastFrameTime.current, 32) : 16;
+    const tune = tuningRef.current;
+    const dt = lastFrameTime.current ? Math.min(now - lastFrameTime.current, tune.frameCapMs) : 16;
     lastFrameTime.current = now;
 
     if (Math.abs(velocity.current) < cfg.stopThreshold || isDragging.current) {
@@ -101,16 +124,18 @@ export function useScrollInertia(
    * 内部转换为 px/frame 速度后注入
    */
   const addImpulse = useCallback((delta: number) => {
-    // 将像素位移转换为速度冲量
-    // 系数 0.35 经验值：一格滚轮 (~100px deltaY) → ~35 px/frame 初速度
-    // 配合 friction 0.12 → 总滚动距离 ≈ 35/0.12 ≈ 290px，手感接近 macOS
-    velocity.current = clampVelocity(velocity.current * IMPULSE_BLEND + delta * IMPULSE_GAIN);
+    const tune = tuningRef.current;
+    velocity.current = clampVelocity(
+      velocity.current * tune.impulseBlend + delta * tune.impulseGain,
+      tune.maxAbsVelocity,
+    );
     ensureRunning();
   }, [ensureRunning]);
 
   /** fling — 触摸释放时注入速度 */
   const fling = useCallback((initialVelocity: number) => {
-    velocity.current = clampVelocity(initialVelocity);
+    const tune = tuningRef.current;
+    velocity.current = clampVelocity(initialVelocity, tune.maxAbsVelocity);
     ensureRunning();
   }, [ensureRunning]);
 

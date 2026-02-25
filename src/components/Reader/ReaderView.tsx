@@ -728,6 +728,16 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                             bookId={bookId}
                             initialSpineIndex={bdiseParams.initialSpineIndex}
                             initialScrollOffset={bdiseParams.initialScrollOffset}
+                            smoothConfig={{
+                                enabled: settings.smoothScrollEnabled,
+                                stepSizePx: settings.smoothStepSizePx,
+                                animationTimeMs: settings.smoothAnimationTimeMs,
+                                accelerationDeltaMs: settings.smoothAccelerationDeltaMs,
+                                accelerationMax: settings.smoothAccelerationMax,
+                                tailToHeadRatio: settings.smoothTailToHeadRatio,
+                                easing: settings.smoothAnimationEasing,
+                                reverseWheelDirection: settings.smoothReverseWheelDirection,
+                            }}
                             readerStyles={{
                                 textColor: readerColors.textColor,
                                 bgColor: readerColors.bgColor,
@@ -1118,6 +1128,99 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                                         </button>
                                     </div>
                                 </div>
+
+                                {settings.pageTurnMode === 'scrolled-continuous' && (
+                                    <>
+                                        <div className={styles.settingsGroup}>
+                                            <label>连续滚动平滑</label>
+                                            <div className={styles.toggleRow}>
+                                                <button
+                                                    className={`${styles.toggleBtn} ${settings.smoothScrollEnabled ? styles.active : ''}`}
+                                                    onClick={() => settings.updateSetting('smoothScrollEnabled', !settings.smoothScrollEnabled)}
+                                                >
+                                                    {settings.smoothScrollEnabled ? '已启用' : '已关闭'}
+                                                </button>
+                                                <button
+                                                    className={styles.toggleBtn}
+                                                    onClick={() => {
+                                                        settings.updateSetting('smoothStepSizePx', 120)
+                                                        settings.updateSetting('smoothAnimationTimeMs', 360)
+                                                        settings.updateSetting('smoothAccelerationDeltaMs', 70)
+                                                        settings.updateSetting('smoothAccelerationMax', 7)
+                                                        settings.updateSetting('smoothTailToHeadRatio', 3)
+                                                        settings.updateSetting('smoothAnimationEasing', true)
+                                                        settings.updateSetting('smoothReverseWheelDirection', false)
+                                                    }}
+                                                >
+                                                    恢复推荐值
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className={styles.settingsGroup}>
+                                            <label>Step size: {settings.smoothStepSizePx}px</label>
+                                            <input
+                                                type="range" min="20" max="220" step="2"
+                                                value={settings.smoothStepSizePx}
+                                                onChange={(e) => settings.updateSetting('smoothStepSizePx', Number(e.target.value))}
+                                            />
+                                        </div>
+
+                                        <div className={styles.settingsGroup}>
+                                            <label>Animation time: {settings.smoothAnimationTimeMs}ms</label>
+                                            <input
+                                                type="range" min="120" max="1200" step="20"
+                                                value={settings.smoothAnimationTimeMs}
+                                                onChange={(e) => settings.updateSetting('smoothAnimationTimeMs', Number(e.target.value))}
+                                            />
+                                        </div>
+
+                                        <div className={styles.settingsGroup}>
+                                            <label>Acceleration delta: {settings.smoothAccelerationDeltaMs}ms</label>
+                                            <input
+                                                type="range" min="10" max="240" step="5"
+                                                value={settings.smoothAccelerationDeltaMs}
+                                                onChange={(e) => settings.updateSetting('smoothAccelerationDeltaMs', Number(e.target.value))}
+                                            />
+                                        </div>
+
+                                        <div className={styles.settingsGroup}>
+                                            <label>Acceleration max: {settings.smoothAccelerationMax.toFixed(1)}x</label>
+                                            <input
+                                                type="range" min="1" max="12" step="0.2"
+                                                value={settings.smoothAccelerationMax}
+                                                onChange={(e) => settings.updateSetting('smoothAccelerationMax', Number(e.target.value))}
+                                            />
+                                        </div>
+
+                                        <div className={styles.settingsGroup}>
+                                            <label>Tail / Head ratio: {settings.smoothTailToHeadRatio.toFixed(1)}x</label>
+                                            <input
+                                                type="range" min="1" max="8" step="0.1"
+                                                value={settings.smoothTailToHeadRatio}
+                                                onChange={(e) => settings.updateSetting('smoothTailToHeadRatio', Number(e.target.value))}
+                                            />
+                                        </div>
+
+                                        <div className={styles.settingsGroup}>
+                                            <label>滚轮增强</label>
+                                            <div className={styles.toggleRow}>
+                                                <button
+                                                    className={`${styles.toggleBtn} ${settings.smoothAnimationEasing ? styles.active : ''}`}
+                                                    onClick={() => settings.updateSetting('smoothAnimationEasing', !settings.smoothAnimationEasing)}
+                                                >
+                                                    {settings.smoothAnimationEasing ? 'Animation easing 开' : 'Animation easing 关'}
+                                                </button>
+                                                <button
+                                                    className={`${styles.toggleBtn} ${settings.smoothReverseWheelDirection ? styles.active : ''}`}
+                                                    onClick={() => settings.updateSetting('smoothReverseWheelDirection', !settings.smoothReverseWheelDirection)}
+                                                >
+                                                    {settings.smoothReverseWheelDirection ? '反向滚轮 开' : '反向滚轮 关'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
 
                                 <div className={styles.divider} />
 

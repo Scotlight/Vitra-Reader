@@ -35,13 +35,25 @@ interface UseScrollEventsOptions {
   onDragStart?: () => void;
   /** 触摸结束拖拽 */
   onDragEnd?: () => void;
+  /** 滚轮平滑参数 */
+  wheelConfig?: {
+    enabled: boolean;
+    stepSizePx: number;
+    accelerationDeltaMs: number;
+    accelerationMax: number;
+    reverseDirection: boolean;
+  };
 }
 
 const LINE_DELTA_PX = 16;
 const PAGE_DELTA_FACTOR = 0.9;
-const MAX_WHEEL_DELTA_PX = 180;
+const DEFAULT_WHEEL_STEP_PX = 120;
 
-function normalizeWheelDelta(event: WheelEvent, viewport: HTMLElement | null): number {
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function normalizeWheelDelta(event: WheelEvent, viewport: HTMLElement | null, stepSizePx: number): number {
   let deltaY = event.deltaY;
 
   if (event.deltaMode === 1) {
@@ -53,7 +65,9 @@ function normalizeWheelDelta(event: WheelEvent, viewport: HTMLElement | null): n
 
   if (!Number.isFinite(deltaY)) return 0;
   if (Math.abs(deltaY) < 0.1) return 0;
-  return Math.sign(deltaY) * Math.min(Math.abs(deltaY), MAX_WHEEL_DELTA_PX);
+  const scale = Math.max(1, stepSizePx);
+  const compressed = scale * Math.tanh(Math.abs(deltaY) / scale);
+  return Math.sign(deltaY) * compressed;
 }
 
 /**
@@ -73,13 +87,39 @@ export function useScrollEvents(
   const velocityTracker = useRef(new VelocityTracker());
   const lastTouchY = useRef(0);
   const isTouching = useRef(false);
+  const wheelAccelerationRef = useRef(1);
+  const wheelLastEventAtRef = useRef(0);
 
   // ── Wheel ──
   const handleWheel = useCallback((event: WheelEvent) => {
     event.preventDefault();
+    const wheelConfig = optionsRef.current.wheelConfig;
+
+    const stepSizePx = clampNumber(Number(wheelConfig?.stepSizePx ?? DEFAULT_WHEEL_STEP_PX), 20, 300);
+    const accelerationDeltaMs = clampNumber(Number(wheelConfig?.accelerationDeltaMs ?? 70), 10, 400);
+    const accelerationMax = clampNumber(Number(wheelConfig?.accelerationMax ?? 7), 1, 12);
+    const reverseDirection = Boolean(wheelConfig?.reverseDirection);
+    const accelerationEnabled = wheelConfig?.enabled !== false;
+
     const viewport = viewportRef.current;
-    const deltaY = normalizeWheelDelta(event, viewport);
+    let deltaY = normalizeWheelDelta(event, viewport, stepSizePx);
     if (deltaY === 0) return;
+
+    const now = performance.now();
+    if (!accelerationEnabled) {
+      wheelAccelerationRef.current = 1;
+    } else if (now - wheelLastEventAtRef.current <= accelerationDeltaMs) {
+      wheelAccelerationRef.current = Math.min(accelerationMax, wheelAccelerationRef.current * 1.18);
+    } else {
+      wheelAccelerationRef.current = 1;
+    }
+    wheelLastEventAtRef.current = now;
+
+    deltaY *= wheelAccelerationRef.current;
+    if (reverseDirection) {
+      deltaY *= -1;
+    }
+
     optionsRef.current.onWheelImpulse?.(deltaY);
   }, [viewportRef]);
 

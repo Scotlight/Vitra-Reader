@@ -31,6 +31,16 @@ export interface ReaderSettings {
     pageTurnMode: PageTurnMode
     pageTurnAnimation: 'slide' | 'fade' | 'none'
 
+    // Continuous Scroll (SmoothScroll-like)
+    smoothScrollEnabled: boolean
+    smoothStepSizePx: number
+    smoothAnimationTimeMs: number
+    smoothAccelerationDeltaMs: number
+    smoothAccelerationMax: number
+    smoothTailToHeadRatio: number
+    smoothAnimationEasing: boolean
+    smoothReverseWheelDirection: boolean
+
     // UI Appearance
     uiMaterial: UIMaterial
     uiBlurStrength: number
@@ -67,6 +77,14 @@ const DEFAULT_SETTINGS: ReaderSettings = {
     showFooterTime: true,
     pageTurnMode: 'paginated-single',
     pageTurnAnimation: 'slide',
+    smoothScrollEnabled: true,
+    smoothStepSizePx: 120,
+    smoothAnimationTimeMs: 360,
+    smoothAccelerationDeltaMs: 70,
+    smoothAccelerationMax: 7,
+    smoothTailToHeadRatio: 3,
+    smoothAnimationEasing: true,
+    smoothReverseWheelDirection: false,
     uiMaterial: 'mica',
     uiBlurStrength: 20,
     uiOpacity: 0.85,

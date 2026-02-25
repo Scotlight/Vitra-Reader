@@ -48,6 +48,16 @@ interface ScrollReaderViewProps {
     bookId: string;
     initialSpineIndex?: number;
     initialScrollOffset?: number;
+    smoothConfig?: {
+        enabled: boolean;
+        stepSizePx: number;
+        animationTimeMs: number;
+        accelerationDeltaMs: number;
+        accelerationMax: number;
+        tailToHeadRatio: number;
+        easing: boolean;
+        reverseWheelDirection: boolean;
+    };
     readerStyles: ReaderStyleConfig;
     onProgressChange?: (progress: number) => void;
     onChapterChange?: (label: string, href: string) => void;
@@ -65,6 +75,20 @@ const PRELOAD_THRESHOLD_PX = 600;
 const UNLOAD_DISTANCE = 3;
 const CHAPTER_DETECTION_ANCHOR_RATIO = 0.22;
 const CHAPTER_DETECTION_ANCHOR_MAX_PX = 140;
+const DEFAULT_SMOOTH_CONFIG: NonNullable<ScrollReaderViewProps['smoothConfig']> = {
+    enabled: true,
+    stepSizePx: 120,
+    animationTimeMs: 360,
+    accelerationDeltaMs: 70,
+    accelerationMax: 7,
+    tailToHeadRatio: 3,
+    easing: true,
+    reverseWheelDirection: false,
+};
+
+function clampNumber(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
+}
 
 // ── Component ──
 
@@ -73,6 +97,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     bookId,
     initialSpineIndex = 0,
     initialScrollOffset = 0,
+    smoothConfig = DEFAULT_SMOOTH_CONFIG,
     readerStyles,
     onProgressChange,
     onChapterChange,
@@ -124,6 +149,44 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     // Keep refs in sync with state
     chaptersRef.current = chapters;
 
+    const normalizedSmoothConfig = useMemo(() => ({
+        enabled: smoothConfig.enabled !== false,
+        stepSizePx: clampNumber(Number(smoothConfig.stepSizePx || DEFAULT_SMOOTH_CONFIG.stepSizePx), 20, 300),
+        animationTimeMs: clampNumber(Number(smoothConfig.animationTimeMs || DEFAULT_SMOOTH_CONFIG.animationTimeMs), 120, 1200),
+        accelerationDeltaMs: clampNumber(Number(smoothConfig.accelerationDeltaMs || DEFAULT_SMOOTH_CONFIG.accelerationDeltaMs), 10, 400),
+        accelerationMax: clampNumber(Number(smoothConfig.accelerationMax || DEFAULT_SMOOTH_CONFIG.accelerationMax), 1, 12),
+        tailToHeadRatio: clampNumber(Number(smoothConfig.tailToHeadRatio || DEFAULT_SMOOTH_CONFIG.tailToHeadRatio), 1, 8),
+        easing: smoothConfig.easing !== false,
+        reverseWheelDirection: Boolean(smoothConfig.reverseWheelDirection),
+    }), [smoothConfig]);
+
+    const physicsConfig = useMemo(() => {
+        const friction = clampNumber(26 / normalizedSmoothConfig.animationTimeMs + (normalizedSmoothConfig.easing ? 0 : 0.02), 0.04, 0.18);
+        const stopThreshold = normalizedSmoothConfig.easing ? 0.08 : 0.14;
+        const springStiffness = 0.06;
+        const springDamping = normalizedSmoothConfig.easing ? 0.7 : 0.55;
+        return {
+            friction,
+            stopThreshold,
+            springStiffness,
+            springDamping,
+        };
+    }, [normalizedSmoothConfig.animationTimeMs, normalizedSmoothConfig.easing]);
+
+    const inertiaTuning = useMemo(() => {
+        const ratio = normalizedSmoothConfig.tailToHeadRatio;
+        const impulseBlend = clampNumber(0.72 + (ratio - 1) * 0.05, 0.65, 0.94);
+        const impulseGain = clampNumber(0.18 + (normalizedSmoothConfig.stepSizePx - 120) / 900, 0.1, 0.38);
+        const maxAbsVelocity = clampNumber(normalizedSmoothConfig.stepSizePx * 0.75 + normalizedSmoothConfig.accelerationMax * 5, 48, 220);
+        const frameCapMs = normalizedSmoothConfig.easing ? 24 : 32;
+        return {
+            impulseBlend,
+            impulseGain,
+            maxAbsVelocity,
+            frameCapMs,
+        };
+    }, [normalizedSmoothConfig.stepSizePx, normalizedSmoothConfig.tailToHeadRatio, normalizedSmoothConfig.accelerationMax, normalizedSmoothConfig.easing]);
+
     // ── Physics Engine Integration ──
 
     const inertiaCallbacks = useMemo(() => ({
@@ -135,11 +198,18 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         }
     }), []);
 
-    const { addImpulse, fling, stop, setDragging } = useScrollInertia(viewportRef, undefined, inertiaCallbacks);
+    const { addImpulse, fling, stop, setDragging } = useScrollInertia(viewportRef, physicsConfig, inertiaCallbacks, inertiaTuning);
 
     const scrollCallbacks = useMemo(() => ({
         onWheelImpulse: (deltaY: number) => {
             addImpulse(deltaY);
+        },
+        wheelConfig: {
+            enabled: normalizedSmoothConfig.enabled,
+            stepSizePx: normalizedSmoothConfig.stepSizePx,
+            accelerationDeltaMs: normalizedSmoothConfig.accelerationDeltaMs,
+            accelerationMax: normalizedSmoothConfig.accelerationMax,
+            reverseDirection: normalizedSmoothConfig.reverseWheelDirection,
         },
         onDragStart: () => {
             stop();
@@ -152,7 +222,17 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         onDragEnd: () => {
             setDragging(false);
         }
-    }), [addImpulse, fling, stop, setDragging]);
+    }), [
+        addImpulse,
+        fling,
+        stop,
+        setDragging,
+        normalizedSmoothConfig.enabled,
+        normalizedSmoothConfig.stepSizePx,
+        normalizedSmoothConfig.accelerationDeltaMs,
+        normalizedSmoothConfig.accelerationMax,
+        normalizedSmoothConfig.reverseWheelDirection,
+    ]);
 
     useScrollEvents(viewportRef, scrollCallbacks);
 
