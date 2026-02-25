@@ -7,6 +7,7 @@ export interface BookMeta {
     id: string
     title: string
     author: string
+    description?: string
     cover?: string            // Base64 cover image
     publisher?: string
     language?: string

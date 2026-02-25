@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLibraryStore } from '../../stores/useLibraryStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
@@ -33,6 +33,22 @@ import styles from './LibraryView.module.css'
 type ShelfItem = {
     id: string
     name: string
+}
+
+type BookPropertiesDraft = {
+    id: string
+    title: string
+    author: string
+    description: string
+    cover: string
+}
+
+const EMPTY_BOOK_PROPERTIES_DRAFT: BookPropertiesDraft = {
+    id: '',
+    title: '',
+    author: '',
+    description: '',
+    cover: '',
 }
 
 export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { location: string; searchText?: string }) => void }) => {
@@ -89,6 +105,11 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
     const [translateSaving, setTranslateSaving] = useState(false)
     const [translateTesting, setTranslateTesting] = useState(false)
     const [translateStatus, setTranslateStatus] = useState('')
+    const [showBookPropertiesModal, setShowBookPropertiesModal] = useState(false)
+    const [bookPropertiesDraft, setBookPropertiesDraft] = useState<BookPropertiesDraft>(EMPTY_BOOK_PROPERTIES_DRAFT)
+    const [bookPropertiesSaving, setBookPropertiesSaving] = useState(false)
+    const [bookPropertiesStatus, setBookPropertiesStatus] = useState('')
+    const bookCoverInputRef = useRef<HTMLInputElement | null>(null)
 
     // Temporary color state for text color picker (only text color needs delay)
     const [tempTextColor, setTempTextColor] = useState<string | null>(null)
@@ -597,6 +618,94 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                 await persistTrash(trashBookIds.filter((id) => id !== bookId))
             }
         })
+    }
+
+    const openBookPropertiesModal = (bookId: string) => {
+        const book = books.find((item) => item.id === bookId)
+        if (!book) {
+            showInfoDialog('未找到该图书')
+            return
+        }
+
+        setBookPropertiesDraft({
+            id: book.id,
+            title: book.title || '',
+            author: book.author || '',
+            description: book.description || '',
+            cover: book.cover || '',
+        })
+        setBookPropertiesStatus('')
+        setShowBookPropertiesModal(true)
+    }
+
+    const closeBookPropertiesModal = (force = false) => {
+        if (bookPropertiesSaving && !force) return
+        setShowBookPropertiesModal(false)
+        setBookPropertiesStatus('')
+        setBookPropertiesDraft(EMPTY_BOOK_PROPERTIES_DRAFT)
+        if (bookCoverInputRef.current) {
+            bookCoverInputRef.current.value = ''
+        }
+    }
+
+    const fileToDataUrl = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => {
+                if (typeof reader.result === 'string') {
+                    resolve(reader.result)
+                    return
+                }
+                reject(new Error('封面读取失败'))
+            }
+            reader.onerror = () => reject(new Error('封面读取失败'))
+            reader.readAsDataURL(file)
+        })
+    }
+
+    const handleBookCoverFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0]
+        if (!file) return
+
+        try {
+            const coverDataUrl = await fileToDataUrl(file)
+            setBookPropertiesDraft((prev) => ({ ...prev, cover: coverDataUrl }))
+            setBookPropertiesStatus('')
+        } catch (error: any) {
+            setBookPropertiesStatus(`封面读取失败: ${error?.message || error}`)
+        } finally {
+            event.target.value = ''
+        }
+    }
+
+    const handleSaveBookProperties = async () => {
+        if (!bookPropertiesDraft.id) return
+
+        const title = bookPropertiesDraft.title.trim()
+        if (!title) {
+            setBookPropertiesStatus('书名不能为空')
+            return
+        }
+
+        const author = bookPropertiesDraft.author.trim() || '未知作者'
+        const description = bookPropertiesDraft.description.trim()
+
+        setBookPropertiesSaving(true)
+        setBookPropertiesStatus('保存中...')
+        try {
+            await db.books.update(bookPropertiesDraft.id, {
+                title,
+                author,
+                cover: bookPropertiesDraft.cover,
+                description,
+            })
+            await loadBooks()
+            closeBookPropertiesModal(true)
+        } catch (error: any) {
+            setBookPropertiesStatus(`保存失败: ${error?.message || error}`)
+        } finally {
+            setBookPropertiesSaving(false)
+        }
     }
 
     const handleImport = async () => {
@@ -1404,6 +1513,87 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                     </div>
                 )}
 
+                {showBookPropertiesModal && (
+                    <div className={styles.settingsModalOverlay} onClick={() => closeBookPropertiesModal()}>
+                        <div className={`${styles.dialogPanel} ${styles.bookPropertiesPanel}`} onClick={(event) => event.stopPropagation()}>
+                            <div className={styles.settingsHeader}>
+                                <h3>图书属性</h3>
+                                <button className={styles.closeBtn} onClick={() => closeBookPropertiesModal()}>×</button>
+                            </div>
+
+                            <div className={styles.bookPropertiesBody}>
+                                <div className={styles.bookCoverEditor}>
+                                    <div className={styles.bookCoverPreview}>
+                                        {bookPropertiesDraft.cover ? (
+                                            <img src={bookPropertiesDraft.cover} alt={bookPropertiesDraft.title || '封面'} />
+                                        ) : (
+                                            <div className={styles.placeholderCover}>
+                                                <span>EPUB</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className={styles.rowActions}>
+                                        <input
+                                            ref={bookCoverInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            className={styles.hiddenFileInput}
+                                            onChange={(event) => void handleBookCoverFileChange(event)}
+                                        />
+                                        <button className={styles.smallBtn} onClick={() => bookCoverInputRef.current?.click()}>
+                                            更换封面
+                                        </button>
+                                        <button
+                                            className={styles.smallBtn}
+                                            onClick={() => setBookPropertiesDraft((prev) => ({ ...prev, cover: '' }))}
+                                        >
+                                            移除封面
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <label className={styles.settingRow}>
+                                    <span>书名</span>
+                                    <input
+                                        className={styles.textInput}
+                                        type="text"
+                                        value={bookPropertiesDraft.title}
+                                        onChange={(event) => setBookPropertiesDraft((prev) => ({ ...prev, title: event.target.value }))}
+                                    />
+                                </label>
+
+                                <label className={styles.settingRow}>
+                                    <span>作者</span>
+                                    <input
+                                        className={styles.textInput}
+                                        type="text"
+                                        value={bookPropertiesDraft.author}
+                                        onChange={(event) => setBookPropertiesDraft((prev) => ({ ...prev, author: event.target.value }))}
+                                    />
+                                </label>
+
+                                <label className={`${styles.settingRow} ${styles.settingRowTop}`}>
+                                    <span>简介</span>
+                                    <textarea
+                                        className={styles.textAreaInput}
+                                        value={bookPropertiesDraft.description}
+                                        placeholder="输入图书简介..."
+                                        onChange={(event) => setBookPropertiesDraft((prev) => ({ ...prev, description: event.target.value }))}
+                                    />
+                                </label>
+                            </div>
+
+                            {bookPropertiesStatus && <div className={styles.syncStatus}>{bookPropertiesStatus}</div>}
+                            <div className={styles.rowActions}>
+                                <button className={styles.smallBtn} onClick={() => closeBookPropertiesModal()} disabled={bookPropertiesSaving}>取消</button>
+                                <button className={styles.syncPrimaryBtn} onClick={() => void handleSaveBookProperties()} disabled={bookPropertiesSaving}>
+                                    {bookPropertiesSaving ? '保存中...' : '保存属性'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {showCreateShelfModal && (
                     <div className={styles.settingsModalOverlay} onClick={() => setShowCreateShelfModal(false)}>
                         <div className={styles.dialogPanel} onClick={(event) => event.stopPropagation()}>
@@ -1656,6 +1846,15 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                             </>
                         ) : (
                             <>
+                                <button
+                                    className={styles.contextMenuItem}
+                                    onClick={() => {
+                                        openBookPropertiesModal(contextMenu.bookId as string)
+                                        setContextMenu({ visible: false, x: 0, y: 0, bookId: null })
+                                    }}
+                                >
+                                    属性
+                                </button>
                                 <button
                                     className={styles.contextMenuItem}
                                     onClick={async () => {

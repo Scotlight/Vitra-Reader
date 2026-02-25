@@ -52,6 +52,7 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
                 id,
                 title: parsed.title || stripBookExtension(file.name),
                 author: parsed.author || '未知作者',
+                description: (parsed as any).description,
                 cover: (parsed as any).cover,
                 publisher: (parsed as any).publisher,
                 language: (parsed as any).language,
