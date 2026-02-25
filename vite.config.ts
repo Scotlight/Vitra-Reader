@@ -42,4 +42,45 @@ export default defineConfig({
         strictPort: true,
         host: 'localhost',
     },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks(id) {
+                    const normalizedId = id.replace(/\\/g, '/').toLowerCase()
+                    if (!normalizedId.includes('/node_modules/')) return
+
+                    if (
+                        normalizedId.includes('/epubjs/')
+                    ) {
+                        return 'epub-vendor'
+                    }
+
+                    if (normalizedId.includes('/pdfjs-dist/')) {
+                        return 'pdf-vendor'
+                    }
+
+                    if (normalizedId.includes('/mobi/')) {
+                        return 'mobi-vendor'
+                    }
+
+                    if (normalizedId.includes('/marked/')) {
+                        return 'markdown-vendor'
+                    }
+
+                    if (
+                        normalizedId.includes('/react/')
+                        || normalizedId.includes('/react-dom/')
+                        || normalizedId.includes('/framer-motion/')
+                        || normalizedId.includes('/zustand/')
+                    ) {
+                        return 'react-vendor'
+                    }
+
+                    if (normalizedId.includes('/dexie/')) {
+                        return 'data-vendor'
+                    }
+                },
+            },
+        },
+    },
 })

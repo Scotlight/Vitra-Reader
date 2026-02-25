@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { db, type BookMeta } from '../services/storageService'
 import { detectFormat, stripBookExtension } from '../services/contentProvider'
+import { parseBookMetadata } from '../services/contentProviderFactory'
 
 type BinaryPayload = ArrayBuffer | Uint8Array
 type ImportedFile = { name: string; path: string; data: BinaryPayload }
@@ -9,7 +10,7 @@ interface LibraryStore {
     books: BookMeta[]
     isLoading: boolean
     loadBooks: () => Promise<void>
-    importBook: (file: ImportedFile) => Promise<void>
+    importBook: (file: ImportedFile, options?: { skipRefresh?: boolean }) => Promise<void>
     removeBook: (id: string) => Promise<void>
 }
 
@@ -28,7 +29,7 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
         set({ books, isLoading: false })
     },
 
-    importBook: async (file) => {
+    importBook: async (file, options) => {
         const fileData = toArrayBuffer(file.data)
         const id = crypto.randomUUID()
         const now = Date.now()
@@ -45,7 +46,6 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
         let meta: BookMeta
         try {
             const format = detectFormat(file.name)
-            const { parseBookMetadata } = await import('../services/contentProviderFactory')
             const parsed = await parseBookMetadata(format, fileData, file.name)
             const title = parsed.title || stripBookExtension(file.name)
             const author = parsed.author || '未知作者'
@@ -91,8 +91,10 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
 
         await db.books.put(meta)
 
-        // 3. Refresh list
-        await get().loadBooks()
+        // 3. Refresh list (can be deferred in batch import)
+        if (!options?.skipRefresh) {
+            await get().loadBooks()
+        }
     },
 
     removeBook: async (id) => {

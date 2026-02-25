@@ -176,12 +176,14 @@ async function getCached(cacheKey: string): Promise<TranslationCacheEntry | null
 async function cleanupCache(maxEntries: number): Promise<void> {
     const count = await db.translationCache.count()
     if (count <= maxEntries) return
-    const rows = await db.translationCache.toArray()
-    rows.sort((a, b) => a.lastAccessAt - b.lastAccessAt)
-    const removeCount = Math.max(0, rows.length - maxEntries)
+    const removeCount = Math.max(0, count - maxEntries)
     if (removeCount <= 0) return
-    const toDelete = rows.slice(0, removeCount).map((row) => row.key)
-    await db.translationCache.bulkDelete(toDelete)
+    const toDelete = await db.translationCache
+        .orderBy('lastAccessAt')
+        .limit(removeCount)
+        .primaryKeys()
+    if (!toDelete.length) return
+    await db.translationCache.bulkDelete(toDelete as string[])
 }
 
 async function setCached(cacheKey: string, config: TranslateConfig, sourceText: string, translatedText: string): Promise<void> {

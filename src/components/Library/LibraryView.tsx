@@ -14,6 +14,7 @@ import {
     type TranslateConfig,
     type TranslateProvider,
 } from '../../services/translateService'
+import { parseBookMetadata } from '../../services/contentProviderFactory'
 import heartIcon from '../../assets/icons/heart.svg'
 import noteIcon from '../../assets/icons/note.svg'
 import highlightIcon from '../../assets/icons/highlight.svg'
@@ -342,6 +343,15 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         void db.settings.put({ key: 'shelfBookMap', value: nextMap })
     }, [books, shelfBookMap])
 
+    const favoriteBookIdSet = useMemo(() => new Set(favoriteBookIds), [favoriteBookIds])
+    const trashBookIdSet = useMemo(() => new Set(trashBookIds), [trashBookIds])
+    const noteBookIdSet = useMemo(() => new Set(noteBookIds), [noteBookIds])
+    const highlightBookIdSet = useMemo(() => new Set(highlightBookIds), [highlightBookIds])
+    const activeShelfBookIdSet = useMemo(() => {
+        if (!(activeNav === 'all' && activeShelfId)) return null
+        return new Set(shelfBookMap[activeShelfId] || [])
+    }, [activeNav, activeShelfId, shelfBookMap])
+
     const filteredBooks = useMemo(() => {
         const q = keyword.trim().toLowerCase()
         const sourceBase = !q
@@ -350,20 +360,20 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
             return book.title.toLowerCase().includes(q) || book.author.toLowerCase().includes(q)
         })
         const source = activeNav === 'trash'
-            ? sourceBase.filter((book) => trashBookIds.includes(book.id))
-            : sourceBase.filter((book) => !trashBookIds.includes(book.id))
+            ? sourceBase.filter((book) => trashBookIdSet.has(book.id))
+            : sourceBase.filter((book) => !trashBookIdSet.has(book.id))
 
         const navFiltered =
             activeNav === 'fav'
-                ? source.filter((book) => favoriteBookIds.includes(book.id))
+                ? source.filter((book) => favoriteBookIdSet.has(book.id))
                 : activeNav === 'notes'
-                    ? source.filter((book) => noteBookIds.includes(book.id))
+                    ? source.filter((book) => noteBookIdSet.has(book.id))
                     : activeNav === 'highlight'
-                        ? source.filter((book) => highlightBookIds.includes(book.id))
+                        ? source.filter((book) => highlightBookIdSet.has(book.id))
                         : source
 
         const shelfFiltered = activeNav === 'all' && activeShelfId
-            ? navFiltered.filter((book) => (shelfBookMap[activeShelfId] || []).includes(book.id))
+            ? navFiltered.filter((book) => activeShelfBookIdSet?.has(book.id))
             : navFiltered
 
         const sorted = [...shelfFiltered].sort((a, b) => {
@@ -373,7 +383,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
             return (b.lastReadAt || 0) - (a.lastReadAt || 0)
         })
         return sorted
-    }, [books, keyword, sortMode, activeNav, favoriteBookIds, trashBookIds, noteBookIds, highlightBookIds, activeShelfId, shelfBookMap])
+    }, [books, keyword, sortMode, activeNav, activeShelfId, favoriteBookIdSet, trashBookIdSet, noteBookIdSet, highlightBookIdSet, activeShelfBookIdSet])
 
     const visibleBooks = useMemo(() => {
         if (!(activeNav === 'all' && !activeShelfId)) return filteredBooks
@@ -426,7 +436,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                 const shelfBooks = (shelfBookMap[shelf.id] || [])
                     .map((bookId) => bookById.get(bookId))
                     .filter((book): book is NonNullable<typeof book> => Boolean(book))
-                    .filter((book) => !trashBookIds.includes(book.id))
+                    .filter((book) => !trashBookIdSet.has(book.id))
                 return {
                     id: shelf.id,
                     name: shelf.name,
@@ -434,7 +444,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                 }
             })
             .filter((group) => group.books.length > 0)
-    }, [shelves, shelfBookMap, bookById, trashBookIds])
+    }, [shelves, shelfBookMap, bookById, trashBookIdSet])
 
     const nextSortMode = () => {
         const order: Array<typeof sortMode> = ['lastRead', 'addedAt', 'title', 'author']
@@ -680,7 +690,6 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                 const file = await db.bookFiles.get(book.id)
                 if (file?.data) {
                     const format = book.format || 'epub'
-                    const { parseBookMetadata } = await import('../../services/contentProviderFactory')
                     const parsed = await parseBookMetadata(format, file.data, `${book.title || 'book'}.${format}`)
                     defaults = {
                         title: (parsed.title || defaults.title || '').trim(),
@@ -785,12 +794,14 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
             let failed = 0
             for (const file of files) {
                 try {
-                    await importBook(file)
+                    await importBook(file, { skipRefresh: true })
                 } catch (error) {
                     failed += 1
                     console.error(`Failed to import book: ${file.name}`, error)
                 }
             }
+
+            await loadBooks()
 
             if (failed > 0) {
                 showInfoDialog(`导入完成：成功 ${files.length - failed} 本，失败 ${failed} 本。请查看控制台错误日志。`)
