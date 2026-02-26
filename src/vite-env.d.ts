@@ -1,5 +1,21 @@
 /// <reference types="vite/client" />
 
+declare module 'mammoth' {
+    interface MammothResult {
+        value: string;
+        messages: ReadonlyArray<{ type: string; message: string }>;
+    }
+    interface MammothInput {
+        arrayBuffer: ArrayBuffer;
+    }
+    export function convertToHtml(input: MammothInput): Promise<MammothResult>;
+}
+
+declare module 'djvu.js' {
+    const mod: unknown;
+    export default mod;
+}
+
 interface ImportedEpubFile {
     name: string
     path: string
@@ -36,6 +52,8 @@ interface Window {
             processMetrics?: ElectronProcessMetric[]
             error?: string
         }>
+        getAutoStartOnLogin: () => Promise<{ supported: boolean; enabled: boolean }>
+        setAutoStartOnLogin: (enabled: boolean) => Promise<{ supported: boolean; enabled: boolean }>
         setWindowTheme: (payload: { themeId: string; customBgColor?: string | null; customTextColor?: string | null }) => void
         openExternal: (url: string) => Promise<void>
         webdavSync: (

@@ -1,8 +1,9 @@
+import { decodeMobiText } from './mobiTextDecoding'
+
 const UNKNOWN_AUTHOR = '未知作者'
 const MOBI_MAGIC = 'MOBI'
 const EXTH_MAGIC = 'EXTH'
 const MOBI_ENCODING_CP1252 = 1252
-const MOBI_ENCODING_UTF8 = 65001
 const EXTH_FLAG_MASK = 0x40
 const EXTH_AUTHOR_RECORD_TYPE = 100
 const EXTH_TITLE_RECORD_TYPE = 503
@@ -63,27 +64,6 @@ function sliceSafe(data: Uint8Array, start: number, end: number): Uint8Array {
     const clampedStart = Math.max(0, Math.min(start, data.length))
     const clampedEnd = Math.max(clampedStart, Math.min(end, data.length))
     return data.slice(clampedStart, clampedEnd)
-}
-
-function resolveMobiEncoding(code: number): string {
-    if (code === MOBI_ENCODING_UTF8) return 'utf-8'
-    if (code === MOBI_ENCODING_CP1252) return 'windows-1252'
-    console.warn(`[MOBI] Unknown text encoding code ${code}, fallback to utf-8`)
-    return 'utf-8'
-}
-
-function decodeMobiText(data: Uint8Array, encodingCode: number): string {
-    const preferred = resolveMobiEncoding(encodingCode)
-    const primary = new TextDecoder(preferred).decode(data)
-    if (encodingCode !== MOBI_ENCODING_CP1252) return primary
-
-    const utf8 = new TextDecoder('utf-8').decode(data)
-    const primaryCjk = (primary.match(/[\u4e00-\u9fff]/g) || []).length
-    const utf8Cjk = (utf8.match(/[\u4e00-\u9fff]/g) || []).length
-    const primaryMojibake = (primary.match(/[ÃÂæçï¼]/g) || []).length
-    const utf8Mojibake = (utf8.match(/[ÃÂæçï¼]/g) || []).length
-    if (utf8Cjk > primaryCjk * 2 && utf8Mojibake <= primaryMojibake) return utf8
-    return primary
 }
 
 function readUint32FromPayload(payload: Uint8Array): number | null {

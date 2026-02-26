@@ -395,6 +395,11 @@
     font-size: 12px;
 }
 
+.smallActionBtn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
 .themeGrid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -522,6 +527,183 @@ input[type=range] {
     background: var(--bg-primary);
     color: var(--text-primary);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.toggleBtn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.smoothPanel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.smoothPanelTop {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.smoothPanelTitleWrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.smoothPanelTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.smoothPanelDesc {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.smoothPanelSwitches {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.smoothCheckbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-primary);
+    user-select: none;
+}
+
+.smoothCheckbox input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent-color);
+}
+
+.smoothPanelCard {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-primary);
+}
+
+.smoothProfileRow {
+    padding: 9px 12px;
+    font-size: 14px;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.smoothGrid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(160px, 0.75fr);
+    gap: 14px;
+    padding: 12px;
+}
+
+.smoothNumbers {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.smoothNumberRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 92px;
+    align-items: center;
+    gap: 10px;
+}
+
+.smoothNumberLabel {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.smoothNumberInput {
+    width: 92px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 14px;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+}
+
+.smoothNumberInput:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.smoothChecks {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-left: 1px dashed var(--border-color);
+    padding-left: 12px;
+}
+
+.smoothCheckboxRow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.smoothCheckboxRow input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent-color);
+}
+
+.smoothCheckboxRow input[type='checkbox']:disabled {
+    cursor: not-allowed;
+}
+
+.smoothActions {
+    display: flex;
+    justify-content: flex-start;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+@media (max-width: 980px) {
+    .smoothPanelTop {
+        gap: 12px;
+    }
+
+    .smoothPanelSwitches {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .smoothGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .smoothChecks {
+        border-left: none;
+        border-top: 1px dashed var(--border-color);
+        padding-left: 0;
+        padding-top: 10px;
+    }
+}
+
+.modeHint {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
 }
 
 .divider {

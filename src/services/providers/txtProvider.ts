@@ -1,33 +1,15 @@
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '../contentProvider'
+import { decodeTextBuffer } from './textDecoding'
+import {
+    isChapterTitle as detectTitle,
+    EMPTY_SECTION_HTML,
+    DEFAULT_DOCUMENT_LABEL,
+} from '../../utils/chapterTitleDetector'
+
 const PARAGRAPHS_PER_CHAPTER = 500
 const MAX_LABEL_LENGTH = 24
-const TITLE_CANDIDATE_MAX_LENGTH = 40
 const MIN_DISTANCE_BETWEEN_TITLES = 12
 const MIN_AVERAGE_PARAGRAPHS_PER_TITLE = 30
-const CHAPTER_KEYWORDS = ['章', '节', '回', '節', '卷', '部', '輯', '辑', '話', '集', '话', '篇']
-const SPECIAL_STARTS = [
-    'CHAPTER',
-    'Chapter',
-    'Prologue',
-    'Epilogue',
-    '序章',
-    '前言',
-    '声明',
-    '写在前面的话',
-    '后记',
-    '楔子',
-    '后序',
-    '章节目录',
-    '尾声',
-    '聲明',
-    '寫在前面的話',
-    '後記',
-    '後序',
-    '章節目錄',
-    '尾聲',
-]
-const BODY_PUNCTUATION = /[。；;，,！!？?…—“”"‘’'：:]/
-const ZH_NUM = /^[\u96f6\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07\u4ebf\u5146\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u4e24\u842c\u5169]+$/
 
 interface TxtChapter {
     title: string
@@ -113,11 +95,7 @@ export class TxtContentProvider implements ContentProvider {
 }
 
 function decodeTxt(data: ArrayBuffer): string {
-    try {
-        return new TextDecoder('utf-8', { fatal: true }).decode(data)
-    } catch {
-        return new TextDecoder('gbk').decode(data)
-    }
+    return decodeTextBuffer(data, 'txt').text
 }
 
 function splitParagraphs(rawText: string): string[] {
@@ -127,7 +105,7 @@ function splitParagraphs(rawText: string): string[] {
 
 function buildChapterLayout(paragraphs: string[]): TxtChapter[] {
     if (paragraphs.length === 0) {
-        return [{ title: '正文', start: 0, end: 0 }]
+        return [{ title: DEFAULT_DOCUMENT_LABEL, start: 0, end: 0 }]
     }
 
     const explicitTitles = findExplicitTitleIndexes(paragraphs)
@@ -158,7 +136,7 @@ function buildVirtualChapterTitle(paragraphs: string[], start: number, end: numb
     for (let cursor = start; cursor < end; cursor += 1) {
         const line = (paragraphs[cursor] || '').trim()
         if (!line) continue
-        if (isChapterTitle(line)) return trimLabel(line)
+        if (detectTitle(line, { excludeBodyPunctuation: true })) return trimLabel(line)
         break
     }
     return `第 ${index + 1} 节`
@@ -176,7 +154,7 @@ function findExplicitTitleIndexes(paragraphs: string[]): number[] {
 
     for (let i = 0; i < paragraphs.length; i += 1) {
         const line = (paragraphs[i] || '').trim()
-        if (!isChapterTitle(line)) continue
+        if (!detectTitle(line, { excludeBodyPunctuation: true })) continue
         if (!hasHeadingContext(paragraphs, i)) continue
         if (i - lastAccepted < MIN_DISTANCE_BETWEEN_TITLES) continue
         result.push(i)
@@ -215,38 +193,6 @@ function hasHeadingContext(paragraphs: string[], index: number): boolean {
     return shortNeighborCount === 0
 }
 
-function normalizeTitleLine(line: string): string {
-    return line
-        .trim()
-        .replace(/[\r\n\t]/g, '')
-        .replace(/[=\-_+]/g, '')
-        .replace(/\s+/g, ' ')
-        .slice(0, 100)
-}
-
-function isChapterTitle(line: string): boolean {
-    const cleaned = normalizeTitleLine(line)
-    if (!cleaned || cleaned.length >= TITLE_CANDIDATE_MAX_LENGTH) return false
-    if (BODY_PUNCTUATION.test(cleaned)) return false
-    if (SPECIAL_STARTS.some((prefix) => cleaned.startsWith(prefix))) return true
-
-    if (cleaned.startsWith('第')) {
-        for (const keyword of CHAPTER_KEYWORDS) {
-            const keywordIndex = cleaned.indexOf(keyword)
-            if (keywordIndex <= 1) continue
-            const mid = cleaned.substring(1, keywordIndex).trim()
-            if (ZH_NUM.test(mid) || /^\d+$/.test(mid)) return true
-        }
-    }
-
-    if (cleaned.startsWith('卷')) {
-        const rest = cleaned.substring(1).trim().split(/\s+/)[0]
-        if (ZH_NUM.test(rest) || /^\d+$/.test(rest)) return true
-    }
-
-    return false
-}
-
 function trimLabel(label: string): string {
     if (!label) return ''
     if (label.length <= MAX_LABEL_LENGTH) return label
@@ -255,7 +201,7 @@ function trimLabel(label: string): string {
 
 function renderChapterHtml(paragraphs: string[]): string {
     if (paragraphs.length === 0) {
-        return '<p>(空章节)</p>'
+        return EMPTY_SECTION_HTML
     }
 
     return paragraphs.map((text) => {

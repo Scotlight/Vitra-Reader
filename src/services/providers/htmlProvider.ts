@@ -1,4 +1,7 @@
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '../contentProvider'
+import { VitraSectionSplitter } from '../vitraSectionSplitter'
+import { decodeTextBuffer } from './textDecoding'
+import { EMPTY_SECTION_HTML, DEFAULT_DOCUMENT_LABEL } from '../../utils/chapterTitleDetector'
 
 interface Chapter {
     title: string
@@ -11,42 +14,20 @@ export class HtmlContentProvider implements ContentProvider {
     constructor(private data: ArrayBuffer) {}
 
     async init() {
-        let text: string
-        try {
-            text = new TextDecoder('utf-8', { fatal: true }).decode(this.data)
-        } catch {
-            text = new TextDecoder('gbk').decode(this.data)
-        }
+        const text = decodeTextBuffer(this.data, 'html').text
 
         // 取 <body> 内容，fallback 为全文
         const bodyMatch = text.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
         const body = bodyMatch ? bodyMatch[1] : text
 
-        // 按 h1/h2/h3 标签分割章节
-        const headingRe = /<(h[123])[^>]*>([\s\S]*?)<\/\1>/gi
-        const splits: { title: string; pos: number }[] = []
-        let m: RegExpExecArray | null
-        while ((m = headingRe.exec(body)) !== null) {
-            splits.push({
-                title: stripTags(m[2]).trim() || `第 ${splits.length + 1} 章`,
-                pos: m.index,
-            })
-        }
+        const chunks = VitraSectionSplitter.split(body)
+        this.chapters = chunks.map((chunk, index) => ({
+            title: chunk.label || `第 ${index + 1} 章`,
+            html: chunk.html || EMPTY_SECTION_HTML,
+        }))
 
-        if (splits.length === 0) {
-            // 没有标题，整篇作为一章
-            this.chapters = [{ title: '正文', html: body }]
-        } else {
-            // 第一个标题前如有内容，作为"前言"
-            if (splits[0].pos > 0) {
-                const pre = body.slice(0, splits[0].pos).trim()
-                if (pre) this.chapters.push({ title: '前言', html: pre })
-            }
-            for (let i = 0; i < splits.length; i++) {
-                const start = splits[i].pos
-                const end = i + 1 < splits.length ? splits[i + 1].pos : body.length
-                this.chapters.push({ title: splits[i].title, html: body.slice(start, end) })
-            }
+        if (this.chapters.length === 0) {
+            this.chapters = [{ title: DEFAULT_DOCUMENT_LABEL, html: EMPTY_SECTION_HTML }]
         }
     }
 
@@ -98,12 +79,7 @@ function stripTags(html: string): string {
 }
 
 export async function parseHtmlMetadata(data: ArrayBuffer, filename: string) {
-    let text: string
-    try {
-        text = new TextDecoder('utf-8', { fatal: true }).decode(data)
-    } catch {
-        text = new TextDecoder('gbk').decode(data)
-    }
+    const text = decodeTextBuffer(data, 'html').text
     const titleMatch = text.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
     const title = titleMatch ? stripTags(titleMatch[1]).trim() : filename.replace(/\.(htm|html|xhtml)$/i, '')
     return { title: title || filename, author: '未知作者' }

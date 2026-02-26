@@ -1,17 +1,26 @@
+import type { SegmentMeta, VectorizeConfig } from './vectorRender'
+
 export interface ChapterPreprocessInput {
     chapterId: string
     spineIndex: number
     chapterHref?: string
     htmlContent: string
     externalStyles: string[]
+    vectorize?: boolean
+    vectorConfig?: VectorizeConfig
 }
 
 export interface ChapterPreprocessResult {
     htmlContent: string
+    htmlFragments: string[]
     externalStyles: string[]
     removedTagCount: number
     removedAttributeCount: number
     usedFallback: boolean
+    stylesScoped: boolean
+    segmentMetas?: SegmentMeta[]
+    /** Piece Table: 不可变 buffer，segmentMetas 通过 (bufferOffset, bufferLength) 索引 */
+    htmlBuffer?: string
 }
 
 export interface ChapterPreprocessRequest {
@@ -25,4 +34,3 @@ export interface ChapterPreprocessResponse {
     result?: ChapterPreprocessResult
     error?: string
 }
-

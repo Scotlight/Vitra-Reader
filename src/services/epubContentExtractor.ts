@@ -4,30 +4,23 @@
  * BDISE 引擎通过此模块获取章节原始 HTML
  */
 import { Book } from 'epubjs';
-
-const resourceWarningCache = new Set<string>();
-const MAX_RESOURCE_WARNING_CACHE = 200;
-
-function warnResourceOnce(message: string): void {
-    if (resourceWarningCache.has(message)) return;
-    resourceWarningCache.add(message);
-    if (resourceWarningCache.size > MAX_RESOURCE_WARNING_CACHE) {
-        const first = resourceWarningCache.values().next().value;
-        if (first) resourceWarningCache.delete(first);
-    }
-    console.warn(message);
-}
-
-function clearUnresolvedResource(el: Element, attrName: string, rawValue: string): void {
-    el.removeAttribute(attrName);
-    el.setAttribute('data-missing-resource', rawValue);
-}
+import {
+    resolveChapterDocumentResources,
+    rewriteExternalStyleSheetUrls,
+} from './epubResourceLoader';
+import { decodeTextBuffer } from './providers/textDecoding';
 
 export interface SpineItemInfo {
     index: number;
     href: string;
     id: string;
     linear: boolean;
+}
+
+interface SpineLookupResult {
+    bookAny: any;
+    spineItems: any[];
+    spineItem: any;
 }
 
 /**
@@ -46,6 +39,20 @@ export function getSpineItems(book: Book): SpineItemInfo[] {
     }));
 }
 
+function lookupSpineItem(book: Book, spineIndex: number): SpineLookupResult {
+    const bookAny = book as any;
+    const spineItems = bookAny?.spine?.spineItems;
+    if (!Array.isArray(spineItems) || spineIndex < 0 || spineIndex >= spineItems.length) {
+        throw new Error(`[ContentExtractor] Invalid spine index: ${spineIndex}`);
+    }
+
+    return {
+        bookAny,
+        spineItems,
+        spineItem: spineItems[spineIndex],
+    };
+}
+
 /**
  * 提取指定章节的 HTML 内容
  * @returns 原始 HTML 字符串
@@ -54,13 +61,7 @@ export async function extractChapterHtml(
     book: Book,
     spineIndex: number
 ): Promise<string> {
-    const bookAny = book as any;
-    const spineItems = bookAny?.spine?.spineItems;
-    if (!Array.isArray(spineItems) || spineIndex < 0 || spineIndex >= spineItems.length) {
-        throw new Error(`[ContentExtractor] Invalid spine index: ${spineIndex}`);
-    }
-
-    const spineItem = spineItems[spineIndex];
+    const { bookAny, spineItem } = lookupSpineItem(book, spineIndex);
 
     // Load the section content via epub.js
     await spineItem.load(bookAny.load.bind(bookAny));
@@ -70,8 +71,8 @@ export async function extractChapterHtml(
     let html = '';
 
     if (doc?.body) {
-        // Resolve relative image/resource URLs to blob URLs before extracting HTML
-        await resolveResourceUrls(doc, spineItem, bookAny);
+        // Resolve internal resource URLs to blob URLs before extracting HTML
+        await resolveChapterDocumentResources(doc, spineItem, bookAny);
         html = doc.body.innerHTML;
     } else if (typeof spineItem.serialize === 'function') {
         html = spineItem.serialize();
@@ -94,13 +95,7 @@ export async function extractChapterStyles(
     book: Book,
     spineIndex: number
 ): Promise<string[]> {
-    const bookAny = book as any;
-    const spineItems = bookAny?.spine?.spineItems;
-    if (!Array.isArray(spineItems) || spineIndex < 0 || spineIndex >= spineItems.length) {
-        return [];
-    }
-
-    const spineItem = spineItems[spineIndex];
+    const { bookAny, spineItem } = lookupSpineItem(book, spineIndex);
 
     // Ensure loaded
     if (!spineItem.document) {
@@ -110,6 +105,7 @@ export async function extractChapterStyles(
     const doc = spineItem.document as Document | undefined;
     if (!doc) return [];
 
+    await resolveChapterDocumentResources(doc, spineItem, bookAny);
     const styles: string[] = [];
 
     // Inline <style> tags
@@ -127,13 +123,20 @@ export async function extractChapterStyles(
         if (!href) continue;
 
         try {
-            // epub.js can resolve relative URLs within the EPUB
-            const resolved = await bookAny.load(href);
-            if (typeof resolved === 'string') {
-                styles.push(resolved);
+            let loadedStyle = '';
+            if (/^(blob:|data:|https?:)/i.test(href)) {
+                const response = await fetch(href);
+                loadedStyle = await response.text();
+            } else {
+                const rawLoaded = await bookAny.load(href);
+                loadedStyle = toStyleText(rawLoaded);
             }
-        } catch {
-            console.warn(`[ContentExtractor] Failed to load stylesheet: ${href}`);
+
+            if (!loadedStyle) continue;
+            const rewritten = await rewriteExternalStyleSheetUrls(loadedStyle, spineItem, bookAny);
+            styles.push(rewritten);
+        } catch (error) {
+            console.warn(`[ContentExtractor] Failed to load stylesheet: ${href}`, error);
         }
     }
 
@@ -145,12 +148,7 @@ export async function extractChapterStyles(
  */
 export function unloadChapter(book: Book, spineIndex: number): void {
     try {
-        const bookAny = book as any;
-        const spineItems = bookAny?.spine?.spineItems;
-        if (!Array.isArray(spineItems) || spineIndex < 0 || spineIndex >= spineItems.length) {
-            return;
-        }
-        const spineItem = spineItems[spineIndex];
+        const { spineItem } = lookupSpineItem(book, spineIndex);
         if (typeof spineItem.unload === 'function') {
             spineItem.unload();
         }
@@ -159,75 +157,36 @@ export function unloadChapter(book: Book, spineIndex: number): void {
     }
 }
 
-/**
- * 将章节 HTML 中的相对资源路径（img src, image href）解析为 blob URL
- *
- * 路径关系：
- *   spineItem.href  — 相对于 OPF 文件 (e.g. "Text/ch1.xhtml")
- *   spineItem.url   — 已解析的 ZIP 根路径 (e.g. "/OEBPS/Text/ch1.xhtml")
- *   archive.createUrl() 期望带前导 "/" 的 ZIP 根路径
- */
-async function resolveResourceUrls(doc: Document, spineItem: any, bookAny: any): Promise<void> {
-    const archive = bookAny.archive;
-    if (!archive) return;
+export async function extractChapterHeading(
+    book: Book,
+    spineIndex: number
+): Promise<string> {
+    const { bookAny, spineItem } = lookupSpineItem(book, spineIndex);
+    await spineItem.load(bookAny.load.bind(bookAny));
 
-    // spineItem.url is already resolved to ZIP root with leading "/"
-    // e.g. "/OEBPS/Text/chapter1.xhtml" → baseDir = "/OEBPS/Text/"
-    const chapterUrl: string = spineItem.url || '';
-    const baseDir = chapterUrl.substring(0, chapterUrl.lastIndexOf('/') + 1);
-
-    const els = Array.from(doc.querySelectorAll('img[src], image[href], image[xlink\\:href]'));
-
-    await Promise.all(els.map(async (el) => {
-        const attr = el.hasAttribute('src') ? 'src'
-            : el.hasAttribute('href') ? 'href'
-            : 'xlink:href';
-        const rawSrc = el.getAttribute(attr);
-        if (!rawSrc) return;
-
-        const normalizedRaw = rawSrc.trim();
-        if (/^(data:|blob:|https?:)/i.test(normalizedRaw)) return;
-
-        if (/^(file:|javascript:|vbscript:)/i.test(normalizedRaw)) {
-            clearUnresolvedResource(el, attr, rawSrc);
-            warnResourceOnce(`[ContentExtractor] Blocked unsafe resource protocol: ${normalizedRaw}`);
-            return;
+    try {
+        const doc = spineItem.document as Document | undefined;
+        if (!doc) return '';
+        const heading = doc.querySelector('h1, h2, h3, title');
+        const text = heading?.textContent?.replace(/\s+/g, ' ').trim() || '';
+        return text;
+    } finally {
+        if (typeof spineItem.unload === 'function') {
+            spineItem.unload();
         }
+    }
+}
 
-        const normalizedSrc = rawSrc
-            .replace(/\\+/g, '/')
-            .replace(/^\.\//, '')
-            .trim();
-        if (!normalizedSrc) {
-            clearUnresolvedResource(el, attr, rawSrc);
-            return;
+function toStyleText(value: unknown): string {
+    if (typeof value === 'string') return value;
+    if (value instanceof ArrayBuffer) {
+        return decodeTextBuffer(value, 'css').text;
+    }
+    if (value && typeof value === 'object' && 'buffer' in (value as Record<string, unknown>)) {
+        const buffer = (value as { buffer?: unknown }).buffer;
+        if (buffer instanceof ArrayBuffer) {
+            return decodeTextBuffer(buffer, 'css').text;
         }
-
-        try {
-            // Resolve relative path against chapter's ZIP-root directory
-            // e.g. "../Images/cover.jpg" + "/OEBPS/Text/" → "/OEBPS/Images/cover.jpg"
-            const resolved = new URL(normalizedSrc, 'http://x' + baseDir).pathname;
-            // resolved already has leading "/", which is what archive.createUrl() expects
-            const blobUrl = await archive.createUrl(resolved);
-            if (blobUrl) {
-                el.setAttribute(attr, blobUrl);
-                return;
-            }
-        } catch { /* fall through */ }
-
-        // Fallback: try book.resolve() which handles all epub.js path logic
-        try {
-            const resolvedPath = bookAny.resolve?.(normalizedSrc);
-            if (resolvedPath) {
-                const blobUrl = await archive.createUrl(resolvedPath);
-                if (blobUrl) {
-                    el.setAttribute(attr, blobUrl);
-                    return;
-                }
-            }
-        } catch { /* fall through */ }
-
-        clearUnresolvedResource(el, attr, rawSrc);
-        warnResourceOnce(`[ContentExtractor] Could not resolve resource: ${rawSrc} (chapter: ${chapterUrl})`);
-    }));
+    }
+    return '';
 }

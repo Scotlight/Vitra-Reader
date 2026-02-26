@@ -279,7 +279,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         if (config.webdavUrl !== undefined) await db.settings.put({ key: 'webdavUrl', value: config.webdavUrl })
         if (config.webdavPath !== undefined) await db.settings.put({ key: 'webdavPath', value: config.webdavPath })
         if (config.webdavUser !== undefined) await db.settings.put({ key: 'webdavUser', value: config.webdavUser })
-        if (config.webdavPass !== undefined) await db.settings.put({ key: 'webdavPass', value: config.webdavPass })
+        if (config.webdavPass !== undefined) await db.settings.delete('webdavPass')
         if (config.syncMode !== undefined) await db.settings.put({ key: 'webdavSyncMode', value: config.syncMode })
         if (config.restoreMode !== undefined) await db.settings.put({ key: 'webdavRestoreMode', value: config.restoreMode })
         if (config.replaceBeforeRestore !== undefined) await db.settings.put({ key: 'webdavReplaceBeforeRestore', value: config.replaceBeforeRestore })
@@ -289,18 +289,20 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         const url = await db.settings.get('webdavUrl')
         const remotePath = await db.settings.get('webdavPath')
         const user = await db.settings.get('webdavUser')
-        const pass = await db.settings.get('webdavPass')
         const syncMode = await db.settings.get('webdavSyncMode')
         const restoreMode = await db.settings.get('webdavRestoreMode')
         const replaceBeforeRestore = await db.settings.get('webdavReplaceBeforeRestore')
         const time = await db.settings.get('lastSyncTime')
         const remoteEtag = await db.settings.get('webdavRemoteEtag')
 
+        // Password is session-only for security; remove legacy persisted value if present.
+        await db.settings.delete('webdavPass')
+
         set({
             webdavUrl: (url?.value as string) || '',
             webdavPath: normalizeFolderPath((remotePath?.value as string) || 'VitraReader'),
             webdavUser: (user?.value as string) || '',
-            webdavPass: (pass?.value as string) || '',
+            webdavPass: '',
             syncMode: ((syncMode?.value as SyncMode) || 'data'),
             restoreMode: ((restoreMode?.value as RestoreMode) || 'auto'),
             replaceBeforeRestore: (replaceBeforeRestore?.value as boolean) ?? true,

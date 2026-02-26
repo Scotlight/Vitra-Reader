@@ -1,26 +1,66 @@
 import { useRef, useEffect, useCallback } from 'react';
 import styles from './ShadowRenderer.module.css';
 import { waitForAssetLoad, getContainerHeight } from '../../utils/assetLoader';
-import { generateCSSOverride, generatePaginatedCSSOverride, scopeStyles, extractStyles, removeStyleTags } from '../../utils/styleProcessor';
+import { generateCSSOverride, generatePaginatedCSSOverride, extractStyles, removeStyleTags, scopeStyles } from '../../utils/styleProcessor';
 import { sanitizeChapterHtml, sanitizeStyleSheets } from '../../utils/contentSanitizer';
-import { buildFontFamilyWithFallback } from '../../utils/fontFallback';
+import { buildReaderCssTemplate } from '../../utils/readerCss';
+import { buildVitraVectorRenderPlan, DEFAULT_VITRA_VECTOR_CONFIG } from '../../services/vitraVectorPlanner';
+import {
+  createVitraRenderTrace,
+  finalizeVitraRenderTrace,
+  formatVitraRenderTrace,
+  runVitraRenderStage,
+} from '../../services/vitraRenderPipeline';
+import type { SegmentMeta } from '../../types/vectorRender';
+import { resolveSegmentHtml } from '../../services/metaVectorManager';
+import { SegmentDomPool } from '../../utils/segmentDomPool';
 
-const LARGE_CHAPTER_HTML_THRESHOLD = 450_000;
+const LARGE_CHAPTER_HTML_THRESHOLD = DEFAULT_VITRA_VECTOR_CONFIG.largeChapterThreshold;
 const CHUNK_APPEND_BATCH_SIZE = 120;
 const VECTOR_SEGMENT_CHAR_BUDGET = 16_000;
 const VECTOR_MIN_SEGMENT_EST_HEIGHT = 96;
+const VECTOR_HYDRATE_YIELD_EVERY_SEGMENTS = 1;
+const VECTOR_HYDRATE_MEASURE_BATCH_SIZE = 4;
+const VECTOR_IDLE_TIMEOUT_MS = 120;
+const SEGMENT_ASSET_SELECTOR = 'img,video,audio,source,svg,image';
+const MEDIA_LAYOUT_SELECTOR = 'img,video,picture,svg,canvas,figure,table,math';
+const MEDIA_SENSITIVE_LOAD_TIMEOUT_MS = 18_000;
+const MEDIA_SENSITIVE_MAX_TRACKED_IMAGES = 128;
+
+/** 模块级段 DOM 节点池单例 */
+export const segmentPool = new SegmentDomPool();
 
 interface ChapterVectorSegment {
   index: number;
   nodes: ChildNode[];
   charCount: number;
   estimatedHeight: number;
+  /** Worker 侧向量化时填充，优先用于 materialize */
+  _htmlContent?: string;
+}
+
+interface ShadowRenderContext {
+  chapterWrapper: HTMLElement;
+  canUseVectorized: boolean;
+  vectorSegments: ChapterVectorSegment[];
+  segmentEls: HTMLElement[];
+  initialSegmentCount: number;
 }
 
 async function yieldToBrowser(): Promise<void> {
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve());
   });
+}
+
+async function yieldForHydration(): Promise<void> {
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    await new Promise<void>((resolve) => {
+      window.requestIdleCallback(() => resolve(), { timeout: VECTOR_IDLE_TIMEOUT_MS });
+    });
+    return;
+  }
+  await yieldToBrowser();
 }
 
 function clampNumber(value: number, min: number, max: number): number {
@@ -54,13 +94,6 @@ function estimateSegmentHeight(charCount: number, readerStyles: ReaderStyleConfi
     VECTOR_MIN_SEGMENT_EST_HEIGHT,
     Math.ceil(estimatedLines * lineHeightPx * paragraphFactor),
   );
-}
-
-function computeInitialSegmentCount(segmentCount: number, chapterSize: number): number {
-  if (segmentCount <= 1) return segmentCount;
-  if (chapterSize >= 1_200_000) return Math.min(2, segmentCount);
-  if (chapterSize >= 750_000) return Math.min(3, segmentCount);
-  return Math.min(4, segmentCount);
 }
 
 function vectorizeChapterContent(
@@ -110,6 +143,12 @@ function vectorizeChapterContent(
 }
 
 function materializeVectorSegment(targetEl: HTMLElement, segment: ChapterVectorSegment): void {
+  // 优先使用 Worker 侧的 _htmlContent (innerHTML 设值)
+  if (segment._htmlContent) {
+    targetEl.innerHTML = segment._htmlContent;
+    return;
+  }
+  // 回退到现有 nodes.cloneNode 路径
   const fragment = document.createDocumentFragment();
   segment.nodes.forEach((node) => {
     fragment.appendChild(node.cloneNode(true));
@@ -121,6 +160,21 @@ function applyPlaceholderSizing(segmentEl: HTMLElement, height: number): void {
   const safeHeight = Math.max(VECTOR_MIN_SEGMENT_EST_HEIGHT, Math.floor(height));
   segmentEl.style.minHeight = `${safeHeight}px`;
   segmentEl.style.containIntrinsicSize = `${safeHeight}px`;
+}
+
+async function calibrateSegmentIntrinsicSizeBatch(targets: readonly HTMLElement[]): Promise<void> {
+  if (targets.length === 0) return;
+
+  // Let browser apply pending writes first, then read in one batch.
+  await yieldToBrowser();
+  const measuredHeights = targets.map((target) =>
+    Math.max(VECTOR_MIN_SEGMENT_EST_HEIGHT, getContainerHeight(target)),
+  );
+
+  // Write in a dedicated pass to avoid interleaving reads/writes.
+  for (let index = 0; index < targets.length; index += 1) {
+    targets[index].style.containIntrinsicSize = `${measuredHeights[index]}px`;
+  }
 }
 
 async function appendHtmlContentChunked(
@@ -153,6 +207,64 @@ async function appendHtmlContentChunked(
   }
 }
 
+async function appendHtmlFragmentsChunked(
+  container: HTMLElement,
+  htmlFragments: readonly string[],
+): Promise<void> {
+  if (htmlFragments.length === 0) {
+    return;
+  }
+
+  for (let index = 0; index < htmlFragments.length; index += 1) {
+    const fragmentHtml = htmlFragments[index];
+    if (!fragmentHtml) continue;
+    await appendHtmlContentChunked(container, fragmentHtml);
+    if (index + 1 < htmlFragments.length) {
+      await yieldToBrowser();
+    }
+  }
+}
+
+function normalizeHtmlFragments(
+  htmlFragments: readonly string[] | undefined,
+  htmlContent: string,
+): readonly string[] {
+  if (!htmlFragments || htmlFragments.length === 0) {
+    return [htmlContent];
+  }
+  return htmlFragments.filter((fragment) => fragment.length > 0);
+}
+
+function hasLayoutSensitiveMedia(html: string): boolean {
+  return /<(img|video|picture|svg|canvas|figure|table|math)\b/i.test(html);
+}
+
+function enforceDeterministicMediaLayout(chapterWrapper: HTMLElement): void {
+  const mediaNodes = chapterWrapper.querySelectorAll(MEDIA_LAYOUT_SELECTOR);
+  if (mediaNodes.length === 0) return;
+
+  mediaNodes.forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.maxWidth ||= '100%';
+  });
+
+  chapterWrapper.querySelectorAll('img').forEach((img) => {
+    // In shadow measurement phase we force eager load to avoid late expansion.
+    img.setAttribute('loading', 'eager');
+    img.setAttribute('decoding', 'async');
+    img.setAttribute('fetchpriority', 'low');
+    img.style.display ||= 'block';
+    img.style.maxWidth ||= '100%';
+    img.style.height ||= 'auto';
+
+    const width = Number(img.getAttribute('width') || '');
+    const height = Number(img.getAttribute('height') || '');
+    if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+      img.style.aspectRatio ||= `${width} / ${height}`;
+    }
+  });
+}
+
 export interface ReaderStyleConfig {
   textColor: string;
   bgColor: string;
@@ -168,10 +280,18 @@ export interface ReaderStyleConfig {
 export interface ShadowRendererProps {
   /** 章节 HTML 内容 */
   htmlContent: string;
+  /** Worker 预处理后的 HTML 分片 */
+  htmlFragments?: string[];
+  /** Worker 侧向量化的段元数据 */
+  segmentMetas?: SegmentMeta[];
+  /** Piece Table: 不可变 HTML buffer，segmentMetas 通过 (bufferOffset, bufferLength) 索引 */
+  htmlBuffer?: string;
   /** 章节唯一标识 */
   chapterId: string;
   /** 章节关联的外部 CSS 数组 */
   externalStyles?: string[];
+  /** 是否已完成 worker 预处理（sanitize + scope） */
+  preprocessed?: boolean;
   /** 就绪回调：DOM 节点 + 精确高度 */
   onReady: (node: HTMLElement, height: number) => void;
   /** 渲染失败回调 */
@@ -195,8 +315,12 @@ export interface ShadowRendererProps {
  */
 export function ShadowRenderer({
   htmlContent,
+  htmlFragments = [],
+  segmentMetas,
+  htmlBuffer,
   chapterId,
   externalStyles = [],
+  preprocessed = false,
   onReady,
   onError,
   readerStyles,
@@ -212,28 +336,25 @@ export function ShadowRenderer({
       textColor, bgColor, fontSize, fontFamily,
       lineHeight, paragraphSpacing, letterSpacing, textAlign,
     } = readerStyles;
-    const resolvedFontFamily = buildFontFamilyWithFallback(fontFamily);
-
     const scope = `[data-chapter-id="${chapterId}"]`;
 
     return `
-      ${scope} * { box-sizing: border-box; }
-      ${scope} {
-        margin: 0 !important; padding: 0 !important;
-        background: var(--reader-bg-color, ${bgColor}) !important;
-        color: var(--reader-text-color, ${textColor}) !important;
-        font-family: var(--reader-font-family, ${resolvedFontFamily}) !important;
-        font-size: var(--reader-font-size, ${fontSize}px) !important;
-        line-height: var(--reader-line-height, ${lineHeight}) !important;
-        letter-spacing: var(--reader-letter-spacing, ${letterSpacing}px) !important;
-        text-align: var(--reader-text-align, ${textAlign}) !important;
-      }
+      ${buildReaderCssTemplate({
+        textColor,
+        bgColor,
+        fontSize,
+        fontFamily,
+        lineHeight,
+        paragraphSpacing,
+        letterSpacing,
+        textAlign,
+      }, {
+        scope,
+        applyColumns: false,
+        textIndentEm: 0,
+      })}
       ${scope} *:not(img):not(svg):not(path):not(video):not(canvas) {
         color: var(--reader-text-color, ${textColor}) !important;
-      }
-      ${scope} p, ${scope} div, ${scope} section, ${scope} article {
-        margin-top: 0 !important;
-        margin-bottom: var(--reader-paragraph-spacing, ${paragraphSpacing}px) !important;
       }
       ${scope} h1, ${scope} h2, ${scope} h3, ${scope} h4, ${scope} h5, ${scope} h6 {
         margin-top: 1em !important;
@@ -241,10 +362,6 @@ export function ShadowRenderer({
       }
       ${scope} hr, ${scope} .break, ${scope} [style*="page-break"] {
         display: none !important;
-      }
-      ${scope} img, ${scope} svg {
-        max-width: 100% !important;
-        height: auto !important;
       }
     `;
   }, [readerStyles, chapterId]);
@@ -264,185 +381,233 @@ export function ShadowRenderer({
     let cancelled = false;
 
     const renderAndMeasure = async () => {
+      const trace = createVitraRenderTrace(chapterId);
       try {
-        // 1. Create chapter wrapper with data attribute for CSS scoping
         const chapterWrapper = document.createElement('div');
         chapterWrapper.setAttribute('data-chapter-id', chapterId);
         chapterWrapper.className = 'chapter-content';
         chapterWrapper.style.width = '100%';
         chapterWrapper.style.position = 'relative';
+        chapterWrapper.style.display = 'flow-root';
 
-        // 2. Centralized sanitize + scope styles
-        const sanitizedHtml = sanitizeChapterHtml(htmlContent).htmlContent;
-        const inlineStyles = sanitizeStyleSheets(extractStyles(sanitizedHtml));
-        const cleanedHtml = removeStyleTags(sanitizedHtml);
-        const sanitizedExternalStyles = sanitizeStyleSheets(externalStyles);
-        const isLargeChapter = cleanedHtml.length >= LARGE_CHAPTER_HTML_THRESHOLD;
-        const useVectorizedFlow = mode === 'scroll' && isLargeChapter;
+        const processed = await runVitraRenderStage(trace, 'parse', () => {
+          if (preprocessed) {
+            return {
+              cleanedHtml: htmlContent,
+              processedStyles: externalStyles,
+              fragments: normalizeHtmlFragments(htmlFragments, htmlContent),
+            };
+          }
+          return buildLocalProcessedPayload(htmlContent, externalStyles, chapterId);
+        });
 
-        // 3. Build combined scoped stylesheet
-        const styleEl = document.createElement('style');
-        const cssOverride = mode === 'paginated'
-          ? generatePaginatedCSSOverride(chapterId)
-          : generateCSSOverride(chapterId);
-        const allStyles = [...sanitizedExternalStyles, ...inlineStyles];
-        const scopedCss = allStyles
-          .map(css => scopeStyles(css, chapterId))
-          .join('\n');
+        const cleanedHtml = processed.cleanedHtml;
+        const processedStyles = processed.processedStyles;
+        const normalizedFragments = processed.fragments;
+        const chapterSize = cleanedHtml.length;
+        const isLargeChapter = chapterSize >= LARGE_CHAPTER_HTML_THRESHOLD;
+        const mediaSensitiveChapter = hasLayoutSensitiveMedia(cleanedHtml);
 
-        styleEl.textContent = [
-          cssOverride,
-          scopedCss,
-          buildContentCss(),
-        ].join('\n');
+        const vectorSegments = await runVitraRenderStage(trace, 'measure', () => {
+          if (mode !== 'scroll' || !isLargeChapter) return [];
+          // 优先使用 Worker 侧 segmentMetas，转为内部 ChapterVectorSegment 兼容格式
+          if (segmentMetas && segmentMetas.length > 0) {
+            // Piece Table: 从 buffer 按需 slice 段内容，htmlBuffer 缺失时回退到 htmlContent
+            const buffer = htmlBuffer || htmlContent;
+            return segmentMetas.map((meta): ChapterVectorSegment => ({
+              index: meta.index,
+              nodes: [],
+              charCount: meta.charCount,
+              estimatedHeight: meta.estimatedHeight,
+              _htmlContent: resolveSegmentHtml(buffer, meta),
+            }));
+          }
+          // 回退到主线程 DOMParser 向量化路径
+          return vectorizeChapterContent(cleanedHtml, readerStyles);
+        });
 
-        chapterWrapper.appendChild(styleEl);
-
-        // 4. Inject cleaned HTML
-        const contentDiv = document.createElement('div');
-        const vectorSegments = useVectorizedFlow
-          ? vectorizeChapterContent(cleanedHtml, readerStyles)
-          : [];
-
-        const canUseVectorized = useVectorizedFlow && vectorSegments.length > 1;
-        const segmentEls: HTMLElement[] = [];
-        let initialSegmentCount = 0;
-
-        if (canUseVectorized) {
-          initialSegmentCount = computeInitialSegmentCount(vectorSegments.length, cleanedHtml.length);
-
-          vectorSegments.forEach((segment, segmentIndex) => {
-            const segmentEl = document.createElement('section');
-            segmentEl.setAttribute('data-shadow-segment-index', String(segmentIndex));
-            segmentEl.style.width = '100%';
-            segmentEl.style.position = 'relative';
-            segmentEl.style.contain = 'layout paint';
-            segmentEl.style.contentVisibility = 'auto';
-
-            if (segmentIndex < initialSegmentCount) {
-              materializeVectorSegment(segmentEl, segment);
-              segmentEl.setAttribute('data-shadow-segment-state', 'hydrated');
-              segmentEl.style.containIntrinsicSize = `${Math.max(VECTOR_MIN_SEGMENT_EST_HEIGHT, segment.estimatedHeight)}px`;
-            } else {
-              segmentEl.setAttribute('data-shadow-segment-state', 'placeholder');
-              applyPlaceholderSizing(segmentEl, segment.estimatedHeight);
-            }
-
-            contentDiv.appendChild(segmentEl);
-            segmentEls.push(segmentEl);
+        const vectorPlan = await runVitraRenderStage(trace, 'paginate', () => {
+          return buildVitraVectorRenderPlan({
+            mode,
+            chapterSize,
+            segmentCount: vectorSegments.length,
           });
-
-          if (initialSegmentCount > 0 && vectorSegments.length > initialSegmentCount) {
-            void contentDiv.offsetHeight;
-
-            const measuredSeedHeight = segmentEls
-              .slice(0, initialSegmentCount)
-              .reduce((sum, el) => sum + Math.max(1, getContainerHeight(el)), 0);
-            const estimatedSeedHeight = vectorSegments
-              .slice(0, initialSegmentCount)
-              .reduce((sum, seg) => sum + seg.estimatedHeight, 0);
-
-            const correction = estimatedSeedHeight > 0
-              ? clampNumber(measuredSeedHeight / estimatedSeedHeight, 0.62, 2.4)
-              : 1;
-
-            for (let idx = initialSegmentCount; idx < vectorSegments.length; idx += 1) {
-              const placeholderEl = segmentEls[idx];
-              const seg = vectorSegments[idx];
-              if (!placeholderEl || !seg) continue;
-              applyPlaceholderSizing(placeholderEl, seg.estimatedHeight * correction);
-            }
-          }
-        } else if (isLargeChapter) {
-          await appendHtmlContentChunked(contentDiv, cleanedHtml);
-        } else {
-          contentDiv.innerHTML = cleanedHtml;
-        }
-        chapterWrapper.appendChild(contentDiv);
-
-        // 5. Memory-conscious media hints
-        chapterWrapper.querySelectorAll('img').forEach((img) => {
-          if (!img.getAttribute('loading')) {
-            img.setAttribute('loading', 'lazy');
-          }
-          if (!img.getAttribute('decoding')) {
-            img.setAttribute('decoding', 'async');
-          }
-          if (!img.getAttribute('fetchpriority')) {
-            img.setAttribute('fetchpriority', 'low');
-          }
         });
 
-        // 6. Mount into shadow container
-        container.innerHTML = '';
-        container.appendChild(chapterWrapper);
+        const renderContext = await runVitraRenderStage<ShadowRenderContext | null>(trace, 'render', async () => {
+          const styleEl = document.createElement('style');
+          const cssOverride = mode === 'paginated'
+            ? generatePaginatedCSSOverride(chapterId)
+            : generateCSSOverride(chapterId);
+          styleEl.textContent = [
+            cssOverride,
+            processedStyles.join('\n'),
+            buildContentCss(),
+          ].join('\n');
+          chapterWrapper.appendChild(styleEl);
 
-        if (cancelled) return;
+          const contentDiv = document.createElement('div');
+          contentDiv.style.display = 'flow-root';
+          const canUseVectorized = vectorPlan.enabled;
+          const segmentEls: HTMLElement[] = [];
+          const initialSegmentCount = mediaSensitiveChapter
+            ? vectorSegments.length
+            : vectorPlan.initialSegmentCount;
 
-        // 7. Wait for all images to finish loading
-        await waitForAssetLoad(chapterWrapper, {
-          chapterSizeHint: cleanedHtml.length,
-          timeoutMs: canUseVectorized ? 9000 : (isLargeChapter ? 14000 : undefined),
-          maxTrackedImages: canUseVectorized ? 10 : (isLargeChapter ? 16 : 48),
-          largeChapterThreshold: LARGE_CHAPTER_HTML_THRESHOLD,
-        });
+          if (canUseVectorized) {
+            vectorSegments.forEach((segment, segmentIndex) => {
+              const segmentEl = segmentPool.acquire();
+              segmentEl.setAttribute('data-shadow-segment-index', String(segmentIndex));
+              segmentEl.style.width = '100%';
+              segmentEl.style.position = 'relative';
+              segmentEl.style.contain = 'layout style paint';
+              segmentEl.style.contentVisibility = 'auto';
 
-        if (cancelled) return;
-
-        // 8. Force reflow and measure precise height
-        void chapterWrapper.offsetHeight;
-        const height = getContainerHeight(chapterWrapper);
-
-        console.log(`[ShadowRenderer] Chapter "${chapterId}" ready. Height: ${height}px`);
-
-        hasReportedRef.current = true;
-        onReady(chapterWrapper, height);
-
-        if (canUseVectorized && vectorSegments.length > initialSegmentCount) {
-          const hydrateRemainingSegments = async () => {
-            let materializedCount = 0;
-
-            for (let idx = initialSegmentCount; idx < vectorSegments.length; idx += 1) {
-              if (cancelled || !chapterWrapper.isConnected) {
-                return;
+              if (segmentIndex < initialSegmentCount) {
+                materializeVectorSegment(segmentEl, segment);
+                segmentEl.setAttribute('data-shadow-segment-state', 'hydrated');
+                segmentEl.style.containIntrinsicSize = `${Math.max(VECTOR_MIN_SEGMENT_EST_HEIGHT, segment.estimatedHeight)}px`;
+              } else {
+                segmentEl.setAttribute('data-shadow-segment-state', 'placeholder');
+                applyPlaceholderSizing(segmentEl, segment.estimatedHeight);
               }
 
-              const targetEl = segmentEls[idx];
-              const segment = vectorSegments[idx];
-              if (!targetEl || !segment) continue;
+              contentDiv.appendChild(segmentEl);
+              segmentEls.push(segmentEl);
+            });
 
-              materializeVectorSegment(targetEl, segment);
-              targetEl.setAttribute('data-shadow-segment-state', 'hydrated');
-              targetEl.style.minHeight = '0px';
+            if (initialSegmentCount > 0 && vectorSegments.length > initialSegmentCount) {
+              void contentDiv.offsetHeight;
+              const measuredSeedHeight = segmentEls
+                .slice(0, initialSegmentCount)
+                .reduce((sum, el) => sum + Math.max(1, getContainerHeight(el)), 0);
+              const estimatedSeedHeight = vectorSegments
+                .slice(0, initialSegmentCount)
+                .reduce((sum, seg) => sum + seg.estimatedHeight, 0);
+              const correction = estimatedSeedHeight > 0
+                ? clampNumber(measuredSeedHeight / estimatedSeedHeight, 0.62, 2.4)
+                : 1;
 
-              const measured = Math.max(VECTOR_MIN_SEGMENT_EST_HEIGHT, getContainerHeight(targetEl));
-              targetEl.style.containIntrinsicSize = `${measured}px`;
-
-              if (idx % 3 === 0) {
-                await waitForAssetLoad(targetEl, {
-                  chapterSizeHint: segment.charCount,
-                  timeoutMs: 4000,
-                  maxTrackedImages: 4,
-                  largeChapterThreshold: LARGE_CHAPTER_HTML_THRESHOLD,
-                });
-              }
-
-              materializedCount += 1;
-              if (materializedCount % 2 === 0) {
-                await yieldToBrowser();
+              for (let idx = initialSegmentCount; idx < vectorSegments.length; idx += 1) {
+                const placeholderEl = segmentEls[idx];
+                const seg = vectorSegments[idx];
+                if (!placeholderEl || !seg) continue;
+                applyPlaceholderSizing(placeholderEl, seg.estimatedHeight * correction);
               }
             }
+          } else if (normalizedFragments.length > 1) {
+            await appendHtmlFragmentsChunked(contentDiv, normalizedFragments);
+          } else if (isLargeChapter) {
+            await appendHtmlContentChunked(contentDiv, cleanedHtml);
+          } else {
+            contentDiv.innerHTML = cleanedHtml;
+          }
 
-            if (!cancelled && chapterWrapper.isConnected) {
-              const finalHeight = getContainerHeight(chapterWrapper);
-              console.log(
-                `[ShadowRenderer] Chapter "${chapterId}" vectorized hydration done. Final: ${finalHeight}px`,
-              );
-            }
+          chapterWrapper.appendChild(contentDiv);
+          enforceDeterministicMediaLayout(chapterWrapper);
+
+          container.innerHTML = '';
+          container.appendChild(chapterWrapper);
+          if (cancelled) return null;
+
+          await waitForAssetLoad(chapterWrapper, {
+            chapterSizeHint: cleanedHtml.length,
+            timeoutMs: mediaSensitiveChapter
+              ? MEDIA_SENSITIVE_LOAD_TIMEOUT_MS
+              : (canUseVectorized ? 9000 : (isLargeChapter ? 14000 : undefined)),
+            maxTrackedImages: mediaSensitiveChapter
+              ? MEDIA_SENSITIVE_MAX_TRACKED_IMAGES
+              : (canUseVectorized ? 10 : (isLargeChapter ? 16 : 48)),
+            largeChapterThreshold: mediaSensitiveChapter
+              ? Number.POSITIVE_INFINITY
+              : LARGE_CHAPTER_HTML_THRESHOLD,
+          });
+          if (cancelled) return null;
+
+          void chapterWrapper.offsetHeight;
+          const height = getContainerHeight(chapterWrapper);
+          console.log(`[ShadowRenderer] Chapter "${chapterId}" ready. Height: ${height}px`);
+          hasReportedRef.current = true;
+          onReady(chapterWrapper, height);
+          return {
+            chapterWrapper,
+            canUseVectorized,
+            vectorSegments,
+            segmentEls,
+            initialSegmentCount,
           };
+        });
 
-          void hydrateRemainingSegments();
-        }
+        if (!renderContext || cancelled) return;
+
+        await runVitraRenderStage(trace, 'hydrate', async () => {
+          const {
+            chapterWrapper: activeChapterWrapper,
+            canUseVectorized,
+            vectorSegments: activeSegments,
+            segmentEls: activeSegmentEls,
+            initialSegmentCount: activeInitialSegmentCount,
+          } = renderContext;
+
+          if (!canUseVectorized || activeSegments.length <= activeInitialSegmentCount) return;
+
+          // 若 segmentMetas 存在（Worker路径），跳过全量 rIC 循环，交由 ScrollReaderView IO 驱动
+          const isWorkerVectorized = segmentMetas && segmentMetas.length > 0;
+          if (isWorkerVectorized) {
+            console.log(
+              `[ShadowRenderer] Chapter "${chapterId}" using IO-driven hydration (${activeSegments.length - activeInitialSegmentCount} deferred segments)`,
+            );
+            return;
+          }
+
+          // 回退路径: 保持现有 rIC 全量 hydration
+          let materializedCount = 0;
+          const pendingMeasureTargets: HTMLElement[] = [];
+          for (let idx = activeInitialSegmentCount; idx < activeSegments.length; idx += 1) {
+            if (cancelled || !activeChapterWrapper.isConnected) return;
+
+            const targetEl = activeSegmentEls[idx];
+            const segment = activeSegments[idx];
+            if (!targetEl || !segment) continue;
+
+            materializeVectorSegment(targetEl, segment);
+            targetEl.setAttribute('data-shadow-segment-state', 'hydrated');
+            targetEl.style.minHeight = '0px';
+            pendingMeasureTargets.push(targetEl);
+
+            const hasMediaAsset = targetEl.querySelector(SEGMENT_ASSET_SELECTOR);
+            if (idx % 3 === 0 && hasMediaAsset) {
+              await waitForAssetLoad(targetEl, {
+                chapterSizeHint: segment.charCount,
+                timeoutMs: 4000,
+                maxTrackedImages: 4,
+                largeChapterThreshold: LARGE_CHAPTER_HTML_THRESHOLD,
+              });
+            }
+
+            const isLastSegment = idx === activeSegments.length - 1;
+            const shouldMeasureBatch = pendingMeasureTargets.length >= VECTOR_HYDRATE_MEASURE_BATCH_SIZE || isLastSegment;
+            if (shouldMeasureBatch) {
+              const measureBatch = pendingMeasureTargets.splice(0, pendingMeasureTargets.length);
+              await calibrateSegmentIntrinsicSizeBatch(measureBatch);
+            }
+
+            materializedCount += 1;
+            if (materializedCount % VECTOR_HYDRATE_YIELD_EVERY_SEGMENTS === 0) {
+              await yieldForHydration();
+            }
+          }
+
+          if (!cancelled && activeChapterWrapper.isConnected) {
+            const finalHeight = getContainerHeight(activeChapterWrapper);
+            console.log(
+              `[ShadowRenderer] Chapter "${chapterId}" vectorized hydration done. Final: ${finalHeight}px`,
+            );
+          }
+        });
+
+        const traceSnapshot = finalizeVitraRenderTrace(trace);
+        console.log(formatVitraRenderTrace(traceSnapshot));
       } catch (error) {
         if (cancelled) return;
         const err = error instanceof Error ? error : new Error(String(error));
@@ -458,7 +623,7 @@ export function ShadowRenderer({
         cancelled = true;
       }
     };
-  }, [htmlContent, chapterId, externalStyles, onReady, onError, buildContentCss]);
+  }, [htmlContent, htmlFragments, segmentMetas, htmlBuffer, chapterId, externalStyles, preprocessed, onReady, onError, buildContentCss]);
 
   return (
     <div
@@ -467,4 +632,29 @@ export function ShadowRenderer({
       aria-hidden="true"
     />
   );
+}
+
+function buildLocalProcessedPayload(
+  htmlContent: string,
+  externalStyles: readonly string[],
+  chapterId: string,
+): {
+  cleanedHtml: string;
+  processedStyles: string[];
+  fragments: readonly string[];
+} {
+  const sanitizedHtml = sanitizeChapterHtml(htmlContent).htmlContent;
+  const inlineStyles = sanitizeStyleSheets(extractStyles(sanitizedHtml));
+  const cleanedHtml = removeStyleTags(sanitizedHtml);
+  const sanitizedExternalStyles = sanitizeStyleSheets([...externalStyles]);
+  const allStyles = [...sanitizedExternalStyles, ...inlineStyles];
+  const scopedStyles = allStyles
+    .map((css) => scopeStyles(css, chapterId))
+    .filter((css) => css.trim().length > 0);
+
+  return {
+    cleanedHtml,
+    processedStyles: scopedStyles,
+    fragments: [cleanedHtml],
+  };
 }

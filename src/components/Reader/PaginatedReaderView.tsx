@@ -11,7 +11,12 @@ import { NoteDialog } from './NoteDialog';
 import { TranslationDialog } from './TranslationDialog';
 import { getProviderLabel, translateText } from '../../services/translateService';
 import { preprocessChapterContent } from '../../services/chapterPreprocessService';
+import { startMeasure, type VitraMeasureHandle } from '../../services/vitraMeasure';
+import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
+import type { PageBoundary } from '../../types/vitraPagination';
 import styles from './PaginatedReaderView.module.css';
+
+const HIGHLIGHT_IDLE_TIMEOUT_MS = 600;
 
 function revokeBlobUrl(rawUrl: string | null) {
     if (!rawUrl || !rawUrl.startsWith('blob:')) return
@@ -87,6 +92,12 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     const pendingLastPageRef = useRef(false);
     const pendingSearchTextRef = useRef<string | null>(null);
     const isInitialLoadRef = useRef(true); // 初始加载标记
+    const pageBoundariesRef = useRef<readonly PageBoundary[]>([]);
+    const pageMapReadyRef = useRef(false);
+    const paginationMeasureSeqRef = useRef(0);
+    const paginationMeasureHandleRef = useRef<VitraMeasureHandle | null>(null);
+    const paginationMeasureHostRef = useRef<HTMLDivElement>(null);
+    const highlightIdleHandleRef = useRef<IdleTaskHandle | null>(null);
 
     const [spineItems, setSpineItems] = useState<SpineItemInfo[]>([]);
     const [currentSpineIndex, setCurrentSpineIndex] = useState(initialSpineIndex);
@@ -98,7 +109,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
 
     // Shadow render state
     const [shadowData, setShadowData] = useState<{
-        htmlContent: string; externalStyles: string[]; chapterId: string;
+        htmlContent: string; htmlFragments: string[]; externalStyles: string[]; chapterId: string;
     } | null>(null);
     const [chapterNode, setChapterNode] = useState<HTMLElement | null>(null);
 
@@ -137,6 +148,48 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     currentPageRef.current = currentPage;
     totalPagesRef.current = totalPages;
 
+    const abortPaginationMeasure = useCallback(() => {
+        if (paginationMeasureHandleRef.current) {
+            paginationMeasureHandleRef.current.abort()
+            paginationMeasureHandleRef.current = null
+        }
+    }, [])
+
+    const measureBoundariesInShadow = useCallback(async (
+        sourceNode: HTMLElement,
+        viewportHeight: number,
+    ): Promise<readonly PageBoundary[]> => {
+        const host = paginationMeasureHostRef.current
+        if (!host || viewportHeight <= 0) return []
+
+        abortPaginationMeasure()
+        const measureSeq = ++paginationMeasureSeqRef.current
+
+        const handle = startMeasure({
+            sourceNode,
+            viewportHeight,
+            host,
+            onProgress: (progress) => {
+                if (measureSeq !== paginationMeasureSeqRef.current) return
+                pageBoundariesRef.current = progress.boundaries
+                pageMapReadyRef.current = progress.done
+            },
+        })
+        paginationMeasureHandleRef.current = handle
+
+        const boundaries = await handle.result
+        if (measureSeq !== paginationMeasureSeqRef.current) return []
+        paginationMeasureHandleRef.current = null
+        pageMapReadyRef.current = true
+        return boundaries
+    }, [abortPaginationMeasure])
+
+    useEffect(() => {
+        return () => {
+            abortPaginationMeasure()
+        }
+    }, [abortPaginationMeasure])
+
     // ── Init spine ──
     useEffect(() => {
         const items = provider.getSpineItems();
@@ -153,6 +206,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         if (spineIndex < 0 || spineIndex >= spineItemsRef.current.length) return;
         if (visited.has(spineIndex)) return;
         visited.add(spineIndex);
+        abortPaginationMeasure();
         pendingLastPageRef.current = goToLastPage;
 
         // 非初始加载：先淡出，等淡出完成后再加载
@@ -163,6 +217,8 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         }
 
         setIsLoading(true);
+        pageBoundariesRef.current = [];
+        pageMapReadyRef.current = false;
         renderedHighlightsRef.current.clear();
         try {
             const rawHtml = await provider.extractChapterHtml(spineIndex);
@@ -201,15 +257,18 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
 
             setShadowData({
                 htmlContent: html,
+                htmlFragments: preprocessed.htmlFragments,
                 externalStyles: preprocessed.externalStyles,
                 chapterId: `pch-${spineIndex}`,
             });
         } catch (err) {
             console.error(`[PaginatedReader] Failed to load chapter ${spineIndex}:`, err);
+            pageBoundariesRef.current = [];
+            pageMapReadyRef.current = false;
             setIsLoading(false);
             setChapterFading(false);
         }
-    }, [provider]);
+    }, [provider, abortPaginationMeasure]);
 
     // ── Load initial chapter ──
     useEffect(() => {
@@ -221,9 +280,62 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
 
     // ── Shadow ready → mount + paginate ──
     const handleShadowReady = useCallback((node: HTMLElement, _height: number) => {
+        const viewport = viewportRef.current;
+        const viewportHeight = Math.max(1, Math.floor(viewport?.clientHeight || 0));
+        pageBoundariesRef.current = [];
+        pageMapReadyRef.current = false;
         setChapterNode(node);
         setShadowData(null);
         setIsLoading(false);
+
+        if (viewportHeight <= 0) return;
+        void measureBoundariesInShadow(node, viewportHeight).catch((error) => {
+            console.warn('[PaginatedReader] Background block measurement failed:', error);
+        });
+    }, [measureBoundariesInShadow]);
+
+    // ── Highlights ──
+    const applyHighlights = useCallback((el: HTMLElement, spineIndex: number) => {
+        db.highlights.where('bookId').equals(bookId).toArray().then(highlights => {
+            const matching = highlights.filter(h => {
+                if (h.cfiRange.startsWith('bdise:')) {
+                    return parseInt(h.cfiRange.split(':')[1], 10) === spineIndex;
+                }
+                if (h.cfiRange.startsWith('epubcfi(')) {
+                    const m = h.cfiRange.match(/^epubcfi\(\/\d+\/(\d+)/);
+                    return m ? Math.max(0, Math.floor(parseInt(m[1], 10) / 2) - 1) === spineIndex : false;
+                }
+                return false;
+            });
+            for (const h of matching) {
+                if (renderedHighlightsRef.current.has(h.id)) continue;
+                const range = findTextInDOM(el, h.text);
+                if (range) {
+                    highlightRange(range, h.id, h.color);
+                    renderedHighlightsRef.current.add(h.id);
+                }
+            }
+        }).catch(err => console.warn('[PaginatedReader] Highlight load failed:', err));
+    }, [bookId]);
+
+    const scheduleHighlightInjection = useCallback((el: HTMLElement, spineIndex: number) => {
+        if (highlightIdleHandleRef.current !== null) {
+            cancelIdleTask(highlightIdleHandleRef.current);
+            highlightIdleHandleRef.current = null;
+        }
+        highlightIdleHandleRef.current = scheduleIdleTask(() => {
+            highlightIdleHandleRef.current = null;
+            applyHighlights(el, spineIndex);
+        }, { timeoutMs: HIGHLIGHT_IDLE_TIMEOUT_MS });
+    }, [applyHighlights]);
+
+    useEffect(() => {
+        return () => {
+            if (highlightIdleHandleRef.current !== null) {
+                cancelIdleTask(highlightIdleHandleRef.current);
+                highlightIdleHandleRef.current = null;
+            }
+        };
     }, []);
 
     // ── Mount chapter node + calculate pagination ──
@@ -250,8 +362,15 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         // Calculate pagination after DOM settles
         requestAnimationFrame(() => {
             if (w <= 0) return;
+            const boundaries = pageBoundariesRef.current;
             const rawPages = container.scrollWidth / w;
             const pages = Math.max(1, Math.ceil(rawPages - 0.001));
+            const logicalPages = Math.max(1, boundaries.length || pages);
+            if (Math.abs(logicalPages - pages) >= 3) {
+                console.warn(
+                    `[PaginatedReader] Visual pages (${pages}) diverge from logical map (${logicalPages})`,
+                );
+            }
             setTotalPages(pages);
             totalPagesRef.current = pages;
 
@@ -297,9 +416,9 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 isInitialLoadRef.current = false;
             });
 
-            applyHighlights(chapterNode, currentSpineIndexRef.current);
+            scheduleHighlightInjection(chapterNode, currentSpineIndexRef.current);
         });
-    }, [chapterNode]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [chapterNode, scheduleHighlightInjection]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── Recalculate on resize ──
     useEffect(() => {
@@ -308,6 +427,8 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         if (!viewport || !container || !chapterNode) return;
 
         let resizeTimer: number | null = null;
+        let disposed = false;
+
         const recalc = () => {
             const oldWidth = Math.max(1, viewport.clientWidth);
             const fallbackAnchorX = currentPageRef.current * oldWidth + oldWidth * 0.35;
@@ -332,11 +453,10 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
             resizeTimer = window.setTimeout(() => {
                 const w = viewport.clientWidth;
                 const h = viewport.clientHeight;
-                if (w <= 0 || h <= 0) return;
+                if (disposed || w <= 0 || h <= 0) return;
 
                 container.style.height = `${h}px`;
                 const pages = Math.max(1, Math.ceil(container.scrollWidth / w));
-
                 const anchorBasedPage = Math.floor(anchorX / w);
                 const nextPage = Math.max(0, Math.min(anchorBasedPage, pages - 1));
 
@@ -352,16 +472,23 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 requestAnimationFrame(() => {
                     container.style.transition = '';
                 });
+
+                void measureBoundariesInShadow(chapterNode, h).catch((error) => {
+                    if (disposed) return;
+                    console.warn('[PaginatedReader] Resize pagination measure failed:', error);
+                });
             }, 100);
         };
 
         const ro = new ResizeObserver(recalc);
         ro.observe(viewport);
         return () => {
+            disposed = true;
             ro.disconnect();
             if (resizeTimer) window.clearTimeout(resizeTimer);
+            abortPaginationMeasure();
         };
-    }, [chapterNode]);
+    }, [chapterNode, abortPaginationMeasure, measureBoundariesInShadow]);
 
     // ── Reload chapter when readerStyles change (ShadowRenderer re-render) ──
     const stylesKeyRef = useRef('');
@@ -391,6 +518,8 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
 
         const pageWidth = viewport.clientWidth;
         if (pageWidth <= 0) return false;
+        const logicalPages = pageBoundariesRef.current.length;
+        if (pageMapReadyRef.current && logicalPages > 0 && pageIndex >= logicalPages + 1) return true;
 
         const pageLeft = pageIndex * pageWidth;
         const pageRight = pageLeft + pageWidth;
@@ -578,30 +707,6 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         };
     }, []);
 
-    // ── Highlights ──
-    const applyHighlights = useCallback((el: HTMLElement, spineIndex: number) => {
-        db.highlights.where('bookId').equals(bookId).toArray().then(highlights => {
-            const matching = highlights.filter(h => {
-                if (h.cfiRange.startsWith('bdise:')) {
-                    return parseInt(h.cfiRange.split(':')[1], 10) === spineIndex;
-                }
-                if (h.cfiRange.startsWith('epubcfi(')) {
-                    const m = h.cfiRange.match(/^epubcfi\(\/\d+\/(\d+)/);
-                    return m ? Math.max(0, Math.floor(parseInt(m[1], 10) / 2) - 1) === spineIndex : false;
-                }
-                return false;
-            });
-            for (const h of matching) {
-                if (renderedHighlightsRef.current.has(h.id)) continue;
-                const range = findTextInDOM(el, h.text);
-                if (range) {
-                    highlightRange(range, h.id, h.color);
-                    renderedHighlightsRef.current.add(h.id);
-                }
-            }
-        }).catch(err => console.warn('[PaginatedReader] Highlight load failed:', err));
-    }, [bookId]);
-
     // ── Selection menu handlers ──
     const dismissMenu = useCallback(() => {
         setSelectionMenu(prev => ({ ...prev, visible: false }));
@@ -734,6 +839,34 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         await loadChapter(targetSpineIndex);
     }, [loadChapter]);
 
+    useEffect(() => {
+        const container = columnRef.current;
+        if (!container) return;
+
+        const handlePdfInternalLink = (event: MouseEvent) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+
+            const anchor = target.closest('a[data-pdf-page]');
+            if (!(anchor instanceof HTMLAnchorElement)) return;
+
+            const rawPage = anchor.getAttribute('data-pdf-page');
+            if (!rawPage) return;
+            const targetSpine = Number.parseInt(rawPage, 10);
+            if (!Number.isFinite(targetSpine)) return;
+            if (targetSpine < 0 || targetSpine >= spineItemsRef.current.length) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            void jumpToSpine(targetSpine);
+        };
+
+        container.addEventListener('click', handlePdfInternalLink);
+        return () => {
+            container.removeEventListener('click', handlePdfInternalLink);
+        };
+    }, [jumpToSpine]);
+
     useImperativeHandle(ref, () => ({ jumpToSpine }));
 
     // ── Compute translateX ──
@@ -750,19 +883,28 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                     <ShadowRenderer
                         key={shadowData.chapterId}
                         htmlContent={shadowData.htmlContent}
+                        htmlFragments={shadowData.htmlFragments}
                         chapterId={shadowData.chapterId}
                         externalStyles={shadowData.externalStyles}
+                        preprocessed
                         readerStyles={readerStyles}
                         mode="paginated"
                         onReady={handleShadowReady}
                         onError={(err) => {
                             console.error('[PaginatedReader] Shadow error:', err);
                             setShadowData(null);
+                            pageBoundariesRef.current = [];
+                            pageMapReadyRef.current = false;
                             setIsLoading(false);
                             setChapterFading(false);
                         }}
                     />
                 )}
+                <div
+                    ref={paginationMeasureHostRef}
+                    className={styles.paginationMeasureHost}
+                    aria-hidden="true"
+                />
             </div>
 
             {/* Paginated content */}

@@ -13,6 +13,27 @@ const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 let win: BrowserWindow | null
 let tray: Tray | null = null
 
+const THEME_BG_COLORS: Record<string, string> = {
+    light: '#ffffff',
+    dark: '#1a1a2e',
+    sepia: '#f4ecd8',
+    green: '#c7edcc',
+}
+
+function isValidHexColor(value: string): boolean {
+    return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value.trim())
+}
+
+function resolveWindowBackground(themeId?: string, customBgColor?: string | null): string {
+    if (typeof customBgColor === 'string' && isValidHexColor(customBgColor)) {
+        return customBgColor
+    }
+    if (typeof themeId === 'string' && THEME_BG_COLORS[themeId]) {
+        return THEME_BG_COLORS[themeId]
+    }
+    return THEME_BG_COLORS.light
+}
+
 function createFallbackVitraIcon() {
     const svg = `
 <svg width="64" height="64" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -83,7 +104,7 @@ function createWindow() {
         titleBarStyle: 'default',
         autoHideMenuBar: true,
         icon,
-        backgroundColor: '#ffffff',
+        backgroundColor: resolveWindowBackground('light'),
         show: false, // Don't show until ready
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
@@ -162,7 +183,10 @@ ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
 })
 
 ipcMain.on('window:setTheme', (_event, payload: { themeId?: string; customBgColor?: string | null; customTextColor?: string | null } | string) => {
-    void payload
+    if (!win || win.isDestroyed()) return
+    const normalized = typeof payload === 'string' ? { themeId: payload } : payload
+    const backgroundColor = resolveWindowBackground(normalized?.themeId, normalized?.customBgColor)
+    win.setBackgroundColor(backgroundColor)
 })
 
 ipcMain.handle('system:listFonts', async () => {
@@ -280,6 +304,38 @@ ipcMain.handle('system:getProcessMemoryInfo', async () => {
             timestamp: Date.now(),
         }
     }
+})
+
+function readAutoStartOnLoginState(): { supported: boolean; enabled: boolean } {
+    const supported = process.platform === 'win32' || process.platform === 'darwin'
+    if (!supported) {
+        return { supported: false, enabled: false }
+    }
+    const loginSettings = app.getLoginItemSettings()
+    return {
+        supported: true,
+        enabled: Boolean(loginSettings.openAtLogin),
+    }
+}
+
+ipcMain.handle('system:getAutoStartOnLogin', async () => {
+    return readAutoStartOnLoginState()
+})
+
+ipcMain.handle('system:setAutoStartOnLogin', async (_event, enabled: boolean) => {
+    if (typeof enabled !== 'boolean') {
+        throw new Error('system:setAutoStartOnLogin expects boolean payload')
+    }
+
+    const current = readAutoStartOnLoginState()
+    if (!current.supported) return current
+
+    app.setLoginItemSettings({
+        openAtLogin: enabled,
+        openAsHidden: false,
+    })
+
+    return readAutoStartOnLoginState()
 })
 
 // ─── WebDAV Sync ────────────────────────────────────────────

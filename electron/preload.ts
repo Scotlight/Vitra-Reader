@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readFile: (path: string) => ipcRenderer.invoke('fs:readFile', path),
     listSystemFonts: () => ipcRenderer.invoke('system:listFonts'),
     getProcessMemoryInfo: () => ipcRenderer.invoke('system:getProcessMemoryInfo'),
+    getAutoStartOnLogin: () => ipcRenderer.invoke('system:getAutoStartOnLogin'),
+    setAutoStartOnLogin: (enabled: boolean) => ipcRenderer.invoke('system:setAutoStartOnLogin', enabled),
     setWindowTheme: (payload: { themeId: string; customBgColor?: string | null; customTextColor?: string | null }) => ipcRenderer.send('window:setTheme', payload),
     openExternal: (url: string) => shell.openExternal(url),
     webdavSync: (method: 'upload' | 'download' | 'test' | 'head', config: any) => ipcRenderer.invoke(`webdav:${method}`, config),

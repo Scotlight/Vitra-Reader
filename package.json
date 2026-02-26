@@ -13,7 +13,9 @@
   "dependencies": {
     "dexie": "^4.0.10",
     "epubjs": "^0.3.93",
+    "fflate": "^0.8.2",
     "framer-motion": "^11.15.0",
+    "mammoth": "^1.11.0",
     "marked": "^17.0.3",
     "mobi": "^0.0.1",
     "pdfjs-dist": "^5.4.624",

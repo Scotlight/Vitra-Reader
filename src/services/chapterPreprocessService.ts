@@ -4,7 +4,6 @@ import type {
     ChapterPreprocessResponse,
     ChapterPreprocessResult,
 } from '../types/chapterPreprocess'
-import { preprocessChapterSync } from '../utils/contentSanitizer'
 
 const DEFAULT_TIMEOUT_MS = 2500
 
@@ -33,9 +32,9 @@ function resetWorker() {
     }
 }
 
-function ensureWorker(): Worker | null {
+function ensureWorker(): Worker {
     if (typeof Worker === 'undefined') {
-        return null
+        throw new Error('Chapter preprocess worker is not supported in current runtime')
     }
 
     if (workerInstance) {
@@ -48,7 +47,7 @@ function ensureWorker(): Worker | null {
             { type: 'module' }
         )
 
-        worker.onmessage = (event: MessageEvent<ChapterPreprocessResponse>) => {
+        worker.onmessage = (event: MessageEvent<ChapterPreprocessResponse & { _contentBuffer?: ArrayBuffer }>) => {
             const payload = event.data
             if (!payload || typeof payload.id !== 'number') return
 
@@ -59,6 +58,12 @@ function ensureWorker(): Worker | null {
             window.clearTimeout(pendingTask.timerId)
 
             if (payload.ok && payload.result) {
+                // Piece Table: 解码 Transfer buffer 为字符串，作为 htmlBuffer 保留。
+                // segmentMetas 只含 (bufferOffset, bufferLength)，hydrate 时按需 slice。
+                if (payload._contentBuffer && payload.result.segmentMetas && payload.result.segmentMetas.length > 0) {
+                    const decoder = new TextDecoder()
+                    payload.result.htmlBuffer = decoder.decode(payload._contentBuffer)
+                }
                 pendingTask.resolve(payload.result)
                 return
             }
@@ -67,7 +72,7 @@ function ensureWorker(): Worker | null {
         }
 
         worker.onerror = (event) => {
-            console.warn('[ChapterPreprocess] Worker runtime error:', event.message)
+            console.error('[ChapterPreprocess] Worker runtime error:', event.message)
             rejectAllPending(new Error(event.message || 'Worker crashed'))
             resetWorker()
         }
@@ -75,9 +80,9 @@ function ensureWorker(): Worker | null {
         workerInstance = worker
         return workerInstance
     } catch (error) {
-        console.warn('[ChapterPreprocess] Worker init failed, fallback to sync:', error)
         resetWorker()
-        return null
+        const reason = error instanceof Error ? error.message : String(error)
+        throw new Error(`[ChapterPreprocess] Worker init failed: ${reason}`)
     }
 }
 
@@ -124,15 +129,11 @@ export async function preprocessChapterContent(
     }
 
     const worker = ensureWorker()
-    if (!worker) {
-        return preprocessChapterSync(normalizedPayload)
-    }
 
     try {
         return await preprocessByWorker(worker, normalizedPayload, timeoutMs)
     } catch (error) {
-        console.warn('[ChapterPreprocess] Worker path failed, fallback to sync:', error)
-        return preprocessChapterSync(normalizedPayload)
+        resetWorker()
+        throw (error instanceof Error ? error : new Error(String(error)))
     }
 }
-

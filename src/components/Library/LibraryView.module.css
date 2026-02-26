@@ -810,6 +810,16 @@
     padding: 10px;
 }
 
+.placeholderCover span {
+    letter-spacing: 0.6px;
+    line-height: 1;
+}
+
+.placeholderCoverCompact {
+    font-size: 12px;
+    padding: 6px;
+}
+
 .cardOverlay {
     position: absolute;
     top: 0;

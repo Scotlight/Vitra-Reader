@@ -39,17 +39,25 @@ function sanitizeProtocol(url: string): string {
         return ''
     }
 
+    if (/^vitra-res:/i.test(lowered)) {
+        return url
+    }
+
+    if (/^blob:/i.test(lowered)) {
+        return url
+    }
+
     if (/^data:/i.test(lowered)) {
         if (/^data:(image|audio|video|font)\//i.test(lowered)) return url
         if (/^data:application\/(octet-stream|pdf)/i.test(lowered)) return url
         return ''
     }
 
-    if (/^(https?:|blob:|mailto:|tel:|#|\/)/i.test(lowered)) {
+    if (lowered.startsWith('#')) {
         return url
     }
 
-    return url
+    return ''
 }
 
 export function sanitizeUrlValue(rawValue: string): string {
@@ -277,10 +285,11 @@ export function preprocessChapterSync(input: ChapterPreprocessInput): ChapterPre
 
     return {
         htmlContent: htmlSanitized.htmlContent,
+        htmlFragments: [htmlSanitized.htmlContent],
         externalStyles: styleSanitized,
         removedTagCount: htmlSanitized.removedTagCount,
         removedAttributeCount: htmlSanitized.removedAttributeCount,
         usedFallback: htmlSanitized.usedFallback,
+        stylesScoped: false,
     }
 }
-

@@ -1,9 +1,13 @@
 import { marked } from 'marked'
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '../contentProvider'
+import { VitraSectionSplitter } from '../vitraSectionSplitter'
+import { decodeTextBuffer } from './textDecoding'
+import { EMPTY_SECTION_HTML, DEFAULT_DOCUMENT_LABEL } from '../../utils/chapterTitleDetector'
 
 interface Chapter {
     title: string
-    md: string
+    html: string
+    plain: string
 }
 
 export class MdContentProvider implements ContentProvider {
@@ -12,27 +16,18 @@ export class MdContentProvider implements ContentProvider {
     constructor(private data: ArrayBuffer) {}
 
     async init() {
-        const text = new TextDecoder('utf-8').decode(this.data)
-        const lines = text.split('\n')
+        const text = decodeTextBuffer(this.data, 'md').text
+        const rendered = await marked.parse(text)
+        const html = typeof rendered === 'string' ? rendered : String(rendered)
+        const chunks = VitraSectionSplitter.split(html)
+        this.chapters = chunks.map((chunk, index) => ({
+            title: chunk.label || `第 ${index + 1} 章`,
+            html: chunk.html || EMPTY_SECTION_HTML,
+            plain: stripTags(chunk.html || ''),
+        }))
 
-        const splits: { title: string; lineIdx: number }[] = []
-        for (let i = 0; i < lines.length; i++) {
-            const m = lines[i].match(/^(#{1,2})\s+(.+)/)
-            if (m) splits.push({ title: m[2].trim(), lineIdx: i })
-        }
-
-        if (splits.length === 0) {
-            this.chapters = [{ title: '正文', md: text }]
-        } else {
-            if (splits[0].lineIdx > 0) {
-                const pre = lines.slice(0, splits[0].lineIdx).join('\n').trim()
-                if (pre) this.chapters.push({ title: '前言', md: pre })
-            }
-            for (let i = 0; i < splits.length; i++) {
-                const start = splits[i].lineIdx
-                const end = i + 1 < splits.length ? splits[i + 1].lineIdx : lines.length
-                this.chapters.push({ title: splits[i].title, md: lines.slice(start, end).join('\n') })
-            }
+        if (this.chapters.length === 0) {
+            this.chapters = [{ title: DEFAULT_DOCUMENT_LABEL, html: EMPTY_SECTION_HTML, plain: '' }]
         }
     }
 
@@ -58,7 +53,7 @@ export class MdContentProvider implements ContentProvider {
     async extractChapterHtml(i: number): Promise<string> {
         const ch = this.chapters[i]
         if (!ch) return ''
-        return await marked.parse(ch.md)
+        return ch.html
     }
 
     async extractChapterStyles(): Promise<string[]> { return [] }
@@ -68,12 +63,12 @@ export class MdContentProvider implements ContentProvider {
         const results: SearchResult[] = []
         const lk = keyword.toLowerCase()
         for (let i = 0; i < this.chapters.length; i++) {
-            const plain = this.chapters[i].md.toLowerCase()
+            const plain = this.chapters[i].plain.toLowerCase()
             let pos = plain.indexOf(lk)
             while (pos !== -1) {
                 const start = Math.max(0, pos - 20)
                 const end = Math.min(plain.length, pos + keyword.length + 20)
-                results.push({ cfi: `bdise:${i}:0`, excerpt: this.chapters[i].md.slice(start, end) })
+                results.push({ cfi: `bdise:${i}:0`, excerpt: this.chapters[i].plain.slice(start, end) })
                 pos = plain.indexOf(lk, pos + 1)
             }
         }
@@ -81,8 +76,12 @@ export class MdContentProvider implements ContentProvider {
     }
 }
 
+function stripTags(html: string): string {
+    return html.replace(/<[^>]+>/g, '')
+}
+
 export async function parseMdMetadata(data: ArrayBuffer, filename: string) {
-    const text = new TextDecoder('utf-8').decode(data)
+    const text = decodeTextBuffer(data, 'md').text
     const m = text.match(/^#\s+(.+)/m)
     const title = m ? m[1].trim() : filename.replace(/\.md$/i, '')
     return { title: title || filename, author: '未知作者' }

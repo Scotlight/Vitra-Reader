@@ -5,15 +5,32 @@ type PdfJsRuntime = {
     getDocument: (src: unknown) => { promise: Promise<any> }
 }
 
+interface PdfPageLink {
+    targetPage: number
+    left: number
+    top: number
+    width: number
+    height: number
+}
+
+interface RenderedPdfPage {
+    imageUrl: string
+    links: readonly PdfPageLink[]
+}
+
+const PDF_RENDER_SCALE = 1.8
+
 let cachedPdfRuntime: PdfJsRuntime | null = null
 let cachedRuntimeKind: 'modern' | 'legacy' | null = null
+let forceLegacyRuntime = false
 
 async function getPdfRuntime(forceLegacy = false): Promise<PdfJsRuntime> {
-    if (cachedPdfRuntime && cachedRuntimeKind && (!forceLegacy || cachedRuntimeKind === 'legacy')) {
+    const useLegacy = forceLegacy || forceLegacyRuntime
+    if (cachedPdfRuntime && cachedRuntimeKind && (!useLegacy || cachedRuntimeKind === 'legacy')) {
         return cachedPdfRuntime
     }
 
-    if (!forceLegacy) {
+    if (!useLegacy) {
         try {
             const modern = await import('pdfjs-dist') as unknown as PdfJsRuntime
             modern.GlobalWorkerOptions.workerSrc = new URL(
@@ -45,8 +62,19 @@ function shouldFallbackToLegacy(error: unknown): boolean {
         || text.includes('baseexceptionclosure')
 }
 
+function promoteLegacyRuntime(reason: string, error: unknown): void {
+    if (!forceLegacyRuntime) {
+        console.warn(`[PdfProvider] switch runtime to legacy: ${reason}`, error)
+    }
+    forceLegacyRuntime = true
+    if (cachedRuntimeKind === 'modern') {
+        cachedPdfRuntime = null
+        cachedRuntimeKind = null
+    }
+}
+
 async function openPdfDocument(data: ArrayBuffer, forceLegacy = false): Promise<any> {
-    const runtime = await getPdfRuntime(forceLegacy)
+    const runtime = await getPdfRuntime(forceLegacy || forceLegacyRuntime)
     return runtime.getDocument({
         data: new Uint8Array(data.slice(0)),
         disableAutoFetch: true,
@@ -54,23 +82,29 @@ async function openPdfDocument(data: ArrayBuffer, forceLegacy = false): Promise<
     }).promise
 }
 
+async function openPdfDocumentWithFallback(data: ArrayBuffer): Promise<any> {
+    try {
+        return await openPdfDocument(data, false)
+    } catch (error) {
+        if (!shouldFallbackToLegacy(error)) {
+            throw error
+        }
+        promoteLegacyRuntime('document open parser error', error)
+        return openPdfDocument(data, true)
+    }
+}
+
 export class PdfContentProvider implements ContentProvider {
     private doc: any | null = null
     private pageCount = 0
     private outline: TocItem[] = []
+    private pageHtmlCache = new Map<number, string>()
+    private pageImageUrlCache = new Map<number, string>()
 
     constructor(private data: ArrayBuffer) {}
 
     async init() {
-        try {
-            this.doc = await openPdfDocument(this.data, false)
-        } catch (error) {
-            if (!shouldFallbackToLegacy(error)) {
-                throw error
-            }
-            console.warn('[PdfProvider] retry with legacy runtime due to parser error:', error)
-            this.doc = await openPdfDocument(this.data, true)
-        }
+        this.doc = await openPdfDocumentWithFallback(this.data)
 
         this.pageCount = this.doc.numPages
         try {
@@ -83,7 +117,30 @@ export class PdfContentProvider implements ContentProvider {
         } catch { /* no outline */ }
     }
 
-    destroy() { this.doc?.destroy(); this.doc = null }
+    private clearRenderedPageCache() {
+        this.pageHtmlCache.clear()
+        this.pageImageUrlCache.forEach((url) => {
+            if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+        })
+        this.pageImageUrlCache.clear()
+    }
+
+    private async reopenLegacyDocument(reason: string, error: unknown): Promise<void> {
+        promoteLegacyRuntime(reason, error)
+        this.clearRenderedPageCache()
+        if (this.doc) {
+            this.doc.destroy()
+            this.doc = null
+        }
+        this.doc = await openPdfDocument(this.data, true)
+        this.pageCount = this.doc.numPages
+    }
+
+    destroy() {
+        this.clearRenderedPageCache()
+        this.doc?.destroy()
+        this.doc = null
+    }
 
     getToc(): TocItem[] {
         if (this.outline.length) return this.outline
@@ -108,26 +165,29 @@ export class PdfContentProvider implements ContentProvider {
 
     async extractChapterHtml(pageIndex: number): Promise<string> {
         if (!this.doc) return ''
-        const page = await this.doc.getPage(pageIndex + 1) // 1-based
-        const content = await page.getTextContent()
-        let html = ''
-        let lastY: number | null = null
-        for (const item of content.items as any[]) {
-            if (!item.str?.trim()) continue
-            const y = item.transform?.[5]
-            if (lastY !== null && Math.abs(y - lastY) > 2) {
-                html += '</p><p>'
-            }
-            html += escapeHtml(item.str)
-            lastY = y
+        const cached = this.pageHtmlCache.get(pageIndex)
+        if (cached) return cached
+
+        let renderedPage: RenderedPdfPage
+        try {
+            renderedPage = await renderPdfPage(this.doc, pageIndex)
+        } catch (error) {
+            if (!shouldFallbackToLegacy(error)) throw error
+            await this.reopenLegacyDocument('page render parser error', error)
+            if (!this.doc) return ''
+            renderedPage = await renderPdfPage(this.doc, pageIndex)
         }
-        return `<p>${html}</p>`
+        const imageUrl = renderedPage.imageUrl
+        this.pageImageUrlCache.set(pageIndex, imageUrl)
+        const html = renderPdfPageHtml(imageUrl, renderedPage.links, pageIndex)
+        this.pageHtmlCache.set(pageIndex, html)
+        return html
     }
 
     async extractChapterStyles(): Promise<string[]> { return [] }
     unloadChapter() {}
 
-    async search(keyword: string): Promise<SearchResult[]> {
+    private async searchInCurrentDoc(keyword: string): Promise<SearchResult[]> {
         if (!this.doc) return []
         const results: SearchResult[] = []
         const lk = keyword.toLowerCase()
@@ -135,31 +195,180 @@ export class PdfContentProvider implements ContentProvider {
             const page = await this.doc.getPage(i)
             const content = await page.getTextContent()
             const text = (content.items as any[]).map(it => it.str).join('')
-            if (text.toLowerCase().includes(lk)) {
-                const pos = text.toLowerCase().indexOf(lk)
-                const start = Math.max(0, pos - 20)
-                const end = Math.min(text.length, pos + keyword.length + 20)
-                results.push({ cfi: `bdise:${i - 1}:0`, excerpt: text.slice(start, end) })
-            }
+            if (!text.toLowerCase().includes(lk)) continue
+            const pos = text.toLowerCase().indexOf(lk)
+            const start = Math.max(0, pos - 20)
+            const end = Math.min(text.length, pos + keyword.length + 20)
+            results.push({ cfi: `bdise:${i - 1}:0`, excerpt: text.slice(start, end) })
         }
         return results
     }
+
+    async search(keyword: string): Promise<SearchResult[]> {
+        try {
+            return await this.searchInCurrentDoc(keyword)
+        } catch (error) {
+            if (!shouldFallbackToLegacy(error)) throw error
+            await this.reopenLegacyDocument('search parser error', error)
+            return this.searchInCurrentDoc(keyword)
+        }
+    }
 }
 
-function escapeHtml(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+async function renderPdfPage(doc: any, pageIndex: number): Promise<RenderedPdfPage> {
+    if (typeof document === 'undefined') {
+        throw new Error('[PdfProvider] document is unavailable in current runtime')
+    }
+
+    const page = await doc.getPage(pageIndex + 1)
+    const viewport = page.getViewport({ scale: PDF_RENDER_SCALE })
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.ceil(viewport.width)
+    canvas.height = Math.ceil(viewport.height)
+
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('[PdfProvider] canvas 2d context is unavailable')
+
+    await page.render({ canvasContext: context as any, viewport }).promise
+    const imageUrl = await canvasToImageUrl(canvas)
+    const links = await extractPdfPageLinks(doc, page, viewport, pageIndex)
+    return { imageUrl, links }
+}
+
+async function canvasToImageUrl(canvas: HTMLCanvasElement): Promise<string> {
+    if (typeof canvas.toBlob !== 'function') {
+        return canvas.toDataURL('image/png')
+    }
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((value) => resolve(value), 'image/png')
+    })
+    if (!blob) {
+        return canvas.toDataURL('image/png')
+    }
+    return URL.createObjectURL(blob)
+}
+
+async function extractPdfPageLinks(
+    doc: any,
+    page: any,
+    viewport: any,
+    pageIndex: number,
+): Promise<readonly PdfPageLink[]> {
+    try {
+        const annotations = await page.getAnnotations({ intent: 'display' })
+        if (!Array.isArray(annotations) || annotations.length === 0) return []
+
+        const links: PdfPageLink[] = []
+        for (const annotation of annotations) {
+            const link = await buildPdfPageLink(annotation, doc, viewport, pageIndex)
+            if (link) links.push(link)
+        }
+        return links
+    } catch (error) {
+        console.warn(`[PdfProvider] Failed to extract annotations for page ${pageIndex + 1}:`, error)
+        return []
+    }
+}
+
+async function buildPdfPageLink(
+    annotation: any,
+    doc: any,
+    viewport: any,
+    currentPageIndex: number,
+): Promise<PdfPageLink | null> {
+    if (annotation?.subtype !== 'Link') return null
+    if (!Array.isArray(annotation?.rect) || annotation.rect.length < 4) return null
+
+    const targetPage = await resolvePdfDestPageIndex(doc, annotation?.dest, currentPageIndex)
+    if (targetPage === null) return null
+
+    const rect = normalizePdfRect(annotation.rect, viewport)
+    if (!rect) return null
+    return { targetPage, ...rect }
+}
+
+async function resolvePdfDestPageIndex(
+    doc: any,
+    dest: unknown,
+    currentPageIndex: number,
+): Promise<number | null> {
+    if (!dest) return null
+
+    if (typeof dest === 'string') {
+        const explicit = await doc.getDestination(dest)
+        if (!Array.isArray(explicit) || explicit.length === 0) return null
+        return resolvePdfDestPageIndex(doc, explicit, currentPageIndex)
+    }
+
+    if (!Array.isArray(dest) || dest.length === 0) return null
+    const head = dest[0]
+    if (typeof head === 'number' && Number.isFinite(head)) {
+        return Math.max(0, Math.floor(head))
+    }
+    if (head && typeof head === 'object' && typeof head.num === 'number') {
+        const index = await doc.getPageIndex(head)
+        return Number.isFinite(index) ? Math.max(0, index) : null
+    }
+    if (head === null) {
+        return Math.max(0, currentPageIndex)
+    }
+    return null
+}
+
+function normalizePdfRect(
+    rect: unknown,
+    viewport: any,
+): { left: number; top: number; width: number; height: number } | null {
+    if (!Array.isArray(rect) || rect.length < 4) return null
+    if (!viewport || typeof viewport.width !== 'number' || typeof viewport.height !== 'number') return null
+    if (viewport.width <= 0 || viewport.height <= 0) return null
+
+    const rectNums = rect.map(Number)
+    if (rectNums.some((value) => !Number.isFinite(value))) return null
+
+    const useConverted = typeof viewport.convertToViewportRectangle === 'function'
+    const [x1, y1, x2, y2] = useConverted
+        ? viewport.convertToViewportRectangle(rectNums)
+        : rectNums
+
+    const leftPx = Math.min(x1, x2)
+    const rightPx = Math.max(x1, x2)
+    const topPx = Math.min(y1, y2)
+    const bottomPx = Math.max(y1, y2)
+    const widthPx = rightPx - leftPx
+    const heightPx = bottomPx - topPx
+    if (widthPx <= 0 || heightPx <= 0) return null
+
+    const left = clampPercent((leftPx / viewport.width) * 100)
+    const top = clampPercent((topPx / viewport.height) * 100)
+    const width = clampPercent((widthPx / viewport.width) * 100)
+    const height = clampPercent((heightPx / viewport.height) * 100)
+    if (width <= 0 || height <= 0) return null
+    return { left, top, width, height }
+}
+
+function clampPercent(value: number): number {
+    return Math.max(0, Math.min(100, Number(value.toFixed(4))))
+}
+
+function renderPdfPageHtml(
+    imageUrl: string,
+    links: readonly PdfPageLink[],
+    pageIndex: number,
+): string {
+    const imageTag = `<img src="${imageUrl}" alt="PDF page ${pageIndex + 1}" style="display:block;width:100%;height:auto;"/>`
+    if (links.length === 0) return imageTag
+
+    const linkTags = links
+        .map((link) => `<a data-pdf-page="${link.targetPage}" href="#pdf-page-${link.targetPage}" aria-label="PDF jump to page ${link.targetPage + 1}" style="position:absolute;left:${link.left}%;top:${link.top}%;width:${link.width}%;height:${link.height}%;display:block;z-index:2;background:transparent;text-decoration:none;"></a>`)
+        .join('')
+
+    return `<div class="pdf-page-layer" style="position:relative;width:100%;line-height:0;">${imageTag}${linkTags}</div>`
 }
 
 export async function parsePdfMetadata(data: ArrayBuffer) {
-    let doc: any
-    try {
-        doc = await openPdfDocument(data, false)
-    } catch (error) {
-        if (!shouldFallbackToLegacy(error)) {
-            throw error
-        }
-        doc = await openPdfDocument(data, true)
-    }
+    const doc = await openPdfDocumentWithFallback(data)
     const meta = await doc.getMetadata()
     const info = meta?.info as any
     const title = info?.Title || ''

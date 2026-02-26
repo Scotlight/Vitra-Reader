@@ -33,6 +33,11 @@
     overflow: hidden;
 }
 
+.paginationMeasureHost {
+    width: 100%;
+    contain: layout style paint;
+}
+
 .emptyState {
     display: flex;
     align-items: center;

@@ -9,6 +9,14 @@ export interface AssetLoadOptions {
   maxTrackedImages?: number;
   chapterSizeHint?: number;
   largeChapterThreshold?: number;
+  resourceExists?: (url: string) => boolean;
+}
+
+class MissingAssetError extends Error {
+  constructor(url: string) {
+    super(`[AssetLoader] Resource missing: ${url}`);
+    this.name = 'MissingAssetError';
+  }
 }
 
 function computeDynamicTimeout(
@@ -35,6 +43,7 @@ export async function waitForAssetLoad(
     maxTrackedImages = 48,
     chapterSizeHint = 0,
     largeChapterThreshold = 450_000,
+    resourceExists,
   } = options;
 
   const allImages = Array.from(container.querySelectorAll('img'));
@@ -62,10 +71,25 @@ export async function waitForAssetLoad(
 
   // 创建图片加载 Promise 数组
   const imagePromises = images.map((img) => {
-    return new Promise<void>((resolve) => {
+    return new Promise<void>((resolve, reject) => {
       const src = img.getAttribute('src') || '';
       if (!src || src.startsWith('data:text/html')) {
         resolve();
+        return;
+      }
+
+      if (img.hasAttribute('data-missing-resource')) {
+        reject(new MissingAssetError(src));
+        return;
+      }
+
+      if (resourceExists && !resourceExists(src)) {
+        reject(new MissingAssetError(src));
+        return;
+      }
+
+      if (isRelativeAssetPath(src)) {
+        reject(new MissingAssetError(src));
         return;
       }
 
@@ -85,7 +109,7 @@ export async function waitForAssetLoad(
       const onError = () => {
         console.warn(`[AssetLoader] Image load failed: ${img.src}`);
         cleanup();
-        resolve();
+        reject(new MissingAssetError(img.src || src));
       };
 
       const cleanup = () => {
@@ -107,6 +131,10 @@ export async function waitForAssetLoad(
   if (allImages.length > images.length) {
     console.warn(`[AssetLoader] Only tracked ${images.length}/${allImages.length} images for this chapter`);
   }
+}
+
+function isRelativeAssetPath(url: string): boolean {
+  return !/^(blob:|data:|https?:|\/\/|\/|#)/i.test(url.trim());
 }
 
 /**

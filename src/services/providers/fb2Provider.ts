@@ -1,4 +1,7 @@
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '../contentProvider'
+import { VitraSectionSplitter } from '../vitraSectionSplitter'
+import { decodeTextBuffer } from './textDecoding'
+import { EMPTY_SECTION_HTML, DEFAULT_DOCUMENT_LABEL } from '../../utils/chapterTitleDetector'
 
 interface Chapter {
     title: string
@@ -11,39 +14,20 @@ export class Fb2ContentProvider implements ContentProvider {
     constructor(private data: ArrayBuffer) {}
 
     async init() {
-        let text: string
-        try {
-            text = new TextDecoder('utf-8', { fatal: true }).decode(this.data)
-        } catch {
-            text = new TextDecoder('windows-1251').decode(this.data)
-        }
+        const text = decodeTextBuffer(this.data, 'fb2').text
 
         const parser = new DOMParser()
         const doc = parser.parseFromString(text, 'application/xml')
-
-        // 取所有 <section> 作为章节
-        const sections = Array.from(doc.querySelectorAll('body > section, body section'))
-        if (sections.length === 0) {
-            // 没有 section，整个 body 作为一章
-            const body = doc.querySelector('body')
-            this.chapters = [{ title: '正文', html: fb2NodeToHtml(body ?? doc.documentElement) }]
-            return
-        }
-
-        for (const sec of sections) {
-            const titleEl = sec.querySelector(':scope > title')
-            const label = titleEl ? titleEl.textContent?.trim() || '章节' : '章节'
-            // 转换 section 内容为 HTML，跳过 <title>（已作为章名）
-            let html = ''
-            for (const child of Array.from(sec.childNodes)) {
-                if (child === titleEl) continue
-                html += fb2NodeToHtml(child)
-            }
-            this.chapters.push({ title: label, html: html || '<p>(空章节)</p>' })
-        }
+        const body = doc.querySelector('body')
+        const fullHtml = fb2NodeToHtml(body ?? doc.documentElement)
+        const chunks = VitraSectionSplitter.split(fullHtml)
+        this.chapters = chunks.map((chunk, index) => ({
+            title: chunk.label || `第 ${index + 1} 章`,
+            html: chunk.html || EMPTY_SECTION_HTML,
+        }))
 
         if (this.chapters.length === 0) {
-            this.chapters = [{ title: '正文', html: '<p>(无内容)</p>' }]
+            this.chapters = [{ title: DEFAULT_DOCUMENT_LABEL, html: EMPTY_SECTION_HTML }]
         }
     }
 
@@ -133,12 +117,7 @@ function escapeHtml(s: string): string {
 }
 
 export async function parseFb2Metadata(data: ArrayBuffer, filename: string) {
-    let text: string
-    try {
-        text = new TextDecoder('utf-8', { fatal: true }).decode(data)
-    } catch {
-        text = new TextDecoder('windows-1251').decode(data)
-    }
+    const text = decodeTextBuffer(data, 'fb2').text
     const titleMatch = text.match(/<book-title[^>]*>([\s\S]*?)<\/book-title>/i)
     const firstMatch = text.match(/<first-name[^>]*>([\s\S]*?)<\/first-name>/i)
     const lastMatch = text.match(/<last-name[^>]*>([\s\S]*?)<\/last-name>/i)

@@ -1,5 +1,6 @@
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '../contentProvider'
 import { parseMobiBuffer } from './mobiParser'
+import { EMPTY_SECTION_HTML } from '../../utils/chapterTitleDetector'
 
 interface Chapter {
     label: string
@@ -9,7 +10,7 @@ interface Chapter {
 function splitMobiChapters(content: string): Chapter[] {
     const parts = content.split(/<(?:h[12][^>]*>|mbp:pagebreak[^/]*\/?>)/i).filter((part) => part.trim())
     const headings = content.match(/<(?:h[12][^>]*>)(.*?)<\/h[12]>/gi) || []
-    if (parts.length === 0) parts.push(content || '<p>(空内容)</p>')
+    if (parts.length === 0) parts.push(content || EMPTY_SECTION_HTML)
     return parts.map((html, index) => {
         const heading = headings[index - 1]?.replace(/<[^>]+>/g, '').trim()
         return { label: heading || `第 ${index + 1} 章`, html }

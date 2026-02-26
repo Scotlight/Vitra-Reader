@@ -45,7 +45,7 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
         // 2. Parse metadata
         let meta: BookMeta
         try {
-            const format = detectFormat(file.name)
+            const format = detectFormat(file.name, fileData)
             const parsed = await parseBookMetadata(format, fileData, file.name)
             const title = parsed.title || stripBookExtension(file.name)
             const author = parsed.author || '未知作者'
@@ -71,7 +71,7 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
             }
         } catch (e) {
             console.error('Failed to parse book:', e)
-            const format = detectFormat(file.name)
+            const format = detectFormat(file.name, fileData)
             meta = {
                 id,
                 title: stripBookExtension(file.name),
