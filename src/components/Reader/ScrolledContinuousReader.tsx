@@ -7,7 +7,7 @@ import { useScrollEvents } from '../../hooks/useScrollEvents';
 import { useRenderPipeline } from '../../hooks/useRenderPipeline';
 import { ShadowRenderer } from './ShadowRenderer';
 import { ChapterStatus } from '../../types/chapter';
-import { RenderPipelineState } from '../../types/renderPipeline';
+import { RenderPipelineState } from '../../engine/types/renderPipeline';
 import { shouldPreloadChapter, detectScrollDirection } from '../../utils/scrollDetection';
 import { injectCSSOverride, removeCSSOverride } from '../../utils/styleProcessor';
 import styles from './ScrolledContinuousReader.module.css';

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { db, type BookMeta } from '../services/storageService'
-import { detectFormat, stripBookExtension } from '../services/contentProvider'
-import { parseBookMetadata } from '../services/contentProviderFactory'
+import { detectFormat, stripBookExtension } from '../engine/core/contentProvider'
+import { parseBookMetadata } from '../engine/core/contentProviderFactory'
 
 type BinaryPayload = ArrayBuffer | Uint8Array
 type ImportedFile = { name: string; path: string; data: BinaryPayload }

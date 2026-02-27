@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import { db, type BookMeta } from '../../services/storageService'
-import { parseBookMetadata } from '../../services/contentProviderFactory'
+import { parseBookMetadata } from '../../engine/core/contentProviderFactory'
 import styles from './LibraryView.module.css'
 
 type BookPropertiesDraft = {

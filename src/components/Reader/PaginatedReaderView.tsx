@@ -2,14 +2,14 @@ import {
     useRef, useEffect, useState, useCallback,
     forwardRef, useImperativeHandle,
 } from 'react';
-import type { ContentProvider, SpineItemInfo } from '../../services/contentProvider';
+import type { ContentProvider, SpineItemInfo } from '../../engine/core/contentProvider';
 import { releaseMediaResources } from '../../utils/mediaResourceCleanup';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
 import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
 import { db } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
-import { preprocessChapterContent } from '../../services/chapterPreprocessService';
-import { startMeasure, type VitraMeasureHandle, type PageBoundary } from '../../services/vitraEngine';
+import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService';
+import { startMeasure, type VitraMeasureHandle, type PageBoundary } from '../../engine';
 import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
 import styles from './PaginatedReaderView.module.css';
 

@@ -2,7 +2,7 @@ import {
     useRef, useEffect, useState, useCallback, useLayoutEffect,
     forwardRef, useImperativeHandle, useMemo
 } from 'react';
-import type { ContentProvider, SpineItemInfo } from '../../services/contentProvider';
+import type { ContentProvider, SpineItemInfo } from '../../engine/core/contentProvider';
 import { ShadowRenderer, ReaderStyleConfig, segmentPool } from './ShadowRenderer';
 import {
     shouldPreloadChapter,
@@ -18,8 +18,8 @@ import { useScrollInertia } from '../../hooks/useScrollInertia';
 import { useScrollEvents } from '../../hooks/useScrollEvents';
 import { db } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
-import { preprocessChapterContent } from '../../services/chapterPreprocessService';
-import { buildChapterMetaVector, batchUpdateSegmentHeights, type ChapterMetaVector, type SegmentMeta } from '../../services/vitraEngine';
+import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService';
+import { buildChapterMetaVector, batchUpdateSegmentHeights, type ChapterMetaVector, type SegmentMeta } from '../../engine';
 import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
 import { clampNumber } from '../../utils/mathUtils';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';

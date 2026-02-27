@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { BookFormat } from './contentProvider'
+import type { BookFormat } from '../engine/core/contentProvider'
 
 // ─── Data Models ────────────────────────────────────────────
 

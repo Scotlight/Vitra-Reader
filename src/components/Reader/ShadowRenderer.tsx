@@ -3,7 +3,7 @@ import { clampNumber } from '../../utils/mathUtils';
 import styles from './ShadowRenderer.module.css';
 import { waitForAssetLoad, getContainerHeight } from '../../utils/assetLoader';
 import { generateCSSOverride, generatePaginatedCSSOverride, extractStyles, removeStyleTags, scopeStyles } from '../../utils/styleProcessor';
-import { sanitizeChapterHtml, sanitizeStyleSheets } from '../../utils/contentSanitizer';
+import { sanitizeChapterHtml, sanitizeStyleSheets } from '../../engine/core/contentSanitizer';
 import {
   buildReaderCssTemplate,
   buildVitraVectorRenderPlan,
@@ -14,7 +14,7 @@ import {
   runVitraRenderStage,
   SegmentDomPool,
   type SegmentMeta,
-} from '../../services/vitraEngine';
+} from '../../engine';
 
 const LARGE_CHAPTER_HTML_THRESHOLD = DEFAULT_VITRA_VECTOR_CONFIG.largeChapterThreshold;
 const CHUNK_APPEND_BATCH_SIZE = 120;
