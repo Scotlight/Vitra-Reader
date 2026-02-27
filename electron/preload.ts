@@ -10,7 +10,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setAutoStartOnLogin: (enabled: boolean) => ipcRenderer.invoke('system:setAutoStartOnLogin', enabled),
     setWindowTheme: (payload: { themeId: string; customBgColor?: string | null; customTextColor?: string | null }) => ipcRenderer.send('window:setTheme', payload),
     openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
-    webdavSync: (method: 'upload' | 'download' | 'test' | 'head', config: any) => ipcRenderer.invoke(`webdav:${method}`, config),
+    webdavSync: (method: 'upload' | 'download' | 'test' | 'head', config: { url: string; username: string; password: string; data?: string; ifMatch?: string; ifNoneMatch?: string }) => ipcRenderer.invoke(`webdav:${method}`, config),
     translateRequest: (payload: { url: string; method?: 'GET' | 'POST'; headers?: Record<string, string>; body?: string }) =>
         ipcRenderer.invoke('translate:request', payload),
     safeStorageEncrypt: (plaintext: string) => ipcRenderer.invoke('safeStorage:encrypt', plaintext),

@@ -383,10 +383,10 @@ ipcMain.handle('system:getProcessMemoryInfo', async () => {
             mainMemory,
             processMetrics,
         }
-    } catch (error: any) {
+    } catch (error: unknown) {
         return {
             success: false,
-            error: error?.message || String(error),
+            error: error instanceof Error ? error.message : String(error),
             timestamp: Date.now(),
         }
     }
@@ -601,8 +601,8 @@ ipcMain.handle('translate:request', async (_, payload: {
                 request.write(payload.body)
             }
             request.end()
-        } catch (error: any) {
-            resolve({ success: false, error: error?.message || String(error) })
+        } catch (error: unknown) {
+            resolve({ success: false, error: error instanceof Error ? error.message : String(error) })
         }
     })
 })
