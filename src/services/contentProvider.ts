@@ -1,4 +1,7 @@
-export type BookFormat = 'epub' | 'pdf' | 'txt' | 'mobi' | 'azw' | 'azw3' | 'html' | 'xml' | 'md' | 'fb2'
+export type BookFormat =
+    | 'epub' | 'pdf' | 'txt' | 'mobi' | 'azw' | 'azw3'
+    | 'html' | 'xml' | 'md' | 'fb2'
+    | 'docx' | 'cbz' | 'cbt' | 'cbr' | 'cb7'
 
 export interface TocItem {
     id: string
@@ -101,6 +104,11 @@ function detectByExtension(filename: string): BookFormat {
     if (ext === 'xml') return 'xml'
     if (ext === 'md') return 'md'
     if (ext === 'fb2') return 'fb2'
+    if (ext === 'docx') return 'docx'
+    if (ext === 'cbz') return 'cbz'
+    if (ext === 'cbt') return 'cbt'
+    if (ext === 'cbr') return 'cbr'
+    if (ext === 'cb7') return 'cb7'
     return 'epub'
 }
 
@@ -126,5 +134,5 @@ export function detectFormat(filename: string, data?: BinarySource): BookFormat 
 }
 
 export function stripBookExtension(filename: string): string {
-    return filename.replace(/\.(epub|pdf|txt|mobi|azw3?|htm|html|xhtml|xml|md|fb2)$/i, '')
+    return filename.replace(/\.(epub|pdf|txt|mobi|azw3?|htm|html|xhtml|xml|md|fb2|docx|cbz|cbt|cbr|cb7)$/i, '')
 }

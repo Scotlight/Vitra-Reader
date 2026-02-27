@@ -102,6 +102,9 @@ export type { VitraCachedBook, VitraCacheStats } from './vitraBookCache';
 export { VitraSectionManager } from './vitraSectionManager';
 export type { VitraSectionManagerOptions, VitraSectionManagerStats } from './vitraSectionManager';
 
+// 适配器：VitraBook → ContentProvider
+export { VitraContentAdapter } from './vitraContentAdapter';
+
 // 搜索索引缓存 (5.3 辅助)
 export {
   upsertChapterIndex,

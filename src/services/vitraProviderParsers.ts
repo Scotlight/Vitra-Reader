@@ -232,11 +232,7 @@ function createSections(
   const stylesCache = new Map<number, readonly string[]>();
 
   const releaseSection = (spineIndex: number): void => {
-    const blobUrl = cache.get(spineIndex);
-    if (blobUrl) {
-      URL.revokeObjectURL(blobUrl);
-      cache.delete(spineIndex);
-    }
+    cache.delete(spineIndex);
     sizeCache.delete(spineIndex);
     stylesCache.delete(spineIndex);
     provider.unloadChapter(spineIndex);
@@ -254,21 +250,17 @@ function createSections(
       if (cached) return cached;
 
       const html = await provider.extractChapterHtml(spine.index);
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      const blobUrl = URL.createObjectURL(blob);
-      cache.set(spine.index, blobUrl);
-      sizeCache.set(spine.index, blob.size);
+      cache.set(spine.index, html);
+      sizeCache.set(spine.index, new Blob([html]).size);
 
-      // 加载关联样式（EPUB 有实际 CSS，其他格式返回空数组）
       if (!stylesCache.has(spine.index)) {
         const styles = await provider.extractChapterStyles(spine.index);
         stylesCache.set(spine.index, styles);
       }
 
-      // 建立搜索索引
       upsertChapterIndex(bookId, spine.index, html);
 
-      return blobUrl;
+      return html;
     },
     unload: () => releaseSection(spine.index),
     get styles() {

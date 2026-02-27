@@ -8,7 +8,10 @@ type AnyFormatString = BookFormat | string
 
 const REFLOWABLE_MODES: readonly PageTurnMode[] = ['paginated-single', 'paginated-double', 'scrolled-continuous']
 const FIXED_LAYOUT_MODES: readonly PageTurnMode[] = ['paginated-single']
-const FIXED_LAYOUT_FORMATS = new Set<string>(['pdf', 'PDF', 'djvu', 'DJVU'])
+const FIXED_LAYOUT_FORMATS = new Set<string>([
+    'pdf', 'PDF', 'djvu', 'DJVU',
+    'cbz', 'CBZ', 'cbt', 'CBT', 'cbr', 'CBR', 'cb7', 'CB7',
+])
 
 export interface ReaderRenderModeDecision {
     requestedMode: PageTurnMode

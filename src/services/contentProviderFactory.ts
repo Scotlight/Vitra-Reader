@@ -33,6 +33,8 @@ export async function createContentProvider(format: BookFormat, data: ArrayBuffe
             const { Fb2ContentProvider } = await import('./providers/fb2Provider')
             return new Fb2ContentProvider(data)
         }
+        default:
+            throw new Error(`[contentProviderFactory] 不支持的格式: ${format}，请使用 VitraPipeline`)
     }
 }
 
@@ -68,6 +70,24 @@ export async function parseBookMetadata(format: BookFormat, data: ArrayBuffer, f
         case 'fb2': {
             const { parseFb2Metadata } = await import('./providers/fb2Provider')
             return parseFb2Metadata(data, filename)
+        }
+        case 'docx':
+        case 'cbz':
+        case 'cbt':
+        case 'cbr':
+        case 'cb7': {
+            const { VitraPipeline } = await import('./vitraPipeline')
+            const pipeline = new VitraPipeline()
+            const handle = await pipeline.open({ buffer: data, filename })
+            const metadata = await handle.metadata
+            return {
+                title: metadata.title || filename.replace(/\.[^.]+$/, ''),
+                author: metadata.author.join(', ') || '',
+                description: metadata.description || '',
+                cover: null,
+                publisher: metadata.publisher || '',
+                language: metadata.language || '',
+            }
         }
     }
 }

@@ -4,8 +4,7 @@ import { clampInt, clampDecimal } from '../../utils/mathUtils'
 import { db, Highlight, Bookmark } from '../../services/storageService'
 import { useSettingsStore, type PageTurnMode } from '../../stores/useSettingsStore'
 import type { ContentProvider, TocItem, SearchResult, SpineItemInfo, BookFormat } from '../../services/contentProvider'
-import { createContentProvider } from '../../services/contentProviderFactory'
-import { resolveReaderRenderMode } from '../../services/vitraEngine'
+import { VitraPipeline, VitraContentAdapter, resolveReaderRenderMode } from '../../services/vitraEngine'
 import { ScrollReaderView, ScrollReaderHandle } from './ScrollReaderView'
 import { PaginatedReaderView, PaginatedReaderHandle } from './PaginatedReaderView'
 import { buildFontFamilyWithFallback } from '../../utils/fontFallback'
@@ -259,17 +258,24 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             setCurrentProgress(initialProgress)
             currentProgressRef.current = initialProgress
 
-            // 2. Initialize ContentProvider
+            // 2. Initialize VitraPipeline → VitraContentAdapter
             const bookData = file.data instanceof ArrayBuffer ? file.data.slice(0) : file.data
             const format = (bookMeta?.format || 'epub') as BookFormat
             setBookFormat(format)
             let cp: ContentProvider
             try {
-                cp = await createContentProvider(format, bookData as ArrayBuffer)
+                const pipeline = new VitraPipeline()
+                const handle = await pipeline.open({
+                    buffer: bookData as ArrayBuffer,
+                    filename: `${bookMeta?.title || bookId}.${format}`,
+                })
+                const vitraBook = await handle.ready
+                if (!mounted) { vitraBook.destroy(); return }
+                cp = new VitraContentAdapter(vitraBook, bookId, bookData as ArrayBuffer)
                 await cp.init()
             } catch (err) {
                 if (!mounted) return
-                console.error('[ReaderView] provider init failed:', err)
+                console.error('[ReaderView] Vitra pipeline init failed:', err)
                 return
             }
             if (!mounted) { cp.destroy(); return }
