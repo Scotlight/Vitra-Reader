@@ -75,8 +75,9 @@ export type { ArchiveLoader, ArchiveEntry } from './parsers/comicArchiveAdapters
 // 独立格式 Parser：DOCX
 export { VitraDocxParser } from './parsers/vitraDocxParser';
 
-// 独立格式 Parser：DJVU（骨架）
-export { VitraDjvuParser } from './parsers/vitraDjvuParser';
+// 独立格式 Parser：DJVU（骨架，依赖可选的 djvu.js GPL-3.0）
+// 不从桶导出以避免构建时拉入未安装的 djvu.js。
+// 如需使用请手动 import './parsers/vitraDjvuParser'。
 
 // 向量渲染规划器 (4.4)
 export {

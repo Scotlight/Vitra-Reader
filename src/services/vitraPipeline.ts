@@ -12,7 +12,6 @@ import {
   VitraTxtParser,
   VitraXmlParser,
 } from './vitraProviderParsers';
-import { VitraDjvuParser } from './parsers/vitraDjvuParser';
 import { VitraDocxParser } from './parsers/vitraDocxParser';
 import {
   VitraCbzParser,
@@ -92,7 +91,8 @@ export class VitraPipeline {
       case 'XML': return new VitraXmlParser(buffer, filename);
       case 'MD': return new VitraMdParser(buffer, filename);
       case 'FB2': return new VitraFb2Parser(buffer, filename);
-      case 'DJVU': return new VitraDjvuParser(buffer, filename);
+      case 'DJVU':
+        throw new Error('VitraPipeline: DJVU support requires optional dependency "djvu.js" (GPL-3.0). Install it and import VitraDjvuParser manually.');
       case 'DOCX': return new VitraDocxParser(buffer, filename);
       case 'CBZ': return new VitraCbzParser(buffer, filename);
       case 'CBT': return new VitraCbtParser(buffer, filename);
