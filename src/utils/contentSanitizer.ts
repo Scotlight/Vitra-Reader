@@ -14,6 +14,11 @@ const DANGEROUS_TAG_SELECTOR = [
     'applet',
     'base',
     'meta[http-equiv="refresh"]',
+    'form',
+    'input',
+    'button',
+    'textarea',
+    'select',
 ].join(',')
 
 function trimWrappedQuotes(value: string): string {
@@ -24,7 +29,11 @@ function trimWrappedQuotes(value: string): string {
     return trimmed
 }
 
-function escapeHtmlAttribute(value: string): string {
+export function escapeHtml(value: string): string {
+    return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+export function escapeHtmlAttribute(value: string): string {
     return value
         .replace(/&/g, '&amp;')
         .replace(/"/g, '&quot;')
@@ -49,7 +58,6 @@ function sanitizeProtocol(url: string): string {
 
     if (/^data:/i.test(lowered)) {
         if (/^data:(image|audio|video|font)\//i.test(lowered)) return url
-        if (/^data:application\/(octet-stream|pdf)/i.test(lowered)) return url
         return ''
     }
 
@@ -124,12 +132,8 @@ function sanitizeWithDomParser(html: string): {
     const root = parsed.getElementById('__bdise_sanitizer_root')
 
     if (!root) {
-        return {
-            htmlContent: html,
-            removedTagCount: 0,
-            removedAttributeCount: 0,
-            usedFallback: true,
-        }
+        // DOMParser 解析失败 — 不可返回未消毒的原始 HTML，降级到 regex 消毒
+        return sanitizeWithRegexFallback(html)
     }
 
     let removedTagCount = 0
@@ -197,6 +201,39 @@ function sanitizeWithDomParser(html: string): {
     }
 }
 
+/** 白名单标签 — EPUB 文档常用的安全 HTML 标签 */
+const ALLOWED_TAG_NAMES = new Set([
+    // 结构
+    'div', 'span', 'p', 'br', 'hr', 'section', 'article', 'aside', 'header', 'footer', 'nav', 'main',
+    // 标题
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    // 文本格式
+    'a', 'b', 'i', 'u', 's', 'em', 'strong', 'small', 'sub', 'sup', 'mark', 'del', 'ins',
+    'abbr', 'cite', 'code', 'pre', 'kbd', 'samp', 'var', 'time', 'dfn', 'q', 'bdi', 'bdo', 'wbr',
+    // 列表
+    'ul', 'ol', 'li', 'dl', 'dt', 'dd',
+    // 表格
+    'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption', 'col', 'colgroup',
+    // 媒体
+    'img', 'picture', 'source', 'figure', 'figcaption', 'audio', 'video',
+    // 引用/块级
+    'blockquote', 'details', 'summary', 'ruby', 'rt', 'rp',
+    // SVG 基础（行内图形）
+    'svg', 'path', 'g', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'text', 'tspan', 'defs', 'use', 'image', 'clippath', 'mask',
+    // MathML 基础
+    'math', 'mi', 'mn', 'mo', 'ms', 'mrow', 'msup', 'msub', 'mfrac', 'mover', 'munder', 'msqrt', 'mroot', 'mtable', 'mtr', 'mtd',
+])
+
+/** 白名单属性 — 所有标签通用安全属性 */
+const ALLOWED_ATTR_NAMES = new Set([
+    'id', 'class', 'lang', 'dir', 'title', 'role', 'aria-label', 'aria-hidden', 'aria-describedby',
+    'style', 'src', 'href', 'xlink:href', 'alt', 'width', 'height', 'srcset', 'poster',
+    'colspan', 'rowspan', 'scope', 'headers',
+    'viewbox', 'xmlns', 'xmlns:xlink', 'fill', 'stroke', 'stroke-width', 'd', 'transform',
+    'cx', 'cy', 'r', 'rx', 'ry', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'points',
+    'data-pdf-page',
+])
+
 function sanitizeWithRegexFallback(html: string): {
     htmlContent: string
     removedTagCount: number
@@ -206,47 +243,80 @@ function sanitizeWithRegexFallback(html: string): {
     let removedTagCount = 0
     let removedAttributeCount = 0
 
-    let sanitized = html
+    // 白名单模式：处理每个 HTML 标签，不在白名单内的标签被剥离（保留内容）
+    const sanitized = html.replace(/<\/?([a-zA-Z][a-zA-Z0-9-]*)\b([^>]*)?\/?>/gi, (fullMatch, tagName: string, attrsStr: string | undefined) => {
+        const tag = tagName.toLowerCase()
 
-    sanitized = sanitized.replace(/<\s*(script|iframe|frame|frameset|object|embed|applet|base|meta)\b[\s\S]*?(?:<\/\s*\1\s*>|\/?>)/gi, (_match) => {
-        removedTagCount += 1
-        return ''
-    })
-
-    sanitized = sanitized.replace(/\s+on[a-z0-9_-]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, (_match) => {
-        removedAttributeCount += 1
-        return ''
-    })
-
-    sanitized = sanitized.replace(/\s+(href|src|xlink:href|poster)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, (_match, attrName: string, rawValue: string) => {
-        const safeValue = sanitizeUrlValue(rawValue)
-        if (!safeValue) {
-            removedAttributeCount += 1
+        if (!ALLOWED_TAG_NAMES.has(tag)) {
+            removedTagCount += 1
+            // 自闭合危险标签完全移除；块级标签移除但保留内容
             return ''
         }
-        const decodedRaw = trimWrappedQuotes(rawValue)
-        if (safeValue !== decodedRaw) {
-            removedAttributeCount += 1
-        }
-        return ` ${attrName}="${escapeHtmlAttribute(safeValue)}"`
-    })
 
-    sanitized = sanitized.replace(/\s+srcset\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, (_match, rawValue: string) => {
-        const safeValue = sanitizeSrcSetValue(trimWrappedQuotes(rawValue))
-        if (!safeValue) {
-            removedAttributeCount += 1
-            return ''
-        }
-        return ` srcset="${escapeHtmlAttribute(safeValue)}"`
-    })
+        // 标签在白名单中 — 过滤属性
+        if (!attrsStr || !attrsStr.trim()) return fullMatch
 
-    sanitized = sanitized.replace(/\s+style\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, (_match, rawValue: string) => {
-        const safeStyle = sanitizeInlineStyleValue(trimWrappedQuotes(rawValue))
-        if (!safeStyle) {
-            removedAttributeCount += 1
-            return ''
+        const isClosing = fullMatch.startsWith('</')
+        if (isClosing) return fullMatch
+
+        const safeAttrs: string[] = []
+        const attrPattern = /([a-zA-Z][a-zA-Z0-9:_-]*)\s*(?:=\s*(?:"([^"]*)"|'([^']*)'|(\S+)))?/gi
+        let attrMatch: RegExpExecArray | null
+
+        while ((attrMatch = attrPattern.exec(attrsStr)) !== null) {
+            const attrName = attrMatch[1].toLowerCase()
+            const attrValue = attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? ''
+
+            // 拒绝 event handler 属性
+            if (attrName.startsWith('on')) {
+                removedAttributeCount += 1
+                continue
+            }
+
+            if (!ALLOWED_ATTR_NAMES.has(attrName)) {
+                removedAttributeCount += 1
+                continue
+            }
+
+            // URL 属性消毒
+            if (URL_LIKE_ATTRS.has(attrName)) {
+                const safeUrl = sanitizeUrlValue(attrValue)
+                if (!safeUrl) {
+                    removedAttributeCount += 1
+                    continue
+                }
+                safeAttrs.push(`${attrName}="${escapeHtmlAttribute(safeUrl)}"`)
+                continue
+            }
+
+            // srcset 消毒
+            if (attrName === 'srcset') {
+                const safeSrcSet = sanitizeSrcSetValue(attrValue)
+                if (!safeSrcSet) {
+                    removedAttributeCount += 1
+                    continue
+                }
+                safeAttrs.push(`srcset="${escapeHtmlAttribute(safeSrcSet)}"`)
+                continue
+            }
+
+            // style 消毒
+            if (attrName === 'style') {
+                const safeStyle = sanitizeInlineStyleValue(attrValue)
+                if (!safeStyle) {
+                    removedAttributeCount += 1
+                    continue
+                }
+                safeAttrs.push(`style="${escapeHtmlAttribute(safeStyle)}"`)
+                continue
+            }
+
+            safeAttrs.push(`${attrName}="${escapeHtmlAttribute(attrValue)}"`)
         }
-        return ` style="${escapeHtmlAttribute(safeStyle)}"`
+
+        const isSelfClosing = fullMatch.endsWith('/>')
+        const attrStr = safeAttrs.length > 0 ? ' ' + safeAttrs.join(' ') : ''
+        return `<${tagName}${attrStr}${isSelfClosing ? '/>' : '>'}`
     })
 
     return {

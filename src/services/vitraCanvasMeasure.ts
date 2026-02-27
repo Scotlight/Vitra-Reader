@@ -1,4 +1,5 @@
 import type { BlockMetrics } from '../types/vitraPagination'
+import { clampNumber } from '../utils/mathUtils'
 
 const COMPLEX_LAYOUT_SELECTOR = 'img,svg,video,audio,canvas,table,math,pre,code,figure,iframe,object,embed,input,textarea,select,button'
 const NON_BREAKABLE_TAGS = new Set(['img', 'svg', 'video', 'audio', 'canvas', 'table', 'pre', 'code', 'figure', 'math'])
@@ -32,9 +33,7 @@ interface CanvasMeasureState {
     cumulativeTop: number
 }
 
-function clampNumber(value: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, value))
-}
+
 
 function parseCssNumber(value: string, fallback = 0): number {
     const parsed = Number.parseFloat(value)

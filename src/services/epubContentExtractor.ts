@@ -4,6 +4,7 @@
  * BDISE 引擎通过此模块获取章节原始 HTML
  */
 import { Book } from 'epubjs';
+import type { EpubBookInternal, EpubSpineItem } from '../types/epubjs';
 import {
     resolveChapterDocumentResources,
     rewriteExternalStyleSheetUrls,
@@ -18,20 +19,20 @@ export interface SpineItemInfo {
 }
 
 interface SpineLookupResult {
-    bookAny: any;
-    spineItems: any[];
-    spineItem: any;
+    bookInternal: EpubBookInternal;
+    spineItems: EpubSpineItem[];
+    spineItem: EpubSpineItem;
 }
 
 /**
  * 获取 spine 列表
  */
 export function getSpineItems(book: Book): SpineItemInfo[] {
-    const bookAny = book as any;
-    const spineItems = bookAny?.spine?.spineItems;
+    const bookInternal = book as unknown as EpubBookInternal;
+    const spineItems = bookInternal?.spine?.spineItems;
     if (!Array.isArray(spineItems)) return [];
 
-    return spineItems.map((item: any, index: number) => ({
+    return spineItems.map((item, index) => ({
         index,
         href: item.href || '',
         id: item.idref || item.id || `spine-${index}`,
@@ -40,14 +41,14 @@ export function getSpineItems(book: Book): SpineItemInfo[] {
 }
 
 function lookupSpineItem(book: Book, spineIndex: number): SpineLookupResult {
-    const bookAny = book as any;
-    const spineItems = bookAny?.spine?.spineItems;
+    const bookInternal = book as unknown as EpubBookInternal;
+    const spineItems = bookInternal?.spine?.spineItems;
     if (!Array.isArray(spineItems) || spineIndex < 0 || spineIndex >= spineItems.length) {
         throw new Error(`[ContentExtractor] Invalid spine index: ${spineIndex}`);
     }
 
     return {
-        bookAny,
+        bookInternal,
         spineItems,
         spineItem: spineItems[spineIndex],
     };
@@ -61,10 +62,10 @@ export async function extractChapterHtml(
     book: Book,
     spineIndex: number
 ): Promise<string> {
-    const { bookAny, spineItem } = lookupSpineItem(book, spineIndex);
+    const { bookInternal, spineItem } = lookupSpineItem(book, spineIndex);
 
     // Load the section content via epub.js
-    await spineItem.load(bookAny.load.bind(bookAny));
+    await spineItem.load(bookInternal.load.bind(bookInternal));
 
     // Extract rendered HTML
     const doc = spineItem.document as Document | undefined;
@@ -72,7 +73,7 @@ export async function extractChapterHtml(
 
     if (doc?.body) {
         // Resolve internal resource URLs to blob URLs before extracting HTML
-        await resolveChapterDocumentResources(doc, spineItem, bookAny);
+        await resolveChapterDocumentResources(doc, spineItem, bookInternal);
         html = doc.body.innerHTML;
     } else if (typeof spineItem.serialize === 'function') {
         html = spineItem.serialize();
@@ -95,17 +96,17 @@ export async function extractChapterStyles(
     book: Book,
     spineIndex: number
 ): Promise<string[]> {
-    const { bookAny, spineItem } = lookupSpineItem(book, spineIndex);
+    const { bookInternal, spineItem } = lookupSpineItem(book, spineIndex);
 
     // Ensure loaded
     if (!spineItem.document) {
-        await spineItem.load(bookAny.load.bind(bookAny));
+        await spineItem.load(bookInternal.load.bind(bookInternal));
     }
 
     const doc = spineItem.document as Document | undefined;
     if (!doc) return [];
 
-    await resolveChapterDocumentResources(doc, spineItem, bookAny);
+    await resolveChapterDocumentResources(doc, spineItem, bookInternal);
     const styles: string[] = [];
 
     // Inline <style> tags
@@ -128,12 +129,12 @@ export async function extractChapterStyles(
                 const response = await fetch(href);
                 loadedStyle = await response.text();
             } else {
-                const rawLoaded = await bookAny.load(href);
+                const rawLoaded = await bookInternal.load(href);
                 loadedStyle = toStyleText(rawLoaded);
             }
 
             if (!loadedStyle) continue;
-            const rewritten = await rewriteExternalStyleSheetUrls(loadedStyle, spineItem, bookAny);
+            const rewritten = await rewriteExternalStyleSheetUrls(loadedStyle, spineItem, bookInternal);
             styles.push(rewritten);
         } catch (error) {
             console.warn(`[ContentExtractor] Failed to load stylesheet: ${href}`, error);
@@ -161,8 +162,8 @@ export async function extractChapterHeading(
     book: Book,
     spineIndex: number
 ): Promise<string> {
-    const { bookAny, spineItem } = lookupSpineItem(book, spineIndex);
-    await spineItem.load(bookAny.load.bind(bookAny));
+    const { bookInternal, spineItem } = lookupSpineItem(book, spineIndex);
+    await spineItem.load(bookInternal.load.bind(bookInternal));
 
     try {
         const doc = spineItem.document as Document | undefined;

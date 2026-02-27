@@ -19,8 +19,6 @@ export interface ChapterPreprocessResult {
     usedFallback: boolean
     stylesScoped: boolean
     segmentMetas?: SegmentMeta[]
-    /** Piece Table: 不可变 buffer，segmentMetas 通过 (bufferOffset, bufferLength) 索引 */
-    htmlBuffer?: string
 }
 
 export interface ChapterPreprocessRequest {

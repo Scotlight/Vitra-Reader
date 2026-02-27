@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react';
+import { clampNumber } from '../../utils/mathUtils';
 import styles from './ShadowRenderer.module.css';
 import { waitForAssetLoad, getContainerHeight } from '../../utils/assetLoader';
 import { generateCSSOverride, generatePaginatedCSSOverride, extractStyles, removeStyleTags, scopeStyles } from '../../utils/styleProcessor';
@@ -12,7 +13,6 @@ import {
   runVitraRenderStage,
 } from '../../services/vitraRenderPipeline';
 import type { SegmentMeta } from '../../types/vectorRender';
-import { resolveSegmentHtml } from '../../services/metaVectorManager';
 import { SegmentDomPool } from '../../utils/segmentDomPool';
 
 const LARGE_CHAPTER_HTML_THRESHOLD = DEFAULT_VITRA_VECTOR_CONFIG.largeChapterThreshold;
@@ -26,6 +26,40 @@ const SEGMENT_ASSET_SELECTOR = 'img,video,audio,source,svg,image';
 const MEDIA_LAYOUT_SELECTOR = 'img,video,picture,svg,canvas,figure,table,math';
 const MEDIA_SENSITIVE_LOAD_TIMEOUT_MS = 18_000;
 const MEDIA_SENSITIVE_MAX_TRACKED_IMAGES = 128;
+
+// ── 高度估算参数 ──
+const EST_TEXT_NODE_MIN_CHAR_WEIGHT = 24;
+const EST_ELEMENT_NODE_MIN_CHAR_WEIGHT = 40;
+const EST_ELEMENT_NODE_TAG_OVERHEAD = 32;
+const EST_MEDIA_ELEMENT_CHAR_BOOST = 260;
+const EST_UNKNOWN_NODE_CHAR_WEIGHT = 32;
+const EST_FONT_SIZE_MIN_PX = 11;
+const EST_FONT_SIZE_DEFAULT_PX = 16;
+const EST_PAGE_WIDTH_MIN_PX = 360;
+const EST_PAGE_WIDTH_MAX_PX = 1400;
+const EST_PAGE_WIDTH_DEFAULT_PX = 900;
+const EST_CHARS_PER_LINE_MIN = 18;
+const EST_CHAR_WIDTH_RATIO = 1.75;
+const EST_MIN_LINES = 2;
+const EST_LINE_HEIGHT_MIN_FACTOR = 1.25;
+const EST_LINE_HEIGHT_DEFAULT = 1.6;
+const EST_PARAGRAPH_SPACING_FACTOR_MIN = 1.04;
+const EST_PARAGRAPH_SPACING_NORMALIZE_DIVISOR = 220;
+const EST_HEIGHT_CORRECTION_MIN = 0.62;
+const EST_HEIGHT_CORRECTION_MAX = 2.4;
+
+// ── 渲染阶段资源加载参数 ──
+const RENDER_VECTORIZED_LOAD_TIMEOUT_MS = 9_000;
+const RENDER_LARGE_CHAPTER_LOAD_TIMEOUT_MS = 14_000;
+const RENDER_VECTORIZED_MAX_TRACKED_IMAGES = 10;
+const RENDER_LARGE_MAX_TRACKED_IMAGES = 16;
+const RENDER_NORMAL_MAX_TRACKED_IMAGES = 48;
+const CHUNK_APPEND_MIN_BATCH_SIZE = 40;
+
+// ── 水合阶段参数 ──
+const HYDRATE_MEDIA_CHECK_INTERVAL = 3;
+const HYDRATE_MEDIA_LOAD_TIMEOUT_MS = 4_000;
+const HYDRATE_MEDIA_MAX_TRACKED_IMAGES = 4;
 
 /** 模块级段 DOM 节点池单例 */
 export const segmentPool = new SegmentDomPool();
@@ -63,32 +97,29 @@ async function yieldForHydration(): Promise<void> {
   await yieldToBrowser();
 }
 
-function clampNumber(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
 
 function estimateNodeCharWeight(node: ChildNode): number {
   if (node.nodeType === Node.TEXT_NODE) {
-    return Math.max(24, (node.textContent || '').trim().length);
+    return Math.max(EST_TEXT_NODE_MIN_CHAR_WEIGHT, (node.textContent || '').trim().length);
   }
 
   if (node.nodeType === Node.ELEMENT_NODE) {
     const element = node as HTMLElement;
     const textLength = (element.textContent || '').length;
-    const mediaBoost = element.matches('img,svg,video,table,pre,code') ? 260 : 0;
-    return Math.max(40, textLength + 32 + mediaBoost);
+    const mediaBoost = element.matches('img,svg,video,table,pre,code') ? EST_MEDIA_ELEMENT_CHAR_BOOST : 0;
+    return Math.max(EST_ELEMENT_NODE_MIN_CHAR_WEIGHT, textLength + EST_ELEMENT_NODE_TAG_OVERHEAD + mediaBoost);
   }
 
-  return 32;
+  return EST_UNKNOWN_NODE_CHAR_WEIGHT;
 }
 
 function estimateSegmentHeight(charCount: number, readerStyles: ReaderStyleConfig): number {
-  const fontSize = Math.max(11, readerStyles.fontSize || 16);
-  const width = Math.max(360, Math.min(1400, readerStyles.pageWidth || 900));
-  const charsPerLine = Math.max(18, Math.floor((width / fontSize) * 1.75));
-  const estimatedLines = Math.max(2, Math.ceil(Math.max(1, charCount) / charsPerLine));
-  const lineHeightPx = Math.max(fontSize * 1.25, fontSize * (readerStyles.lineHeight || 1.6));
-  const paragraphFactor = Math.max(1.04, 1 + (readerStyles.paragraphSpacing || 0) / 220);
+  const fontSize = Math.max(EST_FONT_SIZE_MIN_PX, readerStyles.fontSize || EST_FONT_SIZE_DEFAULT_PX);
+  const width = Math.max(EST_PAGE_WIDTH_MIN_PX, Math.min(EST_PAGE_WIDTH_MAX_PX, readerStyles.pageWidth || EST_PAGE_WIDTH_DEFAULT_PX));
+  const charsPerLine = Math.max(EST_CHARS_PER_LINE_MIN, Math.floor((width / fontSize) * EST_CHAR_WIDTH_RATIO));
+  const estimatedLines = Math.max(EST_MIN_LINES, Math.ceil(Math.max(1, charCount) / charsPerLine));
+  const lineHeightPx = Math.max(fontSize * EST_LINE_HEIGHT_MIN_FACTOR, fontSize * (readerStyles.lineHeight || EST_LINE_HEIGHT_DEFAULT));
+  const paragraphFactor = Math.max(EST_PARAGRAPH_SPACING_FACTOR_MIN, 1 + (readerStyles.paragraphSpacing || 0) / EST_PARAGRAPH_SPACING_NORMALIZE_DIVISOR);
 
   return Math.max(
     VECTOR_MIN_SEGMENT_EST_HEIGHT,
@@ -187,12 +218,14 @@ async function appendHtmlContentChunked(
   const sourceBody = parsed.body;
 
   if (!sourceBody || sourceBody.childNodes.length === 0) {
-    container.innerHTML = html;
+    // DOMParser 解析失败 — 不直接 innerHTML（避免浏览器宽松解析构造危险标签）
+    // 降级为纯文本渲染
+    container.textContent = html;
     return;
   }
 
   const nodes = Array.from(sourceBody.childNodes);
-  const limit = Math.max(40, batchSize);
+  const limit = Math.max(CHUNK_APPEND_MIN_BATCH_SIZE, batchSize);
 
   for (let offset = 0; offset < nodes.length; offset += limit) {
     const fragment = document.createDocumentFragment();
@@ -284,8 +317,6 @@ export interface ShadowRendererProps {
   htmlFragments?: string[];
   /** Worker 侧向量化的段元数据 */
   segmentMetas?: SegmentMeta[];
-  /** Piece Table: 不可变 HTML buffer，segmentMetas 通过 (bufferOffset, bufferLength) 索引 */
-  htmlBuffer?: string;
   /** 章节唯一标识 */
   chapterId: string;
   /** 章节关联的外部 CSS 数组 */
@@ -317,7 +348,6 @@ export function ShadowRenderer({
   htmlContent,
   htmlFragments = [],
   segmentMetas,
-  htmlBuffer,
   chapterId,
   externalStyles = [],
   preprocessed = false,
@@ -412,14 +442,12 @@ export function ShadowRenderer({
           if (mode !== 'scroll' || !isLargeChapter) return [];
           // 优先使用 Worker 侧 segmentMetas，转为内部 ChapterVectorSegment 兼容格式
           if (segmentMetas && segmentMetas.length > 0) {
-            // Piece Table: 从 buffer 按需 slice 段内容，htmlBuffer 缺失时回退到 htmlContent
-            const buffer = htmlBuffer || htmlContent;
             return segmentMetas.map((meta): ChapterVectorSegment => ({
               index: meta.index,
               nodes: [],
               charCount: meta.charCount,
               estimatedHeight: meta.estimatedHeight,
-              _htmlContent: resolveSegmentHtml(buffer, meta),
+              _htmlContent: meta.htmlContent,
             }));
           }
           // 回退到主线程 DOMParser 向量化路径
@@ -485,7 +513,7 @@ export function ShadowRenderer({
                 .slice(0, initialSegmentCount)
                 .reduce((sum, seg) => sum + seg.estimatedHeight, 0);
               const correction = estimatedSeedHeight > 0
-                ? clampNumber(measuredSeedHeight / estimatedSeedHeight, 0.62, 2.4)
+                ? clampNumber(measuredSeedHeight / estimatedSeedHeight, EST_HEIGHT_CORRECTION_MIN, EST_HEIGHT_CORRECTION_MAX)
                 : 1;
 
               for (let idx = initialSegmentCount; idx < vectorSegments.length; idx += 1) {
@@ -514,10 +542,10 @@ export function ShadowRenderer({
             chapterSizeHint: cleanedHtml.length,
             timeoutMs: mediaSensitiveChapter
               ? MEDIA_SENSITIVE_LOAD_TIMEOUT_MS
-              : (canUseVectorized ? 9000 : (isLargeChapter ? 14000 : undefined)),
+              : (canUseVectorized ? RENDER_VECTORIZED_LOAD_TIMEOUT_MS : (isLargeChapter ? RENDER_LARGE_CHAPTER_LOAD_TIMEOUT_MS : undefined)),
             maxTrackedImages: mediaSensitiveChapter
               ? MEDIA_SENSITIVE_MAX_TRACKED_IMAGES
-              : (canUseVectorized ? 10 : (isLargeChapter ? 16 : 48)),
+              : (canUseVectorized ? RENDER_VECTORIZED_MAX_TRACKED_IMAGES : (isLargeChapter ? RENDER_LARGE_MAX_TRACKED_IMAGES : RENDER_NORMAL_MAX_TRACKED_IMAGES)),
             largeChapterThreshold: mediaSensitiveChapter
               ? Number.POSITIVE_INFINITY
               : LARGE_CHAPTER_HTML_THRESHOLD,
@@ -576,11 +604,11 @@ export function ShadowRenderer({
             pendingMeasureTargets.push(targetEl);
 
             const hasMediaAsset = targetEl.querySelector(SEGMENT_ASSET_SELECTOR);
-            if (idx % 3 === 0 && hasMediaAsset) {
+            if (idx % HYDRATE_MEDIA_CHECK_INTERVAL === 0 && hasMediaAsset) {
               await waitForAssetLoad(targetEl, {
                 chapterSizeHint: segment.charCount,
-                timeoutMs: 4000,
-                maxTrackedImages: 4,
+                timeoutMs: HYDRATE_MEDIA_LOAD_TIMEOUT_MS,
+                maxTrackedImages: HYDRATE_MEDIA_MAX_TRACKED_IMAGES,
                 largeChapterThreshold: LARGE_CHAPTER_HTML_THRESHOLD,
               });
             }
@@ -623,7 +651,7 @@ export function ShadowRenderer({
         cancelled = true;
       }
     };
-  }, [htmlContent, htmlFragments, segmentMetas, htmlBuffer, chapterId, externalStyles, preprocessed, onReady, onError, buildContentCss]);
+  }, [htmlContent, htmlFragments, segmentMetas, chapterId, externalStyles, preprocessed, onReady, onError, buildContentCss]);
 
   return (
     <div

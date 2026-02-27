@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { db } from '../services/storageService'
+import { db, type BookMeta, type BookFile, type ReadingProgress, type Bookmark, type Highlight } from '../services/storageService'
 
 export type SyncMode = 'full' | 'data' | 'files'
 export type RestoreMode = 'auto' | SyncMode
@@ -28,14 +28,45 @@ function buildBackupUrl(baseUrl: string, folderPath: string): string {
     return `${root}/${folder}/${BACKUP_FILENAME}`
 }
 
+// btoa/atob 用于纯二进制（0-255）ArrayBuffer 编码，不涉及 Unicode 文本，无兼容问题
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
-    const binary = atob(base64)
+    let binary: string
+    try {
+        binary = atob(base64)
+    } catch {
+        return new ArrayBuffer(0)
+    }
     const bytes = new Uint8Array(binary.length)
     for (let index = 0; index < binary.length; index += 1) {
         bytes[index] = binary.charCodeAt(index)
     }
     return bytes.buffer
 }
+
+/** 安全解析 JSON，失败返回 null */
+function safeJsonParse(data: string): unknown {
+    try {
+        return JSON.parse(data)
+    } catch {
+        return null
+    }
+}
+
+/** 校验同步数组字段：必须是数组且每项含指定 key */
+function validateSyncArray<T>(arr: unknown, requiredKey: string): T[] | undefined {
+    if (!Array.isArray(arr)) return undefined
+    return arr.filter(
+        (item) => item != null && typeof item === 'object' && requiredKey in item,
+    ) as T[]
+}
+
+/** 敏感 settings key — 不应通过 WebDAV 同步传输 */
+const SENSITIVE_SETTINGS_KEYS = new Set([
+    'translateConfig',
+    'webdavUrl', 'webdavUser', 'webdavPass', 'webdavPath',
+    'webdavRemoteEtag', 'webdavSyncMode', 'webdavRestoreMode', 'webdavReplaceBeforeRestore',
+    'lastSyncTime',
+])
 
 type WebdavAction = 'test' | 'upload' | 'download' | 'head'
 
@@ -80,6 +111,150 @@ async function webdavSyncWithRetry(
         }
     }
     return { success: false, error: lastError || `WebDAV ${action} failed` }
+}
+
+// ── 内部辅助函数（消除 autoSync / syncData / restoreData 间的重复逻辑）──
+
+interface SyncPayloadShape {
+    mode?: SyncMode
+    timestamp?: number
+    books?: unknown
+    progress?: unknown
+    bookmarks?: unknown
+    highlights?: unknown
+    settings?: unknown
+    bookFiles?: unknown
+}
+
+/** 构建上传 payload — 根据 syncMode 从 DB 读取数据 */
+async function buildUploadPayload(syncMode: SyncMode, timestamp: number): Promise<Record<string, unknown>> {
+    const payload: Record<string, unknown> = {
+        mode: syncMode,
+        timestamp,
+    }
+
+    if (syncMode === 'data' || syncMode === 'full') {
+        const [books, progress, bookmarks, highlights, settings] = await Promise.all([
+            db.books.toArray(),
+            db.progress.toArray(),
+            db.bookmarks.toArray(),
+            db.highlights.toArray(),
+            db.settings.toArray(),
+        ])
+        payload.books = books
+        payload.progress = progress
+        payload.bookmarks = bookmarks
+        payload.highlights = highlights
+        payload.settings = settings.filter((s: { key: string }) => !SENSITIVE_SETTINGS_KEYS.has(s.key))
+    }
+
+    if (syncMode === 'files' || syncMode === 'full') {
+        const [books, bookFiles] = await Promise.all([
+            db.books.toArray(),
+            db.bookFiles.toArray(),
+        ])
+        payload.books = payload.books || books
+        payload.bookFiles = bookFiles.map((item) => ({
+            id: item.id,
+            dataBase64: arrayBufferToBase64(item.data),
+        }))
+    }
+
+    return payload
+}
+
+/** ETag 冲突检测 + 上传 — 返回上传结果（成功/冲突/错误） */
+async function checkEtagAndUpload(
+    backupUrl: string,
+    webdavUser: string,
+    webdavPass: string,
+    data: string,
+    remoteEtag: string | null,
+): Promise<{ success: boolean; etag: string | null; conflicted: boolean; error?: string }> {
+    let ifMatch: string | undefined
+    let ifNoneMatch: string | undefined
+    let headEtag: string | null = null
+
+    const headRes = await webdavSyncWithRetry('head', {
+        url: backupUrl, username: webdavUser, password: webdavPass,
+    }, 1)
+
+    if (headRes.success) {
+        if (headRes.exists === false || headRes.statusCode === 404) {
+            ifNoneMatch = '*'
+        } else {
+            headEtag = normalizeEtag(headRes.etag)
+            if (headEtag) {
+                ifMatch = headEtag
+                if (remoteEtag && remoteEtag !== headEtag) {
+                    return { success: false, etag: null, conflicted: true }
+                }
+            }
+        }
+    }
+
+    const uploadRes = await webdavSyncWithRetry('upload', {
+        url: backupUrl, username: webdavUser, password: webdavPass,
+        data, ifMatch, ifNoneMatch,
+    })
+
+    if (!uploadRes.success) {
+        return {
+            success: false,
+            etag: null,
+            conflicted: uploadRes.statusCode === 412,
+            error: uploadRes.error,
+        }
+    }
+
+    const nextEtag = normalizeEtag(uploadRes.etag) || headEtag || remoteEtag
+    return { success: true, etag: nextEtag, conflicted: false }
+}
+
+/** 解析并应用下载的备份数据到本地 DB */
+async function applyDownloadedPayload(
+    payload: SyncPayloadShape,
+    resolvedMode: SyncMode,
+    clearFirst: boolean,
+): Promise<void> {
+    const applyData = resolvedMode === 'data' || resolvedMode === 'full'
+    const applyFiles = resolvedMode === 'files' || resolvedMode === 'full'
+
+    if (clearFirst) {
+        if (applyData) {
+            await Promise.all([
+                db.books.clear(),
+                db.progress.clear(),
+                db.bookmarks.clear(),
+                db.highlights.clear(),
+            ])
+        }
+        if (applyFiles) {
+            await db.bookFiles.clear()
+        }
+    }
+
+    const books = validateSyncArray<{ id: string }>(payload.books, 'id')
+    const progress = validateSyncArray<{ bookId: string }>(payload.progress, 'bookId')
+    const bookmarks = validateSyncArray<{ id: string }>(payload.bookmarks, 'id')
+    const highlights = validateSyncArray<{ id: string }>(payload.highlights, 'id')
+    const settings = validateSyncArray<{ key: string; value: unknown }>(payload.settings, 'key')
+    const bookFiles = validateSyncArray<{ id: string; dataBase64: string }>(payload.bookFiles, 'id')
+
+    if (applyData && books) await db.books.bulkPut(books as BookMeta[])
+    if (applyData && progress) await db.progress.bulkPut(progress as ReadingProgress[])
+    if (applyData && bookmarks) await db.bookmarks.bulkPut(bookmarks as Bookmark[])
+    if (applyData && highlights) await db.highlights.bulkPut(highlights as Highlight[])
+    if (applyData && settings) await db.settings.bulkPut(settings as { key: string; value: unknown }[])
+    if (applyFiles && bookFiles) {
+        const decodedFiles = bookFiles
+            .filter((item) => typeof item.dataBase64 === 'string')
+            .map((item) => ({
+                id: item.id,
+                data: base64ToArrayBuffer(item.dataBase64),
+            }))
+        await db.bookFiles.bulkPut(decodedFiles as BookFile[])
+    }
 }
 
 interface SyncState {
@@ -135,37 +310,16 @@ export const useSyncStore = create<SyncState>((set, get) => ({
                 })
                 if (!downloadRes.success || !downloadRes.data) return
 
-                const payload = JSON.parse(downloadRes.data) as {
-                    mode?: SyncMode
-                    timestamp?: number
-                    books?: Array<{ id: string; [key: string]: unknown }>
-                    progress?: Array<{ bookId: string; [key: string]: unknown }>
-                    bookmarks?: Array<{ id: string; [key: string]: unknown }>
-                    highlights?: Array<{ id: string; [key: string]: unknown }>
-                    settings?: Array<{ key: string; value: unknown }>
-                    bookFiles?: Array<{ id: string; dataBase64: string }>
-                }
+                const raw = safeJsonParse(downloadRes.data)
+                if (!raw || typeof raw !== 'object') return
+                const payload = raw as SyncPayloadShape
 
                 const localLast = get().lastSyncTime || 0
                 const remoteLast = payload.timestamp || 0
                 if (remoteLast <= localLast) return
 
                 const resolvedMode: SyncMode = payload.mode || 'data'
-                const applyData = resolvedMode === 'data' || resolvedMode === 'full'
-                const applyFiles = resolvedMode === 'files' || resolvedMode === 'full'
-
-                if (applyData && payload.books) await db.books.bulkPut(payload.books as any)
-                if (applyData && payload.progress) await db.progress.bulkPut(payload.progress as any)
-                if (applyData && payload.bookmarks) await db.bookmarks.bulkPut(payload.bookmarks as any)
-                if (applyData && payload.highlights) await db.highlights.bulkPut(payload.highlights as any)
-                if (applyData && payload.settings) await db.settings.bulkPut(payload.settings as any)
-                if (applyFiles && payload.bookFiles) {
-                    const decodedFiles = payload.bookFiles.map((item) => ({
-                        id: item.id,
-                        data: base64ToArrayBuffer(item.dataBase64),
-                    }))
-                    await db.bookFiles.bulkPut(decodedFiles as any)
-                }
+                await applyDownloadedPayload(payload, resolvedMode, false)
 
                 const downloadedEtag = normalizeEtag(downloadRes.etag)
                 if (downloadedEtag) {
@@ -184,87 +338,23 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
             // interval / exit: upload local to cloud
             const now = Date.now()
-            const payload: Record<string, unknown> = {
-                mode: syncMode,
-                timestamp: now,
-            }
+            const payload = await buildUploadPayload(syncMode, now)
+            const result = await checkEtagAndUpload(backupUrl, webdavUser, webdavPass, JSON.stringify(payload), remoteEtag)
 
-            if (syncMode === 'data' || syncMode === 'full') {
-                const [books, progress, bookmarks, highlights, settings] = await Promise.all([
-                    db.books.toArray(),
-                    db.progress.toArray(),
-                    db.bookmarks.toArray(),
-                    db.highlights.toArray(),
-                    db.settings.toArray(),
-                ])
-                payload.books = books
-                payload.progress = progress
-                payload.bookmarks = bookmarks
-                payload.highlights = highlights
-                payload.settings = settings
-            }
-
-            if (syncMode === 'files' || syncMode === 'full') {
-                const [books, bookFiles] = await Promise.all([
-                    db.books.toArray(),
-                    db.bookFiles.toArray(),
-                ])
-                payload.books = payload.books || books
-                payload.bookFiles = bookFiles.map((item) => ({
-                    id: item.id,
-                    dataBase64: arrayBufferToBase64(item.data),
-                }))
-            }
-
-            let ifMatch: string | undefined
-            let ifNoneMatch: string | undefined
-            let headEtag: string | null = null
-
-            const headRes = await webdavSyncWithRetry('head', {
-                url: backupUrl,
-                username: webdavUser,
-                password: webdavPass,
-            }, 1)
-
-            if (headRes.success) {
-                if (headRes.exists === false || headRes.statusCode === 404) {
-                    ifNoneMatch = '*'
-                } else {
-                    headEtag = normalizeEtag(headRes.etag)
-                    if (headEtag) {
-                        ifMatch = headEtag
-                        if (remoteEtag && remoteEtag !== headEtag) {
-                            set({ syncStatus: '检测到云端更新，自动同步已跳过（避免覆盖）' })
-                            return
-                        }
-                    }
-                }
-            }
-
-            const uploadRes = await webdavSyncWithRetry('upload', {
-                url: backupUrl,
-                username: webdavUser,
-                password: webdavPass,
-                data: JSON.stringify(payload),
-                ifMatch,
-                ifNoneMatch,
-            })
-
-            if (!uploadRes.success) {
-                if (uploadRes.statusCode === 412) {
-                    set({ syncStatus: '自动同步冲突（云端已变更），请先恢复后再同步' })
+            if (!result.success) {
+                if (result.conflicted) {
+                    set({ syncStatus: '检测到云端更新，自动同步已跳过（避免覆盖）' })
                 }
                 return
             }
 
-            const nextEtag = normalizeEtag(uploadRes.etag) || headEtag || remoteEtag
-            if (nextEtag) {
-                await db.settings.put({ key: 'webdavRemoteEtag', value: nextEtag })
+            if (result.etag) {
+                await db.settings.put({ key: 'webdavRemoteEtag', value: result.etag })
             }
 
             set({
                 lastSyncTime: now,
-                remoteEtag: nextEtag,
+                remoteEtag: result.etag,
                 syncStatus: reason === 'interval' ? '自动同步完成' : '退出前同步完成',
             })
             await db.settings.put({ key: 'lastSyncTime', value: now })
@@ -329,8 +419,8 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
             if (!testRes.success) throw new Error(testRes.error || '连接失败')
             set({ syncStatus: '连接成功，可进行绑定和同步' })
-        } catch (error: any) {
-            set({ syncStatus: `连接失败: ${error?.message || error}` })
+        } catch (error: unknown) {
+            set({ syncStatus: `连接失败: ${error instanceof Error ? error.message : String(error)}` })
         } finally {
             set({ isTesting: false })
         }
@@ -348,93 +438,28 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         try {
             const now = Date.now()
             const backupUrl = buildBackupUrl(webdavUrl, webdavPath)
-            const payload: Record<string, unknown> = {
-                mode: syncMode,
-                timestamp: now,
-            }
+            const payload = await buildUploadPayload(syncMode, now)
 
-            if (syncMode === 'data' || syncMode === 'full') {
-                const [books, progress, bookmarks, highlights, settings] = await Promise.all([
-                    db.books.toArray(),
-                    db.progress.toArray(),
-                    db.bookmarks.toArray(),
-                    db.highlights.toArray(),
-                    db.settings.toArray(),
-                ])
-                payload.books = books
-                payload.progress = progress
-                payload.bookmarks = bookmarks
-                payload.highlights = highlights
-                payload.settings = settings
-            }
-
-            if (syncMode === 'files' || syncMode === 'full') {
-                const [books, bookFiles] = await Promise.all([
-                    db.books.toArray(),
-                    db.bookFiles.toArray(),
-                ])
-                payload.books = payload.books || books
-                payload.bookFiles = bookFiles.map((item) => ({
-                    id: item.id,
-                    dataBase64: arrayBufferToBase64(item.data),
-                }))
-            }
-
-            const backupData = JSON.stringify(payload)
-
-            let ifMatch: string | undefined
-            let ifNoneMatch: string | undefined
-            let headEtag: string | null = null
-
-            const headRes = await webdavSyncWithRetry('head', {
-                url: backupUrl,
-                username: webdavUser,
-                password: webdavPass,
-            }, 1)
-
-            if (headRes.success) {
-                if (headRes.exists === false || headRes.statusCode === 404) {
-                    ifNoneMatch = '*'
-                } else {
-                    headEtag = normalizeEtag(headRes.etag)
-                    if (headEtag) {
-                        ifMatch = headEtag
-                        if (remoteEtag && remoteEtag !== headEtag) {
-                            throw new Error('云端备份已在其他设备更新，请先恢复或重新拉取后再同步')
-                        }
-                    }
-                }
-            }
-
-            // 2. Upload
             set({ syncStatus: `Uploading (${syncMode})...` })
-            const uploadRes = await webdavSyncWithRetry('upload', {
-                url: backupUrl,
-                username: webdavUser,
-                password: webdavPass,
-                data: backupData,
-                ifMatch,
-                ifNoneMatch,
-            })
+            const result = await checkEtagAndUpload(backupUrl, webdavUser, webdavPass, JSON.stringify(payload), remoteEtag)
 
-            if (!uploadRes.success) {
-                if (uploadRes.statusCode === 412) {
+            if (!result.success) {
+                if (result.conflicted) {
                     throw new Error('同步冲突：云端文件已被更新，请先恢复后再同步')
                 }
-                throw new Error(uploadRes.error)
+                throw new Error(result.error)
             }
 
-            const nextEtag = normalizeEtag(uploadRes.etag) || headEtag || remoteEtag
-            if (nextEtag) {
-                await db.settings.put({ key: 'webdavRemoteEtag', value: nextEtag })
+            if (result.etag) {
+                await db.settings.put({ key: 'webdavRemoteEtag', value: result.etag })
             }
 
-            set({ syncStatus: 'Sync Complete', lastSyncTime: now, remoteEtag: nextEtag })
+            set({ syncStatus: 'Sync Complete', lastSyncTime: now, remoteEtag: result.etag })
             await db.settings.put({ key: 'lastSyncTime', value: now })
 
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error('Sync failed:', e)
-            set({ syncStatus: `Error: ${e.message || e}` })
+            set({ syncStatus: `Error: ${e instanceof Error ? e.message : String(e)}` })
         } finally {
             set({ isSyncing: false })
             setTimeout(() => set({ syncStatus: '' }), 3000)
@@ -462,52 +487,18 @@ export const useSyncStore = create<SyncState>((set, get) => ({
                 await db.settings.put({ key: 'webdavRemoteEtag', value: downloadedEtag })
             }
 
-            const payload = JSON.parse(downloadRes.data) as {
-                mode?: SyncMode
-                books?: Array<{ id: string; [key: string]: unknown }>
-                progress?: Array<{ bookId: string; [key: string]: unknown }>
-                bookmarks?: Array<{ id: string; [key: string]: unknown }>
-                highlights?: Array<{ id: string; [key: string]: unknown }>
-                settings?: Array<{ key: string; value: unknown }>
-                bookFiles?: Array<{ id: string; dataBase64: string }>
-            }
+            const raw = safeJsonParse(downloadRes.data)
+            if (!raw || typeof raw !== 'object') throw new Error('备份数据格式无效')
+            const payload = raw as SyncPayloadShape
 
             const resolvedMode: SyncMode = restoreMode === 'auto' ? (payload.mode || 'data') : restoreMode
-            const applyData = resolvedMode === 'data' || resolvedMode === 'full'
-            const applyFiles = resolvedMode === 'files' || resolvedMode === 'full'
-
-            if (replaceBeforeRestore) {
-                if (applyData) {
-                    await Promise.all([
-                        db.books.clear(),
-                        db.progress.clear(),
-                        db.bookmarks.clear(),
-                        db.highlights.clear(),
-                    ])
-                }
-                if (applyFiles) {
-                    await db.bookFiles.clear()
-                }
-            }
-
-            if (applyData && payload.books) await db.books.bulkPut(payload.books as any)
-            if (applyData && payload.progress) await db.progress.bulkPut(payload.progress as any)
-            if (applyData && payload.bookmarks) await db.bookmarks.bulkPut(payload.bookmarks as any)
-            if (applyData && payload.highlights) await db.highlights.bulkPut(payload.highlights as any)
-            if (applyData && payload.settings) await db.settings.bulkPut(payload.settings as any)
-            if (applyFiles && payload.bookFiles) {
-                const decodedFiles = payload.bookFiles.map((item) => ({
-                    id: item.id,
-                    data: base64ToArrayBuffer(item.dataBase64),
-                }))
-                await db.bookFiles.bulkPut(decodedFiles as any)
-            }
+            await applyDownloadedPayload(payload, resolvedMode, replaceBeforeRestore)
 
             await db.settings.put({ key: 'webdavSyncMode', value: resolvedMode })
             set({ syncMode: resolvedMode, remoteEtag: downloadedEtag, syncStatus: `恢复完成（${resolvedMode}）` })
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Restore failed:', error)
-            set({ syncStatus: `恢复失败: ${error?.message || error}` })
+            set({ syncStatus: `恢复失败: ${error instanceof Error ? error.message : String(error)}` })
         } finally {
             set({ isRestoring: false })
         }

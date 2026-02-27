@@ -65,6 +65,7 @@ export class VitraDjvuParser extends VitraBaseParser {
         return null;
       },
       getCover: async () => null,
+      search: () => [],
       destroy,
     };
   }
@@ -83,6 +84,7 @@ export class VitraDjvuParser extends VitraBaseParser {
     pageCount: number,
   ): { sections: VitraBookSection[]; destroy: () => void } {
     const urlCache = new Map<number, string>();
+    const imgUrlCache = new Map<number, string>();
 
     const sections: VitraBookSection[] = Array.from({ length: pageCount }, (_, index) => ({
       id: index,
@@ -107,6 +109,7 @@ export class VitraDjvuParser extends VitraBaseParser {
         });
 
         const imgUrl = URL.createObjectURL(pngBlob);
+        imgUrlCache.set(index, imgUrl);
         const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
 html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#fff}
@@ -124,6 +127,11 @@ img{display:block;max-width:100%;max-height:100%;margin:auto;object-fit:contain}
           URL.revokeObjectURL(url);
           urlCache.delete(index);
         }
+        const img = imgUrlCache.get(index);
+        if (img) {
+          URL.revokeObjectURL(img);
+          imgUrlCache.delete(index);
+        }
       },
     }));
 
@@ -132,6 +140,8 @@ img{display:block;max-width:100%;max-height:100%;margin:auto;object-fit:contain}
       destroy: () => {
         for (const url of urlCache.values()) URL.revokeObjectURL(url);
         urlCache.clear();
+        for (const url of imgUrlCache.values()) URL.revokeObjectURL(url);
+        imgUrlCache.clear();
       },
     };
   }

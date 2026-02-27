@@ -7,11 +7,17 @@ import type {
 import { stripBookExtension } from './contentProvider';
 import { createContentProvider, parseBookMetadata } from './contentProviderFactory';
 import { VitraBaseParser } from './vitraBaseParser';
+import {
+  upsertChapterIndex,
+  searchBookIndex,
+  clearBookIndex,
+} from './searchIndexCache';
 import type {
   VitraBook,
   VitraBookFormat,
   VitraBookMetadata,
   VitraBookSection,
+  VitraSearchResult,
   VitraTocItem,
 } from '../types/vitraBook';
 
@@ -79,7 +85,8 @@ export class VitraProviderBackedParser extends VitraBaseParser {
     const coverBlob = toCoverBlob((rawMetadata as RawMetadata).cover);
     const spineItems = provider.getSpineItems();
     const toc = buildTocWithFallback(provider.getToc(), spineItems);
-    const { sections, releaseAll } = createSections(spineItems, provider);
+    const bookId = `vitra-${this.filename}`;
+    const { sections, releaseAll } = createSections(spineItems, provider, bookId);
 
     return createBookObject({
       format: this.format,
@@ -89,6 +96,7 @@ export class VitraProviderBackedParser extends VitraBaseParser {
       provider,
       coverBlob,
       releaseSections: releaseAll,
+      bookId,
     });
   }
 }
@@ -214,12 +222,14 @@ function decodeSafe(value: string): string {
 function createSections(
   spineItems: readonly SpineItemInfo[],
   provider: ContentProvider,
+  bookId: string,
 ): {
   readonly sections: readonly VitraBookSection[];
   readonly releaseAll: () => void;
 } {
   const cache = new Map<number, string>();
   const sizeCache = new Map<number, number>();
+  const stylesCache = new Map<number, readonly string[]>();
 
   const releaseSection = (spineIndex: number): void => {
     const blobUrl = cache.get(spineIndex);
@@ -228,6 +238,7 @@ function createSections(
       cache.delete(spineIndex);
     }
     sizeCache.delete(spineIndex);
+    stylesCache.delete(spineIndex);
     provider.unloadChapter(spineIndex);
   };
 
@@ -247,9 +258,22 @@ function createSections(
       const blobUrl = URL.createObjectURL(blob);
       cache.set(spine.index, blobUrl);
       sizeCache.set(spine.index, blob.size);
+
+      // 加载关联样式（EPUB 有实际 CSS，其他格式返回空数组）
+      if (!stylesCache.has(spine.index)) {
+        const styles = await provider.extractChapterStyles(spine.index);
+        stylesCache.set(spine.index, styles);
+      }
+
+      // 建立搜索索引
+      upsertChapterIndex(bookId, spine.index, html);
+
       return blobUrl;
     },
     unload: () => releaseSection(spine.index),
+    get styles() {
+      return stylesCache.get(spine.index) ?? [];
+    },
   }));
 
   const releaseAll = (): void => {
@@ -267,6 +291,7 @@ interface CreateBookObjectInput {
   readonly provider: ContentProvider;
   readonly coverBlob: Blob | null;
   readonly releaseSections: () => void;
+  readonly bookId: string;
 }
 
 function createBookObject(input: CreateBookObjectInput): VitraBook {
@@ -279,8 +304,10 @@ function createBookObject(input: CreateBookObjectInput): VitraBook {
     direction: 'auto',
     resolveHref: (href: string) => resolveHref(href, input.provider),
     getCover: async () => input.coverBlob,
+    search: (keyword: string): VitraSearchResult[] => searchBookIndex(input.bookId, keyword),
     destroy: () => {
       input.releaseSections();
+      clearBookIndex(input.bookId);
       input.provider.destroy();
     },
   };

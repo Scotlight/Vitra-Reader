@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { clampInt, clampDecimal } from '../../utils/mathUtils'
 import { db, Highlight, Bookmark } from '../../services/storageService'
 import { useSettingsStore, type PageTurnMode } from '../../stores/useSettingsStore'
 import type { ContentProvider, TocItem, SearchResult, SpineItemInfo, BookFormat } from '../../services/contentProvider'
@@ -90,17 +91,6 @@ const SMOOTH_DEFAULTS = Object.freeze({
     reverseWheelDirection: false,
 })
 
-function clampInt(value: number, min: number, max: number): number {
-    if (!Number.isFinite(value)) return min
-    return Math.min(max, Math.max(min, Math.round(value)))
-}
-
-function clampDecimal(value: number, min: number, max: number, precision: number): number {
-    if (!Number.isFinite(value)) return min
-    const safe = Math.min(max, Math.max(min, value))
-    return Number(safe.toFixed(precision))
-}
-
 export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const tocListRef = useRef<HTMLDivElement>(null)
     const providerRef = useRef<ContentProvider | null>(null)
@@ -124,9 +114,6 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const [isSearching, setIsSearching] = useState(false)
     const [systemFonts, setSystemFonts] = useState<string[]>([])
     const [loadingFonts, setLoadingFonts] = useState(false)
-    const [autoStartOnLogin, setAutoStartOnLogin] = useState(false)
-    const [autoStartSupported, setAutoStartSupported] = useState(false)
-    const [autoStartPending, setAutoStartPending] = useState(false)
     const [bookFormat, setBookFormat] = useState<BookFormat>('epub')
     const [provider, setProvider] = useState<ContentProvider | null>(null)
     const [bdiseParams, setBdiseParams] = useState({ initialSpineIndex: 0, initialScrollOffset: 0 })
@@ -178,20 +165,6 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         settings.updateSetting('smoothTailToHeadRatio', SMOOTH_DEFAULTS.tailToHeadRatio)
         settings.updateSetting('smoothAnimationEasing', SMOOTH_DEFAULTS.easing)
         settings.updateSetting('smoothReverseWheelDirection', SMOOTH_DEFAULTS.reverseWheelDirection)
-    }
-
-    const toggleAutoStartOnLogin = async (next: boolean) => {
-        if (!window.electronAPI?.setAutoStartOnLogin) return
-        setAutoStartPending(true)
-        try {
-            const result = await window.electronAPI.setAutoStartOnLogin(next)
-            setAutoStartSupported(Boolean(result.supported))
-            setAutoStartOnLogin(Boolean(result.enabled))
-        } catch (error) {
-            console.error('[ReaderView] Failed to update auto-start setting:', error)
-        } finally {
-            setAutoStartPending(false)
-        }
     }
 
     const normalizeHref = (href?: string) => {
@@ -257,32 +230,6 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             }
         }
         loadFonts()
-    }, [])
-
-    useEffect(() => {
-        let disposed = false
-
-        const loadAutoStartState = async () => {
-            if (!window.electronAPI?.getAutoStartOnLogin) return
-            setAutoStartPending(true)
-            try {
-                const result = await window.electronAPI.getAutoStartOnLogin()
-                if (disposed) return
-                setAutoStartSupported(Boolean(result.supported))
-                setAutoStartOnLogin(Boolean(result.enabled))
-            } catch (error) {
-                if (disposed) return
-                setAutoStartSupported(false)
-                console.warn('[ReaderView] Failed to read auto-start state:', error)
-            } finally {
-                if (!disposed) setAutoStartPending(false)
-            }
-        }
-
-        void loadAutoStartState()
-        return () => {
-            disposed = true
-        }
     }, [])
 
     // Load Book
@@ -633,14 +580,14 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             style={{
                 background: readerColors.bgColor,
                 color: readerColors.textColor,
-                ['--reader-bg-color' as any]: readerColors.bgColor,
-                ['--reader-text-color' as any]: readerColors.textColor,
-                ['--reader-font-family' as any]: resolvedReaderFontFamily,
-                ['--reader-font-size' as any]: `${settings.fontSize}px`,
-                ['--reader-line-height' as any]: String(settings.lineHeight),
-                ['--reader-letter-spacing' as any]: `${settings.letterSpacing}px`,
-                ['--reader-paragraph-spacing' as any]: `${settings.paragraphSpacing}px`,
-                ['--reader-text-align' as any]: settings.textAlign,
+                ['--reader-bg-color']: readerColors.bgColor,
+                ['--reader-text-color']: readerColors.textColor,
+                ['--reader-font-family']: resolvedReaderFontFamily,
+                ['--reader-font-size']: `${settings.fontSize}px`,
+                ['--reader-line-height']: String(settings.lineHeight),
+                ['--reader-letter-spacing']: `${settings.letterSpacing}px`,
+                ['--reader-paragraph-spacing']: `${settings.paragraphSpacing}px`,
+                ['--reader-text-align']: settings.textAlign,
             }}
         >
             {/* Top Toolbar */}
@@ -1264,137 +1211,94 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                                 </div>
 
                                 {effectivePageTurnMode === 'scrolled-continuous' && (
-                                    <div className={styles.smoothPanel}>
-                                        <div className={styles.smoothPanelTop}>
-                                            <div className={styles.smoothPanelTitleWrap}>
-                                                <div className={styles.smoothPanelTitle}>平滑滚动</div>
-                                                <div className={styles.smoothPanelDesc}>连续滚动模式下的滚轮与惯性参数。</div>
-                                            </div>
-                                            <div className={styles.smoothPanelSwitches}>
-                                                <label className={styles.smoothCheckbox}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={autoStartOnLogin}
-                                                        disabled={!autoStartSupported || autoStartPending}
-                                                        onChange={(e) => { void toggleAutoStartOnLogin(e.target.checked) }}
-                                                    />
-                                                    开机自启
-                                                </label>
-                                                <label className={styles.smoothCheckbox}>
+                                    <>
+                                        <div className={styles.divider} />
+                                        <div className={styles.settingsGroup}>
+                                            <div className={styles.smoothHeader}>
+                                                <span className={styles.smoothTitle}>平滑滚动</span>
+                                                <label className={styles.smoothToggle}>
                                                     <input
                                                         type="checkbox"
                                                         checked={settings.smoothScrollEnabled}
                                                         onChange={(e) => settings.updateSetting('smoothScrollEnabled', e.target.checked)}
                                                     />
-                                                    启用平滑滚动
+                                                    <span className={styles.smoothToggleTrack} />
                                                 </label>
                                             </div>
                                         </div>
-                                        {!autoStartSupported && (
-                                            <div className={styles.modeHint}>当前系统不支持“开机自启”控制。</div>
-                                        )}
-                                        <div className={styles.smoothPanelCard}>
-                                            <div className={styles.smoothProfileRow}>参数档案：默认（当前阅读器）</div>
-                                            <div className={styles.smoothGrid}>
-                                                <div className={styles.smoothNumbers}>
-                                                    <div className={styles.smoothNumberRow}>
-                                                        <span className={styles.smoothNumberLabel}>滚动步长（像素）</span>
-                                                        <input
-                                                            className={styles.smoothNumberInput}
-                                                            type="number"
-                                                            min={20}
-                                                            max={300}
-                                                            step={1}
-                                                            value={settings.smoothStepSizePx}
-                                                            disabled={!settings.smoothScrollEnabled}
-                                                            onChange={(e) => settings.updateSetting('smoothStepSizePx', clampInt(Number(e.target.value), 20, 300))}
-                                                        />
-                                                    </div>
-                                                    <div className={styles.smoothNumberRow}>
-                                                        <span className={styles.smoothNumberLabel}>动画时长（毫秒）</span>
-                                                        <input
-                                                            className={styles.smoothNumberInput}
-                                                            type="number"
-                                                            min={120}
-                                                            max={1200}
-                                                            step={10}
-                                                            value={settings.smoothAnimationTimeMs}
-                                                            disabled={!settings.smoothScrollEnabled}
-                                                            onChange={(e) => settings.updateSetting('smoothAnimationTimeMs', clampInt(Number(e.target.value), 120, 1200))}
-                                                        />
-                                                    </div>
-                                                    <div className={styles.smoothNumberRow}>
-                                                        <span className={styles.smoothNumberLabel}>加速判定间隔（毫秒）</span>
-                                                        <input
-                                                            className={styles.smoothNumberInput}
-                                                            type="number"
-                                                            min={10}
-                                                            max={400}
-                                                            step={5}
-                                                            value={settings.smoothAccelerationDeltaMs}
-                                                            disabled={!settings.smoothScrollEnabled}
-                                                            onChange={(e) => settings.updateSetting('smoothAccelerationDeltaMs', clampInt(Number(e.target.value), 10, 400))}
-                                                        />
-                                                    </div>
-                                                    <div className={styles.smoothNumberRow}>
-                                                        <span className={styles.smoothNumberLabel}>加速度上限（倍）</span>
-                                                        <input
-                                                            className={styles.smoothNumberInput}
-                                                            type="number"
-                                                            min={1}
-                                                            max={12}
-                                                            step={0.1}
-                                                            value={settings.smoothAccelerationMax}
-                                                            disabled={!settings.smoothScrollEnabled}
-                                                            onChange={(e) => settings.updateSetting('smoothAccelerationMax', clampDecimal(Number(e.target.value), 1, 12, 1))}
-                                                        />
-                                                    </div>
-                                                    <div className={styles.smoothNumberRow}>
-                                                        <span className={styles.smoothNumberLabel}>尾段/首段比值（倍）</span>
-                                                        <input
-                                                            className={styles.smoothNumberInput}
-                                                            type="number"
-                                                            min={1}
-                                                            max={8}
-                                                            step={0.1}
-                                                            value={settings.smoothTailToHeadRatio}
-                                                            disabled={!settings.smoothScrollEnabled}
-                                                            onChange={(e) => settings.updateSetting('smoothTailToHeadRatio', clampDecimal(Number(e.target.value), 1, 8, 1))}
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className={styles.smoothChecks}>
-                                                    <label className={styles.smoothCheckboxRow}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={settings.smoothAnimationEasing}
-                                                            disabled={!settings.smoothScrollEnabled}
-                                                            onChange={(e) => settings.updateSetting('smoothAnimationEasing', e.target.checked)}
-                                                        />
-                                                        启用缓动曲线
-                                                    </label>
-                                                    <label className={styles.smoothCheckboxRow}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={settings.smoothReverseWheelDirection}
-                                                            disabled={!settings.smoothScrollEnabled}
-                                                            onChange={(e) => settings.updateSetting('smoothReverseWheelDirection', e.target.checked)}
-                                                        />
-                                                        反转滚轮方向
-                                                    </label>
-                                                </div>
-                                            </div>
-                                            <div className={styles.smoothActions}>
-                                                <button
-                                                    className={styles.smallActionBtn}
-                                                    onClick={resetSmoothSettings}
-                                                    disabled={!settings.smoothScrollEnabled}
-                                                >
-                                                    重置为推荐值
-                                                </button>
-                                            </div>
+                                        <div className={styles.settingsGroup}>
+                                            <label>步长: {settings.smoothStepSizePx}px</label>
+                                            <input
+                                                type="range" min="20" max="300" step="1"
+                                                value={settings.smoothStepSizePx}
+                                                disabled={!settings.smoothScrollEnabled}
+                                                onChange={(e) => settings.updateSetting('smoothStepSizePx', clampInt(Number(e.target.value), 20, 300))}
+                                            />
                                         </div>
-                                    </div>
+                                        <div className={styles.settingsGroup}>
+                                            <label>动画时长: {settings.smoothAnimationTimeMs}ms</label>
+                                            <input
+                                                type="range" min="120" max="1200" step="10"
+                                                value={settings.smoothAnimationTimeMs}
+                                                disabled={!settings.smoothScrollEnabled}
+                                                onChange={(e) => settings.updateSetting('smoothAnimationTimeMs', clampInt(Number(e.target.value), 120, 1200))}
+                                            />
+                                        </div>
+                                        <div className={styles.settingsGroup}>
+                                            <label>加速间隔: {settings.smoothAccelerationDeltaMs}ms</label>
+                                            <input
+                                                type="range" min="10" max="400" step="5"
+                                                value={settings.smoothAccelerationDeltaMs}
+                                                disabled={!settings.smoothScrollEnabled}
+                                                onChange={(e) => settings.updateSetting('smoothAccelerationDeltaMs', clampInt(Number(e.target.value), 10, 400))}
+                                            />
+                                        </div>
+                                        <div className={styles.settingsGroup}>
+                                            <label>加速上限: {settings.smoothAccelerationMax}x</label>
+                                            <input
+                                                type="range" min="1" max="12" step="0.1"
+                                                value={settings.smoothAccelerationMax}
+                                                disabled={!settings.smoothScrollEnabled}
+                                                onChange={(e) => settings.updateSetting('smoothAccelerationMax', clampDecimal(Number(e.target.value), 1, 12, 1))}
+                                            />
+                                        </div>
+                                        <div className={styles.settingsGroup}>
+                                            <label>尾首比值: {settings.smoothTailToHeadRatio}x</label>
+                                            <input
+                                                type="range" min="1" max="8" step="0.1"
+                                                value={settings.smoothTailToHeadRatio}
+                                                disabled={!settings.smoothScrollEnabled}
+                                                onChange={(e) => settings.updateSetting('smoothTailToHeadRatio', clampDecimal(Number(e.target.value), 1, 8, 1))}
+                                            />
+                                        </div>
+                                        <div className={styles.smoothCheckList}>
+                                            <label className={styles.smoothCheckItem}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={settings.smoothAnimationEasing}
+                                                    disabled={!settings.smoothScrollEnabled}
+                                                    onChange={(e) => settings.updateSetting('smoothAnimationEasing', e.target.checked)}
+                                                />
+                                                缓动曲线
+                                            </label>
+                                            <label className={styles.smoothCheckItem}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={settings.smoothReverseWheelDirection}
+                                                    disabled={!settings.smoothScrollEnabled}
+                                                    onChange={(e) => settings.updateSetting('smoothReverseWheelDirection', e.target.checked)}
+                                                />
+                                                反转滚轮方向
+                                            </label>
+                                        </div>
+                                        <button
+                                            className={styles.smallActionBtn}
+                                            onClick={resetSmoothSettings}
+                                            disabled={!settings.smoothScrollEnabled}
+                                        >
+                                            重置为推荐值
+                                        </button>
+                                    </>
                                 )}
 
                                 <div className={styles.divider} />

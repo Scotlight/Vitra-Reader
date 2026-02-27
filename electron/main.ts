@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell, session, safeStorage } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -22,6 +22,41 @@ const THEME_BG_COLORS: Record<string, string> = {
 
 function isValidHexColor(value: string): boolean {
     return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value.trim())
+}
+
+// ─── Security Validators ────────────────────────────────────
+
+/** Only allow http/https — blocks file://, ftp://, data: etc. Used by translate + webdav. */
+function isAllowedHttpUrl(url: string): boolean {
+    try {
+        const parsed = new URL(url)
+        return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+    } catch {
+        return false
+    }
+}
+
+const ALLOWED_BOOK_EXTENSIONS = new Set([
+    '.epub', '.pdf', '.txt', '.mobi', '.azw', '.azw3',
+    '.htm', '.html', '.xhtml', '.xml', '.md', '.fb2',
+    '.docx', '.djvu', '.cbz', '.cbt', '.cbr', '.cb7',
+])
+
+function isAllowedFilePath(filePath: string): boolean {
+    if (!filePath || typeof filePath !== 'string') return false
+    if (!path.isAbsolute(filePath)) return false
+    const normalized = path.resolve(filePath)
+    const ext = path.extname(normalized).toLowerCase()
+    return ALLOWED_BOOK_EXTENSIONS.has(ext)
+}
+
+function isAllowedExternalUrl(url: string): boolean {
+    try {
+        const parsed = new URL(url)
+        return parsed.protocol === 'https:'
+    } catch {
+        return false
+    }
 }
 
 function resolveWindowBackground(themeId?: string, customBgColor?: string | null): string {
@@ -113,6 +148,34 @@ function createWindow() {
         },
     })
 
+    // ─── Security: Content Security Policy ────────────────
+    // 阻止 inline script 执行（XSS 纵深防御），允许 EPUB 所需的 inline style / blob / data 图片
+    const devOrigin = VITE_DEV_SERVER_URL ? (() => { try { return new URL(VITE_DEV_SERVER_URL).origin } catch { return '' } })() : ''
+    const scriptSrc = VITE_DEV_SERVER_URL
+        ? `'self' ${devOrigin} 'unsafe-eval'`   // dev 模式需要 Vite HMR 的 eval
+        : `'self'`
+    const cspValue = [
+        `default-src 'self'`,
+        `script-src ${scriptSrc}`,
+        `style-src 'self' 'unsafe-inline'`,
+        `img-src 'self' blob: data: vitra-res:`,
+        `font-src 'self' data: blob:`,
+        `media-src 'self' blob: data:`,
+        `connect-src 'self' ${devOrigin} https: http:`,
+        `worker-src 'self' blob:`,
+        `frame-src 'self' blob: data:`,
+        `object-src 'none'`,
+    ].join('; ')
+
+    win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+        callback({
+            responseHeaders: {
+                ...details.responseHeaders,
+                'Content-Security-Policy': [cspValue],
+            },
+        })
+    })
+
     // Show window when ready to prevent white screen
     win.once('ready-to-show', () => {
         win?.setMenuBarVisibility(false)
@@ -126,6 +189,26 @@ function createWindow() {
     } else {
         win.loadFile(path.join(RENDERER_DIST, 'index.html'))
     }
+
+    // ─── Security: restrict navigation ──────────────────────
+    const allowedOrigins = new Set<string>()
+    if (VITE_DEV_SERVER_URL) {
+        try { allowedOrigins.add(new URL(VITE_DEV_SERVER_URL).origin) } catch { /* noop */ }
+    }
+    // Production: file:// pages have origin 'null' or 'file://', handled by matching protocol
+    win.webContents.on('will-navigate', (event, navigationUrl) => {
+        try {
+            const parsed = new URL(navigationUrl)
+            // Allow dev server origin
+            if (allowedOrigins.has(parsed.origin)) return
+            // Allow file:// in production builds
+            if (parsed.protocol === 'file:') return
+        } catch { /* block malformed URLs */ }
+        event.preventDefault()
+    })
+
+    // Block all new window creation (target="_blank", window.open, etc.)
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 }
 
 function createTray() {
@@ -177,8 +260,11 @@ ipcMain.handle('dialog:openEpub', async () => {
     return files
 })
 
-// Read a file from disk
+// Read a file from disk (restricted to allowed book extensions)
 ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
+    if (!isAllowedFilePath(filePath)) {
+        throw new Error(`fs:readFile blocked: disallowed path "${filePath}"`)
+    }
     return fs.promises.readFile(filePath)
 })
 
@@ -348,6 +434,9 @@ function firstHeaderValue(value: string | string[] | undefined): string | undefi
 }
 
 ipcMain.handle('webdav:upload', async (_, { url, username, password, data, ifMatch, ifNoneMatch }) => {
+    if (!url || typeof url !== 'string' || !isAllowedHttpUrl(url)) {
+        return { success: false, error: `webdav:upload blocked: disallowed url "${url}"` }
+    }
     return new Promise((resolve) => {
         const request = net.request({
             method: 'PUT',
@@ -380,6 +469,9 @@ ipcMain.handle('webdav:upload', async (_, { url, username, password, data, ifMat
 })
 
 ipcMain.handle('webdav:download', async (_, { url, username, password }) => {
+    if (!url || typeof url !== 'string' || !isAllowedHttpUrl(url)) {
+        return { success: false, error: `webdav:download blocked: disallowed url "${url}"` }
+    }
     return new Promise((resolve) => {
         const request = net.request({ method: 'GET', url })
         request.setHeader('Authorization', 'Basic ' + Buffer.from(username + ':' + password).toString('base64'))
@@ -403,6 +495,9 @@ ipcMain.handle('webdav:download', async (_, { url, username, password }) => {
 })
 
 ipcMain.handle('webdav:head', async (_, { url, username, password }) => {
+    if (!url || typeof url !== 'string' || !isAllowedHttpUrl(url)) {
+        return { success: false, error: `webdav:head blocked: disallowed url "${url}"` }
+    }
     return new Promise((resolve) => {
         const request = net.request({ method: 'HEAD', url })
         request.setHeader('Authorization', 'Basic ' + Buffer.from(username + ':' + password).toString('base64'))
@@ -431,6 +526,9 @@ ipcMain.handle('webdav:head', async (_, { url, username, password }) => {
 })
 
 ipcMain.handle('webdav:test', async (_, { url, username, password }) => {
+    if (!url || typeof url !== 'string' || !isAllowedHttpUrl(url)) {
+        return { success: false, error: `webdav:test blocked: disallowed url "${url}"` }
+    }
     return new Promise((resolve) => {
         const request = net.request({ method: 'OPTIONS', url })
         request.setHeader('Authorization', 'Basic ' + Buffer.from(username + ':' + password).toString('base64'))
@@ -460,6 +558,11 @@ ipcMain.handle('translate:request', async (_, payload: {
             const url = payload?.url
             if (!url || typeof url !== 'string') {
                 resolve({ success: false, error: 'Missing request url' })
+                return
+            }
+
+            if (!isAllowedHttpUrl(url)) {
+                resolve({ success: false, error: `translate:request blocked: disallowed url protocol "${url}"` })
                 return
             }
 
@@ -504,6 +607,58 @@ ipcMain.handle('translate:request', async (_, payload: {
     })
 })
 
+ipcMain.handle('shell:openExternal', async (_event, url: string) => {
+    if (!url || typeof url !== 'string' || !isAllowedExternalUrl(url)) {
+        throw new Error(`shell:openExternal blocked: disallowed url "${url}"`)
+    }
+    return shell.openExternal(url)
+})
+
+// ─── Safe Storage (credential encryption) ───────────────────
+
+const SAFE_STORAGE_PREFIX = 'v1:'        // OS-level safeStorage 加密
+const OBFUSCATION_PREFIX = 'ob1:'        // safeStorage 不可用时的 base64 混淆
+
+ipcMain.handle('safeStorage:encrypt', (_event, plaintext: string) => {
+    if (!plaintext || typeof plaintext !== 'string') return ''
+    if (safeStorage.isEncryptionAvailable()) {
+        const encrypted = safeStorage.encryptString(plaintext)
+        return SAFE_STORAGE_PREFIX + encrypted.toString('base64')
+    }
+    // safeStorage 不可用：base64 混淆（非安全加密，但防肉眼明文）
+    return OBFUSCATION_PREFIX + Buffer.from(plaintext, 'utf8').toString('base64')
+})
+
+ipcMain.handle('safeStorage:decrypt', (_event, stored: string) => {
+    if (!stored || typeof stored !== 'string') return ''
+
+    if (stored.startsWith(SAFE_STORAGE_PREFIX)) {
+        const cipherBase64 = stored.slice(SAFE_STORAGE_PREFIX.length)
+        if (!safeStorage.isEncryptionAvailable()) return ''
+        try {
+            return safeStorage.decryptString(Buffer.from(cipherBase64, 'base64'))
+        } catch {
+            return ''
+        }
+    }
+
+    if (stored.startsWith(OBFUSCATION_PREFIX)) {
+        const b64 = stored.slice(OBFUSCATION_PREFIX.length)
+        try {
+            return Buffer.from(b64, 'base64').toString('utf8')
+        } catch {
+            return ''
+        }
+    }
+
+    // 无前缀 = 旧版明文数据（迁移兼容），原样返回
+    return stored
+})
+
+ipcMain.handle('safeStorage:isAvailable', () => {
+    return safeStorage.isEncryptionAvailable()
+})
+
 // ─── App Lifecycle ──────────────────────────────────────────
 
 app.on('window-all-closed', () => {
@@ -522,6 +677,12 @@ app.on('activate', () => {
 
 app.whenReady().then(() => {
     Menu.setApplicationMenu(null)
+
+    // Deny all permission requests (camera, microphone, geolocation, etc.)
+    session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+        callback(false)
+    })
+
     createWindow()
     createTray()
 })

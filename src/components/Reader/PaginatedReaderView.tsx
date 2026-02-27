@@ -3,13 +3,11 @@ import {
     forwardRef, useImperativeHandle,
 } from 'react';
 import type { ContentProvider, SpineItemInfo } from '../../services/contentProvider';
+import { releaseMediaResources } from '../../utils/mediaResourceCleanup';
+import { useSelectionMenu } from '../../hooks/useSelectionMenu';
 import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
 import { db } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
-import { SelectionMenu } from './SelectionMenu';
-import { NoteDialog } from './NoteDialog';
-import { TranslationDialog } from './TranslationDialog';
-import { getProviderLabel, translateText } from '../../services/translateService';
 import { preprocessChapterContent } from '../../services/chapterPreprocessService';
 import { startMeasure, type VitraMeasureHandle } from '../../services/vitraMeasure';
 import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
@@ -17,47 +15,6 @@ import type { PageBoundary } from '../../types/vitraPagination';
 import styles from './PaginatedReaderView.module.css';
 
 const HIGHLIGHT_IDLE_TIMEOUT_MS = 600;
-
-function revokeBlobUrl(rawUrl: string | null) {
-    if (!rawUrl || !rawUrl.startsWith('blob:')) return
-    try {
-        URL.revokeObjectURL(rawUrl)
-    } catch {
-        // ignore revoke errors
-    }
-}
-
-function releaseContainerMediaResources(container: HTMLElement) {
-    container.querySelectorAll('img').forEach((img) => {
-        revokeBlobUrl(img.getAttribute('src'))
-        const srcSet = img.getAttribute('srcset')
-        if (srcSet) {
-            srcSet.split(',').forEach((entry) => {
-                const url = entry.trim().split(/\s+/)[0]
-                revokeBlobUrl(url || null)
-            })
-        }
-        img.removeAttribute('srcset')
-        img.removeAttribute('src')
-    })
-
-    container.querySelectorAll('source').forEach((sourceEl) => {
-        revokeBlobUrl(sourceEl.getAttribute('src'))
-        sourceEl.removeAttribute('srcset')
-        sourceEl.removeAttribute('src')
-    })
-
-    container.querySelectorAll('video,audio').forEach((mediaEl) => {
-        revokeBlobUrl(mediaEl.getAttribute('src'))
-        mediaEl.removeAttribute('src')
-        mediaEl.querySelectorAll('source').forEach((sourceEl) => {
-            revokeBlobUrl(sourceEl.getAttribute('src'))
-            sourceEl.removeAttribute('src')
-        })
-    })
-
-    container.replaceChildren()
-}
 
 interface PaginatedReaderViewProps {
     provider: ContentProvider;
@@ -88,7 +45,6 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
 }, ref) => {
     const viewportRef = useRef<HTMLDivElement>(null);
     const columnRef = useRef<HTMLDivElement>(null);
-    const renderedHighlightsRef = useRef<Set<string>>(new Set());
     const pendingLastPageRef = useRef(false);
     const pendingSearchTextRef = useRef<string | null>(null);
     const isInitialLoadRef = useRef(true); // 初始加载标记
@@ -114,31 +70,14 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     const [chapterNode, setChapterNode] = useState<HTMLElement | null>(null);
 
     // Selection menu
-    const [selectionMenu, setSelectionMenu] = useState<{
-        visible: boolean; x: number; y: number; text: string; spineIndex: number;
-    }>({ visible: false, x: 0, y: 0, text: '', spineIndex: -1 });
-
-    // Note dialog
-    const [noteDialog, setNoteDialog] = useState<{
-        visible: boolean; text: string; spineIndex: number;
-    }>({ visible: false, text: '', spineIndex: -1 });
-    const [translateDialog, setTranslateDialog] = useState<{
-        visible: boolean;
-        sourceText: string;
-        translatedText: string;
-        loading: boolean;
-        error: string;
-        providerLabel: string;
-        fromCache: boolean;
-    }>({
-        visible: false,
-        sourceText: '',
-        translatedText: '',
-        loading: false,
-        error: '',
-        providerLabel: '-',
-        fromCache: false,
-    });
+    const getHighlightContainer = useCallback((_spineIndex: number): HTMLElement | null => {
+        return columnRef.current;
+    }, []);
+    const {
+        setSelectionMenu,
+        renderedHighlightsRef,
+        renderSelectionUI,
+    } = useSelectionMenu({ bookId, onSelectionSearch, getHighlightContainer });
 
     const spineItemsRef = useRef<SpineItemInfo[]>([]);
     const currentSpineIndexRef = useRef(currentSpineIndex);
@@ -353,7 +292,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         container.style.transform = 'translateX(0)';
 
         // 替换内容
-        releaseContainerMediaResources(container);
+        releaseMediaResources(container);
         container.appendChild(chapterNode);
 
         // 强制重排，确保上面的样式生效
@@ -707,128 +646,6 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         };
     }, []);
 
-    // ── Selection menu handlers ──
-    const dismissMenu = useCallback(() => {
-        setSelectionMenu(prev => ({ ...prev, visible: false }));
-        window.getSelection()?.removeAllRanges();
-    }, []);
-
-    const handleCopy = useCallback(() => {
-        navigator.clipboard.writeText(selectionMenu.text);
-        dismissMenu();
-    }, [selectionMenu.text, dismissMenu]);
-
-    const handleHighlight = useCallback(async (color: string) => {
-        const { text, spineIndex } = selectionMenu;
-        const id = crypto.randomUUID();
-        await db.highlights.add({
-            id, bookId, cfiRange: `bdise:${spineIndex}`, color, text, createdAt: Date.now(),
-        });
-        const container = columnRef.current;
-        if (container) {
-            const range = findTextInDOM(container, text);
-            if (range) {
-                highlightRange(range, id, color);
-                renderedHighlightsRef.current.add(id);
-            }
-        }
-        dismissMenu();
-    }, [selectionMenu, bookId, dismissMenu]);
-
-    const handleAddNote = useCallback(async () => {
-        setNoteDialog({
-            visible: true,
-            text: selectionMenu.text,
-            spineIndex: selectionMenu.spineIndex,
-        });
-        dismissMenu();
-    }, [selectionMenu, dismissMenu]);
-
-    const handleNoteSave = useCallback(async (note: string) => {
-        await db.bookmarks.add({
-            id: crypto.randomUUID(), bookId,
-            location: `bdise:${noteDialog.spineIndex}`,
-            title: noteDialog.text.slice(0, 80),
-            note,
-            createdAt: Date.now(),
-        });
-        setNoteDialog({ visible: false, text: '', spineIndex: -1 });
-    }, [noteDialog, bookId]);
-
-    const handleSearch = useCallback(() => {
-        const keyword = selectionMenu.text.trim();
-        if (keyword) onSelectionSearch?.(keyword);
-        dismissMenu();
-    }, [selectionMenu.text, onSelectionSearch, dismissMenu]);
-
-    const handleWebSearch = useCallback(() => {
-        const q = encodeURIComponent(selectionMenu.text.trim());
-        if (q) window.electronAPI.openExternal(`https://www.google.com/search?q=${q}`);
-        dismissMenu();
-    }, [selectionMenu.text, dismissMenu]);
-
-    const handleReadAloud = useCallback(() => {
-        const text = selectionMenu.text.trim();
-        if (!text) return;
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.lang = 'zh-CN';
-        utter.rate = 1;
-        window.speechSynthesis.speak(utter);
-        dismissMenu();
-    }, [selectionMenu.text, dismissMenu]);
-
-    const runTranslate = useCallback(async (text: string) => {
-        const sourceText = text.trim();
-        if (!sourceText) return;
-
-        setTranslateDialog({
-            visible: true,
-            sourceText,
-            translatedText: '',
-            loading: true,
-            error: '',
-            providerLabel: '-',
-            fromCache: false,
-        });
-
-        try {
-            const result = await translateText(sourceText);
-            if (!result.ok) {
-                setTranslateDialog((prev) => ({
-                    ...prev,
-                    loading: false,
-                    error: result.error || '翻译失败',
-                    providerLabel: getProviderLabel(result.provider),
-                    fromCache: false,
-                }));
-                return;
-            }
-
-            setTranslateDialog((prev) => ({
-                ...prev,
-                loading: false,
-                error: '',
-                translatedText: result.translatedText,
-                providerLabel: getProviderLabel(result.provider),
-                fromCache: result.fromCache,
-            }));
-        } catch (error: any) {
-            setTranslateDialog((prev) => ({
-                ...prev,
-                loading: false,
-                error: error?.message || '翻译请求异常',
-            }));
-        }
-    }, []);
-
-    const handleTranslate = useCallback(() => {
-        const text = selectionMenu.text.trim();
-        if (!text) return;
-        void runTranslate(text);
-        dismissMenu();
-    }, [selectionMenu.text, dismissMenu, runTranslate]);
-
     // ── jumpToSpine (exposed via ref) ──
     const jumpToSpine = useCallback(async (targetSpineIndex: number, searchText?: string) => {
         if (targetSpineIndex < 0 || targetSpineIndex >= spineItemsRef.current.length) return;
@@ -922,39 +739,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 <div className={styles.emptyState}>Loading...</div>
             )}
 
-            {/* Selection Menu */}
-            <SelectionMenu
-                visible={selectionMenu.visible}
-                x={selectionMenu.x}
-                y={selectionMenu.y}
-                onCopy={handleCopy}
-                onHighlight={handleHighlight}
-                onNote={handleAddNote}
-                onSearch={handleSearch}
-                onWebSearch={handleWebSearch}
-                onReadAloud={handleReadAloud}
-                onTranslate={handleTranslate}
-                onDismiss={dismissMenu}
-            />
-
-            <NoteDialog
-                visible={noteDialog.visible}
-                selectedText={noteDialog.text}
-                onSave={handleNoteSave}
-                onCancel={() => setNoteDialog({ visible: false, text: '', spineIndex: -1 })}
-            />
-
-            <TranslationDialog
-                visible={translateDialog.visible}
-                sourceText={translateDialog.sourceText}
-                translatedText={translateDialog.translatedText}
-                providerLabel={translateDialog.providerLabel}
-                fromCache={translateDialog.fromCache}
-                loading={translateDialog.loading}
-                error={translateDialog.error}
-                onRetry={() => void runTranslate(translateDialog.sourceText)}
-                onClose={() => setTranslateDialog((prev) => ({ ...prev, visible: false }))}
-            />
+            {renderSelectionUI()}
         </div>
     );
 });

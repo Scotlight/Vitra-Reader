@@ -47,7 +47,7 @@ function ensureWorker(): Worker {
             { type: 'module' }
         )
 
-        worker.onmessage = (event: MessageEvent<ChapterPreprocessResponse & { _contentBuffer?: ArrayBuffer }>) => {
+        worker.onmessage = (event: MessageEvent<ChapterPreprocessResponse & { _htmlBuffer?: ArrayBuffer }>) => {
             const payload = event.data
             if (!payload || typeof payload.id !== 'number') return
 
@@ -58,11 +58,14 @@ function ensureWorker(): Worker {
             window.clearTimeout(pendingTask.timerId)
 
             if (payload.ok && payload.result) {
-                // Piece Table: 解码 Transfer buffer 为字符串，作为 htmlBuffer 保留。
-                // segmentMetas 只含 (bufferOffset, bufferLength)，hydrate 时按需 slice。
-                if (payload._contentBuffer && payload.result.segmentMetas && payload.result.segmentMetas.length > 0) {
+                // Transferable: 解码 NUL 分隔 ArrayBuffer，回填各段 htmlContent
+                if (payload._htmlBuffer && payload.result.segmentMetas && payload.result.segmentMetas.length > 0) {
                     const decoder = new TextDecoder()
-                    payload.result.htmlBuffer = decoder.decode(payload._contentBuffer)
+                    const joined = decoder.decode(payload._htmlBuffer)
+                    const parts = joined.split('\0')
+                    for (let i = 0; i < payload.result.segmentMetas.length && i < parts.length; i++) {
+                        payload.result.segmentMetas[i].htmlContent = parts[i]
+                    }
                 }
                 pendingTask.resolve(payload.result)
                 return

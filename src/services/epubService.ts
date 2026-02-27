@@ -1,4 +1,5 @@
 import ePub from 'epubjs'
+import type { EpubBookInternal } from '../types/epubjs'
 
 export interface ParsedBook {
     title: string
@@ -20,8 +21,7 @@ export async function parseEpub(data: ArrayBuffer): Promise<ParsedBook> {
     await book.ready
 
     // 2. Extract standard metadata
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { title, creator, description, publisher, language } = (book as any).package.metadata
+    const { title, creator, description, publisher, language } = (book as unknown as EpubBookInternal).package.metadata
 
     // 3. Extract Cover Image
     let cover: string | undefined

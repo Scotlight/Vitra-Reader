@@ -138,10 +138,10 @@ function hasMediaInRange(html: string, start: number, end: number): boolean {
 }
 
 /**
- * Worker 侧纯字符串向量化 — Piece Table 风格。
+ * Worker 侧纯字符串向量化 — 直接存储段 htmlContent。
  *
- * 不 slice 复制 htmlContent，只记录 (bufferOffset, bufferLength) 索引到原始 buffer。
- * 主线程 hydrate 时才按需 buffer.slice(offset, offset + length)。
+ * 每段切分后直接 slice 复制 htmlContent 到 SegmentMeta，
+ * Transferable 传输时编码为 NUL 分隔 ArrayBuffer（零拷贝）。
  */
 export function vectorizeHtmlToSegmentMetas(
   html: string,
@@ -181,9 +181,7 @@ export function vectorizeHtmlToSegmentMetas(
       realHeight: null,
       offsetY: cumulativeOffsetY,
       measured: false,
-      bufferOffset: start,
-      bufferLength: charCount,
-      htmlContent: '', // Piece Table: 不复制，hydrate 时按需 slice
+      htmlContent: html.slice(start, cutPoint),
       hasMedia: hasMediaInRange(html, start, cutPoint),
     });
     cumulativeOffsetY += estHeight;
@@ -202,9 +200,7 @@ export function vectorizeHtmlToSegmentMetas(
       realHeight: null,
       offsetY: cumulativeOffsetY,
       measured: false,
-      bufferOffset: start,
-      bufferLength: charCount,
-      htmlContent: '',
+      htmlContent: html.slice(start),
       hasMedia: hasMediaInRange(html, start, html.length),
     });
   }
@@ -221,9 +217,7 @@ function buildSingleSegmentMeta(html: string, offsetY: number, config: Vectorize
     realHeight: null,
     offsetY,
     measured: false,
-    bufferOffset: 0,
-    bufferLength: charCount,
-    htmlContent: '', // Piece Table: 不复制
+    htmlContent: html,
     hasMedia: MEDIA_TAG_PATTERN.test(html),
   };
 }

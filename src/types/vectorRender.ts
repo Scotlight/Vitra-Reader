@@ -34,7 +34,7 @@ export interface VitraVectorRenderPlan {
     stages: readonly VitraVectorPipelineStage[];
 }
 
-/** 段级元数据向量项 (Piece Table 风格: 默认只存 buffer 偏移，按需 slice) */
+/** 段级元数据向量项 */
 export interface SegmentMeta {
     readonly index: number;
     readonly charCount: number;
@@ -42,14 +42,6 @@ export interface SegmentMeta {
     realHeight: number | null;
     offsetY: number;
     measured: boolean;
-    /** Piece Table: buffer 内起始偏移 */
-    readonly bufferOffset: number;
-    /** Piece Table: buffer 内长度 */
-    readonly bufferLength: number;
-    /**
-     * 段 HTML 内容。
-     * Worker 侧为空串(零拷贝)，主线程 hydrate 时从 buffer 按需 slice 填充。
-     */
     htmlContent: string;
     hasMedia: boolean;
 }
@@ -58,8 +50,6 @@ export interface SegmentMeta {
 export interface ChapterMetaVector {
     readonly chapterId: string;
     readonly spineIndex: number;
-    /** Piece Table: 不可变 HTML buffer，segments 通过 (bufferOffset, bufferLength) 索引 */
-    readonly buffer: string;
     segments: SegmentMeta[];
     totalEstimatedHeight: number;
     totalMeasuredHeight: number;

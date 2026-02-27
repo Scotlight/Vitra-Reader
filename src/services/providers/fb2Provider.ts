@@ -2,6 +2,7 @@ import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '../c
 import { VitraSectionSplitter } from '../vitraSectionSplitter'
 import { decodeTextBuffer } from './textDecoding'
 import { EMPTY_SECTION_HTML, DEFAULT_DOCUMENT_LABEL } from '../../utils/chapterTitleDetector'
+import { escapeHtml } from '../../utils/contentSanitizer'
 
 interface Chapter {
     title: string
@@ -106,15 +107,13 @@ function fb2NodeToHtml(node: Node): string {
             const href = el.getAttribute('l:href') ?? el.getAttribute('xlink:href') ?? ''
             // 内嵌 base64 图片：#id 格式指向 <binary> 元素
             if (href.startsWith('#')) return `<span>[图片]</span>`
-            return `<img src="${href}" style="max-width:100%"/>`
+            const safeHref = href.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            return `<img src="${safeHref}" style="max-width:100%"/>`
         }
         default:           return inner
     }
 }
 
-function escapeHtml(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
 
 export async function parseFb2Metadata(data: ArrayBuffer, filename: string) {
     const text = decodeTextBuffer(data, 'fb2').text

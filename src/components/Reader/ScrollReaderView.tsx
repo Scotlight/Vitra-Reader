@@ -19,14 +19,13 @@ import { useScrollInertia } from '../../hooks/useScrollInertia';
 import { useScrollEvents } from '../../hooks/useScrollEvents';
 import { db } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
-import { SelectionMenu } from './SelectionMenu';
-import { NoteDialog } from './NoteDialog';
-import { TranslationDialog } from './TranslationDialog';
-import { getProviderLabel, translateText } from '../../services/translateService';
 import { preprocessChapterContent } from '../../services/chapterPreprocessService';
-import { buildChapterMetaVector, batchUpdateSegmentHeights, resolveSegmentHtml } from '../../services/metaVectorManager';
+import { buildChapterMetaVector, batchUpdateSegmentHeights } from '../../services/metaVectorManager';
 import type { ChapterMetaVector } from '../../types/vectorRender';
 import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
+import { clampNumber } from '../../utils/mathUtils';
+import { useSelectionMenu } from '../../hooks/useSelectionMenu';
+import { releaseMediaResources } from '../../utils/mediaResourceCleanup';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
@@ -38,11 +37,10 @@ interface LoadedChapter {
     htmlFragments: string[];
     externalStyles: string[];
     segmentMetas?: SegmentMeta[];
-    /** Piece Table: 不可变 buffer，segmentMetas 通过 (bufferOffset, bufferLength) 索引 */
-    htmlBuffer?: string;
     domNode: HTMLElement | null;
     height: number;
     status: 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder';
+    mountedAt?: number;
 }
 
 type PipelineState =
@@ -80,7 +78,8 @@ export interface ScrollReaderHandle {
 // ── Constants ──
 
 const PRELOAD_THRESHOLD_PX = 600;
-const ACTIVE_MOUNTED_WINDOW_RADIUS = 1;
+const UNLOAD_MOUNTED_WINDOW_RADIUS = 2;
+const UNLOAD_COOLDOWN_MS = 3000;
 const SCROLL_IDLE_RESUME_MS = 200;
 const PREFETCH_IDLE_TIMEOUT_MS = 120;
 const CHAPTER_DETECTION_ANCHOR_RATIO = 0.22;
@@ -91,6 +90,32 @@ const CHAPTER_PLACEHOLDER_DEFAULT_HEIGHT_PX = 800;
 const RESIZE_DELTA_THRESHOLD_PX = 1;
 const RESIZE_ANCHOR_EPSILON_PX = 0.5;
 const RESIZE_CORRECTION_STOP_INERTIA_PX = 48;
+
+// ── 物理引擎调参常量 ──
+const PHYSICS_FRICTION_NUMERATOR = 26;
+const PHYSICS_FRICTION_NO_EASING_OFFSET = 0.02;
+const PHYSICS_FRICTION_MIN = 0.04;
+const PHYSICS_FRICTION_MAX = 0.18;
+const PHYSICS_STOP_THRESHOLD_EASING = 0.08;
+const PHYSICS_STOP_THRESHOLD_LINEAR = 0.14;
+const PHYSICS_SPRING_STIFFNESS = 0.06;
+const PHYSICS_SPRING_DAMPING_EASING = 0.7;
+const PHYSICS_SPRING_DAMPING_LINEAR = 0.55;
+const INERTIA_IMPULSE_BLEND_BASE = 0.72;
+const INERTIA_IMPULSE_BLEND_RATIO_SCALE = 0.05;
+const INERTIA_IMPULSE_BLEND_MIN = 0.65;
+const INERTIA_IMPULSE_BLEND_MAX = 0.94;
+const INERTIA_IMPULSE_GAIN_BASE = 0.18;
+const INERTIA_IMPULSE_GAIN_STEP_REF = 120;
+const INERTIA_IMPULSE_GAIN_STEP_DIVISOR = 900;
+const INERTIA_IMPULSE_GAIN_MIN = 0.1;
+const INERTIA_IMPULSE_GAIN_MAX = 0.38;
+const INERTIA_VELOCITY_STEP_FACTOR = 0.75;
+const INERTIA_VELOCITY_ACCEL_FACTOR = 5;
+const INERTIA_VELOCITY_MIN = 48;
+const INERTIA_VELOCITY_MAX = 220;
+const INERTIA_FRAME_CAP_EASING_MS = 24;
+const INERTIA_FRAME_CAP_LINEAR_MS = 32;
 const DEFAULT_SMOOTH_CONFIG: NonNullable<ScrollReaderViewProps['smoothConfig']> = {
     enabled: true,
     stepSizePx: 120,
@@ -102,55 +127,7 @@ const DEFAULT_SMOOTH_CONFIG: NonNullable<ScrollReaderViewProps['smoothConfig']> 
     reverseWheelDirection: false,
 };
 
-function revokeBlobUrl(rawUrl: string | null) {
-    if (!rawUrl) return;
-    if (!rawUrl.startsWith('blob:')) return;
-    try {
-        URL.revokeObjectURL(rawUrl);
-    } catch {
-        // Ignore revoke failures
-    }
-}
 
-function releaseChapterDomResources(chapterNode: HTMLElement | null) {
-    if (!chapterNode) return;
-
-    chapterNode.querySelectorAll('img').forEach((img) => {
-        revokeBlobUrl(img.getAttribute('src'));
-        const srcSet = img.getAttribute('srcset');
-        if (srcSet) {
-            srcSet.split(',').forEach((part) => {
-                const url = part.trim().split(/\s+/)[0];
-                revokeBlobUrl(url || null);
-            });
-        }
-        img.removeAttribute('srcset');
-        img.removeAttribute('src');
-        img.loading = 'lazy';
-        img.decoding = 'async';
-    });
-
-    chapterNode.querySelectorAll('source').forEach((sourceEl) => {
-        revokeBlobUrl(sourceEl.getAttribute('src'));
-        sourceEl.removeAttribute('srcset');
-        sourceEl.removeAttribute('src');
-    });
-
-    chapterNode.querySelectorAll('video,audio').forEach((mediaEl) => {
-        revokeBlobUrl(mediaEl.getAttribute('src'));
-        mediaEl.removeAttribute('src');
-        mediaEl.querySelectorAll('source').forEach((sourceEl) => {
-            revokeBlobUrl(sourceEl.getAttribute('src'));
-            sourceEl.removeAttribute('src');
-        });
-    });
-
-    chapterNode.replaceChildren();
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, value));
-}
 
 function resolveChapterPlaceholderHeight(height: number): number {
     return Math.max(
@@ -205,6 +182,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     const isUserScrollingRef = useRef(false);
     const initialScrollDone = useRef(false);
     const pendingSearchTextRef = useRef<string | null>(null);
+    const jumpGenerationRef = useRef(0);
 
     const [chapters, setChapters] = useState<LoadedChapter[]>([]);
     const chaptersRef = useRef<LoadedChapter[]>([]);
@@ -218,31 +196,17 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     const observedResizeHeightsRef = useRef<WeakMap<HTMLElement, number>>(new WeakMap());
     const chapterVectorsRef = useRef<Map<string, ChapterMetaVector>>(new Map());
 
-    // ── Selection Menu State ──
-    const [selectionMenu, setSelectionMenu] = useState<{
-        visible: boolean; x: number; y: number; text: string; spineIndex: number;
-    }>({ visible: false, x: 0, y: 0, text: '', spineIndex: -1 });
-    const [noteDialog, setNoteDialog] = useState<{
-        visible: boolean; text: string; spineIndex: number;
-    }>({ visible: false, text: '', spineIndex: -1 });
-    const [translateDialog, setTranslateDialog] = useState<{
-        visible: boolean;
-        sourceText: string;
-        translatedText: string;
-        loading: boolean;
-        error: string;
-        providerLabel: string;
-        fromCache: boolean;
-    }>({
-        visible: false,
-        sourceText: '',
-        translatedText: '',
-        loading: false,
-        error: '',
-        providerLabel: '-',
-        fromCache: false,
-    });
-    const renderedHighlightsRef = useRef<Set<string>>(new Set());
+    // ── Selection Menu (shared hook) ──
+    const getHighlightContainer = useCallback((spineIndex: number): HTMLElement | null => {
+        const listEl = chapterListRef.current;
+        if (!listEl) return null;
+        return listEl.querySelector(`[data-chapter-id="ch-${spineIndex}"]`) as HTMLElement | null;
+    }, []);
+    const {
+        selectionMenu, setSelectionMenu,
+        renderedHighlightsRef,
+        renderSelectionUI,
+    } = useSelectionMenu({ bookId, onSelectionSearch, getHighlightContainer });
     const highlightIdleHandlesRef = useRef<Map<number, IdleTaskHandle>>(new Map());
 
     // Keep refs in sync with state
@@ -260,10 +224,10 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     }), [smoothConfig]);
 
     const physicsConfig = useMemo(() => {
-        const friction = clampNumber(26 / normalizedSmoothConfig.animationTimeMs + (normalizedSmoothConfig.easing ? 0 : 0.02), 0.04, 0.18);
-        const stopThreshold = normalizedSmoothConfig.easing ? 0.08 : 0.14;
-        const springStiffness = 0.06;
-        const springDamping = normalizedSmoothConfig.easing ? 0.7 : 0.55;
+        const friction = clampNumber(PHYSICS_FRICTION_NUMERATOR / normalizedSmoothConfig.animationTimeMs + (normalizedSmoothConfig.easing ? 0 : PHYSICS_FRICTION_NO_EASING_OFFSET), PHYSICS_FRICTION_MIN, PHYSICS_FRICTION_MAX);
+        const stopThreshold = normalizedSmoothConfig.easing ? PHYSICS_STOP_THRESHOLD_EASING : PHYSICS_STOP_THRESHOLD_LINEAR;
+        const springStiffness = PHYSICS_SPRING_STIFFNESS;
+        const springDamping = normalizedSmoothConfig.easing ? PHYSICS_SPRING_DAMPING_EASING : PHYSICS_SPRING_DAMPING_LINEAR;
         return {
             friction,
             stopThreshold,
@@ -274,10 +238,10 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
     const inertiaTuning = useMemo(() => {
         const ratio = normalizedSmoothConfig.tailToHeadRatio;
-        const impulseBlend = clampNumber(0.72 + (ratio - 1) * 0.05, 0.65, 0.94);
-        const impulseGain = clampNumber(0.18 + (normalizedSmoothConfig.stepSizePx - 120) / 900, 0.1, 0.38);
-        const maxAbsVelocity = clampNumber(normalizedSmoothConfig.stepSizePx * 0.75 + normalizedSmoothConfig.accelerationMax * 5, 48, 220);
-        const frameCapMs = normalizedSmoothConfig.easing ? 24 : 32;
+        const impulseBlend = clampNumber(INERTIA_IMPULSE_BLEND_BASE + (ratio - 1) * INERTIA_IMPULSE_BLEND_RATIO_SCALE, INERTIA_IMPULSE_BLEND_MIN, INERTIA_IMPULSE_BLEND_MAX);
+        const impulseGain = clampNumber(INERTIA_IMPULSE_GAIN_BASE + (normalizedSmoothConfig.stepSizePx - INERTIA_IMPULSE_GAIN_STEP_REF) / INERTIA_IMPULSE_GAIN_STEP_DIVISOR, INERTIA_IMPULSE_GAIN_MIN, INERTIA_IMPULSE_GAIN_MAX);
+        const maxAbsVelocity = clampNumber(normalizedSmoothConfig.stepSizePx * INERTIA_VELOCITY_STEP_FACTOR + normalizedSmoothConfig.accelerationMax * INERTIA_VELOCITY_ACCEL_FACTOR, INERTIA_VELOCITY_MIN, INERTIA_VELOCITY_MAX);
+        const frameCapMs = normalizedSmoothConfig.easing ? INERTIA_FRAME_CAP_EASING_MS : INERTIA_FRAME_CAP_LINEAR_MS;
         return {
             impulseBlend,
             impulseGain,
@@ -562,7 +526,6 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 htmlFragments: preprocessed.htmlFragments,
                 externalStyles: preprocessed.externalStyles,
                 segmentMetas: preprocessed.segmentMetas,
-                htmlBuffer: preprocessed.htmlBuffer,
                 status: 'shadow-rendering',
             };
 
@@ -635,9 +598,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         const chapterId = `ch-${spineIndex}`;
         const ch = chaptersRef.current.find(c => c.spineIndex === spineIndex);
         if (ch?.segmentMetas && ch.segmentMetas.length > 0) {
-            // Piece Table: htmlBuffer 是不可变 buffer，segmentMetas 通过 offset 索引
-            const buffer = ch.htmlBuffer || ch.htmlContent;
-            const vector = buildChapterMetaVector(chapterId, spineIndex, ch.segmentMetas, buffer);
+            const vector = buildChapterMetaVector(chapterId, spineIndex, ch.segmentMetas);
             chapterVectorsRef.current.set(chapterId, vector);
         }
 
@@ -674,8 +635,8 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         const meta = vector.segments[segIndex];
         if (!meta) return;
 
-        // Piece Table: 按需从 buffer slice
-        segmentEl.innerHTML = resolveSegmentHtml(vector.buffer, meta);
+        // 直接使用段的 htmlContent
+        segmentEl.innerHTML = meta.htmlContent;
         segmentEl.setAttribute('data-shadow-segment-state', 'hydrated');
         segmentEl.style.minHeight = '0px';
     }, []);
@@ -690,29 +651,24 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         const readyChapters = chapters.filter(ch => ch.status === 'ready');
         if (readyChapters.length === 0) return;
 
+        // 判断是否有任何章节会插入到现有 DOM 节点之上（需要滚动补偿）
+        const existingDomNodes = listEl.querySelectorAll('[data-chapter-id]');
+        const hasExistingContent = existingDomNodes.length > 0;
+
+        // 在所有 DOM 变更之前，统一捕获锚点
+        let anchorElement: HTMLElement | null = null;
+        let anchorViewportOffset = 0;
+        if (hasExistingContent) {
+            pipelineRef.current = 'anchoring-locked';
+            anchorElement = findBestAnchor(viewport);
+            anchorViewportOffset = anchorElement.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+        }
+
+        // ── DOM 变更阶段：挂载所有 ready 章节 ──
         readyChapters.forEach(ch => {
             const existingChapterEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
             const isInsertion = !existingChapterEl;
 
-            // Check if this chapter needs prepend compensation
-            const existingDomNodes = listEl.querySelectorAll('[data-chapter-id]');
-            const isFirstInList = chapters.indexOf(ch) === 0;
-            const needsCompensation = isInsertion && isFirstInList && existingDomNodes.length > 0;
-
-            let anchorBefore: ReturnType<typeof captureAnchorInfo> | null = null;
-            let oldScrollTop = 0;
-            let expectedPrependHeight = 0;
-
-            if (needsCompensation) {
-                // Snapshot phase — capture anchor before DOM mutation
-                pipelineRef.current = 'anchoring-locked';
-                const anchor = findBestAnchor(viewport);
-                anchorBefore = captureAnchorInfo(anchor);
-                oldScrollTop = viewport.scrollTop;
-                expectedPrependHeight = Math.max(1, Math.floor(ch.height || 0));
-            }
-
-            // Mutation phase — mount DOM
             const chapterEl = existingChapterEl || document.createElement('div');
             if (!existingChapterEl) {
                 chapterEl.setAttribute('data-chapter-id', ch.id);
@@ -722,13 +678,11 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             markChapterAsMounted(chapterEl, ch.height);
             chapterEl.replaceChildren();
 
-            // Move the shadow-rendered node into the chapter element
             if (ch.domNode) {
                 chapterEl.appendChild(ch.domNode);
             }
 
             if (isInsertion) {
-                // Insert at the correct position
                 const targetIndex = chapters.indexOf(ch);
                 const existingNodes = Array.from(listEl.children);
 
@@ -741,31 +695,27 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 }
             }
             observeChapterResizeNodes(chapterEl);
-
-            // Compensation phase — fix scroll position after prepend
-            if (needsCompensation) {
-                viewport.scrollTop = Math.max(0, oldScrollTop + expectedPrependHeight);
-                lastScrollTopRef.current = viewport.scrollTop;
-                console.log(`[ScrollReader] Scroll compensated by expected prepend height: ${expectedPrependHeight}px`);
-
-                if (anchorBefore) {
-                    const anchorAfter = captureAnchorInfo(anchorBefore.element);
-                    const deltaY = calculateAnchorDelta(anchorBefore, anchorAfter);
-                    if (Math.abs(deltaY) > 0.5) {
-                        viewport.scrollTop = Math.max(0, viewport.scrollTop + deltaY);
-                        lastScrollTopRef.current = viewport.scrollTop;
-                        console.log(`[ScrollReader] Scroll fine-tuned by anchor delta: ${deltaY}px`);
-                    }
-                }
-            }
-
-            pipelineRef.current = 'idle';
         });
+
+        // ── 统一滚动补偿阶段：所有 DOM 变更完成后一次性补偿 ──
+        if (anchorElement && hasExistingContent) {
+            // 强制同步布局，确保所有 DOM 变更已反映
+            void viewport.offsetHeight;
+            const anchorNewTop = anchorElement.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+            const scrollDelta = anchorNewTop - anchorViewportOffset;
+
+            if (Math.abs(scrollDelta) > 0.5) {
+                viewport.scrollTop = Math.max(0, viewport.scrollTop + scrollDelta);
+                lastScrollTopRef.current = viewport.scrollTop;
+                console.log(`[ScrollReader] Scroll compensated by anchor repositioning: ${scrollDelta}px`);
+            }
+            pipelineRef.current = 'idle';
+        }
 
         // Mark as mounted
         setChapters(prev =>
             prev.map(ch =>
-                ch.status === 'ready' ? { ...ch, status: 'mounted' } : ch
+                ch.status === 'ready' ? { ...ch, status: 'mounted', mountedAt: Date.now() } : ch
             )
         );
 
@@ -897,8 +847,12 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
     useEffect(() => {
         const mountedChapters = chapters.filter(ch => ch.status === 'mounted');
+        const now = Date.now();
         const toUnload = mountedChapters
-            .filter(ch => Math.abs(ch.spineIndex - currentSpineIndex) > ACTIVE_MOUNTED_WINDOW_RADIUS)
+            .filter(ch =>
+                Math.abs(ch.spineIndex - currentSpineIndex) > UNLOAD_MOUNTED_WINDOW_RADIUS
+                && (!ch.mountedAt || now - ch.mountedAt > UNLOAD_COOLDOWN_MS)
+            )
             .sort((a, b) =>
                 Math.abs(b.spineIndex - currentSpineIndex) - Math.abs(a.spineIndex - currentSpineIndex)
             );
@@ -916,12 +870,12 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             if (listEl) {
                 const domEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
                 if (domEl) {
-                    // 回收段元素到节点池
+                    // 先 unobserve 再 release，避免清空段内容时 ResizeObserver 触发额外滚动补偿
+                    unobserveChapterResizeNodes(domEl);
                     domEl.querySelectorAll('section[data-shadow-segment-index]').forEach(seg => {
                         segmentPool.release(seg as HTMLElement);
                     });
-                    unobserveChapterResizeNodes(domEl);
-                    releaseChapterDomResources(domEl);
+                    releaseMediaResources(domEl);
                     markChapterAsPlaceholder(domEl, ch.height);
                 }
             }
@@ -1090,6 +1044,10 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
     const jumpToSpine = useCallback(async (targetSpineIndex: number, searchText?: string) => {
         if (targetSpineIndex < 0 || targetSpineIndex >= spineItemsRef.current.length) return;
+
+        // 递增跳转代数，使上一次未完成的跳转自动失效
+        const generation = ++jumpGenerationRef.current;
+
         cancelIdlePrefetch();
         isUserScrollingRef.current = false;
         if (scrollIdleTimerRef.current !== null) {
@@ -1130,6 +1088,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                     updateProgress(viewport.scrollTop, viewport.clientHeight);
 
                     requestAnimationFrame(() => {
+                        if (jumpGenerationRef.current !== generation) return;
                         viewport.scrollTop = domEl.offsetTop;
                         lastScrollTopRef.current = viewport.scrollTop;
                         updateCurrentChapter(viewport.scrollTop, viewport.clientHeight);
@@ -1165,7 +1124,18 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         const listEl = chapterListRef.current;
         if (listEl) {
             resetResizeObservers();
-            listEl.innerHTML = '';
+            // 仅移除手动插入的章节 DOM 节点，不动 React 管理的子节点（如 loading indicator）
+            // innerHTML = '' 会导致 React commitDeletionEffects 时 removeChild 失败
+            const chapterNodes = listEl.querySelectorAll('[data-chapter-id]');
+            chapterNodes.forEach(node => {
+                const el = node as HTMLElement;
+                // 释放段池中的段元素
+                el.querySelectorAll('[data-shadow-segment]').forEach(seg => {
+                    segmentPool.release(seg as HTMLElement);
+                });
+                releaseMediaResources(el);
+                el.remove();
+            });
         }
 
         chaptersRef.current = [];
@@ -1174,6 +1144,9 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         loadingLockRef.current.clear();
         pipelineRef.current = 'idle';
         setCurrentSpineIndex(targetSpineIndex);
+
+        // 跳转代数检查：如果在清理过程中又触发了新的跳转，放弃本次加载
+        if (jumpGenerationRef.current !== generation) return;
 
         // loadChapter uses chaptersRef (always current), so no stale closure issue
         loadChapter(targetSpineIndex, 'initial');
@@ -1380,7 +1353,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             const meta = vector.segments[segIndex];
             if (!meta) continue;
 
-            segmentEl.innerHTML = resolveSegmentHtml(vector.buffer, meta);
+            segmentEl.innerHTML = meta.htmlContent;
             segmentEl.setAttribute('data-shadow-segment-state', 'hydrated');
             segmentEl.style.minHeight = '0px';
             hydratedPairs.push({ el: segmentEl, chapterId, segIndex });
@@ -1522,143 +1495,6 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         };
     }, [chapters]);
 
-    // ── Selection Menu Handlers ──
-
-    const dismissMenu = useCallback(() => {
-        setSelectionMenu(prev => ({ ...prev, visible: false }));
-        window.getSelection()?.removeAllRanges();
-    }, []);
-
-    const handleCopy = useCallback(() => {
-        navigator.clipboard.writeText(selectionMenu.text);
-        dismissMenu();
-    }, [selectionMenu.text, dismissMenu]);
-
-    const handleHighlight = useCallback(async (color: string) => {
-        const { text, spineIndex } = selectionMenu;
-        const id = crypto.randomUUID();
-        const cfiRange = `bdise:${spineIndex}`;
-
-        await db.highlights.add({
-            id,
-            bookId,
-            cfiRange,
-            color,
-            text,
-            createdAt: Date.now(),
-        });
-
-        // Immediately render the highlight in DOM
-        const listEl = chapterListRef.current;
-        if (listEl) {
-            const chapterEl = listEl.querySelector(`[data-chapter-id="ch-${spineIndex}"]`) as HTMLElement | null;
-            if (chapterEl) {
-                const range = findTextInDOM(chapterEl, text);
-                if (range) {
-                    highlightRange(range, id, color);
-                    renderedHighlightsRef.current.add(id);
-                }
-            }
-        }
-        dismissMenu();
-    }, [selectionMenu, bookId, dismissMenu]);
-
-    const handleAddNote = useCallback(async () => {
-        setNoteDialog({
-            visible: true,
-            text: selectionMenu.text,
-            spineIndex: selectionMenu.spineIndex,
-        });
-        dismissMenu();
-    }, [selectionMenu, dismissMenu]);
-
-    const handleNoteSave = useCallback(async (note: string) => {
-        await db.bookmarks.add({
-            id: crypto.randomUUID(), bookId,
-            location: `bdise:${noteDialog.spineIndex}`,
-            title: noteDialog.text.slice(0, 80),
-            note,
-            createdAt: Date.now(),
-        });
-        setNoteDialog({ visible: false, text: '', spineIndex: -1 });
-    }, [noteDialog, bookId]);
-
-    const handleSearch = useCallback(() => {
-        const keyword = selectionMenu.text.trim();
-        if (!keyword) return;
-        onSelectionSearch?.(keyword);
-        dismissMenu();
-    }, [selectionMenu.text, onSelectionSearch, dismissMenu]);
-
-    const handleWebSearch = useCallback(() => {
-        const q = encodeURIComponent(selectionMenu.text.trim());
-        if (!q) return;
-        window.electronAPI.openExternal(`https://www.google.com/search?q=${q}`);
-        dismissMenu();
-    }, [selectionMenu.text, dismissMenu]);
-
-    const handleReadAloud = useCallback(() => {
-        const text = selectionMenu.text.trim();
-        if (!text) return;
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.lang = 'zh-CN';
-        utter.rate = 1;
-        window.speechSynthesis.speak(utter);
-        dismissMenu();
-    }, [selectionMenu.text, dismissMenu]);
-
-    const runTranslate = useCallback(async (text: string) => {
-        const sourceText = text.trim();
-        if (!sourceText) return;
-
-        setTranslateDialog({
-            visible: true,
-            sourceText,
-            translatedText: '',
-            loading: true,
-            error: '',
-            providerLabel: '-',
-            fromCache: false,
-        });
-
-        try {
-            const result = await translateText(sourceText);
-            if (!result.ok) {
-                setTranslateDialog((prev) => ({
-                    ...prev,
-                    loading: false,
-                    error: result.error || '翻译失败',
-                    providerLabel: getProviderLabel(result.provider),
-                    fromCache: false,
-                }));
-                return;
-            }
-
-            setTranslateDialog((prev) => ({
-                ...prev,
-                loading: false,
-                error: '',
-                translatedText: result.translatedText,
-                providerLabel: getProviderLabel(result.provider),
-                fromCache: result.fromCache,
-            }));
-        } catch (error: any) {
-            setTranslateDialog((prev) => ({
-                ...prev,
-                loading: false,
-                error: error?.message || '翻译请求异常',
-            }));
-        }
-    }, []);
-
-    const handleTranslate = useCallback(() => {
-        const text = selectionMenu.text.trim();
-        if (!text) return;
-        void runTranslate(text);
-        dismissMenu();
-    }, [selectionMenu.text, dismissMenu, runTranslate]);
-
     // ── Render ──
 
     return (
@@ -1675,7 +1511,6 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                         htmlContent={ch.htmlContent}
                         htmlFragments={ch.htmlFragments}
                         segmentMetas={ch.segmentMetas}
-                        htmlBuffer={ch.htmlBuffer}
                         chapterId={ch.id}
                         externalStyles={ch.externalStyles}
                         preprocessed
@@ -1720,39 +1555,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 <div className={styles.emptyState}>Loading...</div>
             )}
 
-            {/* Selection Menu */}
-            <SelectionMenu
-                visible={selectionMenu.visible}
-                x={selectionMenu.x}
-                y={selectionMenu.y}
-                onCopy={handleCopy}
-                onHighlight={handleHighlight}
-                onNote={handleAddNote}
-                onSearch={handleSearch}
-                onWebSearch={handleWebSearch}
-                onReadAloud={handleReadAloud}
-                onTranslate={handleTranslate}
-                onDismiss={dismissMenu}
-            />
-
-            <NoteDialog
-                visible={noteDialog.visible}
-                selectedText={noteDialog.text}
-                onSave={handleNoteSave}
-                onCancel={() => setNoteDialog({ visible: false, text: '', spineIndex: -1 })}
-            />
-
-            <TranslationDialog
-                visible={translateDialog.visible}
-                sourceText={translateDialog.sourceText}
-                translatedText={translateDialog.translatedText}
-                providerLabel={translateDialog.providerLabel}
-                fromCache={translateDialog.fromCache}
-                loading={translateDialog.loading}
-                error={translateDialog.error}
-                onRetry={() => void runTranslate(translateDialog.sourceText)}
-                onClose={() => setTranslateDialog((prev) => ({ ...prev, visible: false }))}
-            />
+            {renderSelectionUI()}
         </div>
     );
 });

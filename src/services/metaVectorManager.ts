@@ -1,18 +1,6 @@
 import type { SegmentMeta, ChapterMetaVector } from '../types/vectorRender';
 
 /**
- * Piece Table: 从 buffer 按需 slice 段内容。
- * 若 meta.htmlContent 已填充则直接返回（缓存），否则从 buffer 中 slice。
- */
-export function resolveSegmentHtml(buffer: string, meta: SegmentMeta): string {
-  if (meta.htmlContent) return meta.htmlContent;
-  const resolved = buffer.slice(meta.bufferOffset, meta.bufferOffset + meta.bufferLength);
-  // 缓存到 meta 上，避免重复 slice
-  meta.htmlContent = resolved;
-  return resolved;
-}
-
-/**
  * O(log N) 二分查找 — 返回包含 offset 的段索引。
  * 若 offset 超出总高度则返回最后一段。
  */
@@ -98,13 +86,11 @@ export function batchUpdateSegmentHeights(
 
 /**
  * 从 SegmentMeta[] 构建 ChapterMetaVector。
- * @param buffer Piece Table 不可变 HTML buffer
  */
 export function buildChapterMetaVector(
   chapterId: string,
   spineIndex: number,
   segments: SegmentMeta[],
-  buffer: string,
 ): ChapterMetaVector {
   let totalHeight = 0;
   for (const seg of segments) {
@@ -114,7 +100,6 @@ export function buildChapterMetaVector(
   return {
     chapterId,
     spineIndex,
-    buffer,
     segments,
     totalEstimatedHeight: totalHeight,
     totalMeasuredHeight: totalHeight,

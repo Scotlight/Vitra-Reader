@@ -1,4 +1,5 @@
 import ePub, { Book } from 'epubjs'
+import type { EpubBookInternal, EpubSpineItem } from '../../types/epubjs'
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '../contentProvider'
 import {
     getSpineItems as epubGetSpineItems,
@@ -14,7 +15,7 @@ export class EpubContentProvider implements ContentProvider {
     private spineItems: SpineItemInfo[] = []
 
     constructor(data: ArrayBuffer) {
-        this.book = ePub(data as any)
+        this.book = ePub(data as unknown as string)
     }
 
     async init() {
@@ -47,15 +48,16 @@ export class EpubContentProvider implements ContentProvider {
     unloadChapter(i: number) { epubUnloadChapter(this.book, i) }
 
     async search(keyword: string): Promise<SearchResult[]> {
-        const spineItems = (this.book.spine as any).spineItems
+        const bookInternal = this.book as unknown as EpubBookInternal
+        const spineItems = bookInternal.spine.spineItems
         const results = await Promise.all(
-            spineItems.map((item: any) =>
-                item.load(this.book.load.bind(this.book))
-                    .then(item.find.bind(item, keyword))
-                    .finally(item.unload.bind(item))
+            spineItems.map((item: EpubSpineItem) =>
+                item.load(bookInternal.load.bind(bookInternal))
+                    .then(() => (typeof item.find === 'function' ? item.find(keyword) : []))
+                    .finally(() => item.unload())
             )
         )
-        return [].concat(...results as any)
+        return results.flat() as SearchResult[]
     }
 }
 

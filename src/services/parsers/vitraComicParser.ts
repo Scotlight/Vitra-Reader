@@ -74,6 +74,7 @@ abstract class VitraComicParserBase extends VitraBaseParser {
       direction,
       resolveHref: (href: string) => this.resolveHref(href, imageEntries),
       getCover: async () => coverBlob,
+      search: () => [],
       destroy: () => {
         destroy();
         loader.destroy();
@@ -127,6 +128,7 @@ abstract class VitraComicParserBase extends VitraBaseParser {
     loader: ArchiveLoader,
   ): { sections: VitraBookSection[]; destroy: () => void } {
     const urlCache = new Map<number, string>();
+    const imgUrlCache = new Map<number, string>();
 
     const sections: VitraBookSection[] = imageEntries.map((filename, index) => {
       const entry = loader.entries.find((e) => e.filename === filename);
@@ -144,6 +146,7 @@ abstract class VitraComicParserBase extends VitraBaseParser {
           const mime = mimeFromFilename(filename);
           const typedBlob = new Blob([blob], { type: mime });
           const imgUrl = URL.createObjectURL(typedBlob);
+          imgUrlCache.set(index, imgUrl);
 
           // 将图片包装为 HTML 页面
           const html = `<!DOCTYPE html>
@@ -163,6 +166,11 @@ img{display:block;max-width:100%;max-height:100%;margin:auto;object-fit:contain}
             URL.revokeObjectURL(url);
             urlCache.delete(index);
           }
+          const img = imgUrlCache.get(index);
+          if (img) {
+            URL.revokeObjectURL(img);
+            imgUrlCache.delete(index);
+          }
         },
       };
     });
@@ -172,6 +180,8 @@ img{display:block;max-width:100%;max-height:100%;margin:auto;object-fit:contain}
       destroy: () => {
         for (const url of urlCache.values()) URL.revokeObjectURL(url);
         urlCache.clear();
+        for (const url of imgUrlCache.values()) URL.revokeObjectURL(url);
+        imgUrlCache.clear();
       },
     };
   }

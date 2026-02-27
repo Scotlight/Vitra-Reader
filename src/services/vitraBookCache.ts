@@ -60,8 +60,14 @@ function encodeSections(sectionsHtml: readonly string[]): Uint8Array {
 }
 
 function decodeSections(compressed: Uint8Array): string[] {
-    const json = strFromU8(gunzipSync(compressed))
-    return JSON.parse(json) as string[]
+    try {
+        const json = strFromU8(gunzipSync(compressed))
+        const parsed = JSON.parse(json)
+        if (!Array.isArray(parsed)) return []
+        return parsed as string[]
+    } catch {
+        return []
+    }
 }
 
 // ─── 核心类 ──────────────────────────────────────────

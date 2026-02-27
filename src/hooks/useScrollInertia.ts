@@ -1,5 +1,6 @@
 import { RefObject, useRef, useCallback, useEffect } from 'react';
 import { PhysicsConfig, DEFAULT_PHYSICS_CONFIG } from '../types/scroll';
+import { clampNumber } from '../utils/mathUtils';
 
 interface InertiaCallbacks {
   onStart?: () => void;
@@ -20,9 +21,7 @@ const DEFAULT_INERTIA_TUNING: InertiaTuning = {
   frameCapMs: 32,
 };
 
-function clampNumber(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
+
 
 function clampVelocity(value: number, maxAbsVelocity: number): number {
   return Math.max(-maxAbsVelocity, Math.min(maxAbsVelocity, value));

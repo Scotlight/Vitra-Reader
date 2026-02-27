@@ -5,10 +5,16 @@
 import { VitraBaseParser } from '../vitraBaseParser';
 import { VitraSectionSplitter } from '../vitraSectionSplitter';
 import { createBlobSectionsFromChunks } from '../vitraSectionFactory';
+import {
+  upsertChapterIndex,
+  searchBookIndex,
+  clearBookIndex,
+} from '../searchIndexCache';
 import type {
   VitraBook,
   VitraBookMetadata,
   VitraBookSection,
+  VitraSearchResult,
   VitraTocItem,
 } from '../../types/vitraBook';
 
@@ -26,6 +32,12 @@ export class VitraDocxParser extends VitraBaseParser {
     const chunks = VitraSectionSplitter.split(html);
     const { sections, destroy } = createBlobSectionsFromChunks(chunks, 'docx');
     const toc = this.buildTocFromChunks(chunks, sections);
+    const bookId = `vitra-${this.filename}`;
+
+    // 建立搜索索引（DOCX 只有一段 HTML，按 chunk 分段索引）
+    chunks.forEach((chunk, i) => {
+      upsertChapterIndex(bookId, i, chunk.html);
+    });
 
     return {
       format: 'DOCX',
@@ -36,7 +48,11 @@ export class VitraDocxParser extends VitraBaseParser {
       direction: 'auto',
       resolveHref: (href: string) => this.resolveHref(href, sections),
       getCover: async () => null,
-      destroy,
+      search: (keyword: string): VitraSearchResult[] => searchBookIndex(bookId, keyword),
+      destroy: () => {
+        clearBookIndex(bookId);
+        destroy();
+      },
     };
   }
 

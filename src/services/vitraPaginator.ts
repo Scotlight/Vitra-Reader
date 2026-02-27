@@ -3,6 +3,7 @@ import {
     collectCanvasBlockMetricsIdle,
     isCanvasMeasureEligible,
 } from './vitraCanvasMeasure'
+import { clampNumber } from '../utils/mathUtils'
 
 const DEFAULT_GAP = 0
 const DEFAULT_MIN_BREAKABLE_SPACE_RATIO = 0.2
@@ -55,10 +56,6 @@ function isBreakableTag(tagName: string): boolean {
 function toElementKey(element: HTMLElement, index: number): string {
     const id = element.id ? `#${element.id}` : ''
     return `${element.tagName.toLowerCase()}${id}:${index}`
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, value))
 }
 
 function normalizeBatchSize(batchSize?: number): number {

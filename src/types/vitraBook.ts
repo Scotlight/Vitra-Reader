@@ -43,12 +43,21 @@ export interface VitraBookSection {
   readonly size: number;
   readonly linear?: boolean;
   readonly pageSpread?: 'left' | 'right' | 'center';
+  /** 章节关联的 CSS 样式表（EPUB 特有，其他格式为空数组） */
+  readonly styles?: readonly string[];
 }
 
 export interface VitraTocItem {
   readonly label: string;
   readonly href: string;
   readonly children?: readonly VitraTocItem[];
+}
+
+export interface VitraSearchResult {
+  /** 定位标识（格式：`bdise:{sectionIndex}:{offset}`） */
+  readonly cfi: string;
+  /** 匹配上下文摘要 */
+  readonly excerpt: string;
 }
 
 export interface VitraBook {
@@ -61,5 +70,7 @@ export interface VitraBook {
   readonly resolveHref: (href: string) => { index: number; anchor?: string } | null;
   readonly getCover: () => Promise<Blob | null>;
   readonly destroy: () => void;
+  /** 全文搜索（基于内存索引，需先加载章节才可搜索该章节） */
+  readonly search: (keyword: string) => VitraSearchResult[];
 }
 

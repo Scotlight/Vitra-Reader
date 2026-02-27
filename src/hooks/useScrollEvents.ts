@@ -1,4 +1,5 @@
 import { RefObject, useCallback, useRef, useEffect } from 'react';
+import { clampNumber } from '../utils/mathUtils';
 
 /**
  * 速度追踪器 — 仅用于触摸事件的速度估算
@@ -49,9 +50,7 @@ const LINE_DELTA_PX = 16;
 const PAGE_DELTA_FACTOR = 0.9;
 const DEFAULT_WHEEL_STEP_PX = 120;
 
-function clampNumber(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
+
 
 function normalizeWheelDelta(event: WheelEvent, viewport: HTMLElement | null, stepSizePx: number): number {
   let deltaY = event.deltaY;

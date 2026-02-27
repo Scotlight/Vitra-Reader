@@ -1,3 +1,5 @@
+import type { EpubArchive, EpubBookInternal, EpubSpineItem } from '../types/epubjs';
+
 const RESOURCE_WARNING_CACHE_LIMIT = 240;
 const STYLE_URL_PATTERN = /url\(([^)]+)\)/gi;
 const URL_ATTR_SELECTORS = [
@@ -12,7 +14,7 @@ const URL_ATTR_SELECTORS = [
 ];
 
 interface EpubResourceContext {
-  readonly archive: any;
+  readonly archive: EpubArchive;
   readonly chapterUrl: string;
   readonly baseDir: string;
   readonly resolvePath?: (href: string) => string | undefined;
@@ -206,15 +208,15 @@ async function rewriteStyleTags(doc: Document, context: EpubResourceContext): Pr
   }
 }
 
-function createContext(spineItem: any, bookAny: any): EpubResourceContext | null {
-  const archive = bookAny.archive;
+function createContext(spineItem: EpubSpineItem, bookInternal: EpubBookInternal): EpubResourceContext | null {
+  const archive = bookInternal.archive;
   if (!archive) return null;
 
   const chapterUrl: string = spineItem.url || '';
   const index = chapterUrl.lastIndexOf('/');
   const baseDir = index >= 0 ? chapterUrl.slice(0, index + 1) : '/';
-  const resolvePath = typeof bookAny.resolve === 'function' ? (bookAny.resolve.bind(bookAny) as (href: string) => string) : undefined;
-  const resourceExists = buildResourceExistsChecker(bookAny, baseDir);
+  const resolvePath = typeof bookInternal.resolve === 'function' ? (bookInternal.resolve.bind(bookInternal) as (href: string) => string) : undefined;
+  const resourceExists = buildResourceExistsChecker(bookInternal, baseDir);
 
   return {
     archive,
@@ -226,10 +228,10 @@ function createContext(spineItem: any, bookAny: any): EpubResourceContext | null
 }
 
 function buildResourceExistsChecker(
-  bookAny: any,
+  bookInternal: EpubBookInternal,
   baseDir: string,
 ): ((path: string) => boolean) | undefined {
-  const manifestSet = collectManifestResources(bookAny, baseDir);
+  const manifestSet = collectManifestResources(bookInternal, baseDir);
   if (manifestSet.size === 0) return undefined;
   return (path: string) => {
     const normalized = normalizeManifestPath(path);
@@ -239,8 +241,8 @@ function buildResourceExistsChecker(
   };
 }
 
-function collectManifestResources(bookAny: any, baseDir: string): Set<string> {
-  const manifest = bookAny?.packaging?.manifest;
+function collectManifestResources(bookInternal: EpubBookInternal, baseDir: string): Set<string> {
+  const manifest = bookInternal?.packaging?.manifest;
   if (!manifest || typeof manifest !== 'object') return new Set<string>();
 
   const set = new Set<string>();
@@ -274,10 +276,10 @@ function addManifestCandidate(set: Set<string>, rawPath: string, baseDir: string
 
 export async function resolveChapterDocumentResources(
   doc: Document,
-  spineItem: any,
-  bookAny: any,
+  spineItem: EpubSpineItem,
+  bookInternal: EpubBookInternal,
 ): Promise<void> {
-  const context = createContext(spineItem, bookAny);
+  const context = createContext(spineItem, bookInternal);
   if (!context) return;
 
   const resourceElements = URL_ATTR_SELECTORS
@@ -300,10 +302,10 @@ export async function resolveChapterDocumentResources(
 
 export async function rewriteExternalStyleSheetUrls(
   cssText: string,
-  spineItem: any,
-  bookAny: any,
+  spineItem: EpubSpineItem,
+  bookInternal: EpubBookInternal,
 ): Promise<string> {
-  const context = createContext(spineItem, bookAny);
+  const context = createContext(spineItem, bookInternal);
   if (!context) return cssText;
   return rewriteCssUrls(cssText, context);
 }

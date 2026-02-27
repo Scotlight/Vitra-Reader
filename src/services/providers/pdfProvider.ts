@@ -1,8 +1,10 @@
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '../contentProvider'
+import { escapeHtmlAttribute as escapeAttr } from '../../utils/contentSanitizer'
+import type { PdfDocumentProxy, PdfPageProxy, PdfPageViewport, PdfOutlineItem, PdfAnnotation } from '../../types/pdfjs'
 
 type PdfJsRuntime = {
     GlobalWorkerOptions: { workerSrc: string }
-    getDocument: (src: unknown) => { promise: Promise<any> }
+    getDocument: (src: unknown) => { promise: Promise<PdfDocumentProxy> }
 }
 
 interface PdfPageLink {
@@ -56,7 +58,7 @@ async function getPdfRuntime(forceLegacy = false): Promise<PdfJsRuntime> {
 }
 
 function shouldFallbackToLegacy(error: unknown): boolean {
-    const text = String((error as any)?.message || error || '').toLowerCase()
+    const text = String(error instanceof Error ? error.message : error || '').toLowerCase()
     return text.includes('tohex is not a function')
         || text.includes('unknownerrorexception')
         || text.includes('baseexceptionclosure')
@@ -73,7 +75,7 @@ function promoteLegacyRuntime(reason: string, error: unknown): void {
     }
 }
 
-async function openPdfDocument(data: ArrayBuffer, forceLegacy = false): Promise<any> {
+async function openPdfDocument(data: ArrayBuffer, forceLegacy = false): Promise<PdfDocumentProxy> {
     const runtime = await getPdfRuntime(forceLegacy || forceLegacyRuntime)
     return runtime.getDocument({
         data: new Uint8Array(data.slice(0)),
@@ -82,7 +84,7 @@ async function openPdfDocument(data: ArrayBuffer, forceLegacy = false): Promise<
     }).promise
 }
 
-async function openPdfDocumentWithFallback(data: ArrayBuffer): Promise<any> {
+async function openPdfDocumentWithFallback(data: ArrayBuffer): Promise<PdfDocumentProxy> {
     try {
         return await openPdfDocument(data, false)
     } catch (error) {
@@ -95,7 +97,7 @@ async function openPdfDocumentWithFallback(data: ArrayBuffer): Promise<any> {
 }
 
 export class PdfContentProvider implements ContentProvider {
-    private doc: any | null = null
+    private doc: PdfDocumentProxy | null = null
     private pageCount = 0
     private outline: TocItem[] = []
     private pageHtmlCache = new Map<number, string>()
@@ -110,7 +112,7 @@ export class PdfContentProvider implements ContentProvider {
         try {
             const raw = await this.doc.getOutline()
             if (raw) {
-                this.outline = raw.map((item: any, i: number) => ({
+                this.outline = raw.map((item: PdfOutlineItem, i: number) => ({
                     id: `outline-${i}`, href: `page-${i}`, label: item.title || `第 ${i + 1} 节`,
                 }))
             }
@@ -194,7 +196,7 @@ export class PdfContentProvider implements ContentProvider {
         for (let i = 1; i <= this.pageCount; i++) {
             const page = await this.doc.getPage(i)
             const content = await page.getTextContent()
-            const text = (content.items as any[]).map(it => it.str).join('')
+            const text = content.items.map(it => it.str).join('')
             if (!text.toLowerCase().includes(lk)) continue
             const pos = text.toLowerCase().indexOf(lk)
             const start = Math.max(0, pos - 20)
@@ -215,7 +217,7 @@ export class PdfContentProvider implements ContentProvider {
     }
 }
 
-async function renderPdfPage(doc: any, pageIndex: number): Promise<RenderedPdfPage> {
+async function renderPdfPage(doc: PdfDocumentProxy, pageIndex: number): Promise<RenderedPdfPage> {
     if (typeof document === 'undefined') {
         throw new Error('[PdfProvider] document is unavailable in current runtime')
     }
@@ -229,7 +231,7 @@ async function renderPdfPage(doc: any, pageIndex: number): Promise<RenderedPdfPa
     const context = canvas.getContext('2d')
     if (!context) throw new Error('[PdfProvider] canvas 2d context is unavailable')
 
-    await page.render({ canvasContext: context as any, viewport }).promise
+    await page.render({ canvasContext: context, viewport }).promise
     const imageUrl = await canvasToImageUrl(canvas)
     const links = await extractPdfPageLinks(doc, page, viewport, pageIndex)
     return { imageUrl, links }
@@ -250,9 +252,9 @@ async function canvasToImageUrl(canvas: HTMLCanvasElement): Promise<string> {
 }
 
 async function extractPdfPageLinks(
-    doc: any,
-    page: any,
-    viewport: any,
+    doc: PdfDocumentProxy,
+    page: PdfPageProxy,
+    viewport: PdfPageViewport,
     pageIndex: number,
 ): Promise<readonly PdfPageLink[]> {
     try {
@@ -272,9 +274,9 @@ async function extractPdfPageLinks(
 }
 
 async function buildPdfPageLink(
-    annotation: any,
-    doc: any,
-    viewport: any,
+    annotation: PdfAnnotation,
+    doc: PdfDocumentProxy,
+    viewport: PdfPageViewport,
     currentPageIndex: number,
 ): Promise<PdfPageLink | null> {
     if (annotation?.subtype !== 'Link') return null
@@ -289,7 +291,7 @@ async function buildPdfPageLink(
 }
 
 async function resolvePdfDestPageIndex(
-    doc: any,
+    doc: PdfDocumentProxy,
     dest: unknown,
     currentPageIndex: number,
 ): Promise<number | null> {
@@ -318,7 +320,7 @@ async function resolvePdfDestPageIndex(
 
 function normalizePdfRect(
     rect: unknown,
-    viewport: any,
+    viewport: PdfPageViewport,
 ): { left: number; top: number; width: number; height: number } | null {
     if (!Array.isArray(rect) || rect.length < 4) return null
     if (!viewport || typeof viewport.width !== 'number' || typeof viewport.height !== 'number') return null
@@ -329,7 +331,7 @@ function normalizePdfRect(
 
     const useConverted = typeof viewport.convertToViewportRectangle === 'function'
     const [x1, y1, x2, y2] = useConverted
-        ? viewport.convertToViewportRectangle(rectNums)
+        ? viewport.convertToViewportRectangle!(rectNums)
         : rectNums
 
     const leftPx = Math.min(x1, x2)
@@ -352,12 +354,14 @@ function clampPercent(value: number): number {
     return Math.max(0, Math.min(100, Number(value.toFixed(4))))
 }
 
+
 function renderPdfPageHtml(
     imageUrl: string,
     links: readonly PdfPageLink[],
     pageIndex: number,
 ): string {
-    const imageTag = `<img src="${imageUrl}" alt="PDF page ${pageIndex + 1}" style="display:block;width:100%;height:auto;"/>`
+    const safeUrl = escapeAttr(imageUrl)
+    const imageTag = `<img src="${safeUrl}" alt="PDF page ${pageIndex + 1}" style="display:block;width:100%;height:auto;"/>`
     if (links.length === 0) return imageTag
 
     const linkTags = links
@@ -370,9 +374,9 @@ function renderPdfPageHtml(
 export async function parsePdfMetadata(data: ArrayBuffer) {
     const doc = await openPdfDocumentWithFallback(data)
     const meta = await doc.getMetadata()
-    const info = meta?.info as any
-    const title = info?.Title || ''
-    const author = info?.Author || '未知作者'
+    const info = meta?.info
+    const title = (info?.Title as string) || ''
+    const author = (info?.Author as string) || '未知作者'
     doc.destroy()
     return { title, author }
 }

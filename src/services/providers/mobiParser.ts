@@ -258,7 +258,8 @@ export function parseMobiBuffer(buf: ArrayBuffer): MobiParsed {
         content += decodeTextRecordPayload(getRecordBytes(bytes, records, i), header)
     }
     if (cover && !content.includes(cover)) {
-        content = `<div class="mobi-cover"><img src="${cover}" alt="cover" /></div><mbp:pagebreak/>${content}`
+        const safeCover = cover.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        content = `<div class="mobi-cover"><img src="${safeCover}" alt="cover" /></div><mbp:pagebreak/>${content}`
     }
     return { title, author, content, cover }
 }

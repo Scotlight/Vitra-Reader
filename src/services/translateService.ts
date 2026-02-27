@@ -1,5 +1,35 @@
 import { db, type TranslationCacheEntry } from './storageService'
 
+// ─── Safe Storage helpers for API keys ──────────────────────
+
+const API_KEY_FIELDS = ['deeplApiKey', 'openaiApiKey', 'geminiApiKey', 'claudeApiKey'] as const
+
+async function encryptApiKeys(config: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const api = window.electronAPI
+    if (!api?.safeStorageEncrypt) return config
+    const copy = { ...config }
+    for (const field of API_KEY_FIELDS) {
+        const value = copy[field]
+        if (typeof value === 'string' && value.length > 0) {
+            copy[field] = await api.safeStorageEncrypt(value)
+        }
+    }
+    return copy
+}
+
+async function decryptApiKeys(config: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const api = window.electronAPI
+    if (!api?.safeStorageDecrypt) return config
+    const copy = { ...config }
+    for (const field of API_KEY_FIELDS) {
+        const value = copy[field]
+        if (typeof value === 'string' && value.length > 0) {
+            copy[field] = await api.safeStorageDecrypt(value)
+        }
+    }
+    return copy
+}
+
 export type TranslateProvider =
     | 'openai'
     | 'gemini'
@@ -132,13 +162,15 @@ export async function loadTranslateConfig(): Promise<TranslateConfig> {
     const entry = await db.settings.get(TRANSLATE_CONFIG_KEY)
     const value = entry?.value
     if (!value || typeof value !== 'object') return DEFAULT_TRANSLATE_CONFIG
-    return normalizeConfig(value as Partial<TranslateConfig>)
+    const decrypted = await decryptApiKeys(value as Record<string, unknown>)
+    return normalizeConfig(decrypted as Partial<TranslateConfig>)
 }
 
 export async function saveTranslateConfig(config: Partial<TranslateConfig>): Promise<TranslateConfig> {
     const current = await loadTranslateConfig()
     const next = normalizeConfig({ ...current, ...config })
-    await db.settings.put({ key: TRANSLATE_CONFIG_KEY, value: next })
+    const encrypted = await encryptApiKeys(next as unknown as Record<string, unknown>)
+    await db.settings.put({ key: TRANSLATE_CONFIG_KEY, value: encrypted })
     return next
 }
 

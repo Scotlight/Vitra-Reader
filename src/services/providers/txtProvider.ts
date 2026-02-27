@@ -5,6 +5,7 @@ import {
     EMPTY_SECTION_HTML,
     DEFAULT_DOCUMENT_LABEL,
 } from '../../utils/chapterTitleDetector'
+import { escapeHtml } from '../../utils/contentSanitizer'
 
 const PARAGRAPHS_PER_CHAPTER = 500
 const MAX_LABEL_LENGTH = 24
@@ -211,9 +212,6 @@ function renderChapterHtml(paragraphs: string[]): string {
     }).join('\n')
 }
 
-function escapeHtml(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
 
 export async function parseTxtMetadata(_data: ArrayBuffer, filename: string) {
     return { title: filename.replace(/\.txt$/i, ''), author: '未知作者' }

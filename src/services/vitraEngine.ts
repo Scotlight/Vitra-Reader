@@ -137,5 +137,6 @@ export type {
   VitraBookSection,
   VitraLayoutMode,
   VitraReadingDirection,
+  VitraSearchResult,
   VitraTocItem,
 } from '../types/vitraBook';

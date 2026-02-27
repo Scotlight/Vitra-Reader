@@ -81,5 +81,8 @@ interface Window {
             headers?: Record<string, string>
             body?: string
         }) => Promise<{ success: boolean; status?: number; data?: string; error?: string }>
+        safeStorageEncrypt: (plaintext: string) => Promise<string>
+        safeStorageDecrypt: (cipherBase64: string) => Promise<string>
+        safeStorageIsAvailable: () => Promise<boolean>
     }
 }
