@@ -68,7 +68,7 @@ export class MdContentProvider implements ContentProvider {
             while (pos !== -1) {
                 const start = Math.max(0, pos - 20)
                 const end = Math.min(plain.length, pos + keyword.length + 20)
-                results.push({ cfi: `bdise:${i}:0`, excerpt: this.chapters[i].plain.slice(start, end) })
+                results.push({ cfi: `vitra:${i}:0`, excerpt: this.chapters[i].plain.slice(start, end) })
                 pos = plain.indexOf(lk, pos + 1)
             }
         }

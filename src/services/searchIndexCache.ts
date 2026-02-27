@@ -62,7 +62,7 @@ export function searchBookIndex(bookId: string, keyword: string): SearchResult[]
         let pos = lower.indexOf(normalized)
         while (pos !== -1) {
             results.push({
-                cfi: `bdise:${spineIndex}:0`,
+                cfi: `vitra:${spineIndex}:0`,
                 excerpt: buildExcerpt(text, pos, normalized.length),
             })
             pos = lower.indexOf(normalized, pos + normalized.length)

@@ -54,7 +54,7 @@ export interface VitraTocItem {
 }
 
 export interface VitraSearchResult {
-  /** 定位标识（格式：`bdise:{sectionIndex}:{offset}`） */
+  /** 定位标识（格式：`vitra:{sectionIndex}:{offset}`） */
   readonly cfi: string;
   /** 匹配上下文摘要 */
   readonly excerpt: string;

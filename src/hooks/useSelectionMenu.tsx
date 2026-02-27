@@ -67,7 +67,7 @@ export function useSelectionMenu({ bookId, onSelectionSearch, getHighlightContai
     const handleHighlight = useCallback(async (color: string) => {
         const { text, spineIndex } = selectionMenu;
         const id = crypto.randomUUID();
-        const cfiRange = `bdise:${spineIndex}`;
+        const cfiRange = `vitra:${spineIndex}`;
 
         await db.highlights.add({
             id, bookId, cfiRange, color, text, createdAt: Date.now(),
@@ -96,7 +96,7 @@ export function useSelectionMenu({ bookId, onSelectionSearch, getHighlightContai
     const handleNoteSave = useCallback(async (note: string) => {
         await db.bookmarks.add({
             id: crypto.randomUUID(), bookId,
-            location: `bdise:${noteDialog.spineIndex}`,
+            location: `vitra:${noteDialog.spineIndex}`,
             title: noteDialog.text.slice(0, 80),
             note,
             createdAt: Date.now(),

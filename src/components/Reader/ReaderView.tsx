@@ -5,7 +5,7 @@ import { db, Highlight, Bookmark } from '../../services/storageService'
 import { useSettingsStore, type PageTurnMode } from '../../stores/useSettingsStore'
 import type { ContentProvider, TocItem, SearchResult, SpineItemInfo, BookFormat } from '../../services/contentProvider'
 import { createContentProvider } from '../../services/contentProviderFactory'
-import { resolveReaderRenderMode } from '../../services/readerRenderMode'
+import { resolveReaderRenderMode } from '../../services/vitraEngine'
 import { ScrollReaderView, ScrollReaderHandle } from './ScrollReaderView'
 import { PaginatedReaderView, PaginatedReaderHandle } from './PaginatedReaderView'
 import { buildFontFamilyWithFallback } from '../../utils/fontFallback'
@@ -116,7 +116,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const [loadingFonts, setLoadingFonts] = useState(false)
     const [bookFormat, setBookFormat] = useState<BookFormat>('epub')
     const [provider, setProvider] = useState<ContentProvider | null>(null)
-    const [bdiseParams, setBdiseParams] = useState({ initialSpineIndex: 0, initialScrollOffset: 0 })
+    const [vitraScrollParams, setVitraScrollParams] = useState({ initialSpineIndex: 0, initialScrollOffset: 0 })
     const [paginatedParams, setPaginatedParams] = useState({ initialSpineIndex: 0, initialPage: 0 })
     const scrollReaderRef = useRef<ScrollReaderHandle>(null)
     const paginatedReaderRef = useRef<PaginatedReaderHandle>(null)
@@ -135,7 +135,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const settings = useSettingsStore()
     const modeDecision = resolveReaderRenderMode(bookFormat, settings.pageTurnMode)
     const effectivePageTurnMode = modeDecision.effectiveMode
-    const isBdiseMode = effectivePageTurnMode === 'scrolled-continuous'
+    const isScrollMode = effectivePageTurnMode === 'scrolled-continuous'
     const resolvedReaderFontFamily = buildFontFamilyWithFallback(settings.fontFamily)
     const readerColors = (() => {
         const fallbackByTheme: Record<string, { text: string; bg: string }> = {
@@ -284,11 +284,12 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                 setToc(buildFallbackTocFromSpine(cp.getSpineItems()))
             }
 
-            // 3. Parse initial position from saved progress (bdise:{spineIndex}:{pageOrOffset})
+            // 3. Parse initial position from saved progress (vitra:{spineIndex}:{pageOrOffset})
+            //    兼容旧格式 bdise: 前缀
             let sIndex = 0
             let sOffset = 0
 
-            if (initialCfi && initialCfi.startsWith('bdise:')) {
+            if (initialCfi && (initialCfi.startsWith('vitra:') || initialCfi.startsWith('bdise:'))) {
                 const parts = initialCfi.split(':')
                 sIndex = parseInt(parts[1], 10) || 0
                 sOffset = parseInt(parts[2], 10) || 0
@@ -301,7 +302,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             // 4. Set params based on mode
             const effectiveMode = resolveReaderRenderMode(format, settings.pageTurnMode).effectiveMode
             if (effectiveMode === 'scrolled-continuous') {
-                setBdiseParams({ initialSpineIndex: sIndex, initialScrollOffset: sOffset })
+                setVitraScrollParams({ initialSpineIndex: sIndex, initialScrollOffset: sOffset })
             } else {
                 // Paginated modes use PaginatedReaderView
                 setPaginatedParams({ initialSpineIndex: sIndex, initialPage: sOffset })
@@ -358,7 +359,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const jumpToAnnotation = async (location: string, searchText?: string) => {
         let spineIndex: number | null = null
 
-        if (location.startsWith('bdise:')) {
+        if (location.startsWith('vitra:') || location.startsWith('bdise:')) {
             spineIndex = parseInt(location.split(':')[1], 10)
         } else if (location.startsWith('epubcfi(')) {
             // epubcfi(/6/6!/4/4/28,...) — second number /6 = spine position, (pos/2 - 1) = spineIndex
@@ -370,7 +371,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
 
         if (spineIndex === null || isNaN(spineIndex)) return
 
-        if (isBdiseMode) {
+        if (isScrollMode) {
             await scrollReaderRef.current?.jumpToSpine(spineIndex, searchText)
         } else {
             await paginatedReaderRef.current?.jumpToSpine(spineIndex, searchText)
@@ -407,7 +408,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         if (providerRef.current) {
             const spineIndex = providerRef.current.getSpineIndexByHref(href)
             if (spineIndex >= 0) {
-                if (isBdiseMode) {
+                if (isScrollMode) {
                     await scrollReaderRef.current?.jumpToSpine(spineIndex)
                 } else {
                     await paginatedReaderRef.current?.jumpToSpine(spineIndex)
@@ -796,13 +797,13 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                     )}
 
                     {/* Scroll Mode */}
-                    {isBdiseMode && provider && isReady && (
+                    {isScrollMode && provider && isReady && (
                         <ScrollReaderView
                             ref={scrollReaderRef}
                             provider={provider}
                             bookId={bookId}
-                            initialSpineIndex={bdiseParams.initialSpineIndex}
-                            initialScrollOffset={bdiseParams.initialScrollOffset}
+                            initialSpineIndex={vitraScrollParams.initialSpineIndex}
+                            initialScrollOffset={vitraScrollParams.initialScrollOffset}
                             smoothConfig={{
                                 enabled: settings.smoothScrollEnabled,
                                 stepSizePx: settings.smoothStepSizePx,
@@ -842,7 +843,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                     )}
 
                     {/* Paginated Mode (single or double) */}
-                    {!isBdiseMode && provider && isReady && (
+                    {!isScrollMode && provider && isReady && (
                         <PaginatedReaderView
                             ref={paginatedReaderRef}
                             provider={provider}

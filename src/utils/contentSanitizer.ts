@@ -128,8 +128,8 @@ function sanitizeWithDomParser(html: string): {
     usedFallback: boolean
 } {
     const parser = new DOMParser()
-    const parsed = parser.parseFromString(`<div id="__bdise_sanitizer_root">${html}</div>`, 'text/html')
-    const root = parsed.getElementById('__bdise_sanitizer_root')
+    const parsed = parser.parseFromString(`<div id="__vitra_sanitizer_root">${html}</div>`, 'text/html')
+    const root = parsed.getElementById('__vitra_sanitizer_root')
 
     if (!root) {
         // DOMParser 解析失败 — 不可返回未消毒的原始 HTML，降级到 regex 消毒

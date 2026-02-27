@@ -4,7 +4,6 @@ import {
 } from 'react';
 import type { ContentProvider, SpineItemInfo } from '../../services/contentProvider';
 import { ShadowRenderer, ReaderStyleConfig, segmentPool } from './ShadowRenderer';
-import type { SegmentMeta } from '../../types/vectorRender';
 import {
     shouldPreloadChapter,
     detectScrollDirection,
@@ -20,8 +19,7 @@ import { useScrollEvents } from '../../hooks/useScrollEvents';
 import { db } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
 import { preprocessChapterContent } from '../../services/chapterPreprocessService';
-import { buildChapterMetaVector, batchUpdateSegmentHeights } from '../../services/metaVectorManager';
-import type { ChapterMetaVector } from '../../types/vectorRender';
+import { buildChapterMetaVector, batchUpdateSegmentHeights, type ChapterMetaVector, type SegmentMeta } from '../../services/vitraEngine';
 import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
 import { clampNumber } from '../../utils/mathUtils';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
@@ -982,7 +980,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         // Persist progress
         db.progress.put({
             bookId,
-            location: `bdise:${resolvedSpineIndex}:${scrollTop}`,
+            location: `vitra:${resolvedSpineIndex}:${scrollTop}`,
             percentage: progress,
             currentChapter: spineItems[resolvedSpineIndex]?.href || '',
             updatedAt: Date.now(),
@@ -1263,7 +1261,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         });
         db.highlights.where('bookId').equals(bookId).toArray().then(highlights => {
             const matching = highlights.filter(h => {
-                if (h.cfiRange.startsWith('bdise:')) {
+                if (h.cfiRange.startsWith('vitra:') || h.cfiRange.startsWith('bdise:')) {
                     return parseInt(h.cfiRange.split(':')[1], 10) === spineIndex;
                 }
                 if (h.cfiRange.startsWith('epubcfi(')) {
@@ -1499,7 +1497,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
     return (
         <div
-            className={styles.bdiseViewport}
+            className={styles.vitraViewport}
             ref={viewportRef}
             style={{ overflow: 'hidden' }} // Override to disable native scrolling
         >

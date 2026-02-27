@@ -68,7 +68,7 @@ export class Fb2ContentProvider implements ContentProvider {
                 const start = Math.max(0, pos - 20)
                 const end = Math.min(plain.length, pos + keyword.length + 20)
                 const raw = this.chapters[i].html.replace(/<[^>]+>/g, '')
-                results.push({ cfi: `bdise:${i}:0`, excerpt: raw.slice(start, end) })
+                results.push({ cfi: `vitra:${i}:0`, excerpt: raw.slice(start, end) })
                 pos = plain.indexOf(lk, pos + 1)
             }
         }

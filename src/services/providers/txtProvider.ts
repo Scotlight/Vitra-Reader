@@ -75,7 +75,7 @@ export class TxtContentProvider implements ContentProvider {
             while (pos !== -1) {
                 const start = Math.max(0, pos - 20)
                 const end = Math.min(lower.length, pos + lk.length + 20)
-                results.push({ cfi: `bdise:${i}:0`, excerpt: plain.slice(start, end) })
+                results.push({ cfi: `vitra:${i}:0`, excerpt: plain.slice(start, end) })
                 pos = lower.indexOf(lk, pos + 1)
             }
         }

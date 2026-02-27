@@ -4,16 +4,17 @@ import styles from './ShadowRenderer.module.css';
 import { waitForAssetLoad, getContainerHeight } from '../../utils/assetLoader';
 import { generateCSSOverride, generatePaginatedCSSOverride, extractStyles, removeStyleTags, scopeStyles } from '../../utils/styleProcessor';
 import { sanitizeChapterHtml, sanitizeStyleSheets } from '../../utils/contentSanitizer';
-import { buildReaderCssTemplate } from '../../utils/readerCss';
-import { buildVitraVectorRenderPlan, DEFAULT_VITRA_VECTOR_CONFIG } from '../../services/vitraVectorPlanner';
 import {
+  buildReaderCssTemplate,
+  buildVitraVectorRenderPlan,
+  DEFAULT_VITRA_VECTOR_CONFIG,
   createVitraRenderTrace,
   finalizeVitraRenderTrace,
   formatVitraRenderTrace,
   runVitraRenderStage,
-} from '../../services/vitraRenderPipeline';
-import type { SegmentMeta } from '../../types/vectorRender';
-import { SegmentDomPool } from '../../utils/segmentDomPool';
+  SegmentDomPool,
+  type SegmentMeta,
+} from '../../services/vitraEngine';
 
 const LARGE_CHAPTER_HTML_THRESHOLD = DEFAULT_VITRA_VECTOR_CONFIG.largeChapterThreshold;
 const CHUNK_APPEND_BATCH_SIZE = 120;

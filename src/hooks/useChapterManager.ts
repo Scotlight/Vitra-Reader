@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import type { Book } from 'epubjs';
 import { ChapterState, ChapterStatus } from '../types/chapter';
 
 /**
@@ -19,7 +20,7 @@ const DEFAULT_CONFIG: ChapterManagerConfig = {
  * 职责：管理章节队列，触发预加载，维护章节生命周期
  */
 export function useChapterManager(
-  epubBook: any,  // epub.js Book 实例
+  epubBook: Book | null,
   currentChapterIndex: number,
   config: ChapterManagerConfig = DEFAULT_CONFIG
 ) {
@@ -127,7 +128,7 @@ export function useChapterManager(
     const nextIndex = latestChapter.index + 1;
 
     // 检查是否已经是最后一章
-    const totalChapters = epubBook.spine?.length || 0;
+    const totalChapters = (epubBook.spine as unknown as { length?: number })?.length || 0;
     if (nextIndex >= totalChapters) {
       console.log('[ChapterManager] Already at last chapter');
       return;

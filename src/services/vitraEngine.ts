@@ -53,19 +53,20 @@ export type {
   VitraRenderTraceSnapshot,
 } from './vitraRenderPipeline';
 
-// 核心：渐进式水合调度器 (4.5)
+// 核心：渐进式水合调度器 (4.5) — 已被 ShadowRenderer/ScrollReaderView
+// 的 IO 驱动方案取代，保留模块文件但不再从桶导出。
+// 如需恢复请手动 import './vitraHydration'。
+
+// 向量元数据管理器 (4.1)
 export {
-  scheduleHydration,
-  shouldUseProgressiveHydration,
-  HYDRATION_PHASE_ORDER,
-} from './vitraHydration';
-export type {
-  VitraHydrationPhase,
-  VitraHydrationTask,
-  VitraHydrationProgress,
-  VitraHydrationHandle,
-  VitraHydrationOptions,
-} from './vitraHydration';
+  findSegmentByOffset,
+  computeVisibleRange,
+  batchUpdateSegmentHeights,
+  buildChapterMetaVector,
+} from './metaVectorManager';
+
+// 段级 DOM 节点池 (4.1)
+export { SegmentDomPool } from '../utils/segmentDomPool';
 
 // 独立格式 Parser：漫画归档
 export { VitraCbzParser, VitraCbtParser, VitraCbrParser, VitraCb7Parser } from './parsers/vitraComicParser';

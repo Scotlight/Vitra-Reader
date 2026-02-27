@@ -9,9 +9,8 @@ import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
 import { db } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
 import { preprocessChapterContent } from '../../services/chapterPreprocessService';
-import { startMeasure, type VitraMeasureHandle } from '../../services/vitraMeasure';
+import { startMeasure, type VitraMeasureHandle, type PageBoundary } from '../../services/vitraEngine';
 import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
-import type { PageBoundary } from '../../types/vitraPagination';
 import styles from './PaginatedReaderView.module.css';
 
 const HIGHLIGHT_IDLE_TIMEOUT_MS = 600;
@@ -237,7 +236,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     const applyHighlights = useCallback((el: HTMLElement, spineIndex: number) => {
         db.highlights.where('bookId').equals(bookId).toArray().then(highlights => {
             const matching = highlights.filter(h => {
-                if (h.cfiRange.startsWith('bdise:')) {
+                if (h.cfiRange.startsWith('vitra:') || h.cfiRange.startsWith('bdise:')) {
                     return parseInt(h.cfiRange.split(':')[1], 10) === spineIndex;
                 }
                 if (h.cfiRange.startsWith('epubcfi(')) {
@@ -570,7 +569,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
 
         db.progress.put({
             bookId,
-            location: `bdise:${currentSpineIndex}:${currentPage}`,
+            location: `vitra:${currentSpineIndex}:${currentPage}`,
             percentage: clamped,
             currentChapter: spineItems[currentSpineIndex]?.href || '',
             updatedAt: Date.now(),

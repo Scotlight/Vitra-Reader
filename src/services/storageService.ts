@@ -115,7 +115,7 @@ class ReaderDatabase extends Dexie {
             translationCache: 'key, provider, createdAt, lastAccessAt, expiresAt',
             settings: 'key',
         }).upgrade(tx => {
-            return tx.table('books').toCollection().modify((book: any) => {
+            return tx.table('books').toCollection().modify((book: Record<string, unknown>) => {
                 if (!book.originalTitle) book.originalTitle = book.title || ''
                 if (!book.originalAuthor) book.originalAuthor = book.author || '未知作者'
                 if (book.originalDescription === undefined) book.originalDescription = book.description || ''

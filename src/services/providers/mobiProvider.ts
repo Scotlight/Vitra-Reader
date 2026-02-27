@@ -73,7 +73,7 @@ export class MobiContentProvider implements ContentProvider {
             while (pos !== -1) {
                 const start = Math.max(0, pos - 20)
                 const end = Math.min(text.length, pos + keyword.length + 20)
-                results.push({ cfi: `bdise:${i}:0`, excerpt: text.slice(start, end) })
+                results.push({ cfi: `vitra:${i}:0`, excerpt: text.slice(start, end) })
                 pos = lowerText.indexOf(needle, pos + 1)
             }
         }

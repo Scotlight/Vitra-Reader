@@ -201,7 +201,7 @@ export class PdfContentProvider implements ContentProvider {
             const pos = text.toLowerCase().indexOf(lk)
             const start = Math.max(0, pos - 20)
             const end = Math.min(text.length, pos + keyword.length + 20)
-            results.push({ cfi: `bdise:${i - 1}:0`, excerpt: text.slice(start, end) })
+            results.push({ cfi: `vitra:${i - 1}:0`, excerpt: text.slice(start, end) })
         }
         return results
     }

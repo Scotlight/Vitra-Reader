@@ -47,10 +47,11 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
         try {
             const format = detectFormat(file.name, fileData)
             const parsed = await parseBookMetadata(format, fileData, file.name)
+            const metaRecord = parsed as Record<string, unknown>
             const title = parsed.title || stripBookExtension(file.name)
             const author = parsed.author || '未知作者'
-            const description = (parsed as any).description || ''
-            const cover = (parsed as any).cover || ''
+            const description = typeof metaRecord.description === 'string' ? metaRecord.description : ''
+            const cover = typeof metaRecord.cover === 'string' ? metaRecord.cover : ''
 
             meta = {
                 id,
@@ -62,8 +63,8 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
                 originalAuthor: author,
                 originalDescription: description,
                 originalCover: cover,
-                publisher: (parsed as any).publisher,
-                language: (parsed as any).language,
+                publisher: typeof metaRecord.publisher === 'string' ? metaRecord.publisher : undefined,
+                language: typeof metaRecord.language === 'string' ? metaRecord.language : undefined,
                 format,
                 fileSize: fileData.byteLength,
                 addedAt: now,

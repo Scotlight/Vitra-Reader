@@ -1,9 +1,9 @@
 /**
- * ScrollReaderView — BDISE 专用垂直滚动阅读视口
+ * ScrollReaderView — Vitra 垂直滚动阅读视口
  */
 
 /* ── 主视口容器 ── */
-.bdiseViewport {
+.vitraViewport {
     position: relative;
     width: 100%;
     height: 100%;
@@ -12,7 +12,7 @@
     overflow-anchor: none;
     -webkit-overflow-scrolling: touch;
     scroll-behavior: auto;
-    /* BDISE 自行管理滚动行为 */
+    /* Vitra 自行管理滚动行为 */
     overscroll-behavior: contain;
 }
 
@@ -75,7 +75,7 @@
     margin: 0 3px;
     border-radius: 50%;
     background: currentColor;
-    animation: bdise-pulse 1.2s ease-in-out infinite;
+    animation: vitra-pulse 1.2s ease-in-out infinite;
 }
 
 .loadingDot:nth-child(2) {
@@ -86,7 +86,7 @@
     animation-delay: 0.4s;
 }
 
-@keyframes bdise-pulse {
+@keyframes vitra-pulse {
 
     0%,
     80%,
