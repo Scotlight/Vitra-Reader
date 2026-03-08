@@ -155,6 +155,18 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             bgColor: candidateBg,
         }
     })()
+    const readerStyleConfig = {
+        textColor: readerColors.textColor,
+        bgColor: readerColors.bgColor,
+        fontSize: settings.fontSize,
+        fontFamily: resolvedReaderFontFamily,
+        lineHeight: settings.lineHeight,
+        paragraphSpacing: settings.paragraphSpacing,
+        textIndentEm: settings.paragraphIndentEnabled ? 2 : 0,
+        letterSpacing: settings.letterSpacing,
+        textAlign: settings.textAlign,
+        pageWidth: settings.pageWidth,
+    }
 
     const resetSmoothSettings = () => {
         settings.updateSetting('smoothStepSizePx', SMOOTH_DEFAULTS.stepSizePx)
@@ -820,17 +832,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                                 easing: settings.smoothAnimationEasing,
                                 reverseWheelDirection: settings.smoothReverseWheelDirection,
                             }}
-                            readerStyles={{
-                                textColor: readerColors.textColor,
-                                bgColor: readerColors.bgColor,
-                                fontSize: settings.fontSize,
-                                fontFamily: resolvedReaderFontFamily,
-                                lineHeight: settings.lineHeight,
-                                paragraphSpacing: settings.paragraphSpacing,
-                                letterSpacing: settings.letterSpacing,
-                                textAlign: settings.textAlign,
-                                pageWidth: settings.pageWidth,
-                            }}
+                            readerStyles={readerStyleConfig}
                             onProgressChange={(p) => {
                                 setCurrentProgress(p)
                                 currentProgressRef.current = p
@@ -857,17 +859,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                             initialSpineIndex={paginatedParams.initialSpineIndex}
                             initialPage={paginatedParams.initialPage}
                             pageTurnMode={(effectivePageTurnMode === 'paginated-double' ? 'paginated-double' : 'paginated-single')}
-                            readerStyles={{
-                                textColor: readerColors.textColor,
-                                bgColor: readerColors.bgColor,
-                                fontSize: settings.fontSize,
-                                fontFamily: resolvedReaderFontFamily,
-                                lineHeight: settings.lineHeight,
-                                paragraphSpacing: settings.paragraphSpacing,
-                                letterSpacing: settings.letterSpacing,
-                                textAlign: settings.textAlign,
-                                pageWidth: settings.pageWidth,
-                            }}
+                            readerStyles={readerStyleConfig}
                             onProgressChange={(p) => {
                                 setCurrentProgress(p)
                                 currentProgressRef.current = p
@@ -1118,6 +1110,23 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                                         value={settings.paragraphSpacing}
                                         onChange={(e) => settings.updateSetting('paragraphSpacing', Number(e.target.value))}
                                     />
+                                </div>
+                                <div className={styles.settingsGroup}>
+                                    <label>正文首行缩进</label>
+                                    <div className={styles.toggleRow}>
+                                        <button
+                                            className={`${styles.toggleBtn} ${!settings.paragraphIndentEnabled ? styles.active : ''}`}
+                                            onClick={() => settings.updateSetting('paragraphIndentEnabled', false)}
+                                        >
+                                            关闭
+                                        </button>
+                                        <button
+                                            className={`${styles.toggleBtn} ${settings.paragraphIndentEnabled ? styles.active : ''}`}
+                                            onClick={() => settings.updateSetting('paragraphIndentEnabled', true)}
+                                        >
+                                            开启
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className={styles.settingsGroup}>
                                     <label>页面宽度: {settings.pageWidth.toFixed(1)}</label>

@@ -17,6 +17,7 @@ export interface ReaderSettings {
     // Spacing
     lineHeight: number
     paragraphSpacing: number
+    paragraphIndentEnabled: boolean
     letterSpacing: number
     pageWidth: number
     brightness: number
@@ -66,6 +67,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
     fontWeight: 'normal',
     lineHeight: 1.6,
     paragraphSpacing: 23,
+    paragraphIndentEnabled: false,
     letterSpacing: 3,
     pageWidth: 3,
     brightness: 1,

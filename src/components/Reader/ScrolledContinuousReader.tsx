@@ -24,6 +24,7 @@ interface ScrolledContinuousReaderProps {
   lineHeight: number;
   letterSpacing: number;
   paragraphSpacing: number;
+  textIndentEm?: number;
   pageWidth: number;
   textAlign: string;
 }
@@ -44,6 +45,7 @@ export function ScrolledContinuousReader({
   lineHeight,
   letterSpacing,
   paragraphSpacing,
+  textIndentEm = 0,
   pageWidth,
   textAlign
 }: ScrolledContinuousReaderProps) {
@@ -278,6 +280,7 @@ export function ScrolledContinuousReader({
               fontFamily,
               lineHeight,
               paragraphSpacing,
+              textIndentEm,
               letterSpacing,
               textAlign,
               pageWidth,

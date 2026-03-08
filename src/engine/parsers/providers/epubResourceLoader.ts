@@ -1,4 +1,5 @@
 import type { EpubArchive, EpubBookInternal, EpubSpineItem } from '../../../types/epubjs';
+import { resolveSessionAssetUrl } from '../../../utils/assetLoader';
 
 const RESOURCE_WARNING_CACHE_LIMIT = 240;
 const STYLE_URL_PATTERN = /url\(([^)]+)\)/gi;
@@ -19,6 +20,7 @@ interface EpubResourceContext {
   readonly baseDir: string;
   readonly resolvePath?: (href: string) => string | undefined;
   readonly resourceExists?: (path: string) => boolean;
+  readonly sessionKey: object;
 }
 
 const resourceWarningCache = new Set<string>();
@@ -104,7 +106,11 @@ async function resolveBlobUrl(pathValue: string, context: EpubResourceContext): 
   ensureResourceExists(candidates, context);
   for (const candidate of candidates) {
     try {
-      const blobUrl = await context.archive.createUrl(candidate);
+      const blobUrl = await resolveSessionAssetUrl(
+        context.sessionKey,
+        candidate,
+        () => context.archive.createUrl(candidate),
+      );
       if (blobUrl) {
         return blobUrl;
       }
@@ -224,6 +230,7 @@ function createContext(spineItem: EpubSpineItem, bookInternal: EpubBookInternal)
     baseDir,
     resolvePath,
     resourceExists,
+    sessionKey: bookInternal,
   };
 }
 

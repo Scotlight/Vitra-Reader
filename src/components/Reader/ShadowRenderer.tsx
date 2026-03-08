@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { clampNumber } from '../../utils/mathUtils';
 import styles from './ShadowRenderer.module.css';
-import { waitForAssetLoad, getContainerHeight } from '../../utils/assetLoader';
+import { waitForAssetLoad, getContainerHeight, isTrackedAssetUrlActive } from '../../utils/assetLoader';
 import { generateCSSOverride, generatePaginatedCSSOverride, extractStyles, removeStyleTags, scopeStyles } from '../../utils/styleProcessor';
 import { sanitizeChapterHtml, sanitizeStyleSheets } from '../../engine/core/contentSanitizer';
 import {
@@ -306,6 +306,7 @@ export interface ReaderStyleConfig {
   fontFamily: string;
   lineHeight: number;
   paragraphSpacing: number;
+  textIndentEm: number;
   letterSpacing: number;
   textAlign: string;
   pageWidth: number;
@@ -365,7 +366,7 @@ export function ShadowRenderer({
   const buildContentCss = useCallback(() => {
     const {
       textColor, bgColor, fontSize, fontFamily,
-      lineHeight, paragraphSpacing, letterSpacing, textAlign,
+      lineHeight, paragraphSpacing, textIndentEm, letterSpacing, textAlign,
     } = readerStyles;
     const scope = `[data-chapter-id="${chapterId}"]`;
 
@@ -382,7 +383,7 @@ export function ShadowRenderer({
       }, {
         scope,
         applyColumns: false,
-        textIndentEm: 0,
+        textIndentEm,
       })}
       ${scope} *:not(img):not(svg):not(path):not(video):not(canvas) {
         color: var(--reader-text-color, ${textColor}) !important;
@@ -550,6 +551,7 @@ export function ShadowRenderer({
             largeChapterThreshold: mediaSensitiveChapter
               ? Number.POSITIVE_INFINITY
               : LARGE_CHAPTER_HTML_THRESHOLD,
+            resourceExists: isTrackedAssetUrlActive,
           });
           if (cancelled) return null;
 

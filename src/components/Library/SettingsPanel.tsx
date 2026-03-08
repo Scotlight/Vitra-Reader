@@ -127,6 +127,47 @@ export const SettingsPanel = ({ systemFonts, loadingFonts, onClose }: SettingsPa
                             />
                         </div>
                         <label className={styles.settingRow}>
+                            <span>{`字号 ${settings.fontSize}px`}</span>
+                            <input
+                                type="range"
+                                min={13}
+                                max={40}
+                                value={settings.fontSize}
+                                onChange={(event) => settings.updateSetting('fontSize', Number(event.target.value))}
+                            />
+                        </label>
+                        <label className={styles.settingRow}>
+                            <span>{`行距 ${settings.lineHeight.toFixed(1)}`}</span>
+                            <input
+                                type="range"
+                                min={1}
+                                max={3.5}
+                                step={0.1}
+                                value={settings.lineHeight}
+                                onChange={(event) => settings.updateSetting('lineHeight', Number(event.target.value))}
+                            />
+                        </label>
+                        <label className={styles.settingRow}>
+                            <span>{`字距 ${settings.letterSpacing}px`}</span>
+                            <input
+                                type="range"
+                                min={0}
+                                max={20}
+                                value={settings.letterSpacing}
+                                onChange={(event) => settings.updateSetting('letterSpacing', Number(event.target.value))}
+                            />
+                        </label>
+                        <label className={styles.settingRow}>
+                            <span>{`段距 ${settings.paragraphSpacing}px`}</span>
+                            <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                value={settings.paragraphSpacing}
+                                onChange={(event) => settings.updateSetting('paragraphSpacing', Number(event.target.value))}
+                            />
+                        </label>
+                        <label className={styles.settingRow}>
                             <span>背景色</span>
                             <input
                                 type="color"
@@ -239,44 +280,11 @@ export const SettingsPanel = ({ systemFonts, loadingFonts, onClose }: SettingsPa
                             )}
                         </label>
                         <label className={styles.settingRow}>
-                            <span>{`字号 ${settings.fontSize}px`}</span>
+                            <span>正文首行缩进</span>
                             <input
-                                type="range"
-                                min={13}
-                                max={40}
-                                value={settings.fontSize}
-                                onChange={(event) => settings.updateSetting('fontSize', Number(event.target.value))}
-                            />
-                        </label>
-                        <label className={styles.settingRow}>
-                            <span>{`行距 ${settings.lineHeight.toFixed(1)}`}</span>
-                            <input
-                                type="range"
-                                min={1}
-                                max={3.5}
-                                step={0.1}
-                                value={settings.lineHeight}
-                                onChange={(event) => settings.updateSetting('lineHeight', Number(event.target.value))}
-                            />
-                        </label>
-                        <label className={styles.settingRow}>
-                            <span>{`字距 ${settings.letterSpacing}px`}</span>
-                            <input
-                                type="range"
-                                min={0}
-                                max={20}
-                                value={settings.letterSpacing}
-                                onChange={(event) => settings.updateSetting('letterSpacing', Number(event.target.value))}
-                            />
-                        </label>
-                        <label className={styles.settingRow}>
-                            <span>{`段距 ${settings.paragraphSpacing}px`}</span>
-                            <input
-                                type="range"
-                                min={0}
-                                max={100}
-                                value={settings.paragraphSpacing}
-                                onChange={(event) => settings.updateSetting('paragraphSpacing', Number(event.target.value))}
+                                type="checkbox"
+                                checked={settings.paragraphIndentEnabled}
+                                onChange={(event) => settings.updateSetting('paragraphIndentEnabled', event.target.checked)}
                             />
                         </label>
                         <label className={styles.settingRow}>
