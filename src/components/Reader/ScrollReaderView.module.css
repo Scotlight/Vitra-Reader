@@ -9,7 +9,6 @@
     height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
-    overflow-anchor: none;
     -webkit-overflow-scrolling: touch;
     scroll-behavior: auto;
     /* Vitra 自行管理滚动行为 */

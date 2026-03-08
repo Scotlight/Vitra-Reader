@@ -143,5 +143,5 @@ function isRelativeAssetPath(url: string): boolean {
  * @returns 高度（px）
  */
 export function getContainerHeight(container: HTMLElement): number {
-  return container.offsetHeight;
+  return container.getBoundingClientRect().height;
 }

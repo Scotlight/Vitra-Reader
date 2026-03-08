@@ -9,11 +9,6 @@ import {
     detectScrollDirection,
     ScrollDirection,
 } from '../../utils/scrollDetection';
-import {
-    findBestAnchor,
-    captureAnchorInfo,
-    calculateAnchorDelta,
-} from '../../utils/anchorDetection';
 import { useScrollInertia } from '../../hooks/useScrollInertia';
 import { useScrollEvents } from '../../hooks/useScrollEvents';
 import { db } from '../../services/storageService';
@@ -50,9 +45,7 @@ interface LoadedChapter {
 type PipelineState =
     | 'idle'
     | 'pre-fetching'
-    | 'rendering-offscreen'
-    | 'anchoring-locked'
-    | 'committing';
+    | 'rendering-offscreen';
 
 interface ScrollReaderViewProps {
     provider: ContentProvider;
@@ -94,9 +87,7 @@ const CHAPTER_DETECTION_ANCHOR_MAX_PX = 140;
 const HIGHLIGHT_IDLE_TIMEOUT_MS = 600;
 const CHAPTER_PLACEHOLDER_MIN_HEIGHT_PX = 240;
 const CHAPTER_PLACEHOLDER_DEFAULT_HEIGHT_PX = 800;
-const RESIZE_DELTA_THRESHOLD_PX = 1;
-const RESIZE_ANCHOR_EPSILON_PX = 0.5;
-const RESIZE_CORRECTION_STOP_INERTIA_PX = 48;
+const SCROLL_HEDGE_EPSILON_PX = 0.1;
 const RANGE_HYDRATION_OVERSCAN_SEGMENTS = 3;
 const RANGE_HYDRATION_PRELOAD_MARGIN_PX = 720;
 
@@ -169,6 +160,8 @@ function markChapterAsMounted(chapterEl: HTMLElement, height: number): void {
     chapterEl.removeAttribute('data-chapter-state');
 }
 
+
+
 // ── Component ──
 
 export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewProps>(({
@@ -222,6 +215,11 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     // rAF 批处理：收集同帧内完成的所有 shadow-ready 事件，合并为一次 setChapters
     const pendingReadyRef = useRef<Array<{ spineIndex: number; node: HTMLElement; height: number }>>([]);
     const pendingReadyRafRef = useRef<number | null>(null);
+    const pendingDeltaRef = useRef(0);
+    const flushRafRef = useRef<number | null>(null);
+    const unlockAdjustingRafRef = useRef<number | null>(null);
+    const ignoreScrollEventRef = useRef(false);
+    const lastKnownAnchorIndexRef = useRef(initialSpineIndex);
 
     // Keep refs in sync with state
     chaptersRef.current = chapters;
@@ -236,6 +234,41 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         easing: smoothConfig.easing !== false,
         reverseWheelDirection: Boolean(smoothConfig.reverseWheelDirection),
     }), [smoothConfig]);
+
+    const requestFlush = useCallback(() => {
+        if (flushRafRef.current !== null) return;
+
+        flushRafRef.current = requestAnimationFrame(() => {
+            flushRafRef.current = null;
+
+            const viewport = viewportRef.current;
+            if (!viewport) {
+                pendingDeltaRef.current = 0;
+                return;
+            }
+
+            const totalDelta = pendingDeltaRef.current;
+            if (Math.abs(totalDelta) <= SCROLL_HEDGE_EPSILON_PX) {
+                pendingDeltaRef.current = 0;
+                return;
+            }
+
+            pendingDeltaRef.current = 0;
+            ignoreScrollEventRef.current = true;
+            viewport.scrollBy({ top: totalDelta, left: 0, behavior: 'auto' });
+
+            if (unlockAdjustingRafRef.current !== null) {
+                cancelAnimationFrame(unlockAdjustingRafRef.current);
+            }
+
+            unlockAdjustingRafRef.current = requestAnimationFrame(() => {
+                unlockAdjustingRafRef.current = requestAnimationFrame(() => {
+                    unlockAdjustingRafRef.current = null;
+                    ignoreScrollEventRef.current = false;
+                });
+            });
+        });
+    }, []);
 
     const physicsConfig = useMemo(() => {
         const friction = clampNumber(PHYSICS_FRICTION_NUMERATOR / normalizedSmoothConfig.animationTimeMs + (normalizedSmoothConfig.easing ? 0 : PHYSICS_FRICTION_NO_EASING_OFFSET), PHYSICS_FRICTION_MIN, PHYSICS_FRICTION_MAX);
@@ -359,7 +392,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         if (!node) return;
         if (observedResizeNodesRef.current.has(node)) return;
         observedResizeNodesRef.current.add(node);
-        observedResizeHeightsRef.current.set(node, Math.max(1, Math.floor(node.getBoundingClientRect().height)));
+        observedResizeHeightsRef.current.set(node, Math.max(1, node.getBoundingClientRect().height));
         resizeObserverRef.current?.observe(node);
     }, []);
 
@@ -403,42 +436,11 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
     useEffect(() => {
         const observer = new ResizeObserver((entries) => {
-            const viewport = viewportRef.current;
-            if (!viewport) return;
-            if (pipelineRef.current === 'anchoring-locked') return;
-
-            const viewportRect = viewport.getBoundingClientRect();
-            let corrected = false;
-
             entries.forEach((entry) => {
                 const target = entry.target as HTMLElement;
-                const prevHeight = observedResizeHeightsRef.current.get(target);
-                const nextHeight = Math.max(1, Math.floor(entry.contentRect.height));
-                if (prevHeight === undefined) {
-                    observedResizeHeightsRef.current.set(target, nextHeight);
-                    return;
-                }
-
-                const delta = nextHeight - prevHeight;
-                if (Math.abs(delta) < RESIZE_DELTA_THRESHOLD_PX) {
-                    return;
-                }
+                const nextHeight = Math.max(1, entry.contentRect.height);
                 observedResizeHeightsRef.current.set(target, nextHeight);
-
-                if (!target.isConnected) return;
-                const targetTop = target.getBoundingClientRect().top - viewportRect.top + viewport.scrollTop;
-                if (targetTop >= viewport.scrollTop - RESIZE_ANCHOR_EPSILON_PX) return;
-
-                if (Math.abs(delta) >= RESIZE_CORRECTION_STOP_INERTIA_PX) {
-                    stop();
-                }
-                viewport.scrollTop = Math.max(0, viewport.scrollTop + delta);
-                corrected = true;
             });
-
-            if (corrected) {
-                lastScrollTopRef.current = viewport.scrollTop;
-            }
         });
 
         resizeObserverRef.current = observer;
@@ -449,7 +451,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 resizeObserverRef.current = null;
             }
         };
-    }, [resetResizeObservers, stop]);
+    }, [resetResizeObservers]);
 
     // Pending shadow renders queue
     const [shadowQueue, setShadowQueue] = useState<LoadedChapter[]>([]);
@@ -468,6 +470,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         if (loadingLockRef.current.size > 0) return; // already loading
         const safeIndex = Math.min(initialSpineIndex, spineItems.length - 1);
         setCurrentSpineIndex(safeIndex);
+        lastKnownAnchorIndexRef.current = safeIndex;
         loadChapter(safeIndex, 'initial');
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [spineItems]);
@@ -567,7 +570,6 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
     const runPredictivePrefetch = useCallback(() => {
         if (isUserScrollingRef.current) return;
-        if (pipelineRef.current === 'anchoring-locked') return;
 
         const totalSpine = spineItemsRef.current.length;
         if (totalSpine === 0) return;
@@ -605,16 +607,16 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     ) => {
         console.log(`[ScrollReader] Shadow ready: spine ${spineIndex}, height ${height}px`);
 
-        // 即时更新 metaVector（纯 ref 操作，无需批处理）
         const chapterId = `ch-${spineIndex}`;
         const ch = chaptersRef.current.find(c => c.spineIndex === spineIndex);
+        const previousHeight = ch?.height ?? 0;
+        const delta = height - previousHeight;
+
         if (ch?.segmentMetas && ch.segmentMetas.length > 0) {
             const vector = buildChapterMetaVector(chapterId, spineIndex, ch.segmentMetas);
             chapterVectorsRef.current.set(chapterId, vector);
         }
 
-        // 积累到 pendingReadyRef，等 rAF 统一 flush
-        // 多章节同帧 ready → 只触发一次 setChapters → 一次 useLayoutEffect → 一次滚动补偿
         pendingReadyRef.current.push({ spineIndex, node, height });
 
         if (pendingReadyRafRef.current === null) {
@@ -625,18 +627,15 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
                 console.log(`[ScrollReader] Flush batch: ${batch.map(b => `spine ${b.spineIndex}`).join(', ')}`);
 
-                // 一次性从 shadow queue 移除本批所有项
                 const batchIndices = new Set(batch.map(b => b.spineIndex));
                 setShadowQueue(prev => prev.filter(c => !batchIndices.has(c.spineIndex)));
 
-                // 一次性更新所有 ready 章节 → 触发一次 useLayoutEffect → 一次滚动补偿
-                // 跳过已经 mounted 的章节：ShadowRenderer 二次触发 onReady 时不应回退已挂载章节的状态
                 setChapters(prev => {
                     let updated = prev;
                     for (const item of batch) {
                         const index = updated.findIndex(c => c.spineIndex === item.spineIndex);
                         if (index < 0) continue;
-                        if (updated[index].status === 'mounted') continue; // 已挂载，忽略重复 ready
+                        if (updated[index].status === 'mounted') continue;
                         if (updated === prev) updated = [...prev];
                         updated[index] = {
                             ...updated[index],
@@ -649,7 +648,12 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 });
             });
         }
-    }, []);
+
+        if (spineIndex < lastKnownAnchorIndexRef.current) {
+            pendingDeltaRef.current += delta;
+            requestFlush();
+        }
+    }, [requestFlush]);
 
     // 组件卸载时取消悬空的 ready-batch rAF，避免在已卸载的组件上调用 setState
     useEffect(() => {
@@ -658,7 +662,17 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 cancelAnimationFrame(pendingReadyRafRef.current);
                 pendingReadyRafRef.current = null;
             }
+            if (flushRafRef.current !== null) {
+                cancelAnimationFrame(flushRafRef.current);
+                flushRafRef.current = null;
+            }
+            if (unlockAdjustingRafRef.current !== null) {
+                cancelAnimationFrame(unlockAdjustingRafRef.current);
+                unlockAdjustingRafRef.current = null;
+            }
             pendingReadyRef.current = [];
+            pendingDeltaRef.current = 0;
+            ignoreScrollEventRef.current = false;
         };
     }, []);
 
@@ -685,7 +699,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         segmentEl.style.minHeight = '0px';
     }, []);
 
-    // ── Atomic DOM Commit (useLayoutEffect for prepend compensation) ──
+    // ── Atomic DOM Commit ──
 
     useLayoutEffect(() => {
         const viewport = viewportRef.current;
@@ -695,20 +709,6 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         const readyChapters = chapters.filter(ch => ch.status === 'ready');
         if (readyChapters.length === 0) return;
 
-        // 判断是否有任何章节会插入到现有 DOM 节点之上（需要滚动补偿）
-        const existingDomNodes = listEl.querySelectorAll('[data-chapter-id]');
-        const hasExistingContent = existingDomNodes.length > 0;
-
-        // 在所有 DOM 变更之前，统一捕获锚点
-        let anchorElement: HTMLElement | null = null;
-        let anchorViewportOffset = 0;
-        if (hasExistingContent) {
-            pipelineRef.current = 'anchoring-locked';
-            anchorElement = findBestAnchor(viewport);
-            anchorViewportOffset = anchorElement.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
-        }
-
-        // ── DOM 变更阶段：挂载所有 ready 章节 ──
         readyChapters.forEach(ch => {
             const existingChapterEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
             const isInsertion = !existingChapterEl;
@@ -741,36 +741,20 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             observeChapterResizeNodes(chapterEl);
         });
 
-        // ── 统一滚动补偿阶段：所有 DOM 变更完成后一次性补偿 ──
-        if (anchorElement && hasExistingContent) {
-            // 强制同步布局，确保所有 DOM 变更已反映
-            void viewport.offsetHeight;
-            const anchorNewTop = anchorElement.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
-            const scrollDelta = anchorNewTop - anchorViewportOffset;
+        pipelineRef.current = 'idle';
 
-            if (Math.abs(scrollDelta) > 0.5) {
-                viewport.scrollTop = Math.max(0, viewport.scrollTop + scrollDelta);
-                lastScrollTopRef.current = viewport.scrollTop;
-                console.log(`[ScrollReader] Scroll compensated by anchor repositioning: ${scrollDelta}px`);
-            }
-            pipelineRef.current = 'idle';
-        }
-
-        // Mark as mounted
         setChapters(prev =>
             prev.map(ch =>
                 ch.status === 'ready' ? { ...ch, status: 'mounted', mountedAt: Date.now() } : ch
             )
         );
 
-        // Handle initial scroll
         if (!initialScrollDone.current && initialScrollOffset > 0) {
             viewport.scrollTop = initialScrollOffset;
             lastScrollTopRef.current = viewport.scrollTop;
             initialScrollDone.current = true;
         }
 
-        // Handle pending search text after chapter mount
         const searchText = pendingSearchTextRef.current;
         if (searchText) {
             pendingSearchTextRef.current = null;
@@ -822,7 +806,6 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             const direction: ScrollDirection = Math.abs(scrollTop - previousScrollTop) < 0.5 ? 'none' : rawDirection;
             lastScrollTopRef.current = scrollTop;
 
-            if (pipelineRef.current === 'anchoring-locked') return;
 
             // Check if we need to preload
             const needsPreload = shouldPreloadChapter(
@@ -919,7 +902,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             if (listEl) {
                 const domEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
                 if (domEl) {
-                    // 先 unobserve 再 release，避免清空段内容时 ResizeObserver 触发额外滚动补偿
+                    // 先 unobserve 再 release，避免清空段内容时 ResizeObserver 记录额外高度变动
                     unobserveChapterResizeNodes(domEl);
                     domEl.querySelectorAll('section[data-shadow-segment-index]').forEach(seg => {
                         segmentPool.release(seg as HTMLElement);
@@ -971,7 +954,8 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 const chapterIdAttr = el.getAttribute('data-chapter-id') || '';
                 const match = chapterIdAttr.match(/^ch-(\d+)$/);
                 if (match) {
-                    const spineIdx = parseInt(match[1], 10);
+                    const spineIdx = Number(match[1]);
+                    lastKnownAnchorIndexRef.current = spineIdx;
                     if (spineIdx !== currentSpineIndex) {
                         setCurrentSpineIndex(spineIdx);
                         // Report chapter change
@@ -1038,56 +1022,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         }).catch(err => console.warn('[ScrollReader] Progress save failed:', err));
     }, [spineItems, bookId, currentSpineIndex, onProgressChange]);
 
-    // ── Resize Anchor Restore ──
 
-    useEffect(() => {
-        const viewport = viewportRef.current;
-        const listEl = chapterListRef.current;
-        if (!viewport || !listEl) return;
-
-        let resizeTimer: number | null = null;
-
-        const observer = new ResizeObserver(() => {
-            const oldScrollTop = viewport.scrollTop;
-            const oldViewportHeight = viewport.clientHeight;
-            const oldScrollable = Math.max(1, listEl.scrollHeight - oldViewportHeight);
-            const oldProgressRatio = oldScrollTop / oldScrollable;
-
-            const anchorElement = findBestAnchor(viewport);
-            const anchorBefore = captureAnchorInfo(anchorElement);
-
-            if (resizeTimer) {
-                window.clearTimeout(resizeTimer);
-            }
-
-            resizeTimer = window.setTimeout(() => {
-                requestAnimationFrame(() => {
-                    if (anchorBefore.element.isConnected) {
-                        const anchorAfter = captureAnchorInfo(anchorBefore.element);
-                        const deltaY = calculateAnchorDelta(anchorBefore, anchorAfter);
-                        if (Number.isFinite(deltaY) && Math.abs(deltaY) > 0.5) {
-                            viewport.scrollTop = Math.max(0, oldScrollTop + deltaY);
-                        }
-                    } else {
-                        const newScrollable = Math.max(1, listEl.scrollHeight - viewport.clientHeight);
-                        viewport.scrollTop = Math.max(0, Math.min(newScrollable, oldProgressRatio * newScrollable));
-                    }
-
-                    lastScrollTopRef.current = viewport.scrollTop;
-                    updateCurrentChapter(viewport.scrollTop, viewport.clientHeight);
-                    updateProgress(viewport.scrollTop, viewport.clientHeight);
-                });
-            }, 110);
-        });
-
-        observer.observe(viewport);
-        return () => {
-            observer.disconnect();
-            if (resizeTimer) {
-                window.clearTimeout(resizeTimer);
-            }
-        };
-    }, [updateCurrentChapter, updateProgress]);
 
     // ── TOC Jump ──
 
@@ -1112,6 +1047,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         }
 
         setCurrentSpineIndex(targetSpineIndex);
+        lastKnownAnchorIndexRef.current = targetSpineIndex;
         if (onChapterChange && spineItemsRef.current[targetSpineIndex]) {
             onChapterChange(
                 spineItemsRef.current[targetSpineIndex].id,
@@ -1193,6 +1129,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         loadingLockRef.current.clear();
         pipelineRef.current = 'idle';
         setCurrentSpineIndex(targetSpineIndex);
+        lastKnownAnchorIndexRef.current = targetSpineIndex;
 
         // 跳转代数检查：如果在清理过程中又触发了新的跳转，放弃本次加载
         if (jumpGenerationRef.current !== generation) return;
@@ -1374,8 +1311,6 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         const queue = hydrationQueueRef.current;
         if (queue.size === 0) return;
 
-        const viewport = viewportRef.current;
-        if (!viewport) return;
 
         // 取最多 IO_HYDRATION_BATCH_SIZE 段
         const batch: HTMLElement[] = [];
@@ -1418,8 +1353,6 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
         // yield rAF → 测量阶段（读 height）→ 数据更新 → 写阶段
         requestAnimationFrame(() => {
-            const viewportScrollTop = viewport.scrollTop;
-
             // 测量阶段（批量读 height）
             const measurements = hydratedPairs.map(({ el, chapterId, segIndex }) => ({
                 el,
@@ -1439,22 +1372,6 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 list.push({ index: m.segIndex, realHeight: m.realHeight });
             }
 
-            let totalDelta = 0;
-            // 找出在视口上方的段的 delta（用于滚动补偿）
-            for (const m of measurements) {
-                const elTop = m.el.getBoundingClientRect().top + viewportScrollTop - (viewport.getBoundingClientRect().top + viewportScrollTop);
-                if (elTop < viewportScrollTop) {
-                    const vector = chapterVectorsRef.current.get(m.chapterId);
-                    if (vector) {
-                        const seg = vector.segments[m.segIndex];
-                        if (seg) {
-                            const oldHeight = seg.realHeight ?? seg.estimatedHeight;
-                            totalDelta += m.realHeight - oldHeight;
-                        }
-                    }
-                }
-            }
-
             // 数据更新阶段（纯计算）
             for (const [chapterId, updates] of groupedByChapter) {
                 const vector = chapterVectorsRef.current.get(chapterId);
@@ -1466,12 +1383,6 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             // 写阶段（containIntrinsicSize）
             for (const m of measurements) {
                 m.el.style.containIntrinsicSize = `${m.realHeight}px`;
-            }
-
-            // 滚动补偿：若段在视口上方
-            if (Math.abs(totalDelta) > 1) {
-                viewport.scrollTop = viewportScrollTop + totalDelta;
-                lastScrollTopRef.current = viewport.scrollTop;
             }
 
             // 若队列还有待处理的段，继续下一帧
@@ -1527,6 +1438,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         if (!viewport) return;
 
         const scheduleRangeHydration = () => {
+            if (ignoreScrollEventRef.current) return;
             if (rangeHydrationRafRef.current !== null) return;
             rangeHydrationRafRef.current = requestAnimationFrame(() => {
                 rangeHydrationRafRef.current = null;
@@ -1555,6 +1467,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         let observer: IntersectionObserver;
         try {
             observer = new IntersectionObserver((entries) => {
+                if (ignoreScrollEventRef.current) return;
                 let needsFlush = false;
                 for (const entry of entries) {
                     const el = entry.target as HTMLElement;
