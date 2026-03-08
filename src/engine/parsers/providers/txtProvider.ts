@@ -9,7 +9,7 @@ import { escapeHtml } from '../../core/contentSanitizer'
 
 const PARAGRAPHS_PER_CHAPTER = 500
 const MAX_LABEL_LENGTH = 24
-const MIN_DISTANCE_BETWEEN_TITLES = 12
+const MIN_DISTANCE_BETWEEN_TITLES = 3
 const MIN_AVERAGE_PARAGRAPHS_PER_TITLE = 30
 
 interface TxtChapter {
@@ -23,7 +23,7 @@ export class TxtContentProvider implements ContentProvider {
     private paragraphs: string[] = []
     private plainCache = new Map<number, string>()
 
-    constructor(private data: ArrayBuffer) {}
+    constructor(private data: ArrayBuffer) { }
 
     async init() {
         const rawText = decodeTxt(this.data)
@@ -61,7 +61,7 @@ export class TxtContentProvider implements ContentProvider {
     }
 
     async extractChapterStyles(): Promise<string[]> { return [] }
-    unloadChapter() {}
+    unloadChapter() { }
 
     async search(keyword: string): Promise<SearchResult[]> {
         const results: SearchResult[] = []
@@ -156,7 +156,6 @@ function findExplicitTitleIndexes(paragraphs: string[]): number[] {
     for (let i = 0; i < paragraphs.length; i += 1) {
         const line = (paragraphs[i] || '').trim()
         if (!detectTitle(line, { excludeBodyPunctuation: true })) continue
-        if (!hasHeadingContext(paragraphs, i)) continue
         if (i - lastAccepted < MIN_DISTANCE_BETWEEN_TITLES) continue
         result.push(i)
         lastAccepted = i
@@ -186,13 +185,7 @@ function buildExplicitChapters(paragraphs: string[], titleIndexes: number[]): Tx
     return chapters
 }
 
-function hasHeadingContext(paragraphs: string[], index: number): boolean {
-    const prev = index > 0 ? (paragraphs[index - 1] || '').trim() : ''
-    const next = index + 1 < paragraphs.length ? (paragraphs[index + 1] || '').trim() : ''
-    if (!prev || !next) return true
-    const shortNeighborCount = [prev, next].filter((line) => line.length <= 8).length
-    return shortNeighborCount === 0
-}
+
 
 function trimLabel(label: string): string {
     if (!label) return ''

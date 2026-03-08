@@ -152,7 +152,7 @@ function createWindow() {
     // 阻止 inline script 执行（XSS 纵深防御），允许 EPUB 所需的 inline style / blob / data 图片
     const devOrigin = VITE_DEV_SERVER_URL ? (() => { try { return new URL(VITE_DEV_SERVER_URL).origin } catch { return '' } })() : ''
     const scriptSrc = VITE_DEV_SERVER_URL
-        ? `'self' ${devOrigin} 'unsafe-eval'`   // dev 模式需要 Vite HMR 的 eval
+        ? `'self' ${devOrigin} 'unsafe-eval' 'unsafe-inline'`   // dev: Vite HMR eval + React Fast Refresh inline preamble
         : `'self'`
     const cspValue = [
         `default-src 'self'`,

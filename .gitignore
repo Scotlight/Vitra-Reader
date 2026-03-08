@@ -58,3 +58,5 @@ QUICK_REFERENCE.md
 .ace-tool/
 .claude/
 .kiro/
+.kiro/specs/bidirectional-infinite-scroll/
+.claude/

@@ -90,13 +90,10 @@ export function isChapterTitle(line: string, options?: ChapterTitleOptions): boo
     const cleaned = normalizeTitleLine(line)
     if (!cleaned || cleaned.length >= maxLen) return false
 
-    // 正文标点排除（TXT 模式）
-    if (options?.excludeBodyPunctuation && BODY_PUNCTUATION.test(cleaned)) return false
-
-    // 特殊起始词
+    // 特殊起始词（优先于标点排除，标题中允许含标点）
     if (SPECIAL_STARTS.some((prefix) => cleaned.startsWith(prefix))) return true
 
-    // 「第X章/节/卷/部/篇/回/集...」模式
+    // 「第X章/节/卷/部/篇/回/集...」模式（优先于标点排除）
     if (cleaned.startsWith('第')) {
         for (const keyword of CHAPTER_KEYWORDS) {
             const keywordIndex = cleaned.indexOf(keyword)
@@ -106,14 +103,17 @@ export function isChapterTitle(line: string, options?: ChapterTitleOptions): boo
         }
     }
 
-    // 「卷N」模式
+    // 「卷N」模式（优先于标点排除）
     if (cleaned.startsWith('卷')) {
         const rest = cleaned.substring(1).trim().split(/\s+/)[0]
         if (rest && (ZH_NUM.test(rest) || /^\d+$/.test(rest))) return true
     }
 
-    // 英文 chapter N / prologue / epilogue（来自 SectionSplitter 的正则）
+    // 英文 chapter N / prologue / epilogue（优先于标点排除）
     if (/^chapter\s+\d+/i.test(cleaned)) return true
+
+    // 正文标点排除（TXT 模式）—— 放在最后，仅过滤不匹配任何已知模式的行
+    if (options?.excludeBodyPunctuation && BODY_PUNCTUATION.test(cleaned)) return false
 
     return false
 }

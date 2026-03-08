@@ -19,7 +19,13 @@ import { useScrollEvents } from '../../hooks/useScrollEvents';
 import { db } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
 import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService';
-import { buildChapterMetaVector, batchUpdateSegmentHeights, type ChapterMetaVector, type SegmentMeta } from '../../engine';
+import {
+    buildChapterMetaVector,
+    batchUpdateSegmentHeights,
+    computeVisibleRange,
+    type ChapterMetaVector,
+    type SegmentMeta,
+} from '../../engine';
 import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
 import { clampNumber } from '../../utils/mathUtils';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
@@ -76,7 +82,10 @@ export interface ScrollReaderHandle {
 // ── Constants ──
 
 const PRELOAD_THRESHOLD_PX = 600;
-const UNLOAD_MOUNTED_WINDOW_RADIUS = 2;
+// 上方章节保留 30 章缓冲（视口上方高度消失会直接导致坐标系崩溃）
+const UNLOAD_ABOVE_RADIUS = 30;
+// 下方章节超出 3 章时才卸载（下方消失不影响当前 scrollTop）
+const UNLOAD_BELOW_RADIUS = 3;
 const UNLOAD_COOLDOWN_MS = 3000;
 const SCROLL_IDLE_RESUME_MS = 200;
 const PREFETCH_IDLE_TIMEOUT_MS = 120;
@@ -88,6 +97,8 @@ const CHAPTER_PLACEHOLDER_DEFAULT_HEIGHT_PX = 800;
 const RESIZE_DELTA_THRESHOLD_PX = 1;
 const RESIZE_ANCHOR_EPSILON_PX = 0.5;
 const RESIZE_CORRECTION_STOP_INERTIA_PX = 48;
+const RANGE_HYDRATION_OVERSCAN_SEGMENTS = 3;
+const RANGE_HYDRATION_PRELOAD_MARGIN_PX = 720;
 
 // ── 物理引擎调参常量 ──
 const PHYSICS_FRICTION_NUMERATOR = 26;
@@ -128,9 +139,11 @@ const DEFAULT_SMOOTH_CONFIG: NonNullable<ScrollReaderViewProps['smoothConfig']> 
 
 
 function resolveChapterPlaceholderHeight(height: number): number {
+    // 已被 ResizeObserver 实测过的高度：原值直接用，保留亚像素精度，杜绝舍入漂移
+    if (height > CHAPTER_PLACEHOLDER_MIN_HEIGHT_PX) return height;
     return Math.max(
         CHAPTER_PLACEHOLDER_MIN_HEIGHT_PX,
-        Math.floor(height || CHAPTER_PLACEHOLDER_DEFAULT_HEIGHT_PX),
+        height || CHAPTER_PLACEHOLDER_DEFAULT_HEIGHT_PX,
     );
 }
 
@@ -206,6 +219,9 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         renderSelectionUI,
     } = useSelectionMenu({ bookId, onSelectionSearch, getHighlightContainer });
     const highlightIdleHandlesRef = useRef<Map<number, IdleTaskHandle>>(new Map());
+    // rAF 批处理：收集同帧内完成的所有 shadow-ready 事件，合并为一次 setChapters
+    const pendingReadyRef = useRef<Array<{ spineIndex: number; node: HTMLElement; height: number }>>([]);
+    const pendingReadyRafRef = useRef<number | null>(null);
 
     // Keep refs in sync with state
     chaptersRef.current = chapters;
@@ -589,10 +605,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     ) => {
         console.log(`[ScrollReader] Shadow ready: spine ${spineIndex}, height ${height}px`);
 
-        // Remove from shadow queue
-        setShadowQueue(prev => prev.filter(ch => ch.spineIndex !== spineIndex));
-
-        // 构建 metaVector（若章节有 segmentMetas）
+        // 即时更新 metaVector（纯 ref 操作，无需批处理）
         const chapterId = `ch-${spineIndex}`;
         const ch = chaptersRef.current.find(c => c.spineIndex === spineIndex);
         if (ch?.segmentMetas && ch.segmentMetas.length > 0) {
@@ -600,20 +613,53 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             chapterVectorsRef.current.set(chapterId, vector);
         }
 
-        // Determine if this is a prepend (previous chapter) or append
-        setChapters(prev => {
-            const index = prev.findIndex(c => c.spineIndex === spineIndex);
-            if (index < 0) return prev;
+        // 积累到 pendingReadyRef，等 rAF 统一 flush
+        // 多章节同帧 ready → 只触发一次 setChapters → 一次 useLayoutEffect → 一次滚动补偿
+        pendingReadyRef.current.push({ spineIndex, node, height });
 
-            const updated = [...prev];
-            updated[index] = {
-                ...updated[index],
-                domNode: node,
-                height,
-                status: 'ready',
-            };
-            return updated;
-        });
+        if (pendingReadyRafRef.current === null) {
+            pendingReadyRafRef.current = requestAnimationFrame(() => {
+                pendingReadyRafRef.current = null;
+                const batch = pendingReadyRef.current.splice(0);
+                if (batch.length === 0) return;
+
+                console.log(`[ScrollReader] Flush batch: ${batch.map(b => `spine ${b.spineIndex}`).join(', ')}`);
+
+                // 一次性从 shadow queue 移除本批所有项
+                const batchIndices = new Set(batch.map(b => b.spineIndex));
+                setShadowQueue(prev => prev.filter(c => !batchIndices.has(c.spineIndex)));
+
+                // 一次性更新所有 ready 章节 → 触发一次 useLayoutEffect → 一次滚动补偿
+                // 跳过已经 mounted 的章节：ShadowRenderer 二次触发 onReady 时不应回退已挂载章节的状态
+                setChapters(prev => {
+                    let updated = prev;
+                    for (const item of batch) {
+                        const index = updated.findIndex(c => c.spineIndex === item.spineIndex);
+                        if (index < 0) continue;
+                        if (updated[index].status === 'mounted') continue; // 已挂载，忽略重复 ready
+                        if (updated === prev) updated = [...prev];
+                        updated[index] = {
+                            ...updated[index],
+                            domNode: item.node,
+                            height: item.height,
+                            status: 'ready',
+                        };
+                    }
+                    return updated;
+                });
+            });
+        }
+    }, []);
+
+    // 组件卸载时取消悬空的 ready-batch rAF，避免在已卸载的组件上调用 setState
+    useEffect(() => {
+        return () => {
+            if (pendingReadyRafRef.current !== null) {
+                cancelAnimationFrame(pendingReadyRafRef.current);
+                pendingReadyRafRef.current = null;
+            }
+            pendingReadyRef.current = [];
+        };
     }, []);
 
     /** 强制 hydrate 指定段元素（供 jumpToSpine/applyHighlights 使用） */
@@ -785,7 +831,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             );
 
             if (needsPreload && pipelineRef.current === 'idle') {
-                const sortedChapters = [...chapters].sort((a, b) => a.spineIndex - b.spineIndex);
+                const sortedChapters = [...chaptersRef.current].sort((a, b) => a.spineIndex - b.spineIndex);
                 const mountedChapters = sortedChapters.filter(ch => ch.status === 'mounted');
 
                 if (mountedChapters.length === 0) {
@@ -829,7 +875,6 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             }
         };
     }, [
-        chapters,
         spineItems,
         loadChapter,
         runPredictivePrefetch,
@@ -847,10 +892,16 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         const mountedChapters = chapters.filter(ch => ch.status === 'mounted');
         const now = Date.now();
         const toUnload = mountedChapters
-            .filter(ch =>
-                Math.abs(ch.spineIndex - currentSpineIndex) > UNLOAD_MOUNTED_WINDOW_RADIUS
-                && (!ch.mountedAt || now - ch.mountedAt > UNLOAD_COOLDOWN_MS)
-            )
+            .filter(ch => {
+                // 惯性滚动中禁止任何卸载，防止高度真空导致坐标系崩溃
+                if (isUserScrollingRef.current) return false;
+                const dist = ch.spineIndex - currentSpineIndex;
+                // 上方章节：使用极大 radius（相当于永不卸载）
+                // 下方章节：正常 radius
+                const radius = dist < 0 ? UNLOAD_ABOVE_RADIUS : UNLOAD_BELOW_RADIUS;
+                return Math.abs(dist) > radius
+                    && (!ch.mountedAt || now - ch.mountedAt > UNLOAD_COOLDOWN_MS);
+            })
             .sort((a, b) =>
                 Math.abs(b.spineIndex - currentSpineIndex) - Math.abs(a.spineIndex - currentSpineIndex)
             );
@@ -1313,6 +1364,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     const segmentIORef = useRef<IntersectionObserver | null>(null);
     const hydrationQueueRef = useRef<Set<HTMLElement>>(new Set());
     const hydrationRafRef = useRef<number | null>(null);
+    const rangeHydrationRafRef = useRef<number | null>(null);
 
     const IO_HYDRATION_BATCH_SIZE = 4;
 
@@ -1428,6 +1480,71 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             }
         });
     }, []);
+
+    const enqueueVisibleSegmentsByRange = useCallback((scrollTop: number, viewportHeight: number) => {
+        const listEl = chapterListRef.current;
+        if (!listEl || viewportHeight <= 0) return;
+
+        const preloadTop = Math.max(0, scrollTop - RANGE_HYDRATION_PRELOAD_MARGIN_PX);
+        const preloadBottom = scrollTop + viewportHeight + RANGE_HYDRATION_PRELOAD_MARGIN_PX;
+        const chapterEls = Array.from(listEl.querySelectorAll('[data-chapter-id]')) as HTMLElement[];
+        let needsFlush = false;
+
+        for (const chapterEl of chapterEls) {
+            const chapterId = chapterEl.getAttribute('data-chapter-id');
+            if (!chapterId) continue;
+
+            const vector = chapterVectorsRef.current.get(chapterId);
+            if (!vector || vector.segments.length === 0) continue;
+
+            const chapterTop = chapterEl.offsetTop;
+            const chapterBottom = chapterTop + chapterEl.offsetHeight;
+            if (chapterBottom < preloadTop || chapterTop > preloadBottom) continue;
+
+            const localScrollTop = Math.max(0, scrollTop - chapterTop);
+            const { startIndex, endIndex } = computeVisibleRange(
+                vector.segments,
+                localScrollTop,
+                viewportHeight,
+                RANGE_HYDRATION_OVERSCAN_SEGMENTS,
+            );
+            for (let index = startIndex; index <= endIndex; index += 1) {
+                const segmentEl = chapterEl.querySelector(`[data-shadow-segment-index="${index}"]`) as HTMLElement | null;
+                if (!segmentEl) continue;
+                if (segmentEl.getAttribute('data-shadow-segment-state') !== 'placeholder') continue;
+                hydrationQueueRef.current.add(segmentEl);
+                needsFlush = true;
+            }
+        }
+
+        if (needsFlush && hydrationRafRef.current === null) {
+            hydrationRafRef.current = requestAnimationFrame(flushHydrationQueue);
+        }
+    }, [flushHydrationQueue]);
+
+    useEffect(() => {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+
+        const scheduleRangeHydration = () => {
+            if (rangeHydrationRafRef.current !== null) return;
+            rangeHydrationRafRef.current = requestAnimationFrame(() => {
+                rangeHydrationRafRef.current = null;
+                enqueueVisibleSegmentsByRange(viewport.scrollTop, viewport.clientHeight);
+            });
+        };
+
+        scheduleRangeHydration();
+        viewport.addEventListener('scroll', scheduleRangeHydration, { passive: true });
+
+        return () => {
+            viewport.removeEventListener('scroll', scheduleRangeHydration);
+            if (rangeHydrationRafRef.current !== null) {
+                cancelAnimationFrame(rangeHydrationRafRef.current);
+                rangeHydrationRafRef.current = null;
+            }
+        };
+    }, [chapters, enqueueVisibleSegmentsByRange]);
 
     // IO 创建与段注册
     useEffect(() => {

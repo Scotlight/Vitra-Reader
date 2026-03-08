@@ -12,13 +12,25 @@ import {
   removeStyleTags,
   scopeStyles,
 } from '../../utils/styleProcessor';
+import {
+  consumeMediaOffsetInRange,
+  scanHtmlBySaxStream,
+} from './htmlSaxStream';
 
 const FRAGMENT_TARGET_CHARS = 120_000;
 const FRAGMENT_HARD_MAX_CHARS = 180_000;
-const FRAGMENT_BREAK_PATTERN = /<\/(?:p|div|section|article|li|blockquote|h[1-6]|table|tr|td|ul|ol)>/gi;
-const MEDIA_TAG_PATTERN = /<(?:img|video|picture|svg|canvas|figure|table|math)\b/i;
 const VECTOR_MIN_SEGMENT_EST_HEIGHT = 96;
 const VECTORIZE_HTML_LENGTH_THRESHOLD = 450_000;
+
+interface AppendSegmentOptions {
+  segments: SegmentMeta[];
+  html: string;
+  start: number;
+  end: number;
+  offsetY: number;
+  hasMedia: boolean;
+  config: VectorizeConfig;
+}
 
 function cutsInsideTag(html: string, index: number): boolean {
   if (index <= 0 || index >= html.length) return false;
@@ -54,48 +66,55 @@ export function preprocessChapterCore(input: ChapterPreprocessInput): ChapterPre
   };
 }
 
+function buildTailFragments(html: string, start: number): string[] | null {
+  if (start >= html.length) return [];
+  if (html.length - start <= FRAGMENT_HARD_MAX_CHARS) {
+    return [html.slice(start)];
+  }
+
+  const fragments: string[] = [];
+  for (let offset = start; offset < html.length; offset += FRAGMENT_HARD_MAX_CHARS) {
+    const end = Math.min(offset + FRAGMENT_HARD_MAX_CHARS, html.length);
+    if (end < html.length && cutsInsideTag(html, end)) {
+      return null;
+    }
+    fragments.push(html.slice(offset, end));
+  }
+  return fragments;
+}
+
 function splitHtmlIntoFragments(html: string): string[] {
   if (!html || html.length <= FRAGMENT_TARGET_CHARS) {
     return [html];
   }
 
+  const { blockBoundaryOffsets } = scanHtmlBySaxStream(html);
   const fragments: string[] = [];
   let start = 0;
   let lastSafeCut = 0;
 
-  for (const match of html.matchAll(FRAGMENT_BREAK_PATTERN)) {
-    const end = (match.index ?? 0) + match[0].length;
+  for (const end of blockBoundaryOffsets) {
     if (end - start < FRAGMENT_TARGET_CHARS) {
       lastSafeCut = end;
       continue;
     }
+
     const hardCut = Math.min(end, start + FRAGMENT_HARD_MAX_CHARS);
     const cutPoint = lastSafeCut > start ? lastSafeCut : hardCut;
     if (cutsInsideTag(html, cutPoint)) {
       return [html];
     }
+
     fragments.push(html.slice(start, cutPoint));
     start = cutPoint;
     lastSafeCut = cutPoint;
   }
 
-  if (start < html.length) {
-    const tail = html.slice(start);
-    if (tail.length <= FRAGMENT_HARD_MAX_CHARS) {
-      fragments.push(tail);
-    } else {
-      for (let offset = 0; offset < tail.length; offset += FRAGMENT_HARD_MAX_CHARS) {
-        const end = Math.min(offset + FRAGMENT_HARD_MAX_CHARS, tail.length);
-        const cutIndex = start + end;
-        if (end < tail.length && cutsInsideTag(html, cutIndex)) {
-          return [html];
-        }
-        fragments.push(tail.slice(offset, end));
-      }
-    }
-  }
+  const tailFragments = buildTailFragments(html, start);
+  if (!tailFragments) return [html];
+  fragments.push(...tailFragments);
 
-  return fragments.filter((fragment) => fragment.length > 0);
+  return fragments.length > 0 ? fragments : [html];
 }
 
 function estimateSegmentHeightPure(charCount: number, config: VectorizeConfig): number {
@@ -112,56 +131,54 @@ function estimateSegmentHeightPure(charCount: number, config: VectorizeConfig): 
   );
 }
 
-/**
- * 检测 html[start..end) 范围内是否包含媒体标签，不产生子串分配。
- */
-function hasMediaInRange(html: string, start: number, end: number): boolean {
-  // 使用 indexOf 链扫描，避免 slice + regex 分配
-  for (let i = start; i < end - 3; i++) {
-    if (html.charCodeAt(i) !== 0x3C) continue; // '<'
-    const rest = html.charCodeAt(i + 1);
-    // 快速前缀匹配: i/I(mg), v/V(ideo), p/P(icture), s/S(vg), c/C(anvas), f/F(igure), t/T(able), m/M(ath)
-    if (rest === 0x69 || rest === 0x49 || // i/I
-        rest === 0x76 || rest === 0x56 || // v/V
-        rest === 0x70 || rest === 0x50 || // p/P
-        rest === 0x73 || rest === 0x53 || // s/S
-        rest === 0x63 || rest === 0x43 || // c/C
-        rest === 0x66 || rest === 0x46 || // f/F
-        rest === 0x74 || rest === 0x54 || // t/T
-        rest === 0x6D || rest === 0x4D) { // m/M
-      // 精确正则只检查这一小段
-      const snippet = html.slice(i, Math.min(i + 12, end));
-      if (MEDIA_TAG_PATTERN.test(snippet)) return true;
-    }
-  }
-  return false;
+function appendSegmentMeta(options: AppendSegmentOptions): number {
+  const {
+    segments,
+    html,
+    start,
+    end,
+    offsetY,
+    hasMedia,
+    config,
+  } = options;
+  const charCount = end - start;
+  const estimatedHeight = estimateSegmentHeightPure(charCount, config);
+  segments.push({
+    index: segments.length,
+    charCount,
+    estimatedHeight,
+    realHeight: null,
+    offsetY,
+    measured: false,
+    htmlContent: html.slice(start, end),
+    hasMedia,
+  });
+  return offsetY + estimatedHeight;
 }
 
 /**
- * Worker 侧纯字符串向量化 — 直接存储段 htmlContent。
- *
- * 每段切分后直接 slice 复制 htmlContent 到 SegmentMeta，
- * Transferable 传输时编码为 NUL 分隔 ArrayBuffer（零拷贝）。
+ * Worker 侧流式/SAX 向量化：
+ * - 分块扫描标签事件，不使用 matchAll 全量正则遍历
+ * - 仅在落段时 slice 内容，避免频繁中间分配
  */
 export function vectorizeHtmlToSegmentMetas(
   html: string,
   config: VectorizeConfig,
 ): SegmentMeta[] {
   const targetChars = Math.max(4_000, config.targetChars || 16_000);
+  const scanResult = scanHtmlBySaxStream(html);
 
   if (!html || html.length <= targetChars) {
-    return [buildSingleSegmentMeta(html, 0, config)];
+    return [buildSingleSegmentMeta(html, 0, config, scanResult.mediaTagOffsets.length > 0)];
   }
 
   const segments: SegmentMeta[] = [];
+  const mediaCursor = { value: 0 };
   let start = 0;
   let lastSafeCut = 0;
   let cumulativeOffsetY = 0;
 
-  const breakPattern = new RegExp(FRAGMENT_BREAK_PATTERN.source, 'gi');
-
-  for (const match of html.matchAll(breakPattern)) {
-    const end = (match.index ?? 0) + match[0].length;
+  for (const end of scanResult.blockBoundaryOffsets) {
     if (end - start < targetChars) {
       lastSafeCut = end;
       continue;
@@ -169,46 +186,58 @@ export function vectorizeHtmlToSegmentMetas(
 
     const cutPoint = lastSafeCut > start ? lastSafeCut : end;
     if (cutsInsideTag(html, cutPoint)) {
-      return [buildSingleSegmentMeta(html, 0, config)];
+      return [buildSingleSegmentMeta(html, 0, config, scanResult.mediaTagOffsets.length > 0)];
     }
 
-    const charCount = cutPoint - start;
-    const estHeight = estimateSegmentHeightPure(charCount, config);
-    segments.push({
-      index: segments.length,
-      charCount,
-      estimatedHeight: estHeight,
-      realHeight: null,
+    const hasMedia = consumeMediaOffsetInRange(
+      scanResult.mediaTagOffsets,
+      start,
+      cutPoint,
+      mediaCursor,
+    );
+    cumulativeOffsetY = appendSegmentMeta({
+      segments,
+      html,
+      start,
+      end: cutPoint,
       offsetY: cumulativeOffsetY,
-      measured: false,
-      htmlContent: html.slice(start, cutPoint),
-      hasMedia: hasMediaInRange(html, start, cutPoint),
+      hasMedia,
+      config,
     });
-    cumulativeOffsetY += estHeight;
     start = cutPoint;
     lastSafeCut = cutPoint;
   }
 
-  // 处理尾部
   if (start < html.length) {
-    const charCount = html.length - start;
-    const estHeight = estimateSegmentHeightPure(charCount, config);
-    segments.push({
-      index: segments.length,
-      charCount,
-      estimatedHeight: estHeight,
-      realHeight: null,
+    const hasMedia = consumeMediaOffsetInRange(
+      scanResult.mediaTagOffsets,
+      start,
+      html.length,
+      mediaCursor,
+    );
+    appendSegmentMeta({
+      segments,
+      html,
+      start,
+      end: html.length,
       offsetY: cumulativeOffsetY,
-      measured: false,
-      htmlContent: html.slice(start),
-      hasMedia: hasMediaInRange(html, start, html.length),
+      hasMedia,
+      config,
     });
   }
 
-  return segments.length > 0 ? segments : [buildSingleSegmentMeta(html, 0, config)];
+  if (segments.length === 0) {
+    return [buildSingleSegmentMeta(html, 0, config, scanResult.mediaTagOffsets.length > 0)];
+  }
+  return segments;
 }
 
-function buildSingleSegmentMeta(html: string, offsetY: number, config: VectorizeConfig): SegmentMeta {
+function buildSingleSegmentMeta(
+  html: string,
+  offsetY: number,
+  config: VectorizeConfig,
+  hasMedia: boolean,
+): SegmentMeta {
   const charCount = html.length;
   return {
     index: 0,
@@ -218,6 +247,6 @@ function buildSingleSegmentMeta(html: string, offsetY: number, config: Vectorize
     offsetY,
     measured: false,
     htmlContent: html,
-    hasMedia: MEDIA_TAG_PATTERN.test(html),
+    hasMedia,
   };
 }
