@@ -384,10 +384,10 @@ export function ShadowRenderer({
     } = readerStyles;
     const scope = `[data-chapter-id="${chapterId}"]`;
 
-    // PDF 暗色模式反色：使用 CSS filter 实现图片反色
+    // PDF 暗色模式：仅反转亮度，不旋转色相（避免图片颜色太诡异）
     const pdfDarkModeCss = isPdfDarkMode ? `
       ${scope} .pdf-page-layer img {
-        filter: invert(0.88) hue-rotate(180deg);
+        filter: invert(1);
       }
     ` : '';
 
