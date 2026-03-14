@@ -403,7 +403,7 @@ async function renderPdfTextLayer(
             const itemWidth = item.width ? clampPercent((item.width / viewport.width) * 100) : 0
 
             spans.push(
-                `<span style="position:absolute;left:${left}%;top:${top}%;${itemWidth > 0 ? `width:${itemWidth}%;` : ''}font-size:${fontSize}px;white-space:pre;color:transparent;cursor:text;user-select:text;pointer-events:auto;">${text}</span>`,
+                `<span style="position:absolute;left:${left}%;top:${top}%;${itemWidth > 0 ? `width:${itemWidth}%;` : ''}font-size:${fontSize}px;white-space:pre;color:transparent;cursor:text;user-select:text;pointer-events:auto;transform-origin:top left;">${text}</span>`,
             )
         }
 
