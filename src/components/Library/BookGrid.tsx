@@ -1,6 +1,7 @@
-import { type MouseEvent as ReactMouseEvent } from 'react'
+import { type MouseEvent as ReactMouseEvent, useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { BookMeta } from '../../services/storageService'
+import { getBookCover } from '../../services/storageService'
 import type { ShelfGroup } from '../../hooks/useShelfManager'
 import { BookFormatPlaceholder } from './BookFormatPlaceholder'
 import styles from './LibraryView.module.css'
@@ -9,13 +10,40 @@ const containerVariants = {
     hidden: { opacity: 0 },
     show: {
         opacity: 1,
-        transition: { staggerChildren: 0.05 },
+        transition: { staggerChildren: 0 },
     },
 }
 
 const itemVariants = {
     hidden: { y: 20, opacity: 0 },
     show: { y: 0, opacity: 1 },
+}
+
+/** 封面懒加载：仅在需要时才读取 IndexedDB，避免全量加载 Base64 */
+function LazyCoverImage({ bookId, format, alt, compact }: { bookId: string; format?: string; alt: string; compact?: boolean }) {
+    const [cover, setCover] = useState<string | null>(null)
+    const [loaded, setLoaded] = useState(false)
+
+    useEffect(() => {
+        let cancelled = false
+        getBookCover(bookId).then((url) => {
+            if (!cancelled) setCover(url ?? null)
+        })
+        return () => { cancelled = true }
+    }, [bookId])
+
+    if (!cover) return <BookFormatPlaceholder format={format} compact={compact} />
+    return (
+        <img
+            src={cover}
+            alt={alt}
+            loading="lazy"
+            decoding="async"
+            className={compact ? undefined : styles.coverImage}
+            style={{ opacity: loaded ? 1 : 0, transition: 'opacity 0.15s', width: '100%', height: '100%', objectFit: 'cover' }}
+            onLoad={() => setLoaded(true)}
+        />
+    )
 }
 
 interface BookGridProps {
@@ -52,11 +80,7 @@ export const BookGrid = ({
                         <div className={styles.shelfGroupCovers}>
                             {group.books.slice(0, 4).map((book) => (
                                 <div key={book.id} className={styles.shelfGroupCover}>
-                                    {book.cover ? (
-                                        <img src={book.cover} alt={book.title} />
-                                    ) : (
-                                        <BookFormatPlaceholder format={book.format} compact />
-                                    )}
+                                    <LazyCoverImage bookId={book.id} format={book.format} alt={book.title} compact />
                                 </div>
                             ))}
                         </div>
@@ -97,11 +121,7 @@ export const BookGrid = ({
                             onContextMenu={(event) => onContextMenu(event, book.id)}
                         >
                             <div className={styles.coverWrapper}>
-                                {book.cover ? (
-                                    <img src={book.cover} alt={book.title} className={styles.coverImage} />
-                                ) : (
-                                    <BookFormatPlaceholder format={book.format} />
-                                )}
+                                <LazyCoverImage bookId={book.id} format={book.format} alt={book.title} />
                                 <div className={styles.cardOverlay} />
                             </div>
                             <div className={styles.meta}>

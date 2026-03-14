@@ -1,9 +1,8 @@
 /**
- * ????? EPUB Blob ???????
+ * Asset loading and EPUB Blob session retention.
  *
- * ???
- * 1. `waitForAssetLoad` ??????????????????
- * 2. EPUB ?????????????? Blob URL?????????????
+ * `waitForAssetLoad` only waits for resources. Blob URL ownership lives at the
+ * book-session level and is released only when the book closes.
  */
 export interface AssetLoadOptions {
   timeoutMs?: number;
@@ -14,10 +13,8 @@ export interface AssetLoadOptions {
 }
 
 interface CachedAssetEntry {
-  readonly canonicalPath: string;
   url: string | null;
   inFlight: Promise<string | null> | null;
-  lastAccessAt: number;
 }
 
 interface AssetSession {
@@ -25,19 +22,18 @@ interface AssetSession {
   released: boolean;
 }
 
-const BASE_TIMEOUT_MS = 5000;
-const IMAGE_TIMEOUT_COST_MS = 240;
-const MAX_IMAGE_TIMEOUT_MS = 12000;
-const TEXT_TIMEOUT_BYTES = 30000;
-const TEXT_TIMEOUT_COST_MS = 180;
-const MAX_TEXT_TIMEOUT_MS = 6000;
-const MIN_TIMEOUT_MS = 2500;
-const MAX_TIMEOUT_MS = 24000;
+const BASE_TIMEOUT_MS = 3_000;
+const IMAGE_TIMEOUT_COST_MS = 180;
+const MAX_IMAGE_TIMEOUT_MS = 7_000;
+const TEXT_TIMEOUT_BYTES = 45_000;
+const TEXT_TIMEOUT_COST_MS = 120;
+const MAX_TEXT_TIMEOUT_MS = 3_000;
+const MIN_TIMEOUT_MS = 1_500;
+const MAX_TIMEOUT_MS = 12_000;
 const LARGE_CHAPTER_TRACK_LIMIT = 18;
 const MIN_TRACKED_IMAGES = 8;
 
 const assetSessions = new WeakMap<object, AssetSession>();
-const activeAssetUrls = new Set<string>();
 
 class MissingAssetError extends Error {
   constructor(url: string) {
@@ -58,24 +54,15 @@ function getAssetSession(sessionKey: object): AssetSession {
   return created;
 }
 
-function markAssetUrlActive(url: string): void {
-  if (url.startsWith('blob:')) {
-    activeAssetUrls.add(url);
-  }
-}
-
 function revokeAssetUrl(url: string | null): void {
   if (!url || !url.startsWith('blob:')) return;
-  activeAssetUrls.delete(url);
   URL.revokeObjectURL(url);
 }
 
-function createAssetEntry(canonicalPath: string): CachedAssetEntry {
+function createAssetEntry(): CachedAssetEntry {
   return {
-    canonicalPath,
     url: null,
     inFlight: null,
-    lastAccessAt: performance.now(),
   };
 }
 
@@ -87,17 +74,15 @@ export async function resolveSessionAssetUrl(
   const session = getAssetSession(sessionKey);
   const cached = session.assets.get(canonicalPath);
   if (cached?.url) {
-    cached.lastAccessAt = performance.now();
     return cached.url;
   }
   if (cached?.inFlight) {
     return cached.inFlight;
   }
 
-  const entry = cached ?? createAssetEntry(canonicalPath);
+  const entry = cached ?? createAssetEntry();
   const inFlight = createUrl()
     .then((resolvedUrl) => {
-      entry.lastAccessAt = performance.now();
       if (session.released) {
         revokeAssetUrl(resolvedUrl);
         session.assets.delete(canonicalPath);
@@ -108,7 +93,6 @@ export async function resolveSessionAssetUrl(
         return null;
       }
       entry.url = resolvedUrl;
-      markAssetUrlActive(resolvedUrl);
       return resolvedUrl;
     })
     .catch((error) => {
@@ -135,10 +119,6 @@ export function hasSessionAssetUrl(sessionKey: object, rawUrl: string): boolean 
     }
   }
   return false;
-}
-
-export function isTrackedAssetUrlActive(rawUrl: string): boolean {
-  return !rawUrl.startsWith('blob:') || activeAssetUrls.has(rawUrl);
 }
 
 export function releaseAssetSession(sessionKey: object): void {

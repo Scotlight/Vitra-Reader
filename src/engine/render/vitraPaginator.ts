@@ -219,6 +219,11 @@ export async function collectBlockMetricsIdle(
         })
     }
 
+    // 等待字体加载完成，确保 getBoundingClientRect 返回准确高度
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+        await document.fonts.ready
+    }
+
     const batchSize = normalizeBatchSize(options.batchSize)
     const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS
     const rootRect = root.getBoundingClientRect()

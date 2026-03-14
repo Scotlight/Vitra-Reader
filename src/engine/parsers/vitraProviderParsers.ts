@@ -287,6 +287,13 @@ interface CreateBookObjectInput {
 }
 
 function createBookObject(input: CreateBookObjectInput): VitraBook {
+  const isAssetUrlAvailable = input.provider.isAssetUrlAvailable
+    ? (url: string) => input.provider.isAssetUrlAvailable?.(url) ?? true
+    : undefined
+  const releaseAssetSession = input.provider.releaseAssetSession
+    ? () => input.provider.releaseAssetSession?.()
+    : undefined
+
   return {
     format: input.format,
     metadata: input.metadata,
@@ -296,6 +303,8 @@ function createBookObject(input: CreateBookObjectInput): VitraBook {
     direction: 'auto',
     resolveHref: (href: string) => resolveHref(href, input.provider),
     getCover: async () => input.coverBlob,
+    isAssetUrlAvailable,
+    releaseAssetSession,
     search: (keyword: string): VitraSearchResult[] => searchBookIndex(input.bookId, keyword),
     destroy: () => {
       input.releaseSections();

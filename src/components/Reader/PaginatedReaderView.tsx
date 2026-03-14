@@ -77,6 +77,9 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         renderedHighlightsRef,
         renderSelectionUI,
     } = useSelectionMenu({ bookId, onSelectionSearch, getHighlightContainer });
+    const shadowResourceExists = useCallback((url: string) => {
+        return provider.isAssetUrlAvailable?.(url) ?? true;
+    }, [provider]);
 
     const spineItemsRef = useRef<SpineItemInfo[]>([]);
     const currentSpineIndexRef = useRef(currentSpineIndex);
@@ -704,6 +707,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                         externalStyles={shadowData.externalStyles}
                         preprocessed
                         readerStyles={readerStyles}
+                        resourceExists={shadowResourceExists}
                         mode="paginated"
                         onReady={handleShadowReady}
                         onError={(err) => {

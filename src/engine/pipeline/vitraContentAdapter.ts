@@ -85,6 +85,7 @@ export class VitraContentAdapter implements ContentProvider {
     const payload = this.buildCachePayload()
     this.sectionManager.destroy()
     this.htmlCache.clear()
+    this.book.releaseAssetSession?.()
     this.book.destroy()
 
     // 异步写入磁盘缓存（fire-and-forget）
@@ -104,6 +105,10 @@ export class VitraContentAdapter implements ContentProvider {
       id: String(section.id),
       linear: section.linear ?? true,
     }))
+  }
+
+  isAssetUrlAvailable(url: string): boolean {
+    return this.book.isAssetUrlAvailable?.(url) ?? true
   }
 
   getSpineIndexByHref(href: string): number {

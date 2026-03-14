@@ -22,29 +22,58 @@ export interface ReaderCssOptions {
 
 const DEFAULT_COLUMN_GAP_PX = 24
 const DARK_IMAGE_FILTER = 'brightness(0.8)'
-const INDENTABLE_BLOCK_TAGS = ['p', 'div', 'section', 'article', 'blockquote', 'aside', 'li'] as const
-const NON_INDENTABLE_TAGS = [
+const TEXT_INDENT_RESET_SELECTORS = [
     'img',
     'svg',
     'video',
     'audio',
     'canvas',
     'picture',
-    'table',
-    'pre',
-    'code',
-    'math',
     'figure',
+    'figure *',
+    'figcaption',
+    'table',
+    'table *',
+    'pre',
+    'pre *',
+    'code',
+    'code *',
+    'math',
+    'math *',
     'h1',
+    'h1 *',
     'h2',
+    'h2 *',
     'h3',
+    'h3 *',
     'h4',
+    'h4 *',
     'h5',
+    'h5 *',
     'h6',
+    'h6 *',
+    'hr',
+    'br',
+    'button',
+    'button *',
+    'input',
+    'textarea',
+    'select',
+    'option',
+    'label',
+    'iframe',
+    'embed',
+    'object',
 ] as const
+const PARAGRAPH_MARGIN_SELECTORS = ['p', 'div', 'section', 'article', 'blockquote', 'aside', 'figure'] as const
 
-function buildScopedSelector(scope: string, tags: readonly string[]): string {
-    return tags.map((tag) => `${scope} ${tag}`).join(',\n')
+function buildScopedSelector(scope: string, selectors: readonly string[]): string {
+    return selectors.map((selector) => `${scope} ${selector}`).join(',\n')
+}
+
+function buildIndentTargetSelector(scope: string): string {
+    return `${scope},
+${scope} *`
 }
 
 export function buildReaderCssTemplate(config: ReaderCssConfig, options: ReaderCssOptions): string {
@@ -57,8 +86,9 @@ export function buildReaderCssTemplate(config: ReaderCssConfig, options: ReaderC
     const columnWidthPx = Math.max(0, Math.floor(options.columnWidthPx ?? 0))
     const useColumns = Boolean(options.applyColumns && columnWidthPx > 0)
     const indentValue = textIndentEm > 0 ? `${textIndentEm}em` : '0'
-    const indentableBlockSelector = buildScopedSelector(scope, INDENTABLE_BLOCK_TAGS)
-    const nonIndentableSelector = buildScopedSelector(scope, NON_INDENTABLE_TAGS)
+    const indentTargetSelector = buildIndentTargetSelector(scope)
+    const indentResetSelector = buildScopedSelector(scope, TEXT_INDENT_RESET_SELECTORS)
+    const paragraphMarginSelector = buildScopedSelector(scope, PARAGRAPH_MARGIN_SELECTORS)
     const columnRules = useColumns ? `
 ${scope} {
   column-width: ${columnWidthPx}px;
@@ -86,22 +116,17 @@ ${scope} {
   overflow-wrap: break-word;
 }
 ${columnRules}
-${indentableBlockSelector} {
+${indentTargetSelector} {
   text-indent: ${indentValue};
 }
 ${scope} p {
   margin: 0 0 var(--reader-paragraph-spacing, ${paragraphSpacingPx}px) 0;
 }
-${scope} div,
-${scope} section,
-${scope} article,
-${scope} blockquote,
-${scope} aside,
-${scope} figure {
+${paragraphMarginSelector} {
   margin-top: 0 !important;
   margin-bottom: var(--reader-paragraph-spacing, ${paragraphSpacingPx}px) !important;
 }
-${nonIndentableSelector} {
+${indentResetSelector} {
   text-indent: 0 !important;
 }
 ${scope} h1,

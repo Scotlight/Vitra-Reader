@@ -44,7 +44,7 @@ export function generatePaginatedCSSOverride(chapterId: string): string {
     [data-chapter-id="${chapterId}"] .break,
     [data-chapter-id="${chapterId}"] .pagebreak,
     [data-chapter-id="${chapterId}"] .page-break,
-    [data-chapter-id="${chapterId}"] [epub\:type*="pagebreak"],
+    [data-chapter-id="${chapterId}"] [epub\\:type*="pagebreak"],
     [data-chapter-id="${chapterId}"] [role="doc-pagebreak"],
     [data-chapter-id="${chapterId}"] [style*="page-break"],
     [data-chapter-id="${chapterId}"] [style*="break-before"],
@@ -74,34 +74,218 @@ export function generatePaginatedCSSOverride(chapterId: string): string {
   `;
 }
 
+// ─── CSS Scoping Engine ──────────────────────────────────────────
+
+/** 不需要 scope 的 at-rule（声明性块，直接透传） */
+const PASSTHROUGH_AT_RULES = new Set([
+  'font-face', 'keyframes', 'charset', 'import', 'namespace', 'layer',
+]);
+
+/** 需要递归 scope 内部规则的 at-rule */
+const RECURSIVE_AT_RULES = new Set([
+  'media', 'supports', 'document', 'container',
+]);
+
+/** 需要被替换为 scope 选择器的全局选择器 */
+const GLOBAL_SELECTOR_REPLACEMENTS: ReadonlyMap<string, string> = new Map([
+  [':root', ''],
+  ['html', ''],
+  ['body', ''],
+]);
+
 /**
- * 为 CSS 规则添加作用域
- * 将 .title { ... } 转换为 [data-chapter-id="ch-1"] .title { ... }
+ * 提取 at-rule 名称（去掉 @ 符号和可能的供应商前缀）
+ * @example "@media" → "media", "@-webkit-keyframes" → "keyframes"
+ */
+function extractAtRuleName(atRule: string): string {
+  const match = atRule.match(/^@(?:-[\w]+-)?(\S+)/);
+  return match ? match[1].toLowerCase() : '';
+}
+
+/**
+ * 在 CSS 字符串中从 startIndex 开始找到匹配的 `}` 位置。
+ * 正确处理嵌套大括号、字符串、注释。
+ */
+function findMatchingBrace(css: string, startIndex: number): number {
+  let depth = 0;
+  let inString: string | null = null;
+  let inComment = false;
+
+  for (let i = startIndex; i < css.length; i++) {
+    const ch = css[i];
+    const next = i + 1 < css.length ? css[i + 1] : '';
+
+    if (!inString && !inComment && ch === '/' && next === '*') {
+      inComment = true;
+      i += 1;
+      continue;
+    }
+    if (inComment) {
+      if (ch === '*' && next === '/') {
+        inComment = false;
+        i += 1;
+      }
+      continue;
+    }
+
+    if (inString) {
+      if (ch === '\\') { i += 1; continue; }
+      if (ch === inString) { inString = null; }
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      inString = ch;
+      continue;
+    }
+
+    if (ch === '{') { depth += 1; }
+    if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return css.length;
+}
+
+/**
+ * 对 CSS 选择器列表中的每个选择器添加 scope 前缀。
+ */
+function scopeSelectorList(selectorList: string, scopePrefix: string): string {
+  return selectorList
+    .split(',')
+    .map((sel) => scopeSingleSelector(sel.trim(), scopePrefix))
+    .join(', ');
+}
+
+/**
+ * 对单个选择器添加 scope 前缀。
+ * :root / html / body → 替换为 scope 自身。
+ */
+function scopeSingleSelector(selector: string, scopePrefix: string): string {
+  if (!selector) return selector;
+
+  const lowerSelector = selector.toLowerCase();
+  for (const [globalSel, replacement] of GLOBAL_SELECTOR_REPLACEMENTS) {
+    if (lowerSelector === globalSel) {
+      return `${scopePrefix}${replacement}`;
+    }
+    if (
+      lowerSelector.startsWith(globalSel) &&
+      /[\s>+~.#\[:]/.test(lowerSelector[globalSel.length] || '')
+    ) {
+      return `${scopePrefix}${selector.slice(globalSel.length)}`;
+    }
+  }
+
+  return `${scopePrefix} ${selector}`;
+}
+
+/**
+ * 为 CSS 规则添加作用域 — 状态机实现
+ *
+ * 正确处理：
+ * - `@font-face` / `@keyframes`：保持原样不加 scope
+ * - `@media` / `@supports`：递归 scope 内部规则
+ * - `:root` / `html` / `body`：替换为 scoped 选择器
+ * - 普通选择器：添加 `[data-chapter-id="..."]` 前缀
  */
 export function scopeStyles(css: string, chapterId: string): string {
   if (!css || !css.trim()) return '';
-
-  // 作用域前缀
   const scopePrefix = `[data-chapter-id="${chapterId}"]`;
+  return scopeCssBlock(css, scopePrefix);
+}
 
-  // 处理 CSS 规则
-  // 匹配选择器和花括号，为每个选择器添加作用域
-  return css.replace(
-    /([^\r\n,{}]+)(,(?=[^}]*{)|\s*{)/g,
-    (match, selector, separator) => {
-      // 跳过 @规则（如 @media, @keyframes）
-      if (selector.trim().startsWith('@')) {
-        return match;
+/**
+ * 递归处理一个 CSS 块（可能是顶层或 @media 内部）
+ */
+function scopeCssBlock(css: string, scopePrefix: string): string {
+  const result: string[] = [];
+  let cursor = 0;
+
+  while (cursor < css.length) {
+    // 跳过空白和注释
+    const wsMatch = css.slice(cursor).match(/^(\s+|\/\*[\s\S]*?\*\/)+/);
+    if (wsMatch) {
+      result.push(wsMatch[0]);
+      cursor += wsMatch[0].length;
+      continue;
+    }
+
+    if (cursor >= css.length) break;
+
+    // 检测 at-rule
+    if (css[cursor] === '@') {
+      const afterAt = css.slice(cursor);
+      const atRuleHeaderMatch = afterAt.match(/^@[\w-]+[^{;]*/);
+      if (!atRuleHeaderMatch) {
+        result.push(css[cursor]);
+        cursor += 1;
+        continue;
       }
 
-      // 跳过伪元素和伪类的特殊情况
-      const trimmedSelector = selector.trim();
-      
-      // 添加作用域前缀
-      return `${scopePrefix} ${trimmedSelector}${separator}`;
+      const atRuleName = extractAtRuleName(atRuleHeaderMatch[0]);
+      const headerEnd = cursor + atRuleHeaderMatch[0].length;
+
+      // 跳过空白找到 { 或 ;
+      let seekIdx = headerEnd;
+      while (seekIdx < css.length && /\s/.test(css[seekIdx])) seekIdx += 1;
+
+      if (seekIdx >= css.length || css[seekIdx] === ';') {
+        // 无块体的 at-rule（@import, @charset 等）
+        const endIdx = css.indexOf(';', cursor);
+        const ruleEnd = endIdx >= 0 ? endIdx + 1 : css.length;
+        result.push(css.slice(cursor, ruleEnd));
+        cursor = ruleEnd;
+        continue;
+      }
+
+      if (css[seekIdx] === '{') {
+        const braceEnd = findMatchingBrace(css, seekIdx);
+        const blockBody = css.slice(seekIdx + 1, braceEnd);
+        const header = css.slice(cursor, seekIdx).trimEnd();
+
+        if (PASSTHROUGH_AT_RULES.has(atRuleName)) {
+          // @font-face, @keyframes 等：原样保留，不 scope
+          result.push(`${header} {${blockBody}}`);
+        } else if (RECURSIVE_AT_RULES.has(atRuleName)) {
+          // @media, @supports 等：递归 scope 内部规则
+          const scopedBody = scopeCssBlock(blockBody, scopePrefix);
+          result.push(`${header} {${scopedBody}}`);
+        } else {
+          // 其他未知 at-rule：保守透传
+          result.push(`${header} {${blockBody}}`);
+        }
+
+        cursor = braceEnd + 1;
+        continue;
+      }
     }
-  );
+
+    // 普通规则：读取选择器直到 {
+    const braceIdx = css.indexOf('{', cursor);
+    if (braceIdx < 0) {
+      result.push(css.slice(cursor));
+      break;
+    }
+
+    const selectorList = css.slice(cursor, braceIdx).trim();
+    const braceEnd = findMatchingBrace(css, braceIdx);
+    const ruleBody = css.slice(braceIdx + 1, braceEnd);
+
+    if (selectorList) {
+      const scopedSelector = scopeSelectorList(selectorList, scopePrefix);
+      result.push(`${scopedSelector} {${ruleBody}}`);
+    } else {
+      result.push(`{${ruleBody}}`);
+    }
+
+    cursor = braceEnd + 1;
+  }
+
+  return result.join('');
 }
+
+// ─── HTML Style 工具 ──────────────────────────────────────────
 
 /**
  * 提取 HTML 中的 <style> 标签内容

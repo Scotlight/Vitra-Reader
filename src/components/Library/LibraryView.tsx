@@ -135,64 +135,36 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
     }, [loadBooks])
 
     useEffect(() => {
-        const loadProgress = async () => {
-            const allProgress = await db.progress.toArray()
+        const loadAllMeta = async () => {
+            const [allProgress, favEntry, trashEntry, bookmarks, highlights] = await Promise.all([
+                db.progress.toArray(),
+                db.settings.get('favoriteBookIds'),
+                db.settings.get('trashBookIds'),
+                db.bookmarks.toArray(),
+                db.highlights.toArray(),
+            ])
             const map = allProgress.reduce<Record<string, number>>((acc, item) => {
                 acc[item.bookId] = Math.round((item.percentage || 0) * 100)
                 return acc
             }, {})
             setProgressMap(map)
+            const favValue = favEntry?.value
+            setFavoriteBookIds(Array.isArray(favValue) ? favValue.map((item) => String(item)) : [])
+            const trashValue = trashEntry?.value
+            setTrashBookIds(Array.isArray(trashValue) ? trashValue.map((item) => String(item)) : [])
+            setNoteBookIds(Array.from(new Set(bookmarks.map((item) => item.bookId))))
+            setHighlightBookIds(Array.from(new Set(highlights.map((item) => item.bookId))))
+            setAllHighlights(highlights)
+            setAllBookmarks(bookmarks)
         }
-        void loadProgress()
-        const handleFocus = () => {
-            void loadProgress()
-        }
+        void loadAllMeta()
+        const handleFocus = () => { void loadAllMeta() }
         document.addEventListener('visibilitychange', handleFocus)
         window.addEventListener('focus', handleFocus)
         return () => {
             document.removeEventListener('visibilitychange', handleFocus)
             window.removeEventListener('focus', handleFocus)
         }
-    }, [books])
-
-    useEffect(() => {
-        const loadFavorites = async () => {
-            const entry = await db.settings.get('favoriteBookIds')
-            const value = entry?.value
-            if (Array.isArray(value)) {
-                setFavoriteBookIds(value.map((item) => String(item)))
-            } else {
-                setFavoriteBookIds([])
-            }
-        }
-        void loadFavorites()
-    }, [])
-
-    useEffect(() => {
-        const loadTrash = async () => {
-            const entry = await db.settings.get('trashBookIds')
-            const value = entry?.value
-            if (Array.isArray(value)) {
-                setTrashBookIds(value.map((item) => String(item)))
-            } else {
-                setTrashBookIds([])
-            }
-        }
-        void loadTrash()
-    }, [])
-
-    useEffect(() => {
-        const loadBookUsage = async () => {
-            const [bookmarks, highlights] = await Promise.all([
-                db.bookmarks.toArray(),
-                db.highlights.toArray(),
-            ])
-            setNoteBookIds(Array.from(new Set(bookmarks.map((item) => item.bookId))))
-            setHighlightBookIds(Array.from(new Set(highlights.map((item) => item.bookId))))
-            setAllHighlights(highlights)
-            setAllBookmarks(bookmarks)
-        }
-        void loadBookUsage()
     }, [books])
 
     useEffect(() => {

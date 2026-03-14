@@ -32,6 +32,8 @@ export interface ContentProvider {
     extractChapterStyles(spineIndex: number): Promise<string[]>
     unloadChapter(spineIndex: number): void
     search(keyword: string): Promise<SearchResult[]>
+    isAssetUrlAvailable?(url: string): boolean
+    releaseAssetSession?(): void
 }
 
 const ZIP_MAGIC_1 = [0x50, 0x4b, 0x03, 0x04]

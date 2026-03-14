@@ -1,10 +1,17 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
 import path from 'node:path'
 
 export default defineConfig({
+    test: {
+        environment: 'jsdom',
+        globals: true,
+        setupFiles: ['./src/test/setup.ts'],
+        include: ['src/**/*.{test,spec}.{ts,tsx}'],
+        exclude: ['node_modules', 'dist', 'dist-electron', 'electron'],
+    },
     plugins: [
         react(),
         electron([

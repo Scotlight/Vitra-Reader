@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { clampNumber } from '../../utils/mathUtils';
 import styles from './ShadowRenderer.module.css';
-import { waitForAssetLoad, getContainerHeight, isTrackedAssetUrlActive } from '../../utils/assetLoader';
+import { waitForAssetLoad, getContainerHeight } from '../../utils/assetLoader';
 import { generateCSSOverride, generatePaginatedCSSOverride, extractStyles, removeStyleTags, scopeStyles } from '../../utils/styleProcessor';
 import { sanitizeChapterHtml, sanitizeStyleSheets } from '../../engine/core/contentSanitizer';
 import {
@@ -25,7 +25,7 @@ const VECTOR_HYDRATE_MEASURE_BATCH_SIZE = 4;
 const VECTOR_IDLE_TIMEOUT_MS = 120;
 const SEGMENT_ASSET_SELECTOR = 'img,video,audio,source,svg,image';
 const MEDIA_LAYOUT_SELECTOR = 'img,video,picture,svg,canvas,figure,table,math';
-const MEDIA_SENSITIVE_LOAD_TIMEOUT_MS = 18_000;
+const MEDIA_SENSITIVE_LOAD_TIMEOUT_MS = 4_500;
 const MEDIA_SENSITIVE_MAX_TRACKED_IMAGES = 128;
 
 // ── 高度估算参数 ──
@@ -50,8 +50,8 @@ const EST_HEIGHT_CORRECTION_MIN = 0.62;
 const EST_HEIGHT_CORRECTION_MAX = 2.4;
 
 // ── 渲染阶段资源加载参数 ──
-const RENDER_VECTORIZED_LOAD_TIMEOUT_MS = 9_000;
-const RENDER_LARGE_CHAPTER_LOAD_TIMEOUT_MS = 14_000;
+const RENDER_VECTORIZED_LOAD_TIMEOUT_MS = 3_500;
+const RENDER_LARGE_CHAPTER_LOAD_TIMEOUT_MS = 6_500;
 const RENDER_VECTORIZED_MAX_TRACKED_IMAGES = 10;
 const RENDER_LARGE_MAX_TRACKED_IMAGES = 16;
 const RENDER_NORMAL_MAX_TRACKED_IMAGES = 48;
@@ -59,7 +59,7 @@ const CHUNK_APPEND_MIN_BATCH_SIZE = 40;
 
 // ── 水合阶段参数 ──
 const HYDRATE_MEDIA_CHECK_INTERVAL = 3;
-const HYDRATE_MEDIA_LOAD_TIMEOUT_MS = 4_000;
+const HYDRATE_MEDIA_LOAD_TIMEOUT_MS = 2_500;
 const HYDRATE_MEDIA_MAX_TRACKED_IMAGES = 4;
 
 /** 模块级段 DOM 节点池单例 */
@@ -295,6 +295,14 @@ function enforceDeterministicMediaLayout(chapterWrapper: HTMLElement): void {
     const height = Number(img.getAttribute('height') || '');
     if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
       img.style.aspectRatio ||= `${width} / ${height}`;
+      // 显式设置 CSS 尺寸，防止图片加载完成后 reflow 导致分页偏移
+      if (!img.style.width || img.style.width === 'auto') {
+        img.style.width = `min(${width}px, 100%)`;
+      }
+    } else {
+      // 无已知尺寸的图片：设置合理默认 aspect-ratio 减少加载后 reflow 幅度
+      img.style.aspectRatio ||= '16 / 9';
+      img.style.minHeight ||= '120px';
     }
   });
 }
@@ -331,6 +339,8 @@ export interface ShadowRendererProps {
   onError?: (error: Error) => void;
   /** 阅读器样式配置 */
   readerStyles: ReaderStyleConfig;
+  /** Session-level asset liveness check */
+  resourceExists?: (url: string) => boolean;
   /** 渲染模式：scroll（滚动）或 paginated（翻页），默认 scroll */
   mode?: 'scroll' | 'paginated';
 }
@@ -356,6 +366,7 @@ export function ShadowRenderer({
   onReady,
   onError,
   readerStyles,
+  resourceExists,
   mode = 'scroll',
 }: ShadowRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -413,6 +424,11 @@ export function ShadowRenderer({
     let cancelled = false;
 
     const renderAndMeasure = async () => {
+      // 等待字体加载完成，确保测量阶段使用正确的字体度量
+      if (typeof document !== 'undefined' && document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+
       const trace = createVitraRenderTrace(chapterId);
       try {
         const chapterWrapper = document.createElement('div');
@@ -551,7 +567,7 @@ export function ShadowRenderer({
             largeChapterThreshold: mediaSensitiveChapter
               ? Number.POSITIVE_INFINITY
               : LARGE_CHAPTER_HTML_THRESHOLD,
-            resourceExists: isTrackedAssetUrlActive,
+            resourceExists,
           });
           if (cancelled) return null;
 
@@ -613,6 +629,7 @@ export function ShadowRenderer({
                 timeoutMs: HYDRATE_MEDIA_LOAD_TIMEOUT_MS,
                 maxTrackedImages: HYDRATE_MEDIA_MAX_TRACKED_IMAGES,
                 largeChapterThreshold: LARGE_CHAPTER_HTML_THRESHOLD,
+                resourceExists,
               });
             }
 
@@ -649,10 +666,22 @@ export function ShadowRenderer({
 
     renderAndMeasure();
 
+    // 字体加载完成后，如果测量已完成，触发高度重校准
+    const handleFontLoaded = () => {
+      if (!hasReportedRef.current || cancelled) return;
+      const wrapper = container.querySelector('.chapter-content') as HTMLElement | null;
+      if (!wrapper || !wrapper.isConnected) return;
+      const recalibratedHeight = getContainerHeight(wrapper);
+      console.log(`[ShadowRenderer] Font loaded recalibration for "${chapterId}": ${recalibratedHeight}px`);
+      onReady(wrapper, recalibratedHeight);
+    };
+    document.fonts?.addEventListener?.('loadingdone', handleFontLoaded);
+
     return () => {
       if (!hasReportedRef.current) {
         cancelled = true;
       }
+      document.fonts?.removeEventListener?.('loadingdone', handleFontLoaded);
     };
   }, [htmlContent, htmlFragments, segmentMetas, chapterId, externalStyles, preprocessed, onReady, onError, buildContentCss]);
 

@@ -126,3 +126,9 @@ class ReaderDatabase extends Dexie {
 }
 
 export const db = new ReaderDatabase()
+
+/** 按需获取单本书封面，不触发全量加载 */
+export async function getBookCover(bookId: string): Promise<string | undefined> {
+    const book = await db.books.get(bookId)
+    return book?.cover || undefined
+}

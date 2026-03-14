@@ -1,7 +1,7 @@
 import ePub, { Book } from 'epubjs'
 import type { EpubBookInternal, EpubSpineItem } from '../../../types/epubjs'
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '../../core/contentProvider'
-import { releaseAssetSession } from '../../../utils/assetLoader'
+import { hasSessionAssetUrl, releaseAssetSession } from '../../../utils/assetLoader'
 import {
     getSpineItems as epubGetSpineItems,
     extractChapterHeading as epubExtractHeading,
@@ -35,10 +35,15 @@ export class EpubContentProvider implements ContentProvider {
         }
     }
 
-    destroy() {
-        releaseAssetSession(this.book as unknown as object)
-        this.book.destroy()
+    isAssetUrlAvailable(url: string): boolean {
+        return hasSessionAssetUrl(this.book as unknown as object, url)
     }
+
+    releaseAssetSession(): void {
+        releaseAssetSession(this.book as unknown as object)
+    }
+
+    destroy() { this.book.destroy() }
     getToc() { return this.tocItems }
     getSpineItems() { return this.spineItems }
 

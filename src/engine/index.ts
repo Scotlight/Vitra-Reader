@@ -39,7 +39,7 @@ export { startMeasure, measurePageBoundaries } from './render/vitraMeasure';
 export type { VitraMeasureConfig, VitraMeasureRequest, VitraMeasureHandle } from './render/vitraMeasure';
 
 // 核心：Canvas 快速测量 (4.2 Stage 2 优化路径)
-export { isCanvasMeasureEligible } from './render/vitraCanvasMeasure';
+export { isCanvasMeasureEligible, invalidateCanvasMeasureCache } from './render/vitraCanvasMeasure';
 
 // 核心：渲染管线跟踪 (4.2)
 export {
@@ -89,6 +89,10 @@ export type { ReaderRenderModeDecision } from './core/readerRenderMode';
 // CSS 注入模板 (4.6)
 export { buildReaderCssTemplate } from './render/readerCss';
 export type { ReaderCssConfig, ReaderCssOptions } from './render/readerCss';
+
+// 位置序列化 (DOM path + text anchor)
+export { serializePosition, deserializePosition, scrollToPosition } from './render/vitraPosition';
+export type { VitraPosition, VitraPositionResult } from './render/vitraPosition';
 
 // 解析缓存 (5.1)
 export { VitraBookCache } from './cache/vitraBookCache';

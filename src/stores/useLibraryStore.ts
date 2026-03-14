@@ -26,7 +26,10 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
     loadBooks: async () => {
         set({ isLoading: true })
         const books = await db.books.orderBy('lastReadAt').reverse().toArray()
-        set({ books, isLoading: false })
+        // 剥离 cover/originalCover 字段，避免把所有封面 Base64 加载到内存
+        // BookGrid 会在渲染时按需读取 cover
+        const booksWithoutCovers = books.map(({ cover: _c, originalCover: _oc, ...rest }) => rest as typeof rest & { cover?: string; originalCover?: string })
+        set({ books: booksWithoutCovers, isLoading: false })
     },
 
     importBook: async (file, options) => {

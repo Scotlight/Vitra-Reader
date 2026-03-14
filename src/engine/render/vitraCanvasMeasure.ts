@@ -9,6 +9,15 @@ const MAX_STYLE_FACTOR_CACHE_ENTRIES = 256
 const MIN_CONTENT_WIDTH_PX = 64
 const STYLE_FACTOR_CACHE = new Map<string, number>()
 
+/**
+ * 清除 Canvas 测量缓存。
+ * 当字体加载完成或用户切换字体时应调用此函数，
+ * 使后续测量使用正确的字体度量。
+ */
+export function invalidateCanvasMeasureCache(): void {
+    STYLE_FACTOR_CACHE.clear()
+}
+
 interface CanvasProgressPayload {
     blocksMeasured: number
     processedCandidates: number
@@ -254,6 +263,11 @@ export async function collectCanvasBlockMetricsIdle(
     selector: string,
     options: CanvasCollectOptions,
 ): Promise<BlockMetrics[]> {
+    // 等待字体加载完成，确保 Canvas.measureText 使用正确的字体度量
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+        await document.fonts.ready
+    }
+
     const nodes = Array.from(root.querySelectorAll(selector))
         .filter((node): node is HTMLElement => node instanceof HTMLElement)
     const state = createMeasureState(root, options)

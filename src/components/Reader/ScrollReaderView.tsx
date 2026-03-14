@@ -88,6 +88,7 @@ const HIGHLIGHT_IDLE_TIMEOUT_MS = 600;
 const CHAPTER_PLACEHOLDER_MIN_HEIGHT_PX = 240;
 const CHAPTER_PLACEHOLDER_DEFAULT_HEIGHT_PX = 800;
 const SCROLL_HEDGE_EPSILON_PX = 0.1;
+const INSTANT_SCROLL_BEHAVIOR = 'instant' as any;
 const RANGE_HYDRATION_OVERSCAN_SEGMENTS = 3;
 const RANGE_HYDRATION_PRELOAD_MARGIN_PX = 720;
 
@@ -220,6 +221,9 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     const unlockAdjustingRafRef = useRef<number | null>(null);
     const ignoreScrollEventRef = useRef(false);
     const lastKnownAnchorIndexRef = useRef(initialSpineIndex);
+    const shadowResourceExists = useCallback((url: string) => {
+        return provider.isAssetUrlAvailable?.(url) ?? true;
+    }, [provider]);
 
     // Keep refs in sync with state
     chaptersRef.current = chapters;
@@ -255,7 +259,8 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
             pendingDeltaRef.current = 0;
             ignoreScrollEventRef.current = true;
-            viewport.scrollBy({ top: totalDelta, left: 0, behavior: 'auto' });
+            const targetTop = viewport.scrollTop + totalDelta;
+            viewport.scrollTo({ top: targetTop, behavior: INSTANT_SCROLL_BEHAVIOR });
 
             if (unlockAdjustingRafRef.current !== null) {
                 cancelAnimationFrame(unlockAdjustingRafRef.current);
@@ -567,6 +572,40 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             loadingLockRef.current.delete(spineIndex);
         }
     }, [provider, readerStyles]);
+
+    const readerStylesKeyRef = useRef('');
+    useEffect(() => {
+        const nextKey = JSON.stringify(readerStyles);
+        if (readerStylesKeyRef.current === '' || readerStylesKeyRef.current === nextKey) {
+            readerStylesKeyRef.current = nextKey;
+            return;
+        }
+        readerStylesKeyRef.current = nextKey;
+
+        const rerenderTargets = chaptersRef.current.filter((chapter) =>
+            chapter.status === 'mounted' || chapter.status === 'ready'
+        );
+        if (rerenderTargets.length === 0) return;
+
+        const rerenderIndexes = new Set(rerenderTargets.map((chapter) => chapter.spineIndex));
+        const rerenderQueue = rerenderTargets.map((chapter) => ({
+            ...chapter,
+            domNode: null,
+            status: 'shadow-rendering' as const,
+        }));
+
+        renderedHighlightsRef.current.clear();
+        pendingReadyRef.current = pendingReadyRef.current.filter((item) => !rerenderIndexes.has(item.spineIndex));
+        setShadowQueue((prev) => [
+            ...prev.filter((chapter) => !rerenderIndexes.has(chapter.spineIndex)),
+            ...rerenderQueue,
+        ]);
+        setChapters((prev) => prev.map((chapter) =>
+            rerenderIndexes.has(chapter.spineIndex)
+                ? { ...chapter, domNode: null, status: 'shadow-rendering' as const }
+                : chapter
+        ));
+    }, [readerStyles, renderedHighlightsRef]);
 
     const runPredictivePrefetch = useCallback(() => {
         if (isUserScrollingRef.current) return;
@@ -1543,6 +1582,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                         externalStyles={ch.externalStyles}
                         preprocessed
                         readerStyles={readerStyles}
+                        resourceExists={shadowResourceExists}
                         onReady={(node, height) => handleShadowReady(ch.spineIndex, node, height)}
                         onError={(err) => {
                             console.error(`[ScrollReader] Shadow error for ${ch.id}:`, err);
