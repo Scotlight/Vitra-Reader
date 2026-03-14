@@ -318,6 +318,8 @@ export interface ReaderStyleConfig {
   letterSpacing: number;
   textAlign: string;
   pageWidth: number;
+  /** PDF 暗色模式反色标志（ReaderView 根据 PDF + 暗色主题计算） */
+  isPdfDarkMode?: boolean;
 }
 
 export interface ShadowRendererProps {
@@ -378,8 +380,16 @@ export function ShadowRenderer({
     const {
       textColor, bgColor, fontSize, fontFamily,
       lineHeight, paragraphSpacing, textIndentEm, letterSpacing, textAlign,
+      isPdfDarkMode,
     } = readerStyles;
     const scope = `[data-chapter-id="${chapterId}"]`;
+
+    // PDF 暗色模式反色：使用 CSS filter 实现图片反色
+    const pdfDarkModeCss = isPdfDarkMode ? `
+      ${scope} .pdf-page-layer img {
+        filter: invert(0.88) hue-rotate(180deg);
+      }
+    ` : '';
 
     return `
       ${buildReaderCssTemplate({
@@ -406,6 +416,7 @@ export function ShadowRenderer({
       ${scope} hr, ${scope} .break, ${scope} [style*="page-break"] {
         display: none !important;
       }
+      ${pdfDarkModeCss}
     `;
   }, [readerStyles, chapterId]);
 

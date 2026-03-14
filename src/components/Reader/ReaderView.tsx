@@ -166,6 +166,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         letterSpacing: settings.letterSpacing,
         textAlign: settings.textAlign,
         pageWidth: settings.pageWidth,
+        isPdfDarkMode: bookFormat === 'pdf' && settings.themeId === 'dark',
     }
 
     const resetSmoothSettings = () => {
