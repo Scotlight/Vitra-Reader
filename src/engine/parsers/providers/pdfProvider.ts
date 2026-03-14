@@ -18,9 +18,16 @@ interface PdfPageLink {
 interface RenderedPdfPage {
     imageUrl: string
     links: readonly PdfPageLink[]
+    pageWidthPx: number
+    pageHeightPx: number
+    textLayerHtml?: string
 }
 
-const PDF_RENDER_SCALE = 1.8
+/** 根据设备 DPR 计算合适的 PDF 渲染缩放比例 */
+function getPdfRenderScale(): number {
+    const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1
+    return Math.min(2.5, Math.max(1.5, dpr * 1.5))
+}
 
 let cachedPdfRuntime: PdfJsRuntime | null = null
 let cachedRuntimeKind: 'modern' | 'legacy' | null = null
@@ -181,7 +188,14 @@ export class PdfContentProvider implements ContentProvider {
         }
         const imageUrl = renderedPage.imageUrl
         this.pageImageUrlCache.set(pageIndex, imageUrl)
-        const html = renderPdfPageHtml(imageUrl, renderedPage.links, pageIndex)
+        const html = renderPdfPageHtml(
+            imageUrl,
+            renderedPage.links,
+            pageIndex,
+            renderedPage.pageWidthPx,
+            renderedPage.pageHeightPx,
+            renderedPage.textLayerHtml,
+        )
         this.pageHtmlCache.set(pageIndex, html)
         return html
     }
@@ -223,18 +237,27 @@ async function renderPdfPage(doc: PdfDocumentProxy, pageIndex: number): Promise<
     }
 
     const page = await doc.getPage(pageIndex + 1)
-    const viewport = page.getViewport({ scale: PDF_RENDER_SCALE })
+    const scale = getPdfRenderScale()
+    const viewport = page.getViewport({ scale })
+    const pageWidthPx = Math.ceil(viewport.width)
+    const pageHeightPx = Math.ceil(viewport.height)
+
     const canvas = document.createElement('canvas')
-    canvas.width = Math.ceil(viewport.width)
-    canvas.height = Math.ceil(viewport.height)
+    canvas.width = pageWidthPx
+    canvas.height = pageHeightPx
 
     const context = canvas.getContext('2d')
     if (!context) throw new Error('[PdfProvider] canvas 2d context is unavailable')
 
-    await page.render({ canvasContext: context, viewport }).promise
+    // 并行执行：页面渲染 + 文字层提取 + 链接提取
+    const [_, textLayerHtml, links] = await Promise.all([
+        page.render({ canvasContext: context, viewport }).promise,
+        renderPdfTextLayer(page, viewport).catch(() => ''), // 文字层失败不影响图片渲染
+        extractPdfPageLinks(doc, page, viewport, pageIndex),
+    ])
+
     const imageUrl = await canvasToImageUrl(canvas)
-    const links = await extractPdfPageLinks(doc, page, viewport, pageIndex)
-    return { imageUrl, links }
+    return { imageUrl, links, pageWidthPx, pageHeightPx, textLayerHtml }
 }
 
 async function canvasToImageUrl(canvas: HTMLCanvasElement): Promise<string> {
@@ -354,21 +377,65 @@ function clampPercent(value: number): number {
     return Math.max(0, Math.min(100, Number(value.toFixed(4))))
 }
 
+/** 渲染 PDF 文字层 HTML（可选中文本叠加） */
+async function renderPdfTextLayer(
+    page: PdfPageProxy,
+    viewport: PdfPageViewport,
+): Promise<string> {
+    try {
+        const content = await page.getTextContent()
+        if (!content.items?.length) return ''
+
+        const spans: string[] = []
+        for (const item of content.items) {
+            if (!item.str) continue
+            const text = escapeAttr(item.str)
+
+            // 默认值（兼容旧类型定义）
+            const tx = item.transform?.[4] ?? 0
+            const ty = item.transform?.[5] ?? 0
+            const fontSize = item.transform
+                ? Math.round(Math.sqrt(Math.pow(item.transform[0], 2) + Math.pow(item.transform[1], 2)))
+                : 12
+
+            const left = clampPercent((tx / viewport.width) * 100)
+            const top = clampPercent((ty / viewport.height) * 100)
+            const itemWidth = item.width ? clampPercent((item.width / viewport.width) * 100) : 0
+
+            spans.push(
+                `<span style="position:absolute;left:${left}%;top:${top}%;${itemWidth > 0 ? `width:${itemWidth}%;` : ''}font-size:${fontSize}px;white-space:pre;color:transparent;cursor:text;user-select:text;pointer-events:auto;">${text}</span>`,
+            )
+        }
+
+        return `<div class="pdf-text-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;pointer-events:none;">${spans.join('')}</div>`
+    } catch (error) {
+        console.warn('[PdfProvider] Failed to render text layer:', error)
+        return ''
+    }
+}
+
 
 function renderPdfPageHtml(
     imageUrl: string,
     links: readonly PdfPageLink[],
     pageIndex: number,
+    pageWidthPx: number,
+    pageHeightPx: number,
+    textLayerHtml?: string,
 ): string {
     const safeUrl = escapeAttr(imageUrl)
-    const imageTag = `<img src="${safeUrl}" alt="PDF page ${pageIndex + 1}" style="display:block;width:100%;height:auto;"/>`
-    if (links.length === 0) return imageTag
+    const imageTag = `<img src="${safeUrl}" width="${pageWidthPx}" height="${pageHeightPx}" alt="PDF page ${pageIndex + 1}" style="display:block;width:100%;height:auto;"/>`
+
+    const content = imageTag + (textLayerHtml || '')
+    if (links.length === 0) {
+        return `<div class="pdf-page-layer" style="position:relative;width:100%;line-height:0;">${content}</div>`
+    }
 
     const linkTags = links
         .map((link) => `<a data-pdf-page="${link.targetPage}" href="#pdf-page-${link.targetPage}" aria-label="PDF jump to page ${link.targetPage + 1}" style="position:absolute;left:${link.left}%;top:${link.top}%;width:${link.width}%;height:${link.height}%;display:block;z-index:2;background:transparent;text-decoration:none;"></a>`)
         .join('')
 
-    return `<div class="pdf-page-layer" style="position:relative;width:100%;line-height:0;">${imageTag}${linkTags}</div>`
+    return `<div class="pdf-page-layer" style="position:relative;width:100%;line-height:0;">${content}${linkTags}</div>`
 }
 
 export async function parsePdfMetadata(data: ArrayBuffer) {

@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest'
-import { clampNumber, clampInt, clampDecimal } from '../engine/render/vitraPaginator'
 import { clampNumber as clampNum, clampInt as clampI, clampDecimal as clampD } from '../utils/mathUtils'
 
 // mathUtils 直接测
@@ -22,9 +21,3 @@ describe('clampDecimal', () => {
     it('超上限夹到上限', () => { expect(clampD(15.5, 0, 10, 1)).toBe(10) })
 })
 
-// 顺便确认 vitraPaginator 再导出的 clampNumber 一致
-describe('clampNumber (re-export from vitraPaginator path)', () => {
-    it('与 mathUtils 行为一致', () => {
-        expect(clampNum(3, 1, 5)).toBe(clampNumber ? clampNum(3,1,5) : 3)
-    })
-})

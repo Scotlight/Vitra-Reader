@@ -8,6 +8,11 @@ export interface PdfOutlineItem {
 
 export interface PdfTextItem {
     str: string
+    transform?: number[]   // [scaleX, skewX, skewY, scaleY, translateX, translateY]
+    width?: number
+    height?: number
+    fontName?: string
+    dir?: string
 }
 
 export interface PdfTextContent {
