@@ -384,10 +384,10 @@ export function ShadowRenderer({
     } = readerStyles;
     const scope = `[data-chapter-id="${chapterId}"]`;
 
-    // PDF 暗色模式：85% 反色 + 亮度补偿，避免完全反色导致图片过暗
+    // PDF 暗色模式：温和反色（60%）+ 亮度补偿
     const pdfDarkModeCss = isPdfDarkMode ? `
       ${scope} .pdf-page-layer img {
-        filter: invert(0.85) brightness(1.15);
+        filter: invert(0.6) brightness(1.3);
       }
     ` : '';
 
