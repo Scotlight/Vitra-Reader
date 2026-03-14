@@ -445,5 +445,5 @@ export async function parsePdfMetadata(data: ArrayBuffer) {
     const title = (info?.Title as string) || ''
     const author = (info?.Author as string) || '未知作者'
     doc.destroy()
-    return { title, author }
+    return { title, author, format: 'pdf' as const }
 }
