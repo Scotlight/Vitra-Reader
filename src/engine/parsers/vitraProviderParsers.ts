@@ -73,11 +73,11 @@ export class VitraProviderBackedParser extends VitraBaseParser {
 
   async parse(): Promise<VitraBook> {
     const providerFormat = PROVIDER_FORMAT_MAP[this.format];
-    const providerData = this.buffer.slice(0);
-    const metadataData = this.buffer.slice(0);
+    // Provider 和 metadata 解析器只读 buffer，无需复制
+    // 直接传递原始 buffer 避免大文件（如 PDF）的 CPU 密集型复制操作
     const [provider, rawMetadata] = await Promise.all([
-      createContentProvider(providerFormat, providerData),
-      parseBookMetadata(providerFormat, metadataData, this.filename),
+      createContentProvider(providerFormat, this.buffer),
+      parseBookMetadata(providerFormat, this.buffer, this.filename),
     ]);
 
     await provider.init();

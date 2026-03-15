@@ -66,10 +66,10 @@ async function getPdfRuntime(forceLegacy = false): Promise<PdfJsRuntime> {
 }
 
 function shouldFallbackToLegacy(error: unknown): boolean {
-    const text = String(error instanceof Error ? error.message : error || '').toLowerCase()
-    return text.includes('tohex is not a function')
-        || text.includes('unknownerrorexception')
-        || text.includes('baseexceptionclosure')
+    // 【紧急修复】禁用 Legacy fallback，避免主线程 CPU 爆表
+    // Legacy runtime 会在主线程同步解析，导致 94% CPU 占用
+    // 如遇 toHex 错误，请检查 pdf.js 版本匹配问题
+    return false
 }
 
 function promoteLegacyRuntime(reason: string, error: unknown): void {
@@ -85,8 +85,9 @@ function promoteLegacyRuntime(reason: string, error: unknown): void {
 
 async function openPdfDocument(data: ArrayBuffer, forceLegacy = false): Promise<PdfDocumentProxy> {
     const runtime = await getPdfRuntime(forceLegacy || forceLegacyRuntime)
+    // 直接传递 data，避免复制（PDF.js 只读）
     return runtime.getDocument({
-        data: new Uint8Array(data.slice(0)),
+        data: new Uint8Array(data),
         disableAutoFetch: true,
         disableStream: true,
     }).promise
@@ -251,9 +252,10 @@ async function renderPdfPage(doc: PdfDocumentProxy, pageIndex: number): Promise<
     if (!context) throw new Error('[PdfProvider] canvas 2d context is unavailable')
 
     // 并行执行：页面渲染 + 文字层提取 + 链接提取
+    // 【紧急修复】暂时禁用文字层，排查 CPU 占用问题
     const [_, textLayerHtml, links] = await Promise.all([
         page.render({ canvasContext: context, viewport }).promise,
-        renderPdfTextLayer(page, viewport).catch(() => ''), // 文字层失败不影响图片渲染
+        Promise.resolve(''), // renderPdfTextLayer(page, viewport).catch(() => ''),
         extractPdfPageLinks(doc, page, viewport, pageIndex),
     ])
 

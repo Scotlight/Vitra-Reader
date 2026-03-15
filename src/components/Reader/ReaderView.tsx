@@ -272,7 +272,8 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             currentProgressRef.current = initialProgress
 
             // 2. Initialize VitraPipeline → VitraContentAdapter
-            const bookData = file.data instanceof ArrayBuffer ? file.data.slice(0) : file.data
+            // VitraPipeline 只读 buffer，无需复制（避免大文件 CPU 密集型操作）
+            const bookData = file.data
             const format = (bookMeta?.format || 'epub') as BookFormat
             setBookFormat(format)
             let cp: ContentProvider
