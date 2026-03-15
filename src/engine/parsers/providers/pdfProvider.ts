@@ -146,12 +146,15 @@ export class PdfContentProvider implements ContentProvider {
     }
 
     private async reopenLegacyDocument(reason: string, error: unknown): Promise<void> {
-        // 【内存优化】禁用 legacy reopen
-        // Legacy fallback 会导致：
-        // 1. 重新加载整个文档（内存复制）
-        // 2. 主线程同步解析（CPU 90%+）
-        // 宁可报错，也不要"烧CPU"
-        throw new Error(`[PdfProvider] Legacy fallback disabled: ${reason}. Original error: ${error}`)
+        promoteLegacyRuntime(reason, error)
+        this.clearRenderedPageCache()
+        if (this.doc) {
+            this.doc.destroy()
+            this.doc = null
+        }
+        // data 已经被释放，无法重新加载
+        // 只切换 runtime 标志，下次 extractChapterHtml 会用 legacy runtime
+        console.warn(`[PdfProvider] Legacy reopen requested: ${reason}`, error)
     }
 
     destroy() {
