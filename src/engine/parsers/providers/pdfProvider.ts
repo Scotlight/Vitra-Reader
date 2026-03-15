@@ -66,10 +66,10 @@ async function getPdfRuntime(forceLegacy = false): Promise<PdfJsRuntime> {
 }
 
 function shouldFallbackToLegacy(error: unknown): boolean {
-    // 【紧急修复】禁用 Legacy fallback，避免主线程 CPU 爆表
-    // Legacy runtime 会在主线程同步解析，导致 94% CPU 占用
-    // 如遇 toHex 错误，请检查 pdf.js 版本匹配问题
-    return false
+    const text = String(error instanceof Error ? error.message : error || '').toLowerCase()
+    // 只对已知可恢复的错误降级，避免无限循环
+    return text.includes('tohex is not a function')
+        || text.includes('unknownerrorexception')
 }
 
 function promoteLegacyRuntime(reason: string, error: unknown): void {
