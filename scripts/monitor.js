@@ -52,14 +52,17 @@ async function getNodeStats() {
   return new Promise((resolve) => {
     const platform = os.platform();
     let cmd = '';
+    let shell = true; // Windows 下使用 shell
 
     if (platform === 'win32') {
-      cmd = 'tasklist /FI "IMAGENAME eq node.exe" /FO CSV /NH';
+      // 使用 wmic 命令，兼容 Git Bash
+      cmd = 'wmic process where "name=\'node.exe\'" get ProcessId,WorkingSetSize /format:csv 2>nul';
     } else {
       cmd = 'ps -ec -o pid,rss,comm | grep -E "node|electron|vite"';
+      shell = false;
     }
 
-    exec(cmd, (error, stdout) => {
+    exec(cmd, { shell }, (error, stdout) => {
       if (error) {
         resolve({ count: 0, totalMemMB: 0 });
         return;
@@ -69,17 +72,16 @@ async function getNodeStats() {
       let totalMemKB = 0;
 
       if (platform === 'win32') {
-        const matches = stdout.match(/"node\.exe".*?"([\d,]+)\s*([KMG]B)"/g);
-        if (matches) {
-          count = matches.length;
-          for (const m of matches) {
-            const memMatch = m.match(/"([\d,]+)\s*([KMG]B)"/);
-            if (memMatch) {
-              let mem = parseInt(memMatch[1].replace(/,/g, ''));
-              const unit = memMatch[2];
-              if (unit === 'K') mem /= 1024;
-              if (unit === 'G') mem *= 1024;
-              totalMemKB += mem * 1024;
+        // wmic 输出格式: Node,node.exe,ProcessId,12345,WorkingSetSize,123456789
+        const lines = stdout.trim().split('\n');
+        for (const line of lines) {
+          if (!line.trim() || line.startsWith('Node,')) continue;
+          const parts = line.split(',');
+          if (parts.length >= 6) {
+            const workingSetSize = parseInt(parts[5]?.trim());
+            if (!isNaN(workingSetSize)) {
+              count++;
+              totalMemKB += Math.round(workingSetSize / 1024);
             }
           }
         }
