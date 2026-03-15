@@ -380,43 +380,6 @@ function clampPercent(value: number): number {
     return Math.max(0, Math.min(100, Number(value.toFixed(4))))
 }
 
-/** 渲染 PDF 文字层 HTML（可选中文本叠加） */
-async function renderPdfTextLayer(
-    page: PdfPageProxy,
-    viewport: PdfPageViewport,
-): Promise<string> {
-    try {
-        const content = await page.getTextContent()
-        if (!content.items?.length) return ''
-
-        const spans: string[] = []
-        for (const item of content.items) {
-            if (!item.str) continue
-            const text = escapeAttr(item.str)
-
-            // 默认值（兼容旧类型定义）
-            const tx = item.transform?.[4] ?? 0
-            const ty = item.transform?.[5] ?? 0
-            const fontSize = item.transform
-                ? Math.round(Math.sqrt(Math.pow(item.transform[0], 2) + Math.pow(item.transform[1], 2)))
-                : 12
-
-            const left = clampPercent((tx / viewport.width) * 100)
-            const top = clampPercent((ty / viewport.height) * 100)
-            const itemWidth = item.width ? clampPercent((item.width / viewport.width) * 100) : 0
-
-            spans.push(
-                `<span style="position:absolute;left:${left}%;top:${top}%;${itemWidth > 0 ? `width:${itemWidth}%;` : ''}font-size:${fontSize}px;white-space:pre;color:transparent;cursor:text;user-select:text;pointer-events:auto;transform-origin:top left;">${text}</span>`,
-            )
-        }
-
-        return `<div class="pdf-text-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;pointer-events:none;">${spans.join('')}</div>`
-    } catch (error) {
-        console.warn('[PdfProvider] Failed to render text layer:', error)
-        return ''
-    }
-}
-
 
 function renderPdfPageHtml(
     imageUrl: string,
