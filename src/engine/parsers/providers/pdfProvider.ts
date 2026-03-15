@@ -26,9 +26,8 @@ interface RenderedPdfPage {
 /** 根据设备 DPR 计算合适的 PDF 渲染缩放比例 */
 function getPdfRenderScale(): number {
     const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1
-    // 上限 1.3：性能优先，Canvas 像素量是平方级增长
-    // 1.3x = 1.69x 像素，1.6x = 2.56x 像素，2x = 4x 像素
-    return Math.min(1.3, Math.max(1.1, dpr * 0.9))
+    // 上限 1.3：降低 Canvas 渲染 CPU 压力，大多数屏幕已足够清晰
+    return Math.min(1.3, Math.max(1.0, dpr * 1.0))
 }
 
 let cachedPdfRuntime: PdfJsRuntime | null = null
@@ -112,28 +111,21 @@ export class PdfContentProvider implements ContentProvider {
     private outline: TocItem[] = []
     private pageHtmlCache = new Map<number, string>()
     private pageImageUrlCache = new Map<number, string>()
-    // 【内存优化】使用 WeakRef 避免 buffer 长期持有
-    private dataRef: WeakRef<ArrayBuffer>
+    // 【内存优化】init 完成后置 null，让 GC 回收原始 buffer
+    private data: ArrayBuffer | null = null
 
     constructor(data: ArrayBuffer) {
-        // 使用 WeakRef 持有数据，GC 可以在需要时回收
-        // PDF.js 内部会持有必要的数据引用
-        this.dataRef = new WeakRef(data)
+        this.data = data
     }
 
     async init() {
-        // 获取 data 引用（如果还没被 GC）
-        const data = this.dataRef.deref()
-        if (!data) {
-            throw new Error('[PdfProvider] Data was garbage collected before init')
+        if (!this.data) {
+            throw new Error('[PdfProvider] Data was already released')
         }
-
-        this.doc = await openPdfDocumentWithFallback(data)
-
+        this.doc = await openPdfDocumentWithFallback(this.data)
         // 【关键优化】init 完成后立即释放 data 引用
-        // PDF.js 内部已经持有必要数据，外层 buffer 可以被 GC
-        this.dataRef = new WeakRef(new ArrayBuffer(0))
-
+        // PDF.js Worker 内部已经持有必要数据，外层 buffer 可以被 GC
+        this.data = null
         this.pageCount = this.doc.numPages
         try {
             const raw = await this.doc.getOutline()
@@ -275,19 +267,24 @@ async function renderPdfPage(doc: PdfDocumentProxy, pageIndex: number): Promise<
     ])
 
     const imageUrl = await canvasToImageUrl(canvas)
+    // 渲染完成后立即释放 Canvas 内存
+    canvas.width = 0
+    canvas.height = 0
     return { imageUrl, links, pageWidthPx, pageHeightPx, textLayerHtml }
 }
 
 async function canvasToImageUrl(canvas: HTMLCanvasElement): Promise<string> {
+    // 使用 JPEG 格式：比 PNG 编码快 3-5x，PDF 页面通常不需要透明通道
+    const JPEG_QUALITY = 0.88
     if (typeof canvas.toBlob !== 'function') {
-        return canvas.toDataURL('image/png')
+        return canvas.toDataURL('image/jpeg', JPEG_QUALITY)
     }
 
     const blob = await new Promise<Blob | null>((resolve) => {
-        canvas.toBlob((value) => resolve(value), 'image/png')
+        canvas.toBlob((value) => resolve(value), 'image/jpeg', JPEG_QUALITY)
     })
     if (!blob) {
-        return canvas.toDataURL('image/png')
+        return canvas.toDataURL('image/jpeg', JPEG_QUALITY)
     }
     return URL.createObjectURL(blob)
 }
