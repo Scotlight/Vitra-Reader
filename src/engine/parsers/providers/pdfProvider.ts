@@ -26,8 +26,9 @@ interface RenderedPdfPage {
 /** 根据设备 DPR 计算合适的 PDF 渲染缩放比例 */
 function getPdfRenderScale(): number {
     const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1
-    // 上限 1.6：平衡清晰度与性能，避免高 DPR 设备内存爆炸
-    return Math.min(1.6, Math.max(1.3, dpr * 1.2))
+    // 上限 1.3：性能优先，Canvas 像素量是平方级增长
+    // 1.3x = 1.69x 像素，1.6x = 2.56x 像素，2x = 4x 像素
+    return Math.min(1.3, Math.max(1.1, dpr * 0.9))
 }
 
 let cachedPdfRuntime: PdfJsRuntime | null = null
