@@ -11,7 +11,8 @@
     "lint": "tsc -b --pretty false",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "monitor": "node scripts/monitor.js"
   },
   "dependencies": {
     "dexie": "^4.0.10",
