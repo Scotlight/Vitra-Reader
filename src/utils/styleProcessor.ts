@@ -25,6 +25,38 @@ export function generateCSSOverride(chapterId: string): string {
   `;
 }
 
+// ── scopeStyles LRU 缓存 ──
+// 防止每次渲染都重新解析 CSS，缓存最近 64 条结果
+const SCOPE_CSS_CACHE_SIZE = 64;
+const scopeCssCache = new Map<string, string>();
+
+function scopeCacheKey(css: string, chapterId: string): string {
+  // 使用 CSS 前 100 字符 + 长度 + chapterId 作为 key
+  const prefix = css.slice(0, 100);
+  return `${prefix}|${css.length}|${chapterId}`;
+}
+
+function getFromScopeCache(css: string, chapterId: string): string | undefined {
+  const key = scopeCacheKey(css, chapterId);
+  const value = scopeCssCache.get(key);
+  if (value) {
+    // LRU: 删除后重新插入，放到最后
+    scopeCssCache.delete(key);
+    scopeCssCache.set(key, value);
+  }
+  return value;
+}
+
+function setToScopeCache(css: string, chapterId: string, result: string): void {
+  const key = scopeCacheKey(css, chapterId);
+  // LRU: 超过容量时删除最旧的
+  if (scopeCssCache.size >= SCOPE_CSS_CACHE_SIZE) {
+    const firstKey = scopeCssCache.keys().next().value;
+    if (firstKey) scopeCssCache.delete(firstKey);
+  }
+  scopeCssCache.set(key, result);
+}
+
 /**
  * 生成翻页模式专用的 CSS Override
  * 不禁用 column 属性，允许父容器使用 CSS multi-column 分页
@@ -181,18 +213,31 @@ function scopeSingleSelector(selector: string, scopePrefix: string): string {
 }
 
 /**
- * 为 CSS 规则添加作用域 — 状态机实现
+ * 为 CSS 规则添加作用域 — 状态机实现（带 LRU 缓存）
  *
  * 正确处理：
  * - `@font-face` / `@keyframes`：保持原样不加 scope
  * - `@media` / `@supports`：递归 scope 内部规则
  * - `:root` / `html` / `body`：替换为 scoped 选择器
  * - 普通选择器：添加 `[data-chapter-id="..."]` 前缀
+ *
+ * 性能优化：使用 LRU 缓存避免重复解析相同 CSS
  */
 export function scopeStyles(css: string, chapterId: string): string {
   if (!css || !css.trim()) return '';
+
+  // 检查缓存
+  const cached = getFromScopeCache(css, chapterId);
+  if (cached) return cached;
+
+  // 未命中缓存，执行解析
   const scopePrefix = `[data-chapter-id="${chapterId}"]`;
-  return scopeCssBlock(css, scopePrefix);
+  const result = scopeCssBlock(css, scopePrefix);
+
+  // 存入缓存
+  setToScopeCache(css, chapterId, result);
+
+  return result;
 }
 
 /**
