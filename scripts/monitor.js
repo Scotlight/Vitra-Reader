@@ -12,7 +12,7 @@ const path = require('path');
 const os = require('os');
 const { exec } = require('child_process');
 
-const REFRESH_INTERVAL = 1000; // 1秒记录一次
+const REFRESH_INTERVAL = 2000; // 2秒记录一次，避免刷屏
 const LOGS_DIR = path.join(__dirname, '../logs');
 
 // 确保日志目录存在
@@ -27,18 +27,6 @@ const logFile = path.join(LOGS_DIR, `perf-${timestamp}.csv`);
 // CSV 表头
 const header = '时间,CPU%,内存使用MB,内存可用MB,内存总MB,Node进程数,Node总内存MB,备注\n';
 fs.writeFileSync(logFile, header, 'utf8');
-
-console.log('\x1b[36m📊 Vitra 性能监控启动\x1b[0m');
-console.log(`📝 日志文件: ${logFile}`);
-console.log('🔄 实时记录中... (Ctrl+C 停止)\n');
-
-// 显示表头
-process.stdout.write(
-  '\x1b[90m' +
-  '时间                     CPU    内存      Node    日志\n' +
-  '─'.repeat(60) +
-  '\x1b[0m\n'
-);
 
 let lastCpu = getCpuUsage();
 let recordCount = 0;
@@ -143,13 +131,15 @@ async function record() {
   const csvLine = `${timeStr},${cpu.toFixed(1)},${usedMemMB},${freeMemMB},${totalMemMB},${nodeCount},${nodeMemMB},${note}\n`;
   fs.appendFileSync(logFile, csvLine, 'utf8');
 
-  // 终端显示（紧凑）
+  // 终端显示（固定宽度，对齐）
   const cpuColor = cpu > 80 ? '\x1b[31m' : cpu > 50 ? '\x1b[33m' : '\x1b[32m';
   const memColor = memPercent > 85 ? '\x1b[31m' : memPercent > 70 ? '\x1b[33m' : '\x1b[32m';
   const nodeColor = nodeMemMB > 1000 ? '\x1b[31m' : '\x1b[36m';
+  const noteColor = note !== '-' ? '\x1b[35m' : '\x1b[90m';
 
-  process.stdout.write(
-    `\r${timeStr}  ${cpuColor}${cpu.toFixed(1).padStart(5)}%\x1b[0m  ${memColor}${usedMemMB.toString().padStart(4)}MB\x1b[0m  ${nodeColor}${nodeCount}进程/${nodeMemMB}MB\x1b[0m  ${note.padEnd(15)}`
+  // 使用 concurrently 友好的输出格式
+  console.log(
+    `[MON] ${timeStr} | ${cpuColor}CPU:${cpu.toFixed(1).padStart(5)}%\x1b[0m | ${memColor}内存:${usedMemMB.toString().padStart(4)}MB\x1b[0m | ${nodeColor}Node:${nodeCount}p/${nodeMemMB}MB\x1b[0m | ${noteColor}${note}\x1b[0m`
   );
 
   recordCount++;
@@ -160,16 +150,18 @@ let running = true;
 
 process.on('SIGINT', () => {
   running = false;
-  console.log('\n\n\x1b[36m📊 监控结束\x1b[0m');
-  console.log(`📝 共记录 ${recordCount} 条数据`);
-  console.log(`📄 日志文件: ${logFile}`);
-  console.log('\n💡 分析建议:');
-  console.log('   - 用 Excel/WPS 打开 CSV 文件查看趋势');
-  console.log('   - 关注 CPU>80% 和 Node 内存持续增长的情况\n');
+  console.log('\n[MON] ════════════════════════════════════════');
+  console.log(`[MON] 📊 监控结束 | 共记录 ${recordCount} 条`);
+  console.log(`[MON] 📄 日志: ${logFile}`);
+  console.log('[MON] 💡 用 Excel/WPS 打开 CSV 查看趋势图\n');
   process.exit(0);
 });
 
 async function loop() {
+  // 启动提示
+  console.log('[MON] 📊 性能监控启动 | 日志: perf-' + timestamp.slice(0, 10) + '.csv');
+  console.log('[MON] ' + '─'.repeat(55));
+
   while (running) {
     await record();
     await new Promise(resolve => setTimeout(resolve, REFRESH_INTERVAL));
@@ -177,6 +169,6 @@ async function loop() {
 }
 
 loop().catch(err => {
-  console.error('监控出错:', err);
+  console.error('[MON] 监控出错:', err);
   process.exit(1);
 });

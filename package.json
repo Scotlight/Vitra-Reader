@@ -6,6 +6,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
+    "dev:monitor": "concurrently --names \"DEV,MON\" --prefix-colors \"blue,cyan\" \"npm run dev\" \"npm run monitor\"",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",
@@ -35,6 +36,7 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/ui": "^4.1.0",
+    "concurrently": "^9.2.1",
     "electron": "^33.3.1",
     "esbuild": "^0.27.3",
     "jsdom": "^28.1.0",
