@@ -111,11 +111,27 @@ export class PdfContentProvider implements ContentProvider {
     private outline: TocItem[] = []
     private pageHtmlCache = new Map<number, string>()
     private pageImageUrlCache = new Map<number, string>()
+    // 【内存优化】使用 WeakRef 避免 buffer 长期持有
+    private dataRef: WeakRef<ArrayBuffer>
 
-    constructor(private data: ArrayBuffer) {}
+    constructor(data: ArrayBuffer) {
+        // 使用 WeakRef 持有数据，GC 可以在需要时回收
+        // PDF.js 内部会持有必要的数据引用
+        this.dataRef = new WeakRef(data)
+    }
 
     async init() {
-        this.doc = await openPdfDocumentWithFallback(this.data)
+        // 获取 data 引用（如果还没被 GC）
+        const data = this.dataRef.deref()
+        if (!data) {
+            throw new Error('[PdfProvider] Data was garbage collected before init')
+        }
+
+        this.doc = await openPdfDocumentWithFallback(data)
+
+        // 【关键优化】init 完成后立即释放 data 引用
+        // PDF.js 内部已经持有必要数据，外层 buffer 可以被 GC
+        this.dataRef = new WeakRef(new ArrayBuffer(0))
 
         this.pageCount = this.doc.numPages
         try {
@@ -137,14 +153,12 @@ export class PdfContentProvider implements ContentProvider {
     }
 
     private async reopenLegacyDocument(reason: string, error: unknown): Promise<void> {
-        promoteLegacyRuntime(reason, error)
-        this.clearRenderedPageCache()
-        if (this.doc) {
-            this.doc.destroy()
-            this.doc = null
-        }
-        this.doc = await openPdfDocument(this.data, true)
-        this.pageCount = this.doc.numPages
+        // 【内存优化】禁用 legacy reopen
+        // Legacy fallback 会导致：
+        // 1. 重新加载整个文档（内存复制）
+        // 2. 主线程同步解析（CPU 90%+）
+        // 宁可报错，也不要"烧CPU"
+        throw new Error(`[PdfProvider] Legacy fallback disabled: ${reason}. Original error: ${error}`)
     }
 
     destroy() {
