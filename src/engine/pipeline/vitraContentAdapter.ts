@@ -34,6 +34,10 @@ const SECTION_MANAGER_MAX_LOADED = 10
 /** 搜索预索引的并发批次大小 */
 const SEARCH_INDEX_BATCH = 4
 
+type ScheduledIndexHandle =
+  | { kind: 'idle'; id: number }
+  | { kind: 'timeout'; id: ReturnType<typeof setTimeout> }
+
 // ─── 适配器 ──────────────────────────────────────────
 
 export class VitraContentAdapter implements ContentProvider {
@@ -44,6 +48,8 @@ export class VitraContentAdapter implements ContentProvider {
   private readonly sectionManager: VitraSectionManager
   private readonly bookCache: VitraBookCache
   private cacheDirty = false
+  private scheduledIndexHandle: ScheduledIndexHandle | null = null
+  private scheduledIndexCancelled = false
 
   constructor(book: VitraBook, bookId: string, buffer: ArrayBuffer) {
     this.book = book
@@ -68,12 +74,13 @@ export class VitraContentAdapter implements ContentProvider {
           const html = cached.sectionsHtml[i]
           if (html) {
             this.htmlCache.set(i, html)
-            upsertChapterIndex(this.bookId, i, html)
           }
         }
         console.log(
           `[VitraContentAdapter] 缓存命中: ${cached.sectionsHtml.length} sections (${this.book.format})`,
         )
+        // 搜索索引延迟到空闲时构建，不阻塞打开流程
+        this.scheduleIdleIndexBuild(cached.sectionsHtml)
       }
     } catch {
       // 缓存读取失败不影响正常流程
@@ -81,6 +88,7 @@ export class VitraContentAdapter implements ContentProvider {
   }
 
   destroy(): void {
+    this.cancelScheduledIndexBuild()
     // 先捕获缓存数据再清理（避免竞态）
     const payload = this.buildCachePayload()
     this.sectionManager.destroy()
@@ -147,7 +155,9 @@ export class VitraContentAdapter implements ContentProvider {
 
     this.htmlCache.set(spineIndex, html)
     this.cacheDirty = true
-    upsertChapterIndex(this.bookId, spineIndex, html)
+    if (!hasChapterIndex(this.bookId, spineIndex)) {
+      upsertChapterIndex(this.bookId, spineIndex, html)
+    }
     return html
   }
 
@@ -171,6 +181,68 @@ export class VitraContentAdapter implements ContentProvider {
   }
 
   // ── 内部方法 ─────────────────────────────────────
+
+  /**
+   * 空闲时分批构建搜索索引，不阻塞打开流程。
+   * 每批沿用 SEARCH_INDEX_BATCH，每批之间让出主线程。
+   */
+  private scheduleIdleIndexBuild(sectionsHtml: readonly string[]): void {
+    this.cancelScheduledIndexBuild()
+    this.scheduledIndexCancelled = false
+
+    let cursor = 0
+    const bookId = this.bookId
+
+    const schedule = () => {
+      if (this.scheduledIndexCancelled) return
+      if (typeof requestIdleCallback === 'function') {
+        this.scheduledIndexHandle = {
+          kind: 'idle',
+          id: requestIdleCallback(step),
+        }
+        return
+      }
+      this.scheduledIndexHandle = {
+        kind: 'timeout',
+        id: setTimeout(step, 0),
+      }
+    }
+
+    const step = () => {
+      this.scheduledIndexHandle = null
+      if (this.scheduledIndexCancelled) return
+
+      const end = Math.min(cursor + SEARCH_INDEX_BATCH, sectionsHtml.length)
+      for (let i = cursor; i < end; i++) {
+        const html = sectionsHtml[i]
+        if (html && !hasChapterIndex(bookId, i)) {
+          upsertChapterIndex(bookId, i, html)
+        }
+      }
+      cursor = end
+      if (cursor < sectionsHtml.length) {
+        schedule()
+      }
+    }
+
+    schedule()
+  }
+
+  private cancelScheduledIndexBuild(): void {
+    this.scheduledIndexCancelled = true
+    const handle = this.scheduledIndexHandle
+    this.scheduledIndexHandle = null
+    if (!handle) return
+
+    if (handle.kind === 'idle') {
+      if (typeof cancelIdleCallback === 'function') {
+        cancelIdleCallback(handle.id)
+      }
+      return
+    }
+
+    clearTimeout(handle.id)
+  }
 
   /**
    * 确保所有章节已建立搜索索引。

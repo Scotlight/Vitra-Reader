@@ -7,6 +7,14 @@ import type {
 
 const DEFAULT_TIMEOUT_MS = 2500
 
+/** 根据 HTML 大小动态计算超时（避免大章节误超时） */
+function computeDynamicTimeout(htmlLength: number, baseTimeout: number): number {
+    if (htmlLength < 100_000) return Math.max(1500, baseTimeout)
+    if (htmlLength < 300_000) return 3500
+    if (htmlLength < 500_000) return 5000
+    return 8000
+}
+
 interface PendingTask {
     resolve: (result: ChapterPreprocessResult) => void
     reject: (reason: Error) => void
@@ -131,10 +139,14 @@ export async function preprocessChapterContent(
         externalStyles: payload.externalStyles || [],
     }
 
+    const effectiveTimeout = computeDynamicTimeout(
+        payload.htmlContent?.length || 0,
+        timeoutMs,
+    )
     const worker = ensureWorker()
 
     try {
-        return await preprocessByWorker(worker, normalizedPayload, timeoutMs)
+        return await preprocessByWorker(worker, normalizedPayload, effectiveTimeout)
     } catch (error) {
         resetWorker()
         throw (error instanceof Error ? error : new Error(String(error)))

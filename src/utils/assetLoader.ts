@@ -19,6 +19,8 @@ interface CachedAssetEntry {
 
 interface AssetSession {
   readonly assets: Map<string, CachedAssetEntry>;
+  /** 反向索引：url → canonicalPath，用于 O(1) 查找 */
+  readonly urlIndex: Map<string, string>;
   released: boolean;
 }
 
@@ -48,6 +50,7 @@ function getAssetSession(sessionKey: object): AssetSession {
 
   const created: AssetSession = {
     assets: new Map<string, CachedAssetEntry>(),
+    urlIndex: new Map<string, string>(),
     released: false,
   };
   assetSessions.set(sessionKey, created);
@@ -93,6 +96,7 @@ export async function resolveSessionAssetUrl(
         return null;
       }
       entry.url = resolvedUrl;
+      session.urlIndex.set(resolvedUrl, canonicalPath);
       return resolvedUrl;
     })
     .catch((error) => {
@@ -112,13 +116,7 @@ export function hasSessionAssetUrl(sessionKey: object, rawUrl: string): boolean 
   if (!rawUrl.startsWith('blob:')) return true;
   const session = assetSessions.get(sessionKey);
   if (!session || session.released) return false;
-
-  for (const entry of session.assets.values()) {
-    if (entry.url === rawUrl) {
-      return true;
-    }
-  }
-  return false;
+  return session.urlIndex.has(rawUrl);
 }
 
 export function releaseAssetSession(sessionKey: object): void {
@@ -134,6 +132,7 @@ export function releaseAssetSession(sessionKey: object): void {
   });
   urlsToRevoke.forEach((url) => revokeAssetUrl(url));
   session.assets.clear();
+  session.urlIndex.clear();
   assetSessions.delete(sessionKey);
 }
 

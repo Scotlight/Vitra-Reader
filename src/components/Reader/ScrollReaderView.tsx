@@ -75,7 +75,7 @@ export interface ScrollReaderHandle {
 // ── Constants ──
 
 const PRELOAD_THRESHOLD_PX = 600;
-// 上方章节保留 30 章缓冲（视口上方高度消失会直接导致坐标系崩溃）
+// 上方章节保留 30 章缓冲，避免回滚时频繁重挂载导致 CPU 抖动
 const UNLOAD_ABOVE_RADIUS = 30;
 // 下方章节超出 3 章时才卸载（下方消失不影响当前 scrollTop）
 const UNLOAD_BELOW_RADIUS = 3;
@@ -635,7 +635,8 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         return () => {
             cancelIdlePrefetch();
         };
-    }, [isInitialized, currentSpineIndex, chapters, runPredictivePrefetch, scheduleIdlePrefetch, cancelIdlePrefetch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isInitialized, currentSpineIndex, runPredictivePrefetch, scheduleIdlePrefetch, cancelIdlePrefetch]);
 
     // ── Shadow Render Complete Handler ──
 
@@ -911,67 +912,75 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     // ── Chapter Unloading ──
 
     useEffect(() => {
-        const mountedChapters = chapters.filter(ch => ch.status === 'mounted');
-        const now = Date.now();
-        const toUnload = mountedChapters
-            .filter(ch => {
-                // 惯性滚动中禁止任何卸载，防止高度真空导致坐标系崩溃
-                if (isUserScrollingRef.current) return false;
-                const dist = ch.spineIndex - currentSpineIndex;
-                // 上方章节：使用极大 radius（相当于永不卸载）
-                // 下方章节：正常 radius
-                const radius = dist < 0 ? UNLOAD_ABOVE_RADIUS : UNLOAD_BELOW_RADIUS;
-                return Math.abs(dist) > radius
-                    && (!ch.mountedAt || now - ch.mountedAt > UNLOAD_COOLDOWN_MS);
-            })
-            .sort((a, b) =>
-                Math.abs(b.spineIndex - currentSpineIndex) - Math.abs(a.spineIndex - currentSpineIndex)
-            );
+        const checkUnload = () => {
+            const currentChapters = chaptersRef.current;
+            const mountedChapters = currentChapters.filter(ch => ch.status === 'mounted');
+            const now = Date.now();
+            const toUnload = mountedChapters
+                .filter(ch => {
+                    // 惯性滚动中禁止任何卸载，防止高度真空导致坐标系崩溃
+                    if (isUserScrollingRef.current) return false;
+                    const dist = ch.spineIndex - currentSpineIndex;
+                    // 上方章节：使用极大 radius（相当于永不卸载）
+                    // 下方章节：正常 radius
+                    const radius = dist < 0 ? UNLOAD_ABOVE_RADIUS : UNLOAD_BELOW_RADIUS;
+                    return Math.abs(dist) > radius
+                        && (!ch.mountedAt || now - ch.mountedAt > UNLOAD_COOLDOWN_MS);
+                })
+                .sort((a, b) =>
+                    Math.abs(b.spineIndex - currentSpineIndex) - Math.abs(a.spineIndex - currentSpineIndex)
+                );
 
-        if (toUnload.length === 0) return;
+            if (toUnload.length === 0) return;
 
-        const listEl = chapterListRef.current;
-        toUnload.forEach(ch => {
-            const idleHandle = highlightIdleHandlesRef.current.get(ch.spineIndex);
-            if (idleHandle !== undefined) {
-                cancelIdleTask(idleHandle);
-                highlightIdleHandlesRef.current.delete(ch.spineIndex);
-            }
-            // Remove DOM
-            if (listEl) {
-                const domEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
-                if (domEl) {
-                    // 先 unobserve 再 release，避免清空段内容时 ResizeObserver 记录额外高度变动
-                    unobserveChapterResizeNodes(domEl);
-                    domEl.querySelectorAll('section[data-shadow-segment-index]').forEach(seg => {
-                        segmentPool.release(seg as HTMLElement);
-                    });
-                    releaseMediaResources(domEl);
-                    markChapterAsPlaceholder(domEl, ch.height);
+            const listEl = chapterListRef.current;
+            toUnload.forEach(ch => {
+                const idleHandle = highlightIdleHandlesRef.current.get(ch.spineIndex);
+                if (idleHandle !== undefined) {
+                    cancelIdleTask(idleHandle);
+                    highlightIdleHandlesRef.current.delete(ch.spineIndex);
                 }
-            }
-            // Free resources
-            provider.unloadChapter(ch.spineIndex);
-            // 清除 metaVector
-            chapterVectorsRef.current.delete(ch.id);
-        });
+                // Remove DOM
+                if (listEl) {
+                    const domEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
+                    if (domEl) {
+                        // 先 unobserve 再 release，避免清空段内容时 ResizeObserver 记录额外高度变动
+                        unobserveChapterResizeNodes(domEl);
+                        domEl.querySelectorAll('section[data-shadow-segment-index]').forEach(seg => {
+                            segmentPool.release(seg as HTMLElement);
+                        });
+                        releaseMediaResources(domEl);
+                        markChapterAsPlaceholder(domEl, ch.height);
+                    }
+                }
+                // Free resources
+                provider.unloadChapter(ch.spineIndex);
+                // 清除 metaVector
+                chapterVectorsRef.current.delete(ch.id);
+            });
 
-        const unloadIds = new Set(toUnload.map(ch => ch.spineIndex));
-        setChapters(prev => prev.map(ch => {
-            if (!unloadIds.has(ch.spineIndex)) return ch;
-            return {
-                ...ch,
-                htmlContent: '',
-                htmlFragments: [],
-                externalStyles: [],
-                domNode: null,
-                height: resolveChapterPlaceholderHeight(ch.height),
-                status: 'placeholder',
-            };
-        }));
+            const unloadIds = new Set(toUnload.map(ch => ch.spineIndex));
+            setChapters(prev => prev.map(ch => {
+                if (!unloadIds.has(ch.spineIndex)) return ch;
+                return {
+                    ...ch,
+                    htmlContent: '',
+                    htmlFragments: [],
+                    externalStyles: [],
+                    domNode: null,
+                    height: resolveChapterPlaceholderHeight(ch.height),
+                    status: 'placeholder',
+                };
+            }));
 
-        console.log(`[ScrollReader] Collapsed to placeholders: ${toUnload.map(ch => ch.spineIndex).join(', ')}`);
-    }, [currentSpineIndex, chapters, provider, unobserveChapterResizeNodes]);
+            console.log(`[ScrollReader] Collapsed to placeholders: ${toUnload.map(ch => ch.spineIndex).join(', ')}`);
+        };
+
+        // 延迟检查，避免在章节状态快速变化时频繁执行
+        const timer = setTimeout(checkUnload, UNLOAD_COOLDOWN_MS);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentSpineIndex, provider, unobserveChapterResizeNodes]);
 
     // ── Current Chapter Detection ──
 
