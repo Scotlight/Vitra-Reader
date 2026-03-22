@@ -1,5 +1,6 @@
-import type { SearchResult, SpineItemInfo, TocItem, ContentProvider } from '../../../core/contentProvider'
+﻿import type { SearchResult, SpineItemInfo, TocItem, ContentProvider } from '../../../core/contentProvider'
 import type { PdfDocumentProxy } from '../../../../types/pdfjs'
+import type { PdfRenderedPage, PdfRuntimeKind } from './pdfTypes'
 import { buildFallbackPdfToc, buildPdfHref, loadPdfOutline } from './pdfNavigation'
 import { renderPdfPageHtml } from './pdfPageHtml'
 import { extractPdfPageSearchText, renderPdfPage } from './pdfPageRenderer'
@@ -7,17 +8,23 @@ import { openPdfDocument, openPdfDocumentWithFallback, promoteLegacyRuntime, sho
 
 const SEARCH_CONTEXT_CHARS = 20
 const ADJACENT_PAGE_DELTA = 1
-
-type IdleScheduler = (callback: () => void) => number
+const PRERENDER_IDLE_DELAY_MS = 450
+const FAST_FOREGROUND_RENDER_THRESHOLD_MS = 180
 
 export class PdfContentProvider implements ContentProvider {
     private doc: PdfDocumentProxy | null = null
     private readonly sourceBytes: Uint8Array
+    private runtimeKind: PdfRuntimeKind = 'modern'
     private pageCount = 0
     private outline: TocItem[] = []
+    private pageSearchTextCache = new Map<number, string>()
     private pageHtmlCache = new Map<number, string>()
-    private pageImageUrlCache = new Map<number, string>()
+    private renderedPageCache = new Map<number, PdfRenderedPage>()
     private activeImageUrls = new Set<string>()
+    private pendingPageLoads = new Map<number, Promise<string>>()
+    private lastForegroundRenderDurationMs: number | null = null
+    private prerenderTimerId: number | null = null
+    private prerenderPendingPageIndex: number | null = null
 
     constructor(data: ArrayBuffer) {
         this.sourceBytes = new Uint8Array(data)
@@ -28,6 +35,9 @@ export class PdfContentProvider implements ContentProvider {
     }
 
     destroy(): void {
+        this.cancelPendingPrerender()
+        this.pendingPageLoads.clear()
+        this.pageSearchTextCache.clear()
         this.clearRenderedPageCache()
         this.doc?.destroy()
         this.doc = null
@@ -56,14 +66,21 @@ export class PdfContentProvider implements ContentProvider {
     }
 
     async extractChapterHtml(pageIndex: number): Promise<string> {
+        this.cancelPendingPrerender()
+
         const cached = this.pageHtmlCache.get(pageIndex)
         if (cached) return cached
 
-        const doc = this.ensureDocument()
-        const renderedPage = await this.renderPageWithFallback(doc, pageIndex)
-        const html = renderPdfPageHtml(renderedPage, pageIndex)
-        this.storeRenderedPage(pageIndex, renderedPage.imageUrl, html)
-        this.prerenderAdjacent(pageIndex)
+        const renderedPage = this.renderedPageCache.get(pageIndex)
+        if (renderedPage) {
+            const html = this.buildPageHtml(pageIndex, renderedPage)
+            this.pageHtmlCache.set(pageIndex, html)
+            this.scheduleNextPagePrerender(pageIndex)
+            return html
+        }
+
+        const html = await this.loadPageHtml(pageIndex, 'foreground')
+        this.scheduleNextPagePrerender(pageIndex)
         return html
     }
 
@@ -72,7 +89,7 @@ export class PdfContentProvider implements ContentProvider {
     }
 
     unloadChapter(pageIndex: number): void {
-        this.releasePageCacheEntry(pageIndex)
+        this.pageHtmlCache.delete(pageIndex)
     }
 
     async search(keyword: string): Promise<SearchResult[]> {
@@ -82,14 +99,16 @@ export class PdfContentProvider implements ContentProvider {
         try {
             return await this.searchInCurrentDoc(normalized)
         } catch (error) {
-            if (!shouldFallbackToLegacy(error)) throw error
+            if (!shouldFallbackToLegacy(error) || this.runtimeKind === 'legacy') throw error
             await this.reopenLegacyDocument('search parser error', error)
             return this.searchInCurrentDoc(normalized)
         }
     }
 
     private async openDocument(): Promise<void> {
-        this.doc = await openPdfDocumentWithFallback(this.sourceBytes)
+        const opened = await openPdfDocumentWithFallback(this.sourceBytes)
+        this.doc = opened.doc
+        this.runtimeKind = opened.kind
         this.pageCount = this.doc.numPages
         this.outline = await loadPdfOutline(this.doc)
     }
@@ -101,80 +120,125 @@ export class PdfContentProvider implements ContentProvider {
 
     private async renderPageWithFallback(doc: PdfDocumentProxy, pageIndex: number) {
         try {
-            return await renderPdfPage(doc, pageIndex)
+            return await renderPdfPage(doc, pageIndex, this.lastForegroundRenderDurationMs)
         } catch (error) {
-            if (!shouldFallbackToLegacy(error)) throw error
+            if (!shouldFallbackToLegacy(error) || this.runtimeKind === 'legacy') throw error
             await this.reopenLegacyDocument('page render parser error', error)
-            return renderPdfPage(this.ensureDocument(), pageIndex)
+            return renderPdfPage(this.ensureDocument(), pageIndex, this.lastForegroundRenderDurationMs)
         }
     }
 
     private async reopenLegacyDocument(reason: string, error: unknown): Promise<void> {
         promoteLegacyRuntime(reason, error)
+        this.cancelPendingPrerender()
+        this.pendingPageLoads.clear()
+        this.pageSearchTextCache.clear()
         this.clearRenderedPageCache()
         this.doc?.destroy()
-        this.doc = await openPdfDocument(this.sourceBytes, true)
+        this.doc = await openPdfDocument(this.sourceBytes, 'legacy')
+        this.runtimeKind = 'legacy'
         this.pageCount = this.doc.numPages
         this.outline = await loadPdfOutline(this.doc)
     }
 
-    private storeRenderedPage(pageIndex: number, imageUrl: string, html: string): void {
-        this.releasePageCacheEntry(pageIndex)
-        this.pageImageUrlCache.set(pageIndex, imageUrl)
-        this.activeImageUrls.add(imageUrl)
+    private async loadPageHtml(pageIndex: number, source: 'foreground' | 'prerender'): Promise<string> {
+        const cached = this.pageHtmlCache.get(pageIndex)
+        if (cached) return cached
+
+        const renderedPage = this.renderedPageCache.get(pageIndex)
+        if (renderedPage) {
+            const html = this.buildPageHtml(pageIndex, renderedPage)
+            this.pageHtmlCache.set(pageIndex, html)
+            return html
+        }
+
+        const pending = this.pendingPageLoads.get(pageIndex)
+        if (pending) return pending
+
+        const task = this.renderAndStorePage(pageIndex, source)
+            .finally(() => {
+                this.pendingPageLoads.delete(pageIndex)
+            })
+        this.pendingPageLoads.set(pageIndex, task)
+        return task
+    }
+
+    private async renderAndStorePage(pageIndex: number, source: 'foreground' | 'prerender'): Promise<string> {
+        const doc = this.ensureDocument()
+        const renderStartedAt = performance.now()
+        const renderedPage = await this.renderPageWithFallback(doc, pageIndex)
+        const renderDurationMs = performance.now() - renderStartedAt
+        if (source === 'foreground') {
+            this.lastForegroundRenderDurationMs = renderDurationMs
+        }
+        this.storeRenderedPage(pageIndex, renderedPage)
+        const html = this.buildPageHtml(pageIndex, renderedPage)
         this.pageHtmlCache.set(pageIndex, html)
+        return html
+    }
+
+    private buildPageHtml(pageIndex: number, renderedPage: PdfRenderedPage): string {
+        return renderPdfPageHtml(renderedPage, pageIndex, this.pageSearchTextCache.get(pageIndex) || '')
+    }
+
+    private storeRenderedPage(pageIndex: number, renderedPage: PdfRenderedPage): void {
+        const previousRenderedPage = this.renderedPageCache.get(pageIndex)
+        if (previousRenderedPage && previousRenderedPage.imageUrl !== renderedPage.imageUrl) {
+            this.activeImageUrls.delete(previousRenderedPage.imageUrl)
+            URL.revokeObjectURL(previousRenderedPage.imageUrl)
+        }
+        this.renderedPageCache.set(pageIndex, renderedPage)
+        this.activeImageUrls.add(renderedPage.imageUrl)
     }
 
     private releasePageCacheEntry(pageIndex: number): void {
-        const imageUrl = this.pageImageUrlCache.get(pageIndex)
-        if (imageUrl) {
-            this.activeImageUrls.delete(imageUrl)
-            URL.revokeObjectURL(imageUrl)
-            this.pageImageUrlCache.delete(pageIndex)
+        const renderedPage = this.renderedPageCache.get(pageIndex)
+        if (renderedPage) {
+            this.activeImageUrls.delete(renderedPage.imageUrl)
+            URL.revokeObjectURL(renderedPage.imageUrl)
+            this.renderedPageCache.delete(pageIndex)
         }
         this.pageHtmlCache.delete(pageIndex)
     }
 
     private clearRenderedPageCache(): void {
-        Array.from(this.pageImageUrlCache.keys()).forEach((pageIndex) => {
+        Array.from(this.renderedPageCache.keys()).forEach((pageIndex) => {
             this.releasePageCacheEntry(pageIndex)
         })
     }
 
-    private prerenderAdjacent(pageIndex: number): void {
-        const doc = this.doc
-        if (!doc) return
+    private scheduleNextPagePrerender(pageIndex: number): void {
+        const nextPageIndex = pageIndex + ADJACENT_PAGE_DELTA
+        if (nextPageIndex < 0 || nextPageIndex >= this.pageCount) return
+        if (this.lastForegroundRenderDurationMs === null || this.lastForegroundRenderDurationMs > FAST_FOREGROUND_RENDER_THRESHOLD_MS) {
+            return
+        }
+        if (this.pageHtmlCache.has(nextPageIndex) || this.pendingPageLoads.has(nextPageIndex)) return
 
-        const candidatePages = [pageIndex + ADJACENT_PAGE_DELTA, pageIndex - ADJACENT_PAGE_DELTA]
-            .filter((candidate) => candidate >= 0 && candidate < this.pageCount)
-            .filter((candidate) => !this.pageHtmlCache.has(candidate))
-        if (candidatePages.length === 0) return
+        this.cancelPendingPrerender()
+        this.prerenderPendingPageIndex = nextPageIndex
+        this.prerenderTimerId = window.setTimeout(() => {
+            const candidatePage = this.prerenderPendingPageIndex
+            this.prerenderTimerId = null
+            this.prerenderPendingPageIndex = null
+            if (candidatePage === null) return
+            if (this.pendingPageLoads.size > 0) return
+            if (this.pageHtmlCache.has(candidatePage) || this.pendingPageLoads.has(candidatePage)) return
 
-        const scheduleIdle = this.getIdleScheduler()
-        scheduleIdle(() => {
-            candidatePages.forEach((candidatePage) => {
-                if (this.pageHtmlCache.has(candidatePage)) return
-                renderPdfPage(doc, candidatePage)
-                    .then((renderedPage) => {
-                        if (this.pageHtmlCache.has(candidatePage)) {
-                            URL.revokeObjectURL(renderedPage.imageUrl)
-                            return
-                        }
-                        const html = renderPdfPageHtml(renderedPage, candidatePage)
-                        this.storeRenderedPage(candidatePage, renderedPage.imageUrl, html)
-                    })
-                    .catch((error) => {
-                        console.warn(`[PdfProvider] Failed to prerender page ${candidatePage + 1}:`, error)
-                    })
-            })
-        })
+            this.loadPageHtml(candidatePage, 'prerender')
+                .then(() => undefined)
+                .catch((error) => {
+                    console.warn(`[PdfProvider] Failed to prerender page ${candidatePage + 1}:`, error)
+                })
+        }, PRERENDER_IDLE_DELAY_MS)
     }
 
-    private getIdleScheduler(): IdleScheduler {
-        if (typeof requestIdleCallback === 'function') {
-            return (callback) => requestIdleCallback(callback)
+    private cancelPendingPrerender(): void {
+        if (this.prerenderTimerId !== null) {
+            window.clearTimeout(this.prerenderTimerId)
+            this.prerenderTimerId = null
         }
-        return (callback) => window.setTimeout(callback, 0)
+        this.prerenderPendingPageIndex = null
     }
 
     private async searchInCurrentDoc(keyword: string): Promise<SearchResult[]> {
@@ -183,14 +247,22 @@ export class PdfContentProvider implements ContentProvider {
         const normalizedKeyword = keyword.toLowerCase()
 
         for (let pageNumber = 1; pageNumber <= this.pageCount; pageNumber += 1) {
-            const page = await doc.getPage(pageNumber)
-            const text = await extractPdfPageSearchText(page, pageNumber - 1)
+            const pageIndex = pageNumber - 1
+            let text = this.pageSearchTextCache.get(pageIndex) || ''
+            if (!text) {
+                const page = await doc.getPage(pageNumber)
+                text = await extractPdfPageSearchText(page, pageIndex)
+                if (text) {
+                    this.pageSearchTextCache.set(pageIndex, text)
+                    this.pageHtmlCache.delete(pageIndex)
+                }
+            }
             if (!text) continue
             const lowerText = text.toLowerCase()
             let position = lowerText.indexOf(normalizedKeyword)
             while (position !== -1) {
                 results.push({
-                    cfi: `vitra:${pageNumber - 1}:0`,
+                    cfi: `vitra:${pageIndex}:0`,
                     excerpt: buildSearchExcerpt(text, position, keyword.length),
                 })
                 position = lowerText.indexOf(normalizedKeyword, position + normalizedKeyword.length)
