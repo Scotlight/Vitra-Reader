@@ -6,30 +6,48 @@ const RECOVERABLE_LEGACY_ERROR_MARKERS = [
     'unknownerrorexception',
 ] as const
 
-let cachedPdfRuntime: PdfJsRuntime | null = null
-let cachedRuntimeKind: PdfRuntimeKind | null = null
-let forceLegacyRuntime = false
+type PdfOpenResult = {
+    doc: PdfDocumentProxy
+    kind: PdfRuntimeKind
+}
+
+const runtimeCache: Partial<Record<PdfRuntimeKind, PdfJsRuntime>> = {}
+const runtimeLoaders: Partial<Record<PdfRuntimeKind, Promise<PdfJsRuntime>>> = {}
+const loggedLegacyPromotions = new Set<string>()
+
+function shouldLogPdfRuntimeFallback(): boolean {
+    if (!import.meta.env.DEV) return false
+    return Boolean((globalThis as typeof globalThis & { __VITRA_PDF_DEBUG_RUNTIME_FALLBACK__?: unknown }).__VITRA_PDF_DEBUG_RUNTIME_FALLBACK__)
+}
+
+function formatRuntimeError(error: unknown): string {
+    const text = String(error instanceof Error ? error.message : error || '').trim()
+    return text || 'unknown runtime error'
+}
 
 function buildWorkerSrc(kind: PdfRuntimeKind): string {
     const workerPath = kind === 'legacy'
         ? 'pdfjs-dist/legacy/build/pdf.worker.mjs'
         : 'pdfjs-dist/build/pdf.worker.min.mjs'
+
+    if (import.meta.env.DEV && typeof window !== 'undefined') {
+        return new URL(`/node_modules/${workerPath}`, window.location.origin).toString()
+    }
+
     return new URL(workerPath, import.meta.url).toString()
 }
 
 async function loadModernRuntime(): Promise<PdfJsRuntime> {
     const runtime = await import('pdfjs-dist') as unknown as PdfJsRuntime
     runtime.GlobalWorkerOptions.workerSrc = buildWorkerSrc('modern')
-    cachedPdfRuntime = runtime
-    cachedRuntimeKind = 'modern'
+    runtimeCache.modern = runtime
     return runtime
 }
 
 async function loadLegacyRuntime(): Promise<PdfJsRuntime> {
     const runtime = await import('pdfjs-dist/legacy/build/pdf.mjs') as unknown as PdfJsRuntime
     runtime.GlobalWorkerOptions.workerSrc = buildWorkerSrc('legacy')
-    cachedPdfRuntime = runtime
-    cachedRuntimeKind = 'legacy'
+    runtimeCache.legacy = runtime
     return runtime
 }
 
@@ -39,50 +57,56 @@ export function shouldFallbackToLegacy(error: unknown): boolean {
 }
 
 export function promoteLegacyRuntime(reason: string, error: unknown): void {
-    if (!forceLegacyRuntime) {
-        console.warn(`[PdfProvider] switch runtime to legacy: ${reason}`, error)
-    }
-    forceLegacyRuntime = true
-    if (cachedRuntimeKind === 'modern') {
-        cachedPdfRuntime = null
-        cachedRuntimeKind = null
+    const signature = `${reason}:${formatRuntimeError(error).toLowerCase()}`
+    if (loggedLegacyPromotions.has(signature)) return
+    loggedLegacyPromotions.add(signature)
+    if (shouldLogPdfRuntimeFallback()) {
+        console.info(`[PdfProvider] switch runtime to legacy: ${reason}`, error)
     }
 }
 
-export async function getPdfRuntime(forceLegacy = false): Promise<PdfJsRuntime> {
-    const useLegacy = forceLegacy || forceLegacyRuntime
-    if (cachedPdfRuntime && cachedRuntimeKind && (!useLegacy || cachedRuntimeKind === 'legacy')) {
-        return cachedPdfRuntime
+export async function getPdfRuntime(kind: PdfRuntimeKind = 'modern'): Promise<PdfJsRuntime> {
+    const cached = runtimeCache[kind]
+    if (cached) {
+        return cached
     }
 
-    if (!useLegacy) {
-        try {
-            return await loadModernRuntime()
-        } catch (error) {
-            console.warn('[PdfProvider] modern runtime load failed, fallback to legacy:', error)
-        }
+    const inFlight = runtimeLoaders[kind]
+    if (inFlight) {
+        return inFlight
     }
 
-    return loadLegacyRuntime()
+    const loader = (kind === 'legacy' ? loadLegacyRuntime() : loadModernRuntime())
+        .finally(() => {
+            delete runtimeLoaders[kind]
+        })
+    runtimeLoaders[kind] = loader
+    return loader
 }
 
-export async function openPdfDocument(sourceBytes: Uint8Array, forceLegacy = false): Promise<PdfDocumentProxy> {
-    const runtime = await getPdfRuntime(forceLegacy || forceLegacyRuntime)
+export async function openPdfDocument(sourceBytes: Uint8Array, kind: PdfRuntimeKind = 'modern'): Promise<PdfDocumentProxy> {
+    const runtime = await getPdfRuntime(kind)
     return runtime.getDocument({
-        data: sourceBytes,
+        data: sourceBytes.slice(),
         disableAutoFetch: true,
         disableStream: true,
     }).promise
 }
 
-export async function openPdfDocumentWithFallback(sourceBytes: Uint8Array): Promise<PdfDocumentProxy> {
+export async function openPdfDocumentWithFallback(sourceBytes: Uint8Array): Promise<PdfOpenResult> {
     try {
-        return await openPdfDocument(sourceBytes, false)
+        return {
+            doc: await openPdfDocument(sourceBytes, 'modern'),
+            kind: 'modern',
+        }
     } catch (error) {
         if (!shouldFallbackToLegacy(error)) {
             throw error
         }
         promoteLegacyRuntime('document open parser error', error)
-        return openPdfDocument(sourceBytes, true)
+        return {
+            doc: await openPdfDocument(sourceBytes, 'legacy'),
+            kind: 'legacy',
+        }
     }
 }

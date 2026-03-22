@@ -29,6 +29,26 @@ import type {
 const DEFAULT_PREVIEW_SECTIONS = 5;
 const PREVIEW_TEXT_LIMIT = 180;
 
+function isPreviewAbortLikeError(error: unknown): boolean {
+  const text = String(error instanceof Error ? error.message : error || '').toLowerCase();
+  return text.includes('preview canceled')
+    || text.includes('load canceled')
+    || text.includes('aborted')
+    || text.includes('canceled');
+}
+
+function shouldLogPreviewDebug(): boolean {
+  if (!import.meta.env.DEV) return false;
+  return Boolean((globalThis as typeof globalThis & { __VITRA_DEBUG_PIPELINE_PREVIEW__?: unknown }).__VITRA_DEBUG_PIPELINE_PREVIEW__);
+}
+
+function recoverPreviewFailure(stage: 'preview' | 'warmup', error: unknown): readonly VitraPreviewSection[] {
+  if (!isPreviewAbortLikeError(error) && shouldLogPreviewDebug()) {
+    console.debug(`[VitraPipeline] ${stage} skipped after recoverable preview error:`, error);
+  }
+  return [];
+}
+
 export const VITRA_SUPPORTED_FORMATS: readonly VitraBookFormat[] = [
   'EPUB', 'MOBI', 'AZW3', 'AZW',
   'PDF', 'DJVU',
@@ -64,7 +84,8 @@ export class VitraPipeline {
     const parser = this.createParser(format, request);
     const ready = this.parseBook(parser, signaler.signal);
     const metadata = ready.then((book) => book.metadata);
-    const preview = this.buildPreview(ready, request.previewCount ?? DEFAULT_PREVIEW_SECTIONS, signaler.signal);
+    const preview = this.buildPreview(ready, request.previewCount ?? DEFAULT_PREVIEW_SECTIONS, signaler.signal)
+      .catch((error) => recoverPreviewFailure('preview', error));
 
     return {
       format,
@@ -139,14 +160,17 @@ async function readPreviewSections(
   const preview: VitraPreviewSection[] = [];
   for (const section of sections) {
     if (signal.aborted) throw new Error('VitraPipeline: preview canceled');
-    const loaded = await section.load();
-    const html = await toHtmlContent(loaded);
-    section.unload();
-    preview.push({
-      id: section.id,
-      href: section.href,
-      excerpt: toExcerpt(html),
-    });
+    try {
+      const loaded = await section.load();
+      const html = await toHtmlContent(loaded);
+      preview.push({
+        id: section.id,
+        href: section.href,
+        excerpt: toExcerpt(html),
+      });
+    } finally {
+      section.unload();
+    }
   }
   return preview;
 }
@@ -199,14 +223,20 @@ function schedulePreviewWarmup(
     requestIdleCallback?: (handler: () => void) => number;
   }).requestIdleCallback;
 
+  const launchWarmup = () => {
+    void runWarmup().catch((error) => {
+      recoverPreviewFailure('warmup', error);
+    });
+  };
+
   if (typeof idleScheduler === 'function') {
     idleScheduler(() => {
-      void runWarmup();
+      launchWarmup();
     });
     return;
   }
 
   window.setTimeout(() => {
-    void runWarmup();
+    launchWarmup();
   }, 0);
 }

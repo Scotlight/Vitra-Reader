@@ -1,0 +1,31 @@
+﻿{
+  "commit": "1640f66",
+  "console_cleanup": {
+    "status": "passed",
+    "reader_title": "pdf-render-smoke-sample",
+    "console_summary": {
+      "errors": 0,
+      "warnings": 0,
+      "remaining_messages": [
+        "vite debug connect/disconnect in dev",
+        "React DevTools suggestion from React development build",
+        "intentional PDF render metrics info logs",
+        "existing app log/info lines from ShadowRenderer and ScrollReader"
+      ]
+    },
+    "render_metrics": [
+      { "page": 1, "scale": 1.575, "pixelArea": 1203072, "renderMs": 42.90 },
+      { "page": 2, "scale": 1.094, "pixelArea": 1103200, "renderMs": 21.70 },
+      { "page": 3, "scale": 1.069, "pixelArea": 1601790, "renderMs": 21.30 }
+    ],
+    "fixed_items": [
+      "removed favicon 404 by adding inline favicon link",
+      "silenced recoverable PDF legacy fallback warnings unless explicitly debug-enabled",
+      "caught preview and warmup promise failures in VitraPipeline to avoid uncaught promise noise",
+      "added name/type/aria-label to library search input to remove browser form-field issue"
+    ]
+  },
+  "artifacts": {
+    "screenshot": "outputs/runtime/vibe-sessions/2026-03-22_160900-console-cleanup/reader-console-clean.png"
+  }
+}

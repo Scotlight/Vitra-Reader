@@ -502,6 +502,9 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                     <div className={styles.searchWrap}>
                         <input
                             className={styles.searchInput}
+                            type="search"
+                            name="library-search"
+                            aria-label="搜索我的书库"
                             placeholder="搜索我的书库"
                             value={keyword}
                             onChange={(event) => setKeyword(event.target.value)}
