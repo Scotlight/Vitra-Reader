@@ -1,0 +1,27 @@
+{
+  "runId": "2026-03-22_110634",
+  "goal": "继续拆解 Reader 层屎山代码，优先压缩超大文件，并审计 any 使用情况。",
+  "deliverable": "新的需求与计划文档、阶段收据，以及 ReaderView 进一步组件拆分结果。",
+  "constraints": [
+    "保持 Reader 行为不变",
+    "不引入静默降级或兜底假成功",
+    "在已有脏工作树中只做局部、可解释改动",
+    "优先处理明确热点，不盲目扩散范围"
+  ],
+  "acceptanceCriteria": [
+    "ReaderView 继续降体积，职责更接近装配层",
+    "本轮拆分文件单个职责更清晰",
+    "给出 any 审计结论",
+    "保留可追踪的验证结论"
+  ],
+  "nonGoals": [
+    "本轮不重写 ScrollReaderView 全量 hydration 链路",
+    "本轮不系统修复 PDF 子模块全部类型错误"
+  ],
+  "autonomyMode": "benchmark_autonomous",
+  "internalGrade": "XL",
+  "assumptions": [
+    "用户更看重高收益拆分而不是一次性清仓所有大文件",
+    "any 审计以 src 目录 TypeScript 源码为主"
+  ]
+}

@@ -1,0 +1,5 @@
+id,item,status,done_at,notes
+1,"冻结新一轮需求与计划",DONE,2026-03-22_110634,"vibe + taskmaster；需求与执行计划已落盘"
+2,"拆分 Reader 左侧面板",DONE,2026-03-22_110634,"ReaderLeftPanel 已接入 ReaderView，目录/搜索/标注逻辑脱离主文件"
+3,"拆分 Reader 设置面板",DONE,2026-03-22_110634,"ReaderSettingsPanel + ReaderAppearanceSettings + ReaderModeSettings 已接入"
+4,"验证大文件与 any",DONE,2026-03-22_110634,"ReaderView 压到 295 行；source any 审计通过；tsc --noEmit 通过"

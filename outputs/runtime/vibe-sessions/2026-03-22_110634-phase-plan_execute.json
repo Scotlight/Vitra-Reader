@@ -1,0 +1,23 @@
+{
+  "runId": "2026-03-22_110634",
+  "stage": "plan_execute",
+  "status": "completed",
+  "scope": "ReaderView 大文件拆分与 source any 清理",
+  "changes": [
+    "接入 ReaderLeftPanel 与 ReaderSettingsPanel，移除 ReaderView 中的大块左右侧 JSX",
+    "新增 useReaderClock、useReaderAnnotations、useAutoScrollActiveToc，继续压缩 ReaderView 为装配层",
+    "将 ReaderView 行数从 818 降到 295",
+    "移除 ScrollReaderView 中唯一的源码 any，改为标准 ScrollBehavior 类型"
+  ],
+  "verification": {
+    "commands": [
+      "rg -n \"\\bany\\b|as any|<any>|Array<any>|Record<string, any>\" src/components src/engine src/stores src/services src/utils",
+      "npx tsc --noEmit --pretty false --incremental false"
+    ],
+    "result": "pass",
+    "notes": [
+      "source 目录审计未发现 any/as any",
+      "全量 TypeScript 检查通过，且未写入 tsbuildinfo"
+    ]
+  }
+}
