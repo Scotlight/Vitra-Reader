@@ -1,7 +1,7 @@
-import type { ShelfItem } from '../../hooks/useShelfManager'
+import type { GroupItem } from '../../hooks/groupManagerState'
 import styles from './LibraryView.module.css'
 
-// ─── 新建书架弹窗 ───────────────────────────────────
+// ─── 新建分组弹窗 ───────────────────────────────────
 
 interface CreateShelfModalProps {
     newShelfName: string
@@ -14,11 +14,11 @@ export const CreateShelfModal = ({ newShelfName, setNewShelfName, onClose, onCre
     <div className={styles.settingsModalOverlay} onClick={onClose}>
         <div className={styles.dialogPanel} onClick={(event) => event.stopPropagation()}>
             <div className={styles.settingsHeader}>
-                <h3>新建书架</h3>
+                <h3>新建分组</h3>
                 <button className={styles.closeBtn} onClick={onClose}>×</button>
             </div>
             <label className={styles.settingRow}>
-                <span>书架名称</span>
+                <span>分组名称</span>
                 <input
                     className={styles.textInput}
                     type="text"
@@ -34,10 +34,10 @@ export const CreateShelfModal = ({ newShelfName, setNewShelfName, onClose, onCre
     </div>
 )
 
-// ─── 管理书架弹窗 ───────────────────────────────────
+// ─── 管理分组弹窗 ───────────────────────────────────
 
 interface ManageShelfModalProps {
-    shelves: ShelfItem[]
+    shelves: GroupItem[]
     manageSourceShelfId: string
     setManageSourceShelfId: (v: string) => void
     manageTargetShelfId: string
@@ -62,7 +62,7 @@ export const ManageShelfModal = ({
     <div className={styles.settingsModalOverlay} onClick={onClose}>
         <div className={styles.dialogPanel} onClick={(event) => event.stopPropagation()}>
             <div className={styles.settingsHeader}>
-                <h3>管理书架</h3>
+                <h3>管理分组</h3>
                 <button className={styles.closeBtn} onClick={onClose}>×</button>
             </div>
             <div className={styles.manageShelfList}>
@@ -80,7 +80,7 @@ export const ManageShelfModal = ({
             {shelves.length > 1 && (
                 <div className={styles.manageMovePanel}>
                     <label className={styles.settingRow}>
-                        <span>来源书架</span>
+                        <span>来源分组</span>
                         <select value={manageSourceShelfId} onChange={(event) => setManageSourceShelfId(event.target.value)}>
                             {shelves.map((shelf) => (
                                 <option key={shelf.id} value={shelf.id}>{shelf.name}</option>
@@ -88,7 +88,7 @@ export const ManageShelfModal = ({
                         </select>
                     </label>
                     <label className={styles.settingRow}>
-                        <span>目标书架</span>
+                        <span>目标分组</span>
                         <select value={manageTargetShelfId} onChange={(event) => setManageTargetShelfId(event.target.value)}>
                             {shelves.map((shelf) => (
                                 <option key={shelf.id} value={shelf.id}>{shelf.name}</option>
@@ -97,7 +97,7 @@ export const ManageShelfModal = ({
                     </label>
                     <div className={styles.rowActions}>
                         <button className={styles.syncPrimaryBtn} onClick={() => onMoveBooks(manageSourceShelfId, manageTargetShelfId)}>
-                            移动全部图书
+                            移动全部图书到目标分组
                         </button>
                     </div>
                 </div>

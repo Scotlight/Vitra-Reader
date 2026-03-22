@@ -1,8 +1,17 @@
-import { type MouseEvent as ReactMouseEvent, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
+import {
+    type MouseEvent as ReactMouseEvent,
+    type PointerEvent as ReactPointerEvent,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useReducer,
+    useRef,
+    useState,
+} from 'react'
 import { motion } from 'framer-motion'
 import type { BookMeta } from '../../services/storageService'
 import { getBookCover } from '../../services/storageService'
-import type { ShelfGroup } from '../../hooks/useShelfManager'
+import type { GroupCollection } from '../../hooks/useGroupManager'
 import { BookFormatPlaceholder } from './BookFormatPlaceholder'
 import { buildVirtualGridMetrics, chunkItemsIntoRows, resolveVisibleVirtualRows } from './libraryVirtualGrid'
 import styles from './LibraryView.module.css'
@@ -10,6 +19,8 @@ import styles from './LibraryView.module.css'
 const PROBE_CARD_LIMIT = 24
 const ROW_OVERSCAN_COUNT = 2
 const ROW_GROUP_EPSILON_PX = 2
+const LONG_PRESS_MS = 320
+const LONG_PRESS_CANCEL_DISTANCE = 10
 
 interface VirtualGridLayoutSnapshot {
     columnCount: number
@@ -20,6 +31,10 @@ interface VirtualGridLayoutSnapshot {
     initialEstimatedRowHeight: number
 }
 
+export type LibraryGridItem =
+    | { key: string; type: 'book'; book: BookMeta }
+    | { key: string; type: 'group'; group: GroupCollection }
+
 function readPixelValue(value: string): number {
     const parsed = Number.parseFloat(value)
     return Number.isFinite(parsed) ? parsed : 0
@@ -29,7 +44,7 @@ function collectVirtualGridProbeLayout(
     probeGrid: HTMLDivElement,
     scrollContainer: HTMLDivElement,
 ): (VirtualGridLayoutSnapshot & { initialRowHeights: Map<number, number> }) | null {
-    const cards = Array.from(probeGrid.querySelectorAll<HTMLDivElement>('[data-virtual-card="true"]'))
+    const cards = Array.from(probeGrid.querySelectorAll<HTMLElement>('[data-virtual-card="true"]'))
     if (cards.length === 0) return null
 
     const computedStyle = window.getComputedStyle(probeGrid)
@@ -72,7 +87,16 @@ function collectVirtualGridProbeLayout(
     }
 }
 
-/** 封面懒加载：仅在需要时才读取 IndexedDB，避免全量加载 Base64 */
+function resolveSortTargetKey(clientX: number, clientY: number, sortContextKey: string | null): string | null {
+    if (!sortContextKey) return null
+    const target = document
+        .elementFromPoint(clientX, clientY)
+        ?.closest<HTMLElement>('[data-sort-key][data-sort-context]')
+
+    if (!target || target.dataset.sortContext !== sortContextKey) return null
+    return target.dataset.sortKey || null
+}
+
 function LazyCoverImage({ bookId, format, alt, compact }: { bookId: string; format?: string; alt: string; compact?: boolean }) {
     const [cover, setCover] = useState<string | null>(null)
     const [loaded, setLoaded] = useState(false)
@@ -99,22 +123,89 @@ function LazyCoverImage({ bookId, format, alt, compact }: { bookId: string; form
     )
 }
 
-interface BookCardProps {
-    book: BookMeta
-    progress: number
-    onOpenBook: (id: string) => void
-    onContextMenu: (event: ReactMouseEvent<HTMLElement>, bookId: string) => void
+interface DragHandlers {
+    draggingKey: string | null
+    onClickCapture: (event: ReactMouseEvent<HTMLElement>) => void
+    onPointerDown: (event: ReactPointerEvent<HTMLElement>, key: string) => void
+    onPointerMove: (event: ReactPointerEvent<HTMLElement>) => void
+    onPointerUp: (event: ReactPointerEvent<HTMLElement>) => void
+    onPointerCancel: (event: ReactPointerEvent<HTMLElement>) => void
 }
 
-function BookCard({ book, progress, onOpenBook, onContextMenu }: BookCardProps) {
+interface GridCardProps {
+    item: LibraryGridItem
+    progressMap: Record<string, number>
+    onOpenBook: (id: string) => void
+    onOpenGroup: (id: string) => void
+    onContextMenu: (event: ReactMouseEvent<HTMLElement>, bookId: string) => void
+    sortable: boolean
+    sortContextKey: string | null
+    dragHandlers: DragHandlers
+}
+
+function GridCard({
+    item,
+    progressMap,
+    onOpenBook,
+    onOpenGroup,
+    onContextMenu,
+    sortable,
+    sortContextKey,
+    dragHandlers,
+}: GridCardProps) {
+    const commonProps = {
+        'data-virtual-card': 'true',
+        'data-library-item': 'true',
+        'data-sort-key': sortable ? item.key : undefined,
+        'data-sort-context': sortable && sortContextKey ? sortContextKey : undefined,
+        className: `${item.type === 'book' ? styles.card : styles.shelfGroupCard} ${dragHandlers.draggingKey === item.key ? styles.dragSortingCard : ''}`,
+        initial: false,
+        whileHover: dragHandlers.draggingKey === item.key ? undefined : { y: -5, boxShadow: '0 8px 30px rgba(0,0,0,0.12)' },
+        onClickCapture: dragHandlers.onClickCapture,
+        onPointerDown: sortable ? (event: ReactPointerEvent<HTMLElement>) => dragHandlers.onPointerDown(event, item.key) : undefined,
+        onPointerMove: sortable ? dragHandlers.onPointerMove : undefined,
+        onPointerUp: sortable ? dragHandlers.onPointerUp : undefined,
+        onPointerCancel: sortable ? dragHandlers.onPointerCancel : undefined,
+    } satisfies Record<string, unknown>
+
+    if (item.type === 'group') {
+        return (
+            <motion.div
+                {...commonProps}
+                title={`${item.group.name}（${item.group.books.length} 本）`}
+                onClick={() => onOpenGroup(item.group.id)}
+                onContextMenu={(event: ReactMouseEvent<HTMLElement>) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                }}
+            >
+                <div className={styles.shelfGroupCovers}>
+                    {Array.from({ length: 4 }, (_, index) => item.group.books[index] ?? null).map((book, index) => (
+                        <div key={book?.id ?? `${item.group.id}-placeholder-${index}`} className={styles.shelfGroupCover}>
+                            {book ? (
+                                <LazyCoverImage bookId={book.id} format={book.format} alt={book.title} compact />
+                            ) : (
+                                <BookFormatPlaceholder compact />
+                            )}
+                        </div>
+                    ))}
+                </div>
+                <div className={styles.shelfGroupMeta}>
+                    <strong>{item.group.name}</strong>
+                    <span>{item.group.books.length} 本</span>
+                </div>
+            </motion.div>
+        )
+    }
+
+    const { book } = item
+    const progress = progressMap[book.id] ?? 0
+
     return (
         <motion.div
-            data-virtual-card="true"
-            className={styles.card}
-            initial={false}
-            whileHover={{ y: -5, boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}
+            {...commonProps}
             onClick={() => onOpenBook(book.id)}
-            onContextMenu={(event) => onContextMenu(event, book.id)}
+            onContextMenu={(event: ReactMouseEvent<HTMLElement>) => onContextMenu(event, book.id)}
         >
             <div className={styles.coverWrapper}>
                 <LazyCoverImage bookId={book.id} format={book.format} alt={book.title} />
@@ -134,33 +225,86 @@ function BookCard({ book, progress, onOpenBook, onContextMenu }: BookCardProps) 
     )
 }
 
-interface VirtualBookGridProps {
-    visibleBooks: BookMeta[]
+interface VirtualItemGridProps {
+    items: LibraryGridItem[]
     progressMap: Record<string, number>
     onOpenBook: (id: string) => void
+    onOpenGroup: (id: string) => void
     onContextMenu: (event: ReactMouseEvent<HTMLElement>, bookId: string) => void
     scrollContainer: HTMLDivElement | null
+    sortable: boolean
+    sortContextKey: string | null
+    onReorder?: (sourceKey: string, targetKey: string) => void | Promise<void>
 }
 
-function VirtualBookGrid({
-    visibleBooks,
+function VirtualItemGrid({
+    items,
     progressMap,
     onOpenBook,
+    onOpenGroup,
     onContextMenu,
     scrollContainer,
-}: VirtualBookGridProps) {
+    sortable,
+    sortContextKey,
+    onReorder,
+}: VirtualItemGridProps) {
     const probeGridRef = useRef<HTMLDivElement | null>(null)
     const rowElementMapRef = useRef(new Map<number, HTMLDivElement>())
     const [layout, setLayout] = useState<VirtualGridLayoutSnapshot | null>(null)
     const [measuredRowHeights, setMeasuredRowHeights] = useState<Map<number, number>>(new Map())
     const [viewport, setViewport] = useState({ scrollTop: 0, height: 0 })
     const [layoutResetToken, forceLayoutReset] = useReducer((value: number) => value + 1, 0)
+    const [draggingKey, setDraggingKey] = useState<string | null>(null)
+    const suppressClickUntilRef = useRef(0)
+    const sortGestureRef = useRef<{
+        timeoutId: number | null
+        active: boolean
+        pointerId: number | null
+        sourceKey: string | null
+        startX: number
+        startY: number
+        latestTargetKey: string | null
+    }>({
+        timeoutId: null,
+        active: false,
+        pointerId: null,
+        sourceKey: null,
+        startX: 0,
+        startY: 0,
+        latestTargetKey: null,
+    })
+
+    const resetSortGesture = () => {
+        const gesture = sortGestureRef.current
+        if (gesture.timeoutId !== null) {
+            window.clearTimeout(gesture.timeoutId)
+        }
+        sortGestureRef.current = {
+            timeoutId: null,
+            active: false,
+            pointerId: null,
+            sourceKey: null,
+            startX: 0,
+            startY: 0,
+            latestTargetKey: null,
+        }
+        setDraggingKey(null)
+    }
 
     useEffect(() => {
         rowElementMapRef.current.clear()
         setMeasuredRowHeights(new Map())
         setLayout(null)
-    }, [visibleBooks])
+        resetSortGesture()
+    }, [items])
+
+    useEffect(() => resetSortGesture, [])
+
+    useEffect(() => {
+        if (!sortable || !sortContextKey) {
+            resetSortGesture()
+        }
+    }, [sortable, sortContextKey])
 
     useEffect(() => {
         if (!scrollContainer) return
@@ -242,8 +386,8 @@ function VirtualBookGrid({
     }, [layout, measuredRowHeights])
 
     const rows = useMemo(
-        () => chunkItemsIntoRows(visibleBooks, layout?.columnCount ?? 1),
-        [visibleBooks, layout?.columnCount],
+        () => chunkItemsIntoRows(items, layout?.columnCount ?? 1),
+        [items, layout?.columnCount],
     )
 
     const metrics = useMemo(() => {
@@ -293,18 +437,106 @@ function VirtualBookGrid({
         }
     }, [layout, visibleRange.startRow, visibleRange.endRow])
 
-    const probeBooks = visibleBooks.slice(0, PROBE_CARD_LIMIT)
+    const handlePointerDown = (event: ReactPointerEvent<HTMLElement>, key: string) => {
+        if (!sortable || !sortContextKey || event.button !== 0) return
+
+        resetSortGesture()
+        try {
+            event.currentTarget.setPointerCapture(event.pointerId)
+        } catch {
+            // noop
+        }
+
+        const pointerId = event.pointerId
+        sortGestureRef.current = {
+            timeoutId: window.setTimeout(() => {
+                if (sortGestureRef.current.pointerId !== pointerId || sortGestureRef.current.sourceKey !== key) return
+                sortGestureRef.current.active = true
+                sortGestureRef.current.timeoutId = null
+                sortGestureRef.current.latestTargetKey = key
+                setDraggingKey(key)
+            }, LONG_PRESS_MS),
+            active: false,
+            pointerId,
+            sourceKey: key,
+            startX: event.clientX,
+            startY: event.clientY,
+            latestTargetKey: null,
+        }
+    }
+
+    const handlePointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+        const gesture = sortGestureRef.current
+        if (gesture.pointerId !== event.pointerId) return
+
+        if (!gesture.active) {
+            const movedDistance = Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY)
+            if (movedDistance > LONG_PRESS_CANCEL_DISTANCE) {
+                resetSortGesture()
+            }
+            return
+        }
+
+        const targetKey = resolveSortTargetKey(event.clientX, event.clientY, sortContextKey)
+        if (targetKey) {
+            gesture.latestTargetKey = targetKey
+        }
+        event.preventDefault()
+    }
+
+    const finishPointerGesture = (event: ReactPointerEvent<HTMLElement>, cancelled = false) => {
+        const gesture = sortGestureRef.current
+        if (gesture.pointerId !== event.pointerId) return
+
+        const wasActive = gesture.active
+        const sourceKey = gesture.sourceKey
+        const targetKey = wasActive
+            ? (resolveSortTargetKey(event.clientX, event.clientY, sortContextKey) ?? gesture.latestTargetKey)
+            : null
+
+        resetSortGesture()
+
+        if (!wasActive) return
+
+        suppressClickUntilRef.current = Date.now() + 400
+        event.preventDefault()
+
+        if (!cancelled && sourceKey && targetKey && sourceKey !== targetKey && onReorder) {
+            void onReorder(sourceKey, targetKey)
+        }
+    }
+
+    const handleClickCapture = (event: ReactMouseEvent<HTMLElement>) => {
+        if (suppressClickUntilRef.current <= Date.now()) return
+        event.preventDefault()
+        event.stopPropagation()
+    }
+
+    const dragHandlers: DragHandlers = {
+        draggingKey,
+        onClickCapture: handleClickCapture,
+        onPointerDown: handlePointerDown,
+        onPointerMove: handlePointerMove,
+        onPointerUp: (event) => finishPointerGesture(event, false),
+        onPointerCancel: (event) => finishPointerGesture(event, true),
+    }
+
+    const probeItems = items.slice(0, PROBE_CARD_LIMIT)
 
     if (!layout || !metrics) {
         return (
             <div ref={probeGridRef} className={styles.grid} data-testid="book-grid-probe">
-                {probeBooks.map((book) => (
-                    <BookCard
-                        key={book.id}
-                        book={book}
-                        progress={progressMap[book.id] ?? 0}
+                {probeItems.map((item) => (
+                    <GridCard
+                        key={item.key}
+                        item={item}
+                        progressMap={progressMap}
                         onOpenBook={onOpenBook}
+                        onOpenGroup={onOpenGroup}
                         onContextMenu={onContextMenu}
+                        sortable={sortable}
+                        sortContextKey={sortContextKey}
+                        dragHandlers={dragHandlers}
                     />
                 ))}
             </div>
@@ -313,8 +545,8 @@ function VirtualBookGrid({
 
     const renderedRows = [] as JSX.Element[]
     for (let rowIndex = visibleRange.startRow; rowIndex <= visibleRange.endRow; rowIndex += 1) {
-        const rowBooks = rows[rowIndex]
-        if (!rowBooks || rowBooks.length === 0) continue
+        const rowItems = rows[rowIndex]
+        if (!rowItems || rowItems.length === 0) continue
         renderedRows.push(
             <div
                 key={`virtual-row-${rowIndex}`}
@@ -333,13 +565,17 @@ function VirtualBookGrid({
                     gridTemplateColumns: `repeat(${layout.columnCount}, minmax(0, 1fr))`,
                 }}
             >
-                {rowBooks.map((book) => (
-                    <BookCard
-                        key={book.id}
-                        book={book}
-                        progress={progressMap[book.id] ?? 0}
+                {rowItems.map((item) => (
+                    <GridCard
+                        key={item.key}
+                        item={item}
+                        progressMap={progressMap}
                         onOpenBook={onOpenBook}
+                        onOpenGroup={onOpenGroup}
                         onContextMenu={onContextMenu}
+                        sortable={sortable}
+                        sortContextKey={sortContextKey}
+                        dragHandlers={dragHandlers}
                     />
                 ))}
             </div>,
@@ -358,71 +594,55 @@ function VirtualBookGrid({
 }
 
 interface BookGridProps {
-    activeNav: string
-    activeShelfId: string | null
-    shelfGroups: ShelfGroup[]
-    visibleBooks: BookMeta[]
+    items: LibraryGridItem[]
+    emptyMessage: string
     progressMap: Record<string, number>
     onOpenBook: (id: string) => void
-    onSetActiveShelf: (id: string) => void
+    onOpenGroup: (id: string) => void
     onContextMenu: (event: ReactMouseEvent<HTMLElement>, bookId: string) => void
     scrollContainer: HTMLDivElement | null
+    sortable: boolean
+    sortContextKey: string | null
+    onReorder?: (sourceKey: string, targetKey: string) => void | Promise<void>
 }
 
 export const BookGrid = ({
-    activeNav,
-    activeShelfId,
-    shelfGroups,
-    visibleBooks,
+    items,
+    emptyMessage,
     progressMap,
     onOpenBook,
-    onSetActiveShelf,
+    onOpenGroup,
     onContextMenu,
     scrollContainer,
-}: BookGridProps) => (
-    <>
-        {activeNav === 'all' && !activeShelfId && shelfGroups.length > 0 && (
-            <div className={styles.shelfGroups}>
-                {shelfGroups.map((group) => (
-                    <button
-                        key={group.id}
-                        className={styles.shelfGroupCard}
-                        onClick={() => onSetActiveShelf(group.id)}
-                        title={`${group.name}（${group.books.length} 本）`}
-                    >
-                        <div className={styles.shelfGroupCovers}>
-                            {group.books.slice(0, 4).map((book) => (
-                                <div key={book.id} className={styles.shelfGroupCover}>
-                                    <LazyCoverImage bookId={book.id} format={book.format} alt={book.title} compact />
-                                </div>
-                            ))}
-                        </div>
-                        <div className={styles.shelfGroupMeta}>
-                            <strong>{group.name}</strong>
-                            <span>{group.books.length} 本</span>
-                        </div>
-                    </button>
-                ))}
-            </div>
-        )}
-        {visibleBooks.length === 0 ? (
+    sortable,
+    sortContextKey,
+    onReorder,
+}: BookGridProps) => {
+    if (items.length === 0) {
+        return (
             <div className={styles.emptyState}>
                 <motion.p
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 0.5 }}
                     transition={{ delay: 0.2 }}
                 >
-                    书架空空如也，导入一本书开始阅读吧。
+                    {emptyMessage}
                 </motion.p>
             </div>
-        ) : (
-            <VirtualBookGrid
-                visibleBooks={visibleBooks}
-                progressMap={progressMap}
-                onOpenBook={onOpenBook}
-                onContextMenu={onContextMenu}
-                scrollContainer={scrollContainer}
-            />
-        )}
-    </>
-)
+        )
+    }
+
+    return (
+        <VirtualItemGrid
+            items={items}
+            progressMap={progressMap}
+            onOpenBook={onOpenBook}
+            onOpenGroup={onOpenGroup}
+            onContextMenu={onContextMenu}
+            scrollContainer={scrollContainer}
+            sortable={sortable}
+            sortContextKey={sortContextKey}
+            onReorder={onReorder}
+        />
+    )
+}

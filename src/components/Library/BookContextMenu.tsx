@@ -6,14 +6,14 @@ interface BookContextMenuProps {
     setContextMenu: (state: { visible: boolean; x: number; y: number; bookId: null }) => void
     trashBookIds: string[]
     favoriteBookIds: string[]
-    activeShelfId: string | null
-    shelfBookMap: Record<string, string[]>
+    activeGroupId: string | null
+    groupBookMap: Record<string, string[]>
     onRestoreFromTrash: (bookId: string) => Promise<void>
     onPermanentDelete: (bookId: string) => void
     onOpenProperties: (bookId: string) => void
     onToggleFavorite: (bookId: string) => Promise<void>
-    onAddToShelf: (bookId: string) => Promise<void>
-    onRemoveFromShelf: (bookId: string) => Promise<void>
+    onAddToGroup: (bookId: string) => Promise<void>
+    onRemoveFromGroup: (bookId: string) => Promise<void>
     onMoveToTrash: (bookId: string) => Promise<void>
 }
 
@@ -24,14 +24,14 @@ export const BookContextMenu = ({
     setContextMenu,
     trashBookIds,
     favoriteBookIds,
-    activeShelfId,
-    shelfBookMap,
+    activeGroupId,
+    groupBookMap,
     onRestoreFromTrash,
     onPermanentDelete,
     onOpenProperties,
     onToggleFavorite,
-    onAddToShelf,
-    onRemoveFromShelf,
+    onAddToGroup,
+    onRemoveFromGroup,
     onMoveToTrash,
 }: BookContextMenuProps) => {
     if (!contextMenu.visible || !contextMenu.bookId) return null
@@ -74,16 +74,16 @@ export const BookContextMenu = ({
                     </button>
                     <button
                         className={styles.contextMenuItem}
-                        onClick={async () => { await onAddToShelf(bookId); setContextMenu(dismiss) }}
+                        onClick={async () => { await onAddToGroup(bookId); setContextMenu(dismiss) }}
                     >
-                        加入书架
+                        加入分组
                     </button>
-                    {activeShelfId && (shelfBookMap[activeShelfId] || []).includes(bookId) && (
+                    {activeGroupId && (groupBookMap[activeGroupId] || []).includes(bookId) && (
                         <button
                             className={styles.contextMenuItem}
-                            onClick={async () => { await onRemoveFromShelf(bookId); setContextMenu(dismiss) }}
+                            onClick={async () => { await onRemoveFromGroup(bookId); setContextMenu(dismiss) }}
                         >
-                            从当前书架移除
+                            从当前分组移除
                         </button>
                     )}
                     <button

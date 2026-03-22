@@ -725,6 +725,11 @@
     box-shadow: 0 6px 22px rgba(0, 0, 0, 0.12);
 }
 
+.dragSortingCard {
+    opacity: 0.82;
+    cursor: grabbing;
+}
+
 .shelfGroupCovers {
     display: grid;
     grid-template-columns: 1fr 1fr;

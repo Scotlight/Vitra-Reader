@@ -1,0 +1,17 @@
+{
+  "stage": "plan_execute",
+  "phase": "implementation",
+  "status": "completed",
+  "files": [
+    "src/components/Library/BookGrid.tsx",
+    "src/components/Library/LibraryView.tsx",
+    "src/components/Library/LibrarySidebar.tsx",
+    "src/components/Library/LibraryView.module.css",
+    "src/hooks/useGroupManager.ts",
+    "src/test/groupManagerState.test.ts"
+  ],
+  "notes": [
+    "主页根视图切为分组卡片与未分组图书混排",
+    "接入空白右键新建分组与长按拖动排序"
+  ]
+}

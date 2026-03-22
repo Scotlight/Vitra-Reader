@@ -1,6 +1,6 @@
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { BookMeta } from '../../services/storageService'
-import type { useShelfManager } from '../../hooks/useShelfManager'
+import type { useGroupManager } from '../../hooks/useGroupManager'
 import heartIcon from '../../assets/icons/heart.svg'
 import noteIcon from '../../assets/icons/note.svg'
 import highlightIcon from '../../assets/icons/highlight.svg'
@@ -17,7 +17,7 @@ type NavType = 'all' | 'fav' | 'notes' | 'highlight' | 'trash'
 interface LibrarySidebarProps {
     activeNav: NavType
     setActiveNav: (nav: NavType) => void
-    shelf: ReturnType<typeof useShelfManager>
+    group: ReturnType<typeof useGroupManager>
     onOpenBook: (id: string) => void
     onContextMenu: (event: ReactMouseEvent<HTMLElement>, bookId: string) => void
     onToggleSettings: () => void
@@ -30,22 +30,22 @@ const Icon = ({ src, className }: { src: string; className?: string }) => (
 export const LibrarySidebar = ({
     activeNav,
     setActiveNav,
-    shelf,
+    group,
     onOpenBook,
     onContextMenu,
     onToggleSettings,
 }: LibrarySidebarProps) => {
     const {
-        shelves,
-        shelfBookMap,
-        activeShelfId,
-        setActiveShelfId,
-        expandedShelves,
-        toggleShelfExpanded,
-        openCreateShelfModal,
-        openManageShelfModal,
+        groups,
+        activeGroupId,
+        setActiveGroupId,
+        expandedGroups,
+        toggleGroupExpanded,
+        openCreateGroupModal,
+        openManageGroupModal,
         bookById,
-    } = shelf
+        orderedGroupBookIdsByGroup,
+    } = group
 
     return (
         <aside className={styles.sidebar}>
@@ -57,7 +57,7 @@ export const LibrarySidebar = ({
                 className={`${styles.navItem} ${activeNav === 'all' ? styles.active : ''}`}
                 onClick={() => {
                     setActiveNav('all')
-                    setActiveShelfId(null)
+                    setActiveGroupId(null)
                 }}
             >
                 <Icon className={styles.navIcon} src={libraryIcon} />全部图书
@@ -66,40 +66,40 @@ export const LibrarySidebar = ({
             <button className={`${styles.navItem} ${activeNav === 'notes' ? styles.active : ''}`} onClick={() => setActiveNav('notes')}><Icon className={styles.navIcon} src={noteIcon} />我的笔记</button>
             <button className={`${styles.navItem} ${activeNav === 'highlight' ? styles.active : ''}`} onClick={() => setActiveNav('highlight')}><Icon className={styles.navIcon} src={highlightIcon} />我的高亮</button>
             <button className={`${styles.navItem} ${activeNav === 'trash' ? styles.active : ''}`} onClick={() => setActiveNav('trash')}><Icon className={styles.navIcon} src={trashIcon} />我的回收</button>
-            <div className={styles.shelfTitle}>我的书架</div>
-            <button className={styles.navItem} onClick={openCreateShelfModal}><Icon className={styles.navIcon} src={shelfAddIcon} />新建书架</button>
-            <button className={styles.navItem} onClick={openManageShelfModal}><Icon className={styles.navIcon} src={shelfManageIcon} />管理书架</button>
+            <div className={styles.shelfTitle}>我的分组</div>
+            <button className={styles.navItem} onClick={openCreateGroupModal}><Icon className={styles.navIcon} src={shelfAddIcon} />新建分组</button>
+            <button className={styles.navItem} onClick={openManageGroupModal}><Icon className={styles.navIcon} src={shelfManageIcon} />管理分组</button>
             <div className={styles.shelfTree}>
-                {shelves.map((shelfItem) => (
-                    <div key={shelfItem.id} className={styles.shelfNode}>
-                        <div className={`${styles.shelfNodeRow} ${activeShelfId === shelfItem.id ? styles.shelfNodeRowActive : ''}`}>
+                {groups.map((groupItem) => (
+                    <div key={groupItem.id} className={styles.shelfNode}>
+                        <div className={`${styles.shelfNodeRow} ${activeGroupId === groupItem.id ? styles.shelfNodeRowActive : ''}`}>
                             <button
                                 className={styles.shelfExpandBtn}
-                                onClick={() => toggleShelfExpanded(shelfItem.id)}
-                                title={expandedShelves[shelfItem.id] ? '收起' : '展开'}
+                                onClick={() => toggleGroupExpanded(groupItem.id)}
+                                title={expandedGroups[groupItem.id] ? '收起' : '展开'}
                             >
-                                {expandedShelves[shelfItem.id] ? '▾' : '▸'}
+                                {expandedGroups[groupItem.id] ? '▾' : '▸'}
                             </button>
                             <button
                                 className={styles.shelfItem}
                                 onClick={() => {
-                                    setActiveShelfId(shelfItem.id)
+                                    setActiveGroupId(groupItem.id)
                                     setActiveNav('all')
                                 }}
-                                title={shelfItem.name}
+                                title={groupItem.name}
                             >
-                                {shelfItem.name}
+                                {groupItem.name}
                             </button>
                         </div>
-                        {expandedShelves[shelfItem.id] && (
+                        {expandedGroups[groupItem.id] && (
                             <div className={styles.shelfChildren}>
-                                {((shelfBookMap[shelfItem.id] || [])
+                                {((orderedGroupBookIdsByGroup[groupItem.id] || [])
                                     .map((bookId) => bookById.get(bookId))
                                     .filter((book): book is NonNullable<typeof book> => Boolean(book))
                                 ).length === 0 ? (
-                                    <div className={styles.shelfChildEmpty}>空书架</div>
+                                    <div className={styles.shelfChildEmpty}>空分组</div>
                                 ) : (
-                                    (shelfBookMap[shelfItem.id] || [])
+                                    (orderedGroupBookIdsByGroup[groupItem.id] || [])
                                         .map((bookId) => bookById.get(bookId))
                                         .filter((book): book is BookMeta => Boolean(book))
                                         .map((book) => (

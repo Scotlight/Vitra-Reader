@@ -3,14 +3,15 @@ import { motion } from 'framer-motion'
 import { useLibraryStore } from '../../stores/useLibraryStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { db, type Highlight, type Bookmark } from '../../services/storageService'
-import { useShelfManager } from '../../hooks/useShelfManager'
+import { useGroupManager } from '../../hooks/useGroupManager'
+import { applyHomeOrder, buildHomeOrderKey, parseHomeOrderKey } from '../../hooks/groupManagerState'
 import { SettingsPanel } from './SettingsPanel'
 import { BookPropertiesModal } from './BookPropertiesModal'
 import { LibrarySidebar } from './LibrarySidebar'
 import { BookContextMenu } from './BookContextMenu'
 import { CreateShelfModal, ManageShelfModal } from './ShelfModals'
 import { AnnotationList } from './AnnotationList'
-import { BookGrid } from './BookGrid'
+import { BookGrid, type LibraryGridItem } from './BookGrid'
 import searchIcon from '../../assets/icons/search.svg'
 import sortIcon from '../../assets/icons/sort.svg'
 import refreshIcon from '../../assets/icons/refresh.svg'
@@ -57,6 +58,11 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         y: 0,
         bookId: null,
     })
+    const [blankContextMenu, setBlankContextMenu] = useState<{ visible: boolean; x: number; y: number }>({
+        visible: false,
+        x: 0,
+        y: 0,
+    })
     const [showBookPropertiesModal, setShowBookPropertiesModal] = useState<string | null>(null)
     const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null)
 
@@ -97,7 +103,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
 
     const trashBookIdSet = useMemo(() => new Set(trashBookIds), [trashBookIds])
 
-    const shelf = useShelfManager({
+    const group = useGroupManager({
         books,
         trashBookIdSet,
         activeNav,
@@ -106,30 +112,34 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
     })
 
     const {
-        shelfBookMap,
-        activeShelfId,
-        setActiveShelfId,
-        activeShelfBookIdSet,
-        shelfGroups,
+        groups,
+        groupBookMap,
+        homeOrder,
+        activeGroupId,
+        setActiveGroupId,
+        groupedBookIdSet,
+        groupCollections,
         bookById,
-        shelves,
-        showCreateShelfModal,
-        setShowCreateShelfModal,
-        newShelfName,
-        setNewShelfName,
-        showManageShelfModal,
-        setShowManageShelfModal,
-        manageSourceShelfId,
-        setManageSourceShelfId,
-        manageTargetShelfId,
-        setManageTargetShelfId,
-        createShelf,
-        renameShelf,
-        dissolveShelf,
-        moveShelfBooks,
-        addBookToShelf,
-        removeBookFromActiveShelf,
-    } = shelf
+        openCreateGroupModal,
+        showCreateGroupModal,
+        setShowCreateGroupModal,
+        newGroupName,
+        setNewGroupName,
+        showManageGroupModal,
+        setShowManageGroupModal,
+        manageSourceGroupId,
+        setManageSourceGroupId,
+        manageTargetGroupId,
+        setManageTargetGroupId,
+        createGroup,
+        renameGroup,
+        dissolveGroup,
+        moveGroupBooks,
+        addBookToGroup,
+        removeBookFromActiveGroup,
+        reorderHomeItems,
+        reorderActiveGroupBooks,
+    } = group
 
     useEffect(() => {
         void loadBooks()
@@ -171,6 +181,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
     useEffect(() => {
         const closeMenu = () => {
             setContextMenu({ visible: false, x: 0, y: 0, bookId: null })
+            setBlankContextMenu({ visible: false, x: 0, y: 0 })
         }
         document.addEventListener('click', closeMenu)
         return () => {
@@ -204,10 +215,11 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
 
     const filteredBooks = useMemo(() => {
         const q = keyword.trim().toLowerCase()
+        const matchesKeyword = (title: string, author: string) => title.toLowerCase().includes(q) || author.toLowerCase().includes(q)
         const sourceBase = !q
             ? books
             : books.filter((book) => {
-            return book.title.toLowerCase().includes(q) || book.author.toLowerCase().includes(q)
+            return matchesKeyword(book.title, book.author)
         })
         const source = activeNav === 'trash'
             ? sourceBase.filter((book) => trashBookIdSet.has(book.id))
@@ -222,27 +234,64 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                         ? source.filter((book) => highlightBookIdSet.has(book.id))
                         : source
 
-        const shelfFiltered = activeNav === 'all' && activeShelfId
-            ? navFiltered.filter((book) => activeShelfBookIdSet?.has(book.id))
-            : navFiltered
+        if (activeNav === 'all' && activeGroupId) {
+            const activeGroupCollection = groupCollections.find((item) => item.id === activeGroupId)
+            const orderedBooks = activeGroupCollection?.books ?? []
+            return !q ? orderedBooks : orderedBooks.filter((book) => matchesKeyword(book.title, book.author))
+        }
 
-        const sorted = [...shelfFiltered].sort((a, b) => {
+        const sorted = [...navFiltered].sort((a, b) => {
             if (sortMode === 'title') return a.title.localeCompare(b.title, 'zh-CN')
             if (sortMode === 'author') return a.author.localeCompare(b.author, 'zh-CN')
             if (sortMode === 'addedAt') return (b.addedAt || 0) - (a.addedAt || 0)
             return (b.lastReadAt || 0) - (a.lastReadAt || 0)
         })
         return sorted
-    }, [books, keyword, sortMode, activeNav, activeShelfId, favoriteBookIdSet, trashBookIdSet, noteBookIdSet, highlightBookIdSet, activeShelfBookIdSet])
+    }, [books, keyword, sortMode, activeNav, activeGroupId, favoriteBookIdSet, trashBookIdSet, noteBookIdSet, highlightBookIdSet, groupCollections])
+
+    const showMixedHome = activeNav === 'all' && !activeGroupId && keyword.trim() === ''
 
     const visibleBooks = useMemo(() => {
-        if (!(activeNav === 'all' && !activeShelfId)) return filteredBooks
-        const groupedIds = new Set<string>()
-        Object.values(shelfBookMap).forEach((bookIds) => {
-            bookIds.forEach((bookId) => groupedIds.add(bookId))
+        if (!showMixedHome) return filteredBooks
+        return filteredBooks.filter((book) => !groupedBookIdSet.has(book.id))
+    }, [showMixedHome, filteredBooks, groupedBookIdSet])
+
+    const homeItems = useMemo<LibraryGridItem[]>(() => {
+        if (!showMixedHome) return []
+
+        const availableKeys = [
+            ...groupCollections.map((collection) => buildHomeOrderKey('group', collection.id)),
+            ...visibleBooks.map((book) => buildHomeOrderKey('book', book.id)),
+        ]
+        const groupsById = new Map(groupCollections.map((collection) => [collection.id, collection]))
+        const visibleBooksById = new Map(visibleBooks.map((book) => [book.id, book]))
+        const orderedItems: LibraryGridItem[] = []
+
+        applyHomeOrder(availableKeys, homeOrder).forEach((key) => {
+            const parsed = parseHomeOrderKey(key)
+            if (!parsed) return
+
+            if (parsed.type === 'group') {
+                const collection = groupsById.get(parsed.id)
+                if (collection) {
+                    orderedItems.push({ key, type: 'group', group: collection })
+                }
+                return
+            }
+
+            const book = visibleBooksById.get(parsed.id)
+            if (book) {
+                orderedItems.push({ key, type: 'book', book })
+            }
         })
-        return filteredBooks.filter((book) => !groupedIds.has(book.id))
-    }, [activeNav, activeShelfId, filteredBooks, shelfBookMap])
+
+        return orderedItems
+    }, [showMixedHome, groupCollections, visibleBooks, homeOrder])
+
+    const gridItems = useMemo<LibraryGridItem[]>(() => {
+        if (showMixedHome) return homeItems
+        return visibleBooks.map((book) => ({ key: book.id, type: 'book', book }))
+    }, [showMixedHome, homeItems, visibleBooks])
 
     const groupedHighlights = useMemo(() => {
         const map = new Map<string, Highlight[]>()
@@ -319,6 +368,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
     const handleBookContextMenu = (event: ReactMouseEvent<HTMLElement>, bookId: string) => {
         event.preventDefault()
         event.stopPropagation()
+        setBlankContextMenu({ visible: false, x: 0, y: 0 })
         setContextMenu({
             visible: true,
             x: event.clientX,
@@ -326,6 +376,54 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
             bookId,
         })
     }
+
+    const handleBlankAreaContextMenu = (event: ReactMouseEvent<HTMLElement>) => {
+        if (!(activeNav === 'all' && !activeGroupId)) return
+        const target = event.target as HTMLElement | null
+        if (target?.closest('[data-library-item="true"]')) return
+
+        event.preventDefault()
+        event.stopPropagation()
+        setContextMenu({ visible: false, x: 0, y: 0, bookId: null })
+        setBlankContextMenu({
+            visible: true,
+            x: event.clientX,
+            y: event.clientY,
+        })
+    }
+
+    const handleGridReorder = (sourceKey: string, targetKey: string) => {
+        if (showMixedHome) {
+            void reorderHomeItems(sourceKey, targetKey, homeItems.map((item) => item.key))
+            return
+        }
+
+        if (activeNav === 'all' && activeGroupId) {
+            void reorderActiveGroupBooks(sourceKey, targetKey)
+        }
+    }
+
+    const currentGroupName = activeGroupId
+        ? groups.find((item) => item.id === activeGroupId)?.name ?? '当前分组'
+        : ''
+    const emptyMessage = activeNav === 'fav'
+        ? '还没有加入喜爱的图书。'
+        : activeNav === 'trash'
+            ? '回收站还是空的。'
+            : activeNav === 'all' && activeGroupId
+                ? (keyword.trim() ? `${currentGroupName} 中没有匹配的图书。` : `${currentGroupName} 里还没有图书。`)
+                : activeNav === 'all' && showMixedHome
+                    ? '还没有分组和图书，导入一本书开始阅读吧。'
+                    : keyword.trim()
+                        ? '没有找到匹配的图书。'
+                        : '还没有图书，导入一本书开始阅读吧。'
+    const statusText = activeNav === 'highlight'
+        ? `${allHighlights.length} 条高亮`
+        : activeNav === 'notes'
+            ? `${allBookmarks.length} 条笔记`
+            : showMixedHome
+                ? `${gridItems.length} 项`
+                : `${gridItems.length} 本书`
 
     const handlePermanentDeleteBook = (bookId: string) => {
         showConfirmDialog('确认删除这本书吗？这会删除本地文件和阅读进度。', async () => {
@@ -393,7 +491,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
             <LibrarySidebar
                 activeNav={activeNav}
                 setActiveNav={setActiveNav}
-                shelf={shelf}
+                group={group}
                 onOpenBook={onOpenBook}
                 onContextMenu={handleBookContextMenu}
                 onToggleSettings={() => setShowSettings((value) => !value)}
@@ -457,26 +555,26 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                     ) : null
                 })()}
 
-                {showCreateShelfModal && (
+                {showCreateGroupModal && (
                     <CreateShelfModal
-                        newShelfName={newShelfName}
-                        setNewShelfName={setNewShelfName}
-                        onClose={() => setShowCreateShelfModal(false)}
-                        onCreate={() => void createShelf()}
+                        newShelfName={newGroupName}
+                        setNewShelfName={setNewGroupName}
+                        onClose={() => setShowCreateGroupModal(false)}
+                        onCreate={() => void createGroup()}
                     />
                 )}
 
-                {showManageShelfModal && (
+                {showManageGroupModal && (
                     <ManageShelfModal
-                        shelves={shelves}
-                        manageSourceShelfId={manageSourceShelfId}
-                        setManageSourceShelfId={setManageSourceShelfId}
-                        manageTargetShelfId={manageTargetShelfId}
-                        setManageTargetShelfId={setManageTargetShelfId}
-                        onClose={() => setShowManageShelfModal(false)}
-                        onRename={(id, name) => void renameShelf(id, name)}
-                        onDissolve={(id) => void dissolveShelf(id)}
-                        onMoveBooks={(from, to) => void moveShelfBooks(from, to)}
+                        shelves={groups}
+                        manageSourceShelfId={manageSourceGroupId}
+                        setManageSourceShelfId={setManageSourceGroupId}
+                        manageTargetShelfId={manageTargetGroupId}
+                        setManageTargetShelfId={setManageTargetGroupId}
+                        onClose={() => setShowManageGroupModal(false)}
+                        onRename={(id, name) => void renameGroup(id, name)}
+                        onDissolve={(id) => void dissolveGroup(id)}
+                        onMoveBooks={(from, to) => void moveGroupBooks(from, to)}
                     />
                 )}
 
@@ -499,10 +597,10 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                 )}
 
                 <div className={styles.statusLine}>
-                    <span>{activeNav === 'highlight' ? `${allHighlights.length} 条高亮` : activeNav === 'notes' ? `${allBookmarks.length} 条笔记` : `${visibleBooks.length} 本书`}</span>
+                    <span>{statusText}</span>
                 </div>
 
-                <div ref={setScrollContainer} className={styles.scrollArea}>
+                <div ref={setScrollContainer} className={styles.scrollArea} onContextMenu={handleBlankAreaContextMenu}>
                     {(activeNav === 'highlight' || activeNav === 'notes') ? (
                         <AnnotationList
                             activeNav={activeNav}
@@ -512,31 +610,54 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                         />
                     ) : (
                         <BookGrid
-                            activeNav={activeNav}
-                            activeShelfId={activeShelfId}
-                            shelfGroups={shelfGroups}
-                            visibleBooks={visibleBooks}
+                            items={gridItems}
+                            emptyMessage={emptyMessage}
                             progressMap={progressMap}
                             onOpenBook={onOpenBook}
-                            onSetActiveShelf={setActiveShelfId}
+                            onOpenGroup={(groupId) => {
+                                setActiveNav('all')
+                                setActiveGroupId(groupId)
+                            }}
                             onContextMenu={handleBookContextMenu}
                             scrollContainer={scrollContainer}
+                            sortable={showMixedHome || (activeNav === 'all' && Boolean(activeGroupId))}
+                            sortContextKey={showMixedHome ? 'home' : activeGroupId ? `group:${activeGroupId}` : null}
+                            onReorder={handleGridReorder}
                         />
                     )}
                 </div>
+
+                {blankContextMenu.visible && (
+                    <div
+                        className={styles.contextMenu}
+                        style={{ left: `${blankContextMenu.x}px`, top: `${blankContextMenu.y}px` }}
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <button
+                            className={styles.contextMenuItem}
+                            onClick={() => {
+                                setBlankContextMenu({ visible: false, x: 0, y: 0 })
+                                openCreateGroupModal()
+                            }}
+                        >
+                            新建分组
+                        </button>
+                    </div>
+                )}
+
                 <BookContextMenu
                     contextMenu={contextMenu}
                     setContextMenu={setContextMenu}
                     trashBookIds={trashBookIds}
                     favoriteBookIds={favoriteBookIds}
-                    activeShelfId={activeShelfId}
-                    shelfBookMap={shelfBookMap}
+                    activeGroupId={activeGroupId}
+                    groupBookMap={groupBookMap}
                     onRestoreFromTrash={restoreFromTrash}
                     onPermanentDelete={handlePermanentDeleteBook}
                     onOpenProperties={openBookPropertiesModal}
                     onToggleFavorite={toggleFavorite}
-                    onAddToShelf={addBookToShelf}
-                    onRemoveFromShelf={removeBookFromActiveShelf}
+                    onAddToGroup={addBookToGroup}
+                    onRemoveFromGroup={removeBookFromActiveGroup}
                     onMoveToTrash={moveToTrash}
                 />
             </section>

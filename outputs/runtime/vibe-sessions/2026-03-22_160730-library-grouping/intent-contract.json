@@ -1,0 +1,21 @@
+{
+  "goal": "将书架重构为分组，并让主页支持混排与长按排序",
+  "deliverable": "分组状态迁移、主页混排、空白右键菜单、长按排序与定向测试",
+  "constraints": [
+    "保留原有功能一个不少",
+    "搜索态退回纯图书结果",
+    "旧 shelves 数据只迁移不硬删"
+  ],
+  "acceptance_criteria": [
+    "首页根视图显示分组卡片与未分组图书混排",
+    "空白区域右键可新建分组",
+    "主页和分组页都支持长按排序"
+  ],
+  "non_goals": [
+    "收藏/笔记/高亮/回收页混排",
+    "旧状态键清理"
+  ],
+  "autonomy_mode": "benchmark_autonomous",
+  "approved_approach": "C",
+  "user_constraint": "先把分组内排序做扎实，同时铺好主页混排顺序"
+}

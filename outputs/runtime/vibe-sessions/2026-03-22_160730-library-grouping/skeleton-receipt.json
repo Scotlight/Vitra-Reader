@@ -1,0 +1,11 @@
+{
+  "stage": "skeleton_check",
+  "task": "library-grouping",
+  "timestamp": "2026-03-22_160730",
+  "repo": "D:/0010/.A_project/epub reader",
+  "status": "ok",
+  "notes": [
+    "TO DO 第 5 项：主页分组混排、空白右键新建分组、长按排序",
+    "延续 TODO 4 的虚拟网格能力，不新增拖拽依赖"
+  ]
+}
