@@ -1,0 +1,16 @@
+{
+  "stage": "plan_execute",
+  "phase": "implementation",
+  "status": "completed",
+  "files": [
+    "src/components/Library/LibraryView.tsx",
+    "src/components/Library/BookGrid.tsx",
+    "src/components/Library/LibraryView.module.css",
+    "src/components/Library/libraryVirtualGrid.ts",
+    "src/test/libraryVirtualGrid.test.ts"
+  ],
+  "notes": [
+    "主页面书籍网格改为动态量测虚拟窗口",
+    "行高不写死，依赖 probe 和可见行实测缓存"
+  ]
+}

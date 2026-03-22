@@ -1,0 +1,11 @@
+{
+  "stage": "skeleton_check",
+  "task": "library-virtual-grid",
+  "timestamp": "2026-03-22_132827",
+  "repo": "D:/0010/.A_project/epub reader",
+  "status": "ok",
+  "notes": [
+    "TO DO 第 4 项：添加主页面虚拟化支持",
+    "目标范围限定为主页面书籍网格，不含书架分组卡片和批注列表"
+  ]
+}

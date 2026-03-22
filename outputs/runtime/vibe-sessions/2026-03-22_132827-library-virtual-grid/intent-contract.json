@@ -1,0 +1,21 @@
+{
+  "goal": "为主页面书籍网格增加虚拟化支持",
+  "deliverable": "动态量测的无依赖虚拟网格实现与验证",
+  "constraints": [
+    "不新增虚拟化依赖",
+    "行高不能写死，必须来自实际量测",
+    "保持现有交互行为与筛选排序不变"
+  ],
+  "acceptance_criteria": [
+    "大量书籍时只渲染视区附近卡片",
+    "响应式列数变化后布局正确",
+    "点击与右键菜单不回退"
+  ],
+  "non_goals": [
+    "书架分组卡片虚拟化",
+    "批注列表虚拟化"
+  ],
+  "autonomy_mode": "benchmark_autonomous",
+  "approved_approach": "A",
+  "user_constraint": "虚拟网格的行高计算不能写死，需从当前卡片实际渲染尺寸量测"
+}

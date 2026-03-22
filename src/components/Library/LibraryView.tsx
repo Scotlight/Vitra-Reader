@@ -58,6 +58,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         bookId: null,
     })
     const [showBookPropertiesModal, setShowBookPropertiesModal] = useState<string | null>(null)
+    const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null)
 
     const showInfoDialog = (message: string, title = '提示') => {
         setDialogState({
@@ -501,7 +502,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                     <span>{activeNav === 'highlight' ? `${allHighlights.length} 条高亮` : activeNav === 'notes' ? `${allBookmarks.length} 条笔记` : `${visibleBooks.length} 本书`}</span>
                 </div>
 
-                <div className={styles.scrollArea}>
+                <div ref={setScrollContainer} className={styles.scrollArea}>
                     {(activeNav === 'highlight' || activeNav === 'notes') ? (
                         <AnnotationList
                             activeNav={activeNav}
@@ -519,6 +520,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                             onOpenBook={onOpenBook}
                             onSetActiveShelf={setActiveShelfId}
                             onContextMenu={handleBookContextMenu}
+                            scrollContainer={scrollContainer}
                         />
                     )}
                 </div>

@@ -770,6 +770,19 @@
     padding-top: 8px;
 }
 
+.virtualGrid {
+    position: relative;
+    width: 100%;
+}
+
+.virtualGridRow {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: grid;
+    align-items: start;
+}
+
 .card {
     cursor: pointer;
     border-radius: 10px;
