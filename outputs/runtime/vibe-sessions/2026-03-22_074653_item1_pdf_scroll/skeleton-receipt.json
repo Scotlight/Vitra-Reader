@@ -1,0 +1,15 @@
+﻿{
+  "runId": "2026-03-22_074653_item1_pdf_scroll",
+  "skill": "vibe",
+  "branch": "main",
+  "cwd": "D:/0010/.A_project/epub reader",
+  "todoSource": "docs/TO DO.md",
+  "targetItem": "1·添加PDF渲染自研。专用渲染，只支持连续滚动。",
+  "detectedSkills": ["vibe", "explore", "taskmaster"],
+  "risks": [
+    "仓库存在预先未提交改动，后续需避免覆盖非本任务代码。",
+    "TODO 列表范围很大，本轮先冻结第 1 项，再逐项推进。",
+    "PDF 当前被判定为 fixed-layout，只允许 paginated-single，与待办目标冲突。"
+  ],
+  "status": "completed"
+}

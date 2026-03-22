@@ -1,15 +1,17 @@
 import type { BookFormat } from './contentProvider'
 import type { PageTurnMode } from '../../stores/useSettingsStore'
 
-type ReaderRenderProfile = 'reflowable' | 'fixed-layout'
+type ReaderRenderProfile = 'reflowable' | 'fixed-layout' | 'scroll-only'
 
 /** 兼容旧 BookFormat 和 VitraBookFormat 的格式字符串 */
 type AnyFormatString = BookFormat | string
 
 const REFLOWABLE_MODES: readonly PageTurnMode[] = ['paginated-single', 'paginated-double', 'scrolled-continuous']
 const FIXED_LAYOUT_MODES: readonly PageTurnMode[] = ['paginated-single']
+const SCROLL_ONLY_MODES: readonly PageTurnMode[] = ['scrolled-continuous']
+const SCROLL_ONLY_FORMATS = new Set<string>(['pdf', 'PDF'])
 const FIXED_LAYOUT_FORMATS = new Set<string>([
-    'pdf', 'PDF', 'djvu', 'DJVU',
+    'djvu', 'DJVU',
     'cbz', 'CBZ', 'cbt', 'CBT', 'cbr', 'CBR', 'cb7', 'CB7',
 ])
 
@@ -23,11 +25,13 @@ export interface ReaderRenderModeDecision {
 }
 
 function resolveRenderProfile(format: AnyFormatString): ReaderRenderProfile {
+    if (SCROLL_ONLY_FORMATS.has(format)) return 'scroll-only'
     if (FIXED_LAYOUT_FORMATS.has(format)) return 'fixed-layout'
     return 'reflowable'
 }
 
 function resolveAvailableModes(profile: ReaderRenderProfile): readonly PageTurnMode[] {
+    if (profile === 'scroll-only') return SCROLL_ONLY_MODES
     if (profile === 'fixed-layout') return FIXED_LAYOUT_MODES
     return REFLOWABLE_MODES
 }
@@ -38,7 +42,8 @@ function pickEffectiveMode(availableModes: readonly PageTurnMode[], requestedMod
 }
 
 function buildReason(profile: ReaderRenderProfile, forced: boolean): string {
-    if (!forced) return '当前格式支持所有流式阅读模式'
+    if (!forced) return '当前格式支持当前阅读模式'
+    if (profile === 'scroll-only') return '当前 PDF 渲染仅支持连续滚动'
     if (profile === 'fixed-layout') return '当前格式为固定布局，仅支持单页渲染'
     return '当前格式模式受限，已切换为兼容渲染模式'
 }

@@ -1,0 +1,19 @@
+{
+  "runId": "2026-03-22_074653_item1_pdf_scroll",
+  "stage": "plan_execute",
+  "summary": [
+    "将 PDF provider 拆分到 src/engine/parsers/providers/pdf/ 下的独立模块目录。",
+    "恢复 src/engine/parsers/providers/pdfProvider.ts 为薄兼容入口。",
+    "将 PDF 从固定布局分页模式单独分流为仅连续滚动。",
+    "为 PDF 页面 HTML 写入隐藏文本层，接通现有 HTML 索引搜索链。"
+  ],
+  "verification": {
+    "lint": "failed-unrelated-existing-errors",
+    "details": [
+      "src/engine/cache/vitraBookCache.ts:46 TS6133",
+      "src/engine/cache/vitraBookCache.ts:60 TS6133",
+      "src/engine/parsers/providers/mobiParser.ts:222 TS6133"
+    ]
+  },
+  "status": "completed"
+}

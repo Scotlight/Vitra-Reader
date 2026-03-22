@@ -1,0 +1,32 @@
+﻿{
+  "runId": "2026-03-22_074653_item1_pdf_scroll",
+  "goal": "先解决 docs/TO DO.md 的第 1 项：为 PDF 提供专用自研渲染，并限定为连续滚动模式。",
+  "deliverable": "需求文档、设计文档、执行计划，以及第 1 项的代码改动与验证结果。",
+  "constraints": [
+    "基于当前仓库实现，不引入静默降级或模拟成功路径。",
+    "尊重现有未提交改动，尽量只改动与 PDF 阅读链路相关文件。",
+    "PDF 目标模式限定为连续滚动，不保留分页渲染入口。"
+  ],
+  "acceptanceCriteria": [
+    "PDF 在阅读器中走专用渲染链路。",
+    "PDF 仅暴露连续滚动模式，UI 与模式决策一致。",
+    "现有跳转、目录、基础进度与搜索能力不被破坏。"
+  ],
+  "nonGoals": [
+    "本轮不处理 TODO 第 2-8 项。",
+    "本轮不扩展 PDF 双页或单页分页模式。"
+  ],
+  "autonomyMode": "interactive_governed",
+  "openQuestions": [],
+  "inferenceNotes": [
+    "当前仓库已经有 PDF provider，会把 PDF 页转成图片层并叠加链接层。",
+    "当前限制主要在 readerRenderMode：PDF 被强制为 paginated-single。",
+    "ReaderView 的搜索实际走 VitraContentAdapter HTML 索引链，因此 PDF 需要提供可索引文本。"
+  ],
+  "artifacts": {
+    "requirementDoc": "docs/requirements/2026-03-22-pdf-scroll-rebuild.md",
+    "designDoc": "docs/plans/2026-03-22-pdf-scroll-rebuild-design.md",
+    "executionPlan": "docs/plans/2026-03-22-pdf-scroll-rebuild-execution-plan.md"
+  },
+  "status": "completed"
+}
