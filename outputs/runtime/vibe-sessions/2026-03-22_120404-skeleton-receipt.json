@@ -1,0 +1,20 @@
+{
+  "runId": "2026-03-22_120404",
+  "stage": "skeleton_check",
+  "status": "completed",
+  "cwd": "D:\\0010\\.A_project\\epub reader",
+  "branch": "main",
+  "artifactsDetected": [
+    "docs/requirements",
+    "docs/plans",
+    "outputs/runtime/vibe-sessions"
+  ],
+  "repoState": {
+    "hasRemote": true,
+    "worktreeDirty": true,
+    "notes": [
+      "当前工作树包含本轮 Reader 拆分相关修改，也包含其他既有未提交改动",
+      "后续推送按最小安全范围处理，仅提交可确认的本轮改动"
+    ]
+  }
+}

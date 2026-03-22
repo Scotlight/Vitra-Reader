@@ -223,20 +223,6 @@ export function highlightRange(
 }
 
 /**
- * 对多个 Range 应用高亮（用于跨段高亮场景）
- */
-export function highlightRanges(
-    ranges: Range[],
-    highlightId: string,
-    color: string,
-): void {
-    // 从后向前高亮，避免前面的修改影响后面 Range 的偏移
-    for (let i = ranges.length - 1; i >= 0; i--) {
-        highlightRange(ranges[i], highlightId, color)
-    }
-}
-
-/**
  * 移除指定 ID 的高亮
  */
 export function removeHighlight(

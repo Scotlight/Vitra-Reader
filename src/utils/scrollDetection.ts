@@ -62,19 +62,3 @@ export function detectScrollDirection(
   return 'none';
 }
 
-/**
- * 计算距离边缘的距离
- */
-export function getDistanceToEdge(
-  scrollTop: number,
-  viewportHeight: number,
-  contentHeight: number,
-  direction: ScrollDirection
-): number {
-  if (direction === 'up') {
-    return scrollTop;
-  } else if (direction === 'down') {
-    return contentHeight - scrollTop - viewportHeight;
-  }
-  return Infinity;
-}

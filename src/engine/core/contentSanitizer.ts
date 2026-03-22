@@ -1,8 +1,3 @@
-import type {
-    ChapterPreprocessInput,
-    ChapterPreprocessResult,
-} from '../types/chapterPreprocess'
-
 const URL_LIKE_ATTRS = new Set(['src', 'href', 'xlink:href', 'poster'])
 const DANGEROUS_TAG_SELECTOR = [
     'script',
@@ -349,17 +344,3 @@ export function sanitizeChapterHtml(html: string): {
     return sanitizeWithRegexFallback(html)
 }
 
-export function preprocessChapterSync(input: ChapterPreprocessInput): ChapterPreprocessResult {
-    const htmlSanitized = sanitizeChapterHtml(input.htmlContent)
-    const styleSanitized = sanitizeStyleSheets(input.externalStyles)
-
-    return {
-        htmlContent: htmlSanitized.htmlContent,
-        htmlFragments: [htmlSanitized.htmlContent],
-        externalStyles: styleSanitized,
-        removedTagCount: htmlSanitized.removedTagCount,
-        removedAttributeCount: htmlSanitized.removedAttributeCount,
-        usedFallback: htmlSanitized.usedFallback,
-        stylesScoped: false,
-    }
-}

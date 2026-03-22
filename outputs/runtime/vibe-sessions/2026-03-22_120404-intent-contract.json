@@ -1,0 +1,30 @@
+{
+  "runId": "2026-03-22_120404",
+  "stage": "deep_interview",
+  "status": "completed",
+  "goal": "在不误推无关脏改动的前提下，先推送当前 Reader 重构成果，再继续审计并清理仓库中的死代码。",
+  "deliverable": [
+    "一条已推送的最小安全提交",
+    "一份死代码审计结果",
+    "一组聚焦死代码清理的代码修改与验证记录"
+  ],
+  "constraints": [
+    "不覆盖或顺带整理用户未明确授权的其他脏改动",
+    "TypeScript 严格模式下保持行为不回退",
+    "需要留下可追踪的 requirement / plan / runtime receipts"
+  ],
+  "acceptanceCriteria": [
+    "当前 Reader 拆分相关改动形成独立提交并推送到 origin/main",
+    "明确列出死代码热点并解决本轮可安全处理的项",
+    "完成针对性验证后再声称完成"
+  ],
+  "nonGoals": [
+    "不一次性清扫所有历史脏改动",
+    "不处理与本轮目标无关的 engine / pdf 历史问题，除非它们属于明确死代码"
+  ],
+  "autonomyMode": "benchmark_autonomous",
+  "assumptions": [
+    "用户所说的‘先推送’指先推送这轮可确认的 Reader 重构结果，而不是把整个脏工作树全部推上去",
+    "死代码优先指未使用符号、无调用模块、残留分支和已被抽离后遗留的旧逻辑"
+  ]
+}

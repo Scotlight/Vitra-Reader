@@ -1,0 +1,24 @@
+{
+  "runId": "2026-03-22_120404",
+  "stage": "plan_execute",
+  "status": "completed",
+  "scope": "先推送 Reader 重构，再清理铁证级死代码",
+  "changes": [
+    "将 Reader 重构提交为 d80ad6d 并推送到 origin/main",
+    "删除未接线的旧模块：themeService、useReaderStore、ScrolledContinuousReader 及其样式文件",
+    "删除未使用 helper：getDistanceToEdge、highlightRanges、injectCSSOverride、removeCSSOverride、preprocessChapterSync"
+  ],
+  "verification": {
+    "commands": [
+      "npx tsc --noEmit --pretty false --incremental false --noUnusedLocals --noUnusedParameters",
+      "npx tsc --noEmit --pretty false --incremental false",
+      "rg -n \"themeService|useReaderStore|ScrolledContinuousReader|getDistanceToEdge|highlightRanges|injectCSSOverride|removeCSSOverride|preprocessChapterSync\" src"
+    ],
+    "result": "pass",
+    "notes": [
+      "未使用项审计通过",
+      "类型检查通过",
+      "本轮清理改动尚未形成新的提交"
+    ]
+  }
+}

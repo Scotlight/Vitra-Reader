@@ -355,26 +355,3 @@ export function extractStyles(html: string): string[] {
 export function removeStyleTags(html: string): string {
   return html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
 }
-
-/**
- * 注入 CSS Override 到文档
- */
-export function injectCSSOverride(chapterId: string): HTMLStyleElement {
-  const styleElement = document.createElement('style');
-  styleElement.setAttribute('data-chapter-style', chapterId);
-  styleElement.textContent = generateCSSOverride(chapterId);
-  document.head.appendChild(styleElement);
-  return styleElement;
-}
-
-/**
- * 移除 CSS Override
- */
-export function removeCSSOverride(chapterId: string): void {
-  const styleElement = document.querySelector(
-    `style[data-chapter-style="${chapterId}"]`
-  );
-  if (styleElement) {
-    styleElement.remove();
-  }
-}
