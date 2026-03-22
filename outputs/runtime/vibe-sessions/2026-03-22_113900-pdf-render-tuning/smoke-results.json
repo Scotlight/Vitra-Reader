@@ -1,0 +1,35 @@
+{
+  "scenario": "browser-side direct PDF render smoke at DPR 2.5",
+  "samplePdf": "outputs/runtime/vibe-sessions/2026-03-22_113900-pdf-render-tuning/pdf-render-smoke-sample.pdf",
+  "runtimeKind": "legacy",
+  "notes": [
+    "Modern runtime hit the known toHex failure and fell back to legacy",
+    "renderMs comes from page.render only; totalMs also includes page image encoding and link extraction"
+  ],
+  "pages": [
+    {
+      "page": 1,
+      "profile": "standard book page",
+      "scale": 1.6,
+      "pixelArea": 1242640,
+      "renderMs": 149.3,
+      "totalMs": 317.2
+    },
+    {
+      "page": 2,
+      "profile": "wide slide",
+      "scale": 1.094,
+      "pixelArea": 1103200,
+      "renderMs": 11.2,
+      "totalMs": 43.6
+    },
+    {
+      "page": 3,
+      "profile": "large scan profile",
+      "scale": 1.069,
+      "pixelArea": 1601790,
+      "renderMs": 5.7,
+      "totalMs": 49.7
+    }
+  ]
+}

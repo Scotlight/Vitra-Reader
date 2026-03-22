@@ -1,0 +1,17 @@
+{
+  "runId": "2026-03-21_220436",
+  "phase": "structure-analysis",
+  "findings": {
+    "rendererEntry": "src/main.tsx",
+    "appSwitch": "src/App.tsx",
+    "electronMain": "electron/main.ts",
+    "preloadBridge": "electron/preload.ts",
+    "libraryState": "src/stores/useLibraryStore.ts",
+    "storage": "src/services/storageService.ts",
+    "reader": "src/components/Reader/ReaderView.tsx",
+    "engineFacade": "src/engine/index.ts",
+    "contentContract": "src/engine/core/contentProvider.ts",
+    "pipeline": "src/engine/pipeline/vitraPipeline.ts"
+  },
+  "status": "completed"
+}

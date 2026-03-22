@@ -1,6 +1,8 @@
 import Dexie, { type Table } from 'dexie'
 import type { BookFormat } from '../engine/core/contentProvider'
 
+// Dexie schema 版本约定：当前最高版本 5；下次修改 schema 必须从 6 开始，并同步更新本注释中的最高版本号。
+
 // ─── Data Models ────────────────────────────────────────────
 
 export interface BookMeta {

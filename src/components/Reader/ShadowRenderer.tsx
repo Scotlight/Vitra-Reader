@@ -262,11 +262,27 @@ async function appendHtmlFragmentsChunked(
 function normalizeHtmlFragments(
   htmlFragments: readonly string[] | undefined,
   htmlContent: string,
+  segmentMetas?: readonly SegmentMeta[],
 ): readonly string[] {
   if (!htmlFragments || htmlFragments.length === 0) {
+    if (segmentMetas && segmentMetas.length > 0) {
+      return segmentMetas
+        .map((segment) => segment.htmlContent)
+        .filter((fragment) => fragment.length > 0);
+    }
     return [htmlContent];
   }
   return htmlFragments.filter((fragment) => fragment.length > 0);
+}
+
+function getSegmentMetaTotalChars(segmentMetas?: readonly SegmentMeta[]): number {
+  if (!segmentMetas || segmentMetas.length === 0) return 0;
+  return segmentMetas.reduce((total, segment) => total + segment.charCount, 0);
+}
+
+function hasSegmentMetaMedia(segmentMetas?: readonly SegmentMeta[]): boolean {
+  if (!segmentMetas || segmentMetas.length === 0) return false;
+  return segmentMetas.some((segment) => segment.hasMedia);
 }
 
 function hasLayoutSensitiveMedia(html: string): boolean {
@@ -454,7 +470,7 @@ export function ShadowRenderer({
             return {
               cleanedHtml: htmlContent,
               processedStyles: externalStyles,
-              fragments: normalizeHtmlFragments(htmlFragments, htmlContent),
+              fragments: normalizeHtmlFragments(htmlFragments, htmlContent, segmentMetas),
             };
           }
           return buildLocalProcessedPayload(htmlContent, externalStyles, chapterId);
@@ -463,9 +479,13 @@ export function ShadowRenderer({
         const cleanedHtml = processed.cleanedHtml;
         const processedStyles = processed.processedStyles;
         const normalizedFragments = processed.fragments;
-        const chapterSize = cleanedHtml.length;
+        const chapterSize = cleanedHtml.length > 0
+          ? cleanedHtml.length
+          : getSegmentMetaTotalChars(segmentMetas);
         const isLargeChapter = chapterSize >= LARGE_CHAPTER_HTML_THRESHOLD;
-        const mediaSensitiveChapter = hasLayoutSensitiveMedia(cleanedHtml);
+        const mediaSensitiveChapter = cleanedHtml.length > 0
+          ? hasLayoutSensitiveMedia(cleanedHtml)
+          : hasSegmentMetaMedia(segmentMetas);
 
         const vectorSegments = await runVitraRenderStage(trace, 'measure', () => {
           if (mode !== 'scroll' || !isLargeChapter) return [];

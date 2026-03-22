@@ -1,0 +1,12 @@
+﻿{
+  "stage": "skeleton_check",
+  "branch": "main",
+  "head": "1640f66",
+  "upstream": "origin/main",
+  "push_state": "already_pushed",
+  "worktree_dirty": true,
+  "notes": [
+    "HEAD equals origin/main at 1640f66",
+    "worktree contains unrelated dirty changes and untracked artifacts"
+  ]
+}

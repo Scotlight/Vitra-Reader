@@ -1,0 +1,22 @@
+﻿{
+  "commit": "1640f66",
+  "push_state": "already_pushed",
+  "smoke": {
+    "status": "passed_with_known_fallback_warning",
+    "reader_title": "pdf-render-smoke-sample",
+    "render_metrics": [
+      { "page": 1, "scale": 1.575, "pixelArea": 1203072, "renderMs": 1151.10 },
+      { "page": 2, "scale": 1.094, "pixelArea": 1103200, "renderMs": 23.70 },
+      { "page": 3, "scale": 1.069, "pixelArea": 1601790, "renderMs": 15.00 }
+    ],
+    "observations": [
+      "PDF page 1 and page 2 blob images mounted in ReaderView",
+      "No MissingAssetError or blob resource missing error observed",
+      "Modern runtime still warns and falls back to legacy on document open",
+      "Console still reports an uncaught promise around the known fallback path"
+    ]
+  },
+  "artifacts": {
+    "screenshot": "outputs/runtime/vibe-sessions/2026-03-22_131900-push-then-smoke/reader-smoke.png"
+  }
+}

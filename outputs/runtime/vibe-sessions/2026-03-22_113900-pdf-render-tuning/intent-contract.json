@@ -1,0 +1,17 @@
+{
+  "runId": "2026-03-22_113900-pdf-render-tuning",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "Switch the PDF page-image hot path back to JPEG@0.88, keep WebP as a developer-only debug override, and add dynamic scaling plus regression coverage.",
+  "acceptanceCriteria": [
+    "Default page image encoding is JPEG@0.88",
+    "WebP is not used in the default hot path",
+    "Dynamic scaling varies by page profile",
+    "Parameterized tests cover multiple PDF page types",
+    "Typecheck and targeted tests pass"
+  ],
+  "nonGoals": [
+    "Expose a user-facing image format setting",
+    "Rework the broader PDF rendering architecture"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "runId": "2026-03-22_113900-pdf-render-tuning",
+  "stage": "skeleton_check",
+  "cwd": "D:\\0010\\.A_project\\epub reader",
+  "focus": "Restore JPEG as the default PDF page-image hot path and add dynamic render scaling.",
+  "repoDirty": true,
+  "notes": [
+    "Existing unrelated worktree changes preserved",
+    "Current pdfPageRenderer had WebP in the hot path before this task"
+  ]
+}

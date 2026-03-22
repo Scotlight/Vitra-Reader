@@ -1,0 +1,6 @@
+﻿{
+  "stage": "xl_plan",
+  "internal_grade": "M",
+  "push_state": "already_pushed",
+  "next_action": "run smoke"
+}

@@ -1,0 +1,33 @@
+{
+  "run_id": "20260322-084046-vitra-engine-autopsy",
+  "stage": "deep_interview",
+  "goal": "Produce an evidence-backed deep autopsy report for Vitra Engine PDF and Reader architecture.",
+  "deliverable": "Chinese markdown report with verdict matrix, root-cause analysis, and traceable evidence.",
+  "constraints": [
+    "Do not overwrite ongoing user refactor work.",
+    "No silent fallback in analysis conclusions.",
+    "Separate current working tree facts from HEAD snapshot facts.",
+    "Default user-facing language is Chinese."
+  ],
+  "acceptance_criteria": [
+    "All 7 user accusations receive verdicts.",
+    "At least 2 additional findings are documented.",
+    "Report explicitly notes that pdfProvider.ts is deleted in the working tree.",
+    "Requirement, plan, phase, and cleanup artifacts are written."
+  ],
+  "non_goals": [
+    "No direct rewrite of PDF rendering implementation.",
+    "No claim that build or tests pass.",
+    "No takeover of the in-progress PDF rebuild branch state."
+  ],
+  "autonomy_mode": "benchmark_autonomous",
+  "open_questions": [
+    "Whether the deleted working-tree pdfProvider.ts will be replaced by a split pdf/ module tree.",
+    "How much of the old PDF behavior is still live vs already replaced by current uncommitted work."
+  ],
+  "inference_notes": [
+    "The user wants a report, not an immediate code patch.",
+    "The complaint targets both implementation quality and knowledge-system drift.",
+    "Existing rebuild artifacts suggest the repo is already reacting to the same class of problems."
+  ]
+}

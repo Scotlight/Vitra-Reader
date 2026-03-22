@@ -563,6 +563,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     }, [currentSpineIndex, spineItems, onChapterChange]);
 
     // ── Report progress + persist ──
+    const progressTimerRef = useRef<number | null>(null);
     useEffect(() => {
         if (spineItems.length === 0 || isLoading) return;
         const chapterProgress = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
@@ -570,13 +571,21 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         const clamped = Math.max(0, Math.min(1, progress));
         onProgressChange?.(clamped);
 
-        db.progress.put({
-            bookId,
-            location: `vitra:${currentSpineIndex}:${currentPage}`,
-            percentage: clamped,
-            currentChapter: spineItems[currentSpineIndex]?.href || '',
-            updatedAt: Date.now(),
-        }).catch(err => console.warn('[PaginatedReader] Progress save failed:', err));
+        // 500ms debounce，避免翻页时频繁写 IndexedDB
+        if (progressTimerRef.current) window.clearTimeout(progressTimerRef.current);
+        progressTimerRef.current = window.setTimeout(() => {
+            db.progress.put({
+                bookId,
+                location: `vitra:${currentSpineIndex}:${currentPage}`,
+                percentage: clamped,
+                currentChapter: spineItems[currentSpineIndex]?.href || '',
+                updatedAt: Date.now(),
+            }).catch(err => console.warn('[PaginatedReader] Progress save failed:', err));
+        }, 500);
+
+        return () => {
+            if (progressTimerRef.current) window.clearTimeout(progressTimerRef.current);
+        };
     }, [currentSpineIndex, currentPage, totalPages, spineItems, isLoading, bookId, onProgressChange]);
 
     // ── Keyboard navigation ──

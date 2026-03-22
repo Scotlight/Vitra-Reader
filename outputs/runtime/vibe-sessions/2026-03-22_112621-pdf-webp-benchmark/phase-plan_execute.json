@@ -1,0 +1,67 @@
+﻿{
+  "runId": "2026-03-22_112621-pdf-webp-benchmark",
+  "method": "Synthetic text-heavy PDF-like canvas page; encode/decode benchmark only, excludes pdf.js raster time",
+  "environment": {
+    "browser": "Chrome 139",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
+  },
+  "batches": [
+    {
+      "label": "broad-scan",
+      "timestamp": "2026-03-22T03:24:45.984Z",
+      "sizes": [
+        {
+          "label": "current-1.3x",
+          "width": 1061,
+          "height": 1373,
+          "results": [
+            { "label": "jpeg@0.88", "meanEncodeMs": 31.27, "meanBlobKB": 207.3, "sampledMae": 0.626 },
+            { "label": "webp@0.80", "meanEncodeMs": 108.13, "meanBlobKB": 94.1, "sampledMae": 0.694 },
+            { "label": "webp@0.88", "meanEncodeMs": 97.87, "meanBlobKB": 111.7, "sampledMae": 0.472 },
+            { "label": "webp@0.92", "meanEncodeMs": 99.83, "meanBlobKB": 129.7, "sampledMae": 0.403 },
+            { "label": "webp@0.96", "meanEncodeMs": 116.2, "meanBlobKB": 157.5, "sampledMae": 0.328 },
+            { "label": "png", "meanEncodeMs": 29.2, "meanBlobKB": 291.3, "sampledMae": 0.0 }
+          ]
+        },
+        {
+          "label": "target-2.5x",
+          "width": 2040,
+          "height": 2640,
+          "results": [
+            { "label": "jpeg@0.88", "meanEncodeMs": 54.43, "meanBlobKB": 513.5, "sampledMae": 0.45 },
+            { "label": "webp@0.80", "meanEncodeMs": 477.8, "meanBlobKB": 215.9, "sampledMae": 0.408 },
+            { "label": "webp@0.88", "meanEncodeMs": 490.13, "meanBlobKB": 261.4, "sampledMae": 0.304 },
+            { "label": "webp@0.92", "meanEncodeMs": 377.03, "meanBlobKB": 304.3, "sampledMae": 0.247 },
+            { "label": "webp@0.96", "meanEncodeMs": 380.03, "meanBlobKB": 366.3, "sampledMae": 0.192 },
+            { "label": "png", "meanEncodeMs": 89.07, "meanBlobKB": 763.0, "sampledMae": 0.0 }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "focused-2.5x-webp-tuning",
+      "timestamp": "2026-03-22T03:26:04.073Z",
+      "runsPerConfig": 5,
+      "width": 2040,
+      "height": 2640,
+      "results": [
+        { "label": "jpeg@0.88", "meanEncodeMs": 47.6, "medianEncodeMs": 47.9, "meanBlobKB": 410.8, "sampledMae": 0.365 },
+        { "label": "webp@0.88", "meanEncodeMs": 318.64, "medianEncodeMs": 312.6, "meanBlobKB": 196.6, "sampledMae": 0.229 },
+        { "label": "webp@0.90", "meanEncodeMs": 372.96, "medianEncodeMs": 387.6, "meanBlobKB": 209.4, "sampledMae": 0.214 },
+        { "label": "webp@0.92", "meanEncodeMs": 397.8, "medianEncodeMs": 393.5, "meanBlobKB": 226.6, "sampledMae": 0.188 },
+        { "label": "webp@0.94", "meanEncodeMs": 521.58, "medianEncodeMs": 545.8, "meanBlobKB": 247.5, "sampledMae": 0.175 },
+        { "label": "webp@0.96", "meanEncodeMs": 568.3, "medianEncodeMs": 562.8, "meanBlobKB": 267.4, "sampledMae": 0.136 },
+        { "label": "png", "meanEncodeMs": 102.28, "medianEncodeMs": 98.7, "meanBlobKB": 617.7, "sampledMae": 0.0 }
+      ]
+    }
+  ],
+  "recommendation": {
+    "defaultFormatDecision": "Do not use WebP as the default performance-oriented path for PDF page images in the current canvas-toBlob pipeline.",
+    "qualityDecisionIfWebPIsKept": "Use image/webp at quality 0.92 instead of 0.96.",
+    "reasoning": [
+      "WebP materially reduces blob size and improves sampled fidelity relative to JPEG.",
+      "WebP encode time is 3x slower at current-like size and roughly 7x-8x slower at 2.5x size versus JPEG.",
+      "0.92 captures most of the visual benefit while avoiding the steep extra cost of 0.94-0.96."
+    ]
+  }
+}

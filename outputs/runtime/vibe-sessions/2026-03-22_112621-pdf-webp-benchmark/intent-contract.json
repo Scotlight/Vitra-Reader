@@ -1,0 +1,20 @@
+﻿{
+  "runId": "2026-03-22_112621-pdf-webp-benchmark",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "Run local benchmarks to decide if PDF page images should use WebP and what quality parameter should be selected.",
+  "deliverable": "Evidence-backed recommendation with raw benchmark data and a concrete quality decision.",
+  "acceptanceCriteria": [
+    "Measure encode time and blob size for current and target page sizes",
+    "Compare multiple WebP quality settings against JPEG and PNG baselines",
+    "State whether WebP improves performance in this workload"
+  ],
+  "nonGoals": [
+    "Re-architect PDF rendering pipeline",
+    "Claim full app-level perf improvement from encode-only data"
+  ],
+  "assumptions": [
+    "A synthetic text-heavy canvas is a valid proxy for the page-image encode step",
+    "pdf.js rasterization cost is out of scope for this benchmark and analyzed separately"
+  ]
+}

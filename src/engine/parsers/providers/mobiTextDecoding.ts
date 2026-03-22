@@ -40,11 +40,19 @@ export function decodeMobiText(data: Uint8Array, encodingCode: number): string {
     const primary = decodeWithEncoding(data, preferred) ?? new TextDecoder('utf-8').decode(data)
     if (encodingCode !== MOBI_ENCODING_CP1252) return primary
 
+    // CP1252 声明但实际可能是 UTF-8（中文 Mobi 常见）
     const utf8 = decodeWithEncoding(data, 'utf-8') ?? primary
-    const primaryCjk = (primary.match(/[\u4e00-\u9fff]/g) || []).length
-    const utf8Cjk = (utf8.match(/[\u4e00-\u9fff]/g) || []).length
+
+    // 如果 CP1252 解码产生了 replacement character，直接倾向 UTF-8
+    const primaryReplacements = (primary.match(/\uFFFD/g) || []).length
+    if (primaryReplacements > 0 && utf8 !== primary) return utf8
+
+    // CJK 检测范围：基本汉字 + 扩展A + 全角标点 + 兼容汉字
+    const cjkPattern = /[\u3000-\u303F\u3400-\u4DBF\u4e00-\u9fff\uF900-\uFAFF]/g
+    const primaryCjk = (primary.match(cjkPattern) || []).length
+    const utf8Cjk = (utf8.match(cjkPattern) || []).length
     const primaryMojibake = (primary.match(/[ÃÂæçï¼]/g) || []).length
     const utf8Mojibake = (utf8.match(/[ÃÂæçï¼]/g) || []).length
-    if (utf8Cjk > primaryCjk * 2 && utf8Mojibake <= primaryMojibake) return utf8
+    if (utf8Cjk > primaryCjk && utf8Mojibake <= primaryMojibake) return utf8
     return primary
 }

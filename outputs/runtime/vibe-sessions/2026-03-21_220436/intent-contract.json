@@ -1,0 +1,17 @@
+{
+  "runId": "2026-03-21_220436",
+  "goal": "分析当前项目结构，并告诉用户先看哪几个文件",
+  "deliverable": "一份中文结构分析与优先阅读清单",
+  "constraints": [
+    "只根据本地仓库证据",
+    "不修改业务代码",
+    "给出可验证文件位置"
+  ],
+  "acceptanceCriteria": [
+    "识别启动入口",
+    "识别书库/阅读器/引擎/存储层",
+    "给出推荐阅读顺序"
+  ],
+  "autonomyMode": "benchmark_autonomous",
+  "status": "completed"
+}

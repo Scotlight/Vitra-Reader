@@ -1,0 +1,25 @@
+{
+  "run_id": "20260322-084046-vitra-engine-autopsy",
+  "stage": "plan_execute",
+  "report_file": "doc/02_VITRA_ENGINE_DEEP_AUTOPSY.md",
+  "verdict_summary": {
+    "validated": [
+      "PDF text layer intentionally disabled",
+      "Three-way parallel pipeline contains inert text-layer placeholder",
+      "JPEG Blob URL page pipeline adds self-inflicted fidelity loss",
+      "Global legacy runtime contamination",
+      "Reader components are oversized and responsibility-heavy"
+    ],
+    "partially_validated": [
+      "Vectorization naming overstates what is actually HTML segmentation / virtualization metadata"
+    ],
+    "historical_residue": [
+      "canvas.width = 0 documented as key architecture optimization while the old provider is now being removed"
+    ]
+  },
+  "additional_findings": [
+    "PDF text extraction still exists for search, so the missing text layer is a product decision rather than a hard capability limit.",
+    "Fallback documentation and real reopen semantics diverged after init() started releasing the source ArrayBuffer.",
+    "Current working tree already forces PDF into scroll-only mode and is removing the old single-file provider."
+  ]
+}

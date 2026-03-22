@@ -1,0 +1,102 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Length 387 >>
+stream
+BT
+/F1 22 Tf
+72 740 Td
+(Vitra Smoke PDF - Page 1 / Standard Book Page) Tj
+/F1 14 Tf
+72 710 Td
+(Expected profile: standard text-heavy page) Tj
+/F1 12 Tf
+72 685 Td
+(This page is intended to trigger the medium dynamic scale branch.) Tj
+/F1 12 Tf
+72 660 Td
+(ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789) Tj
+/F1 10 Tf
+72 120 Td
+(Fine text footer to expose encoding artifacts near glyph edges.) Tj
+ET
+endstream
+endobj
+3 0 obj
+<< /Length 404 >>
+stream
+BT
+/F1 28 Tf
+80 640 Td
+(Vitra Smoke PDF - Page 2 / Wide Slide) Tj
+/F1 18 Tf
+80 595 Td
+(Expected profile: widescreen slide / width-capped branch) Tj
+/F1 16 Tf
+80 540 Td
+(Bullet A: dynamic scaling should cap by width before DPR wins.) Tj
+/F1 16 Tf
+80 505 Td
+(Bullet B: render metrics log should print scale, pixelArea and renderMs.) Tj
+/F1 16 Tf
+80 470 Td
+(Bullet C: this page is intentionally wide.) Tj
+ET
+endstream
+endobj
+4 0 obj
+<< /Length 415 >>
+stream
+BT
+/F1 26 Tf
+90 1320 Td
+(Vitra Smoke PDF - Page 3 / Large Scan Profile) Tj
+/F1 18 Tf
+90 1275 Td
+(Expected profile: tall scanned page / area-limited branch) Tj
+/F1 16 Tf
+90 1235 Td
+(This page is intentionally taller to exercise the area limiter.) Tj
+/F1 16 Tf
+90 1195 Td
+(Render metrics from this page should differ from the other two pages.) Tj
+/F1 11 Tf
+90 140 Td
+(Small footer text for artifact visibility.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Pages /Kids [6 0 R 7 0 R 8 0 R] /Count 3 >>
+endobj
+6 0 obj
+<< /Type /Page /Parent 5 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R >> >> /Contents 2 0 R >>
+endobj
+7 0 obj
+<< /Type /Page /Parent 5 0 R /MediaBox [0 0 1280 720] /Resources << /Font << /F1 1 0 R >> >> /Contents 3 0 R >>
+endobj
+8 0 obj
+<< /Type /Page /Parent 5 0 R /MediaBox [0 0 1000 1400] /Resources << /Font << /F1 1 0 R >> >> /Contents 4 0 R >>
+endobj
+9 0 obj
+<< /Type /Catalog /Pages 5 0 R >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000079 00000 n 
+0000000517 00000 n 
+0000000972 00000 n 
+0000001438 00000 n 
+0000001507 00000 n 
+0000001633 00000 n 
+0000001760 00000 n 
+0000001888 00000 n 
+trailer
+<< /Size 10 /Root 9 0 R >>
+startxref
+1937
+%%EOF

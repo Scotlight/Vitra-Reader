@@ -1,0 +1,16 @@
+{
+  "stage": "phase_cleanup",
+  "transient_artifacts_removed": [
+    "outputs/runtime/vibe-sessions/2026-03-22_091427-cleanup-receipt.json",
+    "outputs/runtime/vibe-sessions/2026-03-22_091427-intent-contract.json",
+    "outputs/runtime/vibe-sessions/2026-03-22_091427-phase-plan_execute.json",
+    "outputs/runtime/vibe-sessions/2026-03-22_091427-skeleton-receipt.json"
+  ],
+  "proof_artifacts_retained": [
+    "outputs/runtime/vibe-sessions/2026-03-22_163149-dirty-worktree-cleanup/skeleton-receipt.json",
+    "outputs/runtime/vibe-sessions/2026-03-22_163149-dirty-worktree-cleanup/intent-contract.json",
+    "outputs/runtime/vibe-sessions/2026-03-22_163149-dirty-worktree-cleanup/phase-plan_execute.json",
+    "outputs/runtime/vibe-sessions/2026-03-22_163149-dirty-worktree-cleanup/cleanup-receipt.json"
+  ],
+  "status": "ready_to_commit"
+}

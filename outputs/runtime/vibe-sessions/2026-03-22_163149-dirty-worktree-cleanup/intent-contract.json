@@ -1,0 +1,23 @@
+{
+  "goal": "Resolve the remaining dirty worktree and commit the reconciled result.",
+  "deliverable": "One clean commit plus receipts showing how dirty changes were classified, verified, and cleaned.",
+  "constraints": [
+    "Do not reopen the pushed pdfPageRenderer.ts integration",
+    "Preserve legitimate fixes that already have coherent code or tests",
+    "Delete only transient or clearly superseded artifacts"
+  ],
+  "acceptance_criteria": [
+    "Dirty source changes are either committed or explicitly reverted",
+    "Focused verification passes for the retained source changes",
+    "The repository ends with a clean git status"
+  ],
+  "non_goals": [
+    "New product work outside the dirty files",
+    "Broad architectural rewrites"
+  ],
+  "autonomy_mode": "benchmark_autonomous",
+  "assumptions": [
+    "The user wants the current dirty worktree settled now rather than split into multiple future commits",
+    "Current untracked runtime outputs from earlier vibe runs are transient unless they are needed as proof for this run"
+  ]
+}

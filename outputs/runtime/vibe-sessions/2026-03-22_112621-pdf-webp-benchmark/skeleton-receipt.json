@@ -1,0 +1,12 @@
+﻿{
+  "runId": "2026-03-22_112621-pdf-webp-benchmark",
+  "stage": "skeleton_check",
+  "cwd": "D:\\0010\\.A_project\\epub reader",
+  "repoDirty": true,
+  "focus": "Benchmark PDF page image encoding formats to choose whether WebP should be used and, if so, which quality is appropriate.",
+  "constraints": [
+    "Do not revert unrelated dirty worktree changes",
+    "Prefer evidence from local runtime over guesswork",
+    "Benchmark current page-image encoding step, not broad app behavior"
+  ]
+}

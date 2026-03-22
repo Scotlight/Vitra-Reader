@@ -1,0 +1,11 @@
+{
+  "stage": "skeleton_check",
+  "branch": "main",
+  "head": "ed35c39",
+  "upstream": "origin/main",
+  "worktree_dirty": true,
+  "notes": [
+    "remaining dirty files include tracked source edits, deleted root artifacts, untracked docs, and untracked vibe runtime outputs",
+    "user requested that the dirty worktree be reconciled and committed under vibe governance"
+  ]
+}

@@ -1,0 +1,23 @@
+﻿{
+  "goal": "Confirm push state, then run a real PDF smoke test against the current reader flow.",
+  "deliverable": "Push-state confirmation, smoke verdict, and cleanup receipt.",
+  "constraints": [
+    "Do not modify or overwrite unrelated dirty worktree changes",
+    "Do not touch pdfPageRenderer.ts in this pass",
+    "Treat current push as satisfied if HEAD already equals origin/main"
+  ],
+  "acceptance_criteria": [
+    "Remote push state is explicitly confirmed",
+    "ReaderView smoke runs on the pushed commit",
+    "Temporary dev-server artifacts are cleaned up"
+  ],
+  "non_goals": [
+    "New feature work",
+    "Rewriting existing PDF renderer policy"
+  ],
+  "autonomy_mode": "benchmark_autonomous",
+  "assumptions": [
+    "User wants verification on the already-pushed commit 1640f66",
+    "Real-browser smoke is preferable to unit-only validation"
+  ]
+}

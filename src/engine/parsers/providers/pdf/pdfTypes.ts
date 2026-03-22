@@ -20,5 +20,4 @@ export interface PdfRenderedPage {
     links: readonly PdfPageLink[]
     pageWidthPx: number
     pageHeightPx: number
-    searchText: string
 }

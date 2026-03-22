@@ -54,9 +54,11 @@ export function preprocessChapterCore(input: ChapterPreprocessInput): ChapterPre
     segmentMetas = vectorizeHtmlToSegmentMetas(cleanedHtml, input.vectorConfig);
   }
 
+  const canUseSegmentPayload = Boolean(segmentMetas && segmentMetas.length > 0);
+
   return {
-    htmlContent: cleanedHtml,
-    htmlFragments: splitHtmlIntoFragments(cleanedHtml),
+    htmlContent: canUseSegmentPayload ? '' : cleanedHtml,
+    htmlFragments: canUseSegmentPayload ? [] : splitHtmlIntoFragments(cleanedHtml),
     externalStyles: scopedStyles,
     removedTagCount: sanitized.removedTagCount,
     removedAttributeCount: sanitized.removedAttributeCount,

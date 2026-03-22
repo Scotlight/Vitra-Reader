@@ -12,10 +12,10 @@ function renderHiddenSearchText(searchText: string): string {
     return `<div class="pdf-page-search-text" aria-hidden="true" style="display:none;white-space:pre-wrap;">${escapeHtml(searchText)}</div>`
 }
 
-export function renderPdfPageHtml(renderedPage: PdfRenderedPage, pageIndex: number): string {
+export function renderPdfPageHtml(renderedPage: PdfRenderedPage, pageIndex: number, searchText = ''): string {
     const safeUrl = escapeHtmlAttribute(renderedPage.imageUrl)
     const imageTag = `<img src="${safeUrl}" width="${renderedPage.pageWidthPx}" height="${renderedPage.pageHeightPx}" alt="PDF page ${pageIndex + 1}" style="display:block;width:100%;height:auto;"/>`
-    const searchTextLayer = renderHiddenSearchText(renderedPage.searchText)
+    const searchTextLayer = renderHiddenSearchText(searchText)
     const linkLayer = renderedPage.links.length > 0 ? renderPdfLinkLayer(renderedPage.links) : ''
     return `<div class="pdf-page-layer" style="position:relative;width:100%;line-height:0;">${imageTag}${searchTextLayer}${linkLayer}</div>`
 }

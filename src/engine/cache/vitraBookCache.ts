@@ -24,6 +24,9 @@ const SKIP_CACHE_FORMATS = new Set<VitraBookFormat>([
     'PDF', 'DJVU', 'CBZ', 'CBT', 'CBR', 'CB7',
 ])
 
+/** 是否支持浏览器原生 CompressionStream（非阻塞） */
+const HAS_COMPRESSION_STREAM = typeof CompressionStream === 'function' && typeof DecompressionStream === 'function'
+
 // ─── 公共接口 ────────────────────────────────────────
 
 export interface VitraCachedBook {
@@ -54,9 +57,18 @@ function buildCacheKey(hash: string): string {
     return `${CACHE_KEY_PREFIX}${hash}`
 }
 
-function encodeSections(sectionsHtml: readonly string[]): Uint8Array {
+/** 异步 gzip 压缩（优先用 CompressionStream，回退 fflate 同步） */
+async function encodeSectionsAsync(sectionsHtml: readonly string[]): Promise<Uint8Array> {
     const json = JSON.stringify(sectionsHtml)
-    return gzipSync(strToU8(json))
+    if (!HAS_COMPRESSION_STREAM) return gzipSync(strToU8(json))
+    try {
+        const blob = new Blob([json])
+        const stream = blob.stream().pipeThrough(new CompressionStream('gzip'))
+        const buf = await new Response(stream).arrayBuffer()
+        return new Uint8Array(buf)
+    } catch {
+        return gzipSync(strToU8(json))
+    }
 }
 
 function decodeSections(compressed: Uint8Array): string[] {
@@ -70,10 +82,35 @@ function decodeSections(compressed: Uint8Array): string[] {
     }
 }
 
+/** 异步 gunzip 解压（优先用 DecompressionStream，回退 fflate 同步） */
+async function decodeSectionsAsync(compressed: Uint8Array): Promise<string[]> {
+    if (!HAS_COMPRESSION_STREAM) return decodeSections(compressed)
+    try {
+        const blob = new Blob([compressed])
+        const stream = blob.stream().pipeThrough(new DecompressionStream('gzip'))
+        const text = await new Response(stream).text()
+        const parsed = JSON.parse(text)
+        if (!Array.isArray(parsed)) return []
+        return parsed as string[]
+    } catch {
+        return decodeSections(compressed)
+    }
+}
+
 // ─── 核心类 ──────────────────────────────────────────
 
 export class VitraBookCache {
     private stats: { hits: number; misses: number } = { hits: 0, misses: 0 }
+    /** 缓存 buffer → hash 映射，避免同一文件重复计算 SHA-256 */
+    private hashCache = new WeakMap<ArrayBuffer, string>()
+
+    private async getHash(buffer: ArrayBuffer): Promise<string> {
+        const cached = this.hashCache.get(buffer)
+        if (cached) return cached
+        const hash = await computeBufferHash(buffer)
+        this.hashCache.set(buffer, hash)
+        return hash
+    }
 
     /**
      * 判断给定格式是否应该被缓存
@@ -88,7 +125,7 @@ export class VitraBookCache {
      * @returns 缓存数据，未命中返回 null
      */
     async get(buffer: ArrayBuffer): Promise<VitraCachedBook | null> {
-        const hash = await computeBufferHash(buffer)
+        const hash = await this.getHash(buffer)
         const key = buildCacheKey(hash)
 
         const row = await db.settings.get(key)
@@ -98,9 +135,12 @@ export class VitraBookCache {
         }
 
         try {
-            const entry = row.value as { compressed: number[]; cachedAt: number }
-            const compressed = new Uint8Array(entry.compressed)
-            const sectionsHtml = decodeSections(compressed)
+            const entry = row.value as { compressed: ArrayBuffer | number[]; cachedAt: number }
+            // 兼容旧格式（number[]）和新格式（ArrayBuffer）
+            const compressed = entry.compressed instanceof ArrayBuffer
+                ? new Uint8Array(entry.compressed)
+                : new Uint8Array(entry.compressed)
+            const sectionsHtml = await decodeSectionsAsync(compressed)
             this.stats.hits++
             return { sectionsHtml, cachedAt: entry.cachedAt }
         } catch {
@@ -115,14 +155,15 @@ export class VitraBookCache {
      * 将 sections HTML 压缩后写入 IndexedDB。
      */
     async put(buffer: ArrayBuffer, sectionsHtml: readonly string[]): Promise<void> {
-        const hash = await computeBufferHash(buffer)
+        const hash = await this.getHash(buffer)
         const key = buildCacheKey(hash)
-        const compressed = encodeSections(sectionsHtml)
+        const compressed = await encodeSectionsAsync(sectionsHtml)
 
         await db.settings.put({
             key,
             value: {
-                compressed: Array.from(compressed),
+                // 直接存 ArrayBuffer，避免 Array.from() 导致的 3-4 倍存储膨胀
+                compressed: compressed.buffer,
                 cachedAt: Date.now(),
             },
         })
@@ -132,7 +173,7 @@ export class VitraBookCache {
      * 删除指定文件的缓存
      */
     async evict(buffer: ArrayBuffer): Promise<void> {
-        const hash = await computeBufferHash(buffer)
+        const hash = await this.getHash(buffer)
         await db.settings.delete(buildCacheKey(hash))
     }
 

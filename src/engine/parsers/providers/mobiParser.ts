@@ -137,20 +137,34 @@ function parseMetadataFromExth(buf: ArrayBuffer, header: MobiHeader): ExthMetada
 }
 
 function palmDocDecompress(data: Uint8Array): Uint8Array {
-    const output: number[] = []
+    // 预分配缓冲区（输入的 4 倍），不够时翻倍扩容
+    let buf = new Uint8Array(data.length * 4)
+    let pos = 0
     let i = 0
+
+    const ensureCapacity = (needed: number) => {
+        while (pos + needed > buf.length) {
+            const next = new Uint8Array(buf.length * 2)
+            next.set(buf)
+            buf = next
+        }
+    }
+
     while (i < data.length) {
         const byte = data[i++]
         if (byte === 0) {
-            output.push(0)
+            ensureCapacity(1)
+            buf[pos++] = 0
             continue
         }
         if (byte <= 0x08) {
-            for (let j = 0; j < byte && i < data.length; j += 1) output.push(data[i++])
+            ensureCapacity(byte)
+            for (let j = 0; j < byte && i < data.length; j += 1) buf[pos++] = data[i++]
             continue
         }
         if (byte <= 0x7F) {
-            output.push(byte)
+            ensureCapacity(1)
+            buf[pos++] = byte
             continue
         }
         if (byte <= 0xBF) {
@@ -158,13 +172,16 @@ function palmDocDecompress(data: Uint8Array): Uint8Array {
             const next = data[i++]
             const distance = (((byte << 8) | next) >> 3) & 0x07FF
             const length = (next & 0x07) + 3
-            if (distance <= 0 || distance > output.length) continue
-            for (let j = 0; j < length; j += 1) output.push(output[output.length - distance] ?? 0)
+            if (distance <= 0 || distance > pos) continue
+            ensureCapacity(length)
+            for (let j = 0; j < length; j += 1) buf[pos++] = buf[pos - distance] ?? 0
             continue
         }
-        output.push(0x20, byte ^ 0x80)
+        ensureCapacity(2)
+        buf[pos++] = 0x20
+        buf[pos++] = byte ^ 0x80
     }
-    return new Uint8Array(output)
+    return buf.slice(0, pos)
 }
 
 function trimTrailingEntries(data: Uint8Array, flags: number): Uint8Array {
@@ -202,13 +219,6 @@ function detectImageMime(data: Uint8Array): string | null {
     return null
 }
 
-function bytesToBase64(data: Uint8Array): string {
-    let binary = ''
-    const chunkSize = 0x4000
-    for (let i = 0; i < data.length; i += chunkSize) binary += String.fromCharCode(...data.slice(i, i + chunkSize))
-    return btoa(binary)
-}
-
 function extractCoverDataUrl(
     buffer: Uint8Array,
     recordOffsets: readonly number[],
@@ -223,16 +233,30 @@ function extractCoverDataUrl(
         const bytes = getRecordBytes(buffer, recordOffsets, index)
         const mime = detectImageMime(bytes)
         if (!mime) continue
-        return `data:${mime};base64,${bytesToBase64(bytes)}`
+        // 使用 Blob URL 替代 data URL，避免 base64 编码的栈溢出和内存膨胀
+        const blob = new Blob([bytes], { type: mime })
+        return URL.createObjectURL(blob)
     }
     return null
 }
 
-function decodeTextRecordPayload(data: Uint8Array, header: MobiHeader): string {
+function decompressRecordPayload(data: Uint8Array, header: MobiHeader): Uint8Array {
     const trimmed = trimTrailingEntries(data, header.extraDataFlags)
-    if (header.compression === 1) return decodeMobiText(trimmed, header.encodingCode)
-    if (header.compression === 2) return decodeMobiText(palmDocDecompress(trimmed), header.encodingCode)
+    if (header.compression === 1) return trimmed
+    if (header.compression === 2) return palmDocDecompress(trimmed)
     throw new Error(`MOBI parse failed: unsupported compression type ${header.compression}`)
+}
+
+function concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
+    let totalLength = 0
+    for (const arr of arrays) totalLength += arr.length
+    const result = new Uint8Array(totalLength)
+    let offset = 0
+    for (const arr of arrays) {
+        result.set(arr, offset)
+        offset += arr.length
+    }
+    return result
 }
 
 export function parseMobiBuffer(buf: ArrayBuffer): MobiParsed {
@@ -254,8 +278,12 @@ export function parseMobiBuffer(buf: ArrayBuffer): MobiParsed {
     const cover = extractCoverDataUrl(bytes, records, header, exth.coverOffset, exth.thumbnailOffset)
 
     let content = ''
+    const textChunks: Uint8Array[] = []
     for (let i = 1; i <= header.textRecordCount && i < records.length; i += 1) {
-        content += decodeTextRecordPayload(getRecordBytes(bytes, records, i), header)
+        textChunks.push(decompressRecordPayload(getRecordBytes(bytes, records, i), header))
+    }
+    if (textChunks.length > 0) {
+        content = decodeMobiText(concatUint8Arrays(textChunks), header.encodingCode)
     }
     if (cover && !content.includes(cover)) {
         const safeCover = cover.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
