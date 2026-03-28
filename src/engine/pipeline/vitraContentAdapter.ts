@@ -34,6 +34,12 @@ const SECTION_MANAGER_MAX_LOADED = 10
 /** 搜索预索引的并发批次大小 */
 const SEARCH_INDEX_BATCH = 4
 
+/** 打开书后延迟多久才开始后台建索引（避免与首屏渲染抢 CPU） */
+const INDEX_BUILD_INITIAL_DELAY_MS = 3000
+
+/** 每批索引之间的间隔（给渲染帧留出时间） */
+const INDEX_BUILD_INTER_BATCH_DELAY_MS = 200
+
 type ScheduledIndexHandle =
   | { kind: 'idle'; id: number }
   | { kind: 'timeout'; id: ReturnType<typeof setTimeout> }
@@ -193,18 +199,11 @@ export class VitraContentAdapter implements ContentProvider {
     let cursor = 0
     const bookId = this.bookId
 
-    const schedule = () => {
+    const scheduleNext = () => {
       if (this.scheduledIndexCancelled) return
-      if (typeof requestIdleCallback === 'function') {
-        this.scheduledIndexHandle = {
-          kind: 'idle',
-          id: requestIdleCallback(step),
-        }
-        return
-      }
       this.scheduledIndexHandle = {
         kind: 'timeout',
-        id: setTimeout(step, 0),
+        id: setTimeout(step, INDEX_BUILD_INTER_BATCH_DELAY_MS),
       }
     }
 
@@ -221,11 +220,15 @@ export class VitraContentAdapter implements ContentProvider {
       }
       cursor = end
       if (cursor < sectionsHtml.length) {
-        schedule()
+        scheduleNext()
       }
     }
 
-    schedule()
+    // 延迟启动，避免与首屏渲染抢 CPU
+    this.scheduledIndexHandle = {
+      kind: 'timeout',
+      id: setTimeout(step, INDEX_BUILD_INITIAL_DELAY_MS),
+    }
   }
 
   private cancelScheduledIndexBuild(): void {

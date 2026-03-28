@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { db } from '../../services/storageService'
 import { VitraContentAdapter, VitraPipeline, resolveReaderRenderMode } from '../../engine'
 import type { BookFormat, ContentProvider, TocItem } from '../../engine/core/contentProvider'
@@ -47,6 +47,9 @@ const INITIAL_STATE: ReaderBookSessionState = {
 
 export function useReaderBookSession({ bookId, pageTurnMode }: UseReaderBookSessionOptions) {
     const [session, setSession] = useState<ReaderBookSessionState>(INITIAL_STATE)
+    const pageTurnModeRef = useRef(pageTurnMode)
+    pageTurnModeRef.current = pageTurnMode
+
     const setCurrentProgress = useCallback((progress: number) => {
         setSession((current) => ({ ...current, currentProgress: progress }))
     }, [])
@@ -57,7 +60,7 @@ export function useReaderBookSession({ bookId, pageTurnMode }: UseReaderBookSess
 
         setSession((current) => ({ ...current, isReady: false, provider: null, toc: [] }))
 
-        void loadReaderBookSession(bookId, pageTurnMode, (nextSession) => {
+        void loadReaderBookSession(bookId, pageTurnModeRef.current, (nextSession) => {
             if (!alive) {
                 nextSession.provider?.destroy()
                 return
@@ -70,7 +73,7 @@ export function useReaderBookSession({ bookId, pageTurnMode }: UseReaderBookSess
             alive = false
             activeProvider?.destroy()
         }
-    }, [bookId, pageTurnMode])
+    }, [bookId])
 
     return {
         ...session,
