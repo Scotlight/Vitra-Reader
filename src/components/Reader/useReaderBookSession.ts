@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { db } from '../../services/storageService'
 import { VitraContentAdapter, VitraPipeline, resolveReaderRenderMode } from '../../engine'
 import type { BookFormat, ContentProvider, TocItem } from '../../engine/core/contentProvider'
@@ -47,6 +47,9 @@ const INITIAL_STATE: ReaderBookSessionState = {
 
 export function useReaderBookSession({ bookId, pageTurnMode }: UseReaderBookSessionOptions) {
     const [session, setSession] = useState<ReaderBookSessionState>(INITIAL_STATE)
+    const setCurrentProgress = useCallback((progress: number) => {
+        setSession((current) => ({ ...current, currentProgress: progress }))
+    }, [])
 
     useEffect(() => {
         let alive = true
@@ -71,9 +74,7 @@ export function useReaderBookSession({ bookId, pageTurnMode }: UseReaderBookSess
 
     return {
         ...session,
-        setCurrentProgress: (progress: number) => {
-            setSession((current) => ({ ...current, currentProgress: progress }))
-        },
+        setCurrentProgress,
     }
 }
 

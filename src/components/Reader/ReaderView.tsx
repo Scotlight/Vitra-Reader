@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import type { ContentProvider, SearchResult } from '../../engine/core/contentProvider'
 import { resolveReaderRenderMode } from '../../engine'
@@ -158,6 +158,9 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         tocLength: toc.length,
         tocListRef,
     })
+    const handleChapterChange = useCallback((_label: string, href: string) => {
+        setCurrentSectionHref(normalizeTocHref(href))
+    }, [])
 
     const currentChapterLabel = findCurrentChapterLabel(toc, currentSectionHref)
     const headerHeight = Math.max(36, Math.min(96, Number(settings.headerHeight) || 48))
@@ -242,9 +245,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                             }}
                             readerStyles={readerStyleConfig}
                             onProgressChange={setCurrentProgress}
-                            onChapterChange={(_label, href) => {
-                                setCurrentSectionHref(normalizeTocHref(href))
-                            }}
+                            onChapterChange={handleChapterChange}
                             onSelectionSearch={(keyword) => {
                                 setSearchQuery(keyword)
                                 openSearchPanelWithKeyword(keyword)
@@ -262,9 +263,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                             pageTurnMode={effectivePageTurnMode === 'paginated-double' ? 'paginated-double' : 'paginated-single'}
                             readerStyles={readerStyleConfig}
                             onProgressChange={setCurrentProgress}
-                            onChapterChange={(_label, href) => {
-                                setCurrentSectionHref(normalizeTocHref(href))
-                            }}
+                            onChapterChange={handleChapterChange}
                             onSelectionSearch={(keyword) => {
                                 setSearchQuery(keyword)
                                 openSearchPanelWithKeyword(keyword)
