@@ -1,11 +1,14 @@
 import type {
-  BookFormat as ProviderBookFormat,
   ContentProvider,
   SpineItemInfo,
   TocItem,
 } from '../core/contentProvider';
 import { stripBookExtension } from '../core/contentProvider';
-import { createContentProvider, parseBookMetadata } from '../core/contentProviderFactory';
+import {
+  createProviderForBackedFormat,
+  parseMetadataForBackedFormat,
+  type ProviderBackedFormat,
+} from '../core/providerRegistry';
 import { VitraBaseParser } from '../core/vitraBaseParser';
 import {
   upsertChapterIndex,
@@ -36,7 +39,7 @@ type ProviderCompatibleFormat =
   | 'MD'
   | 'FB2';
 
-const PROVIDER_FORMAT_MAP: Record<ProviderCompatibleFormat, ProviderBookFormat> = {
+const PROVIDER_FORMAT_MAP: Record<ProviderCompatibleFormat, ProviderBackedFormat> = {
   EPUB: 'epub',
   PDF: 'pdf',
   TXT: 'txt',
@@ -76,8 +79,8 @@ export class VitraProviderBackedParser extends VitraBaseParser {
     // Provider 和 metadata 解析器只读 buffer，无需复制
     // 直接传递原始 buffer 避免大文件（如 PDF）的 CPU 密集型复制操作
     const [provider, rawMetadata] = await Promise.all([
-      createContentProvider(providerFormat, this.buffer),
-      parseBookMetadata(providerFormat, this.buffer, this.filename),
+      createProviderForBackedFormat(providerFormat, this.buffer),
+      parseMetadataForBackedFormat(providerFormat, this.buffer, this.filename),
     ]);
 
     await provider.init();
