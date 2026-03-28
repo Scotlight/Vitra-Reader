@@ -63,11 +63,48 @@ function chooseBetterQuality(
     return leftText
 }
 
+function tryRecoverDeclaredNonCp1252(
+    data: Uint8Array,
+    primary: string,
+    preferredEncoding: string,
+): string {
+    const primaryQuality = evaluateDecodeQuality(primary)
+    const shouldProbe =
+        primaryQuality.replacements > 0
+        || primaryQuality.mojibake >= 16
+        || (primaryQuality.cjk <= 4 && primaryQuality.mojibake >= 8)
+    if (!shouldProbe) return primary
+
+    const candidates = ['gb18030', 'gbk', 'big5', 'windows-1252', 'utf-8']
+        .filter((encoding) => encoding !== preferredEncoding)
+        .map((encoding) => decodeWithEncoding(data, encoding))
+        .filter((text): text is string => Boolean(text))
+    if (candidates.length === 0) return primary
+
+    let best = primary
+    for (const candidate of candidates) {
+        best = chooseBetterQuality(best, candidate)
+    }
+
+    const bestQuality = evaluateDecodeQuality(best)
+    const clearlyBetter =
+        bestQuality.replacements + 2 <= primaryQuality.replacements
+        || (
+            bestQuality.replacements <= primaryQuality.replacements
+            && bestQuality.mojibake + 6 <= primaryQuality.mojibake
+            && bestQuality.cjk >= primaryQuality.cjk + 12
+        )
+
+    return clearlyBetter ? best : primary
+}
+
 export function decodeMobiText(data: Uint8Array, encodingCode: number): string {
     const preferred = resolveMobiEncoding(encodingCode)
     const utf8Loose = new TextDecoder('utf-8').decode(data)
     const primary = decodeWithEncoding(data, preferred) ?? utf8Loose
-    if (encodingCode !== MOBI_ENCODING_CP1252) return primary
+    if (encodingCode !== MOBI_ENCODING_CP1252) {
+        return tryRecoverDeclaredNonCp1252(data, primary, preferred)
+    }
 
     // CP1252 声明但实际可能是 UTF-8（中文 Mobi 常见）
     const utf8 = decodeWithEncoding(data, 'utf-8') ?? utf8Loose
