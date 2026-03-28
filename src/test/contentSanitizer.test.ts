@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
     escapeHtml,
     escapeHtmlAttribute,
+    sanitizeChapterHtml,
     sanitizeUrlValue,
 } from '../engine/core/contentSanitizer'
 
@@ -69,5 +70,18 @@ describe('sanitizeUrlValue', () => {
 
     it('去除首尾引号', () => {
         expect(sanitizeUrlValue('"#anchor"')).toBe('#anchor')
+    })
+})
+
+describe('sanitizeChapterHtml', () => {
+    it('剥离 height=0 属性', () => {
+        const { htmlContent } = sanitizeChapterHtml('<img src="vitra-res://a.png" height="0" width="100" />')
+        expect(htmlContent).toContain('width="100"')
+        expect(htmlContent).not.toContain('height="0"')
+    })
+
+    it('保留非零 height 属性', () => {
+        const { htmlContent } = sanitizeChapterHtml('<img src="vitra-res://a.png" height="240" width="100" />')
+        expect(htmlContent).toContain('height="240"')
     })
 })

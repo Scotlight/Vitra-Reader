@@ -53,6 +53,6 @@ export function decodeMobiText(data: Uint8Array, encodingCode: number): string {
     const utf8Cjk = (utf8.match(cjkPattern) || []).length
     const primaryMojibake = (primary.match(/[ÃÂæçï¼]/g) || []).length
     const utf8Mojibake = (utf8.match(/[ÃÂæçï¼]/g) || []).length
-    if (utf8Cjk > primaryCjk && utf8Mojibake <= primaryMojibake) return utf8
+    if (utf8Cjk > primaryCjk * 2 && utf8Mojibake <= primaryMojibake) return utf8
     return primary
 }

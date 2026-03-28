@@ -101,6 +101,12 @@ function sanitizeInlineStyleValue(styleValue: string): string {
     return sanitized.trim()
 }
 
+function shouldStripZeroHeight(rawHeight: string): boolean {
+    const normalized = rawHeight.trim().toLowerCase()
+    if (!normalized) return false
+    return /^0+(?:\.0+)?(?:[a-z%]+)?$/.test(normalized)
+}
+
 export function sanitizeStyleSheet(css: string): string {
     let sanitized = css.replace(/\u0000/g, '')
     sanitized = sanitized.replace(/@import\s+(['"]?)\s*(javascript:|vbscript:|data:text\/html|data:application\/xhtml\+xml)[^;]*;?/gi, '')
@@ -172,6 +178,12 @@ function sanitizeWithDomParser(html: string): {
                     element.setAttribute(attribute.name, safeSrcSet)
                     removedAttributeCount += 1
                 }
+                return
+            }
+
+            if (attrName === 'height' && shouldStripZeroHeight(attrValue)) {
+                element.removeAttribute(attribute.name)
+                removedAttributeCount += 1
                 return
             }
 
@@ -303,6 +315,11 @@ function sanitizeWithRegexFallback(html: string): {
                     continue
                 }
                 safeAttrs.push(`style="${escapeHtmlAttribute(safeStyle)}"`)
+                continue
+            }
+
+            if (attrName === 'height' && shouldStripZeroHeight(attrValue)) {
+                removedAttributeCount += 1
                 continue
             }
 
