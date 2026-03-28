@@ -72,13 +72,26 @@ function readUint32FromPayload(payload: Uint8Array): number | null {
 }
 
 function countTrailingEntries(flags: number): number {
-    let value = flags
+    let value = flags >>> 1
     let count = 0
-    while (value > 1) {
-        count += 1
-        value &= value - 2
+    while (value > 0) {
+        count += value & 1
+        value >>>= 1
     }
     return count
+}
+
+function readTrailingEntrySize(data: Uint8Array): number {
+    let size = 0
+    let shift = 0
+    const maxBytes = Math.min(4, data.length)
+    for (let i = 1; i <= maxBytes; i += 1) {
+        const value = data[data.length - i]
+        size |= (value & 0x7F) << shift
+        if ((value & 0x80) !== 0) return size
+        shift += 7
+    }
+    return size
 }
 
 function parseRecordOffsets(view: DataView): number[] {
@@ -188,12 +201,7 @@ function trimTrailingEntries(data: Uint8Array, flags: number): Uint8Array {
     let result = data
     const trailers = countTrailingEntries(flags)
     for (let i = 0; i < trailers && result.length >= 4; i += 1) {
-        const endBytes = result.slice(result.length - 4)
-        let size = 0
-        for (let j = 0; j < endBytes.length; j += 1) {
-            if ((endBytes[j] & 0x80) !== 0) size = 0
-            size = (size << 7) | (endBytes[j] & 0x7F)
-        }
+        const size = readTrailingEntrySize(result)
         if (size <= 0 || size > result.length) break
         result = result.slice(0, result.length - size)
     }
