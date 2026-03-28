@@ -83,13 +83,11 @@ function countTrailingEntries(flags: number): number {
 
 function readTrailingEntrySize(data: Uint8Array): number {
     let size = 0
-    let shift = 0
     const maxBytes = Math.min(4, data.length)
     for (let i = 1; i <= maxBytes; i += 1) {
         const value = data[data.length - i]
-        size |= (value & 0x7F) << shift
+        size = (size << 7) | (value & 0x7F)
         if ((value & 0x80) !== 0) return size
-        shift += 7
     }
     return size
 }
