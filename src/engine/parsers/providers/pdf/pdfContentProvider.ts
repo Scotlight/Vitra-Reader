@@ -8,8 +8,8 @@ import { openPdfDocument, openPdfDocumentWithFallback, promoteLegacyRuntime, sho
 
 const SEARCH_CONTEXT_CHARS = 20
 const ADJACENT_PAGE_DELTA = 1
-const PRERENDER_IDLE_DELAY_MS = 450
-const FAST_FOREGROUND_RENDER_THRESHOLD_MS = 180
+const PRERENDER_IDLE_DELAY_MS = 900
+const FAST_FOREGROUND_RENDER_THRESHOLD_MS = 120
 
 export class PdfContentProvider implements ContentProvider {
     private doc: PdfDocumentProxy | null = null
@@ -25,6 +25,8 @@ export class PdfContentProvider implements ContentProvider {
     private lastForegroundRenderDurationMs: number | null = null
     private prerenderTimerId: number | null = null
     private prerenderPendingPageIndex: number | null = null
+    private firstForegroundPageIndex: number | null = null
+    private hasForegroundNavigation = false
 
     constructor(data: ArrayBuffer) {
         this.sourceBytes = new Uint8Array(data)
@@ -170,6 +172,11 @@ export class PdfContentProvider implements ContentProvider {
         const renderDurationMs = performance.now() - renderStartedAt
         if (source === 'foreground') {
             this.lastForegroundRenderDurationMs = renderDurationMs
+            if (this.firstForegroundPageIndex === null) {
+                this.firstForegroundPageIndex = pageIndex
+            } else if (pageIndex !== this.firstForegroundPageIndex) {
+                this.hasForegroundNavigation = true
+            }
         }
         this.storeRenderedPage(pageIndex, renderedPage)
         const html = this.buildPageHtml(pageIndex, renderedPage)
@@ -208,6 +215,7 @@ export class PdfContentProvider implements ContentProvider {
     }
 
     private scheduleNextPagePrerender(pageIndex: number): void {
+        if (!this.hasForegroundNavigation) return
         const nextPageIndex = pageIndex + ADJACENT_PAGE_DELTA
         if (nextPageIndex < 0 || nextPageIndex >= this.pageCount) return
         if (this.lastForegroundRenderDurationMs === null || this.lastForegroundRenderDurationMs > FAST_FOREGROUND_RENDER_THRESHOLD_MS) {

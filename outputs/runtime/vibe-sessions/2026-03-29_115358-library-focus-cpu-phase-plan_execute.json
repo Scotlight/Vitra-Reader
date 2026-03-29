@@ -1,0 +1,24 @@
+{
+  "sessionId": "2026-03-29_115358-library-focus-cpu",
+  "status": "completed",
+  "changes": [
+    {
+      "file": "src/components/Library/LibraryView.tsx",
+      "summary": "焦点恢复元数据刷新增加并发去重与相等性判断，避免无效状态更新。"
+    },
+    {
+      "file": "src/components/Library/BookGrid.tsx",
+      "summary": "封面读取增加模块级缓存，虚拟网格仅在项目键序变化时重置。"
+    },
+    {
+      "file": "src/engine/parsers/providers/pdf/pdfContentProvider.ts",
+      "summary": "PDF 邻页预渲染改为更保守策略，首个前台页面不再触发预渲染。"
+    }
+  ],
+  "verification": [
+    {
+      "command": "powershell.exe -Command \"npm run build --silent\"",
+      "result": "passed"
+    }
+  ]
+}

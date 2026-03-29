@@ -1,0 +1,30 @@
+{
+  "sessionId": "2026-03-29_115358-library-focus-cpu",
+  "goal": [
+    "消除主页面焦点恢复后的封面闪烁",
+    "定位并收敛打开书籍时的 CPU 热点"
+  ],
+  "deliverable": [
+    "最小且可维护的代码修复",
+    "构建验证结果"
+  ],
+  "constraints": [
+    "不把所有封面重新常驻到 Zustand",
+    "先定位根因，再实施修复",
+    "不保留生产调试噪音"
+  ],
+  "acceptanceCriteria": [
+    "焦点恢复不再出现默认封面回退闪烁",
+    "打开书籍 CPU 热点有明确定位与代码修复",
+    "npm run build --silent 通过"
+  ],
+  "nonGoals": [
+    "不做新的大规模架构重写",
+    "不修改书籍存储模型"
+  ],
+  "autonomyMode": "benchmark_autonomous",
+  "assumptions": [
+    "当前问题可以在库页虚拟网格与阅读器打开链路内收敛",
+    "用户要求每个已解决阶段可提交并推送"
+  ]
+}

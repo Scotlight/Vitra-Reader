@@ -1,0 +1,10 @@
+{
+  "sessionId": "2026-03-29_115358-library-focus-cpu",
+  "date": "2026-03-29",
+  "branch": "main",
+  "task": "library focus cover flicker and open-book cpu",
+  "artifacts": {
+    "requirementDoc": "docs/requirements/2026-03-29-library-focus-cover-and-openbook-cpu.md",
+    "executionPlan": "docs/plans/2026-03-29-library-focus-cover-and-openbook-cpu-execution-plan.md"
+  }
+}

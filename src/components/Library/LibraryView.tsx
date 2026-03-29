@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { motion } from 'framer-motion'
 import { useLibraryStore } from '../../stores/useLibraryStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
@@ -18,6 +18,25 @@ import refreshIcon from '../../assets/icons/refresh.svg'
 import themeIcon from '../../assets/icons/theme.svg'
 import chevronDownIcon from '../../assets/icons/chevron-down.svg'
 import styles from './LibraryView.module.css'
+
+function areStringListsEqual(left: readonly string[], right: readonly string[]): boolean {
+    if (left === right) return true
+    if (left.length !== right.length) return false
+    for (let index = 0; index < left.length; index += 1) {
+        if (left[index] !== right[index]) return false
+    }
+    return true
+}
+
+function areProgressMapsEqual(left: Record<string, number>, right: Record<string, number>): boolean {
+    const leftKeys = Object.keys(left)
+    const rightKeys = Object.keys(right)
+    if (leftKeys.length !== rightKeys.length) return false
+    for (const key of leftKeys) {
+        if (left[key] !== right[key]) return false
+    }
+    return true
+}
 
 export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { location: string; searchText?: string }) => void }) => {
     const { books, importBook, isLoading, loadBooks, removeBook } = useLibraryStore()
@@ -65,6 +84,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
     })
     const [showBookPropertiesModal, setShowBookPropertiesModal] = useState<string | null>(null)
     const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null)
+    const metaRefreshTaskRef = useRef<Promise<void> | null>(null)
 
     const showInfoDialog = (message: string, title = '提示') => {
         setDialogState({
@@ -147,36 +167,56 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
 
     useEffect(() => {
         const loadAllMeta = async () => {
-            const [allProgress, favEntry, trashEntry, bookmarks, highlights] = await Promise.all([
-                db.progress.toArray(),
-                db.settings.get('favoriteBookIds'),
-                db.settings.get('trashBookIds'),
-                db.bookmarks.toArray(),
-                db.highlights.toArray(),
-            ])
-            const map = allProgress.reduce<Record<string, number>>((acc, item) => {
-                acc[item.bookId] = Math.round((item.percentage || 0) * 100)
-                return acc
-            }, {})
-            setProgressMap(map)
-            const favValue = favEntry?.value
-            setFavoriteBookIds(Array.isArray(favValue) ? favValue.map((item) => String(item)) : [])
-            const trashValue = trashEntry?.value
-            setTrashBookIds(Array.isArray(trashValue) ? trashValue.map((item) => String(item)) : [])
-            setNoteBookIds(Array.from(new Set(bookmarks.map((item) => item.bookId))))
-            setHighlightBookIds(Array.from(new Set(highlights.map((item) => item.bookId))))
-            setAllHighlights(highlights)
-            setAllBookmarks(bookmarks)
+            if (metaRefreshTaskRef.current) return metaRefreshTaskRef.current
+
+            const task = (async () => {
+                const [allProgress, favEntry, trashEntry, bookmarks, highlights] = await Promise.all([
+                    db.progress.toArray(),
+                    db.settings.get('favoriteBookIds'),
+                    db.settings.get('trashBookIds'),
+                    db.bookmarks.toArray(),
+                    db.highlights.toArray(),
+                ])
+                const map = allProgress.reduce<Record<string, number>>((acc, item) => {
+                    acc[item.bookId] = Math.round((item.percentage || 0) * 100)
+                    return acc
+                }, {})
+                const favValue = favEntry?.value
+                const nextFavoriteBookIds = Array.isArray(favValue) ? favValue.map((item) => String(item)) : []
+                const trashValue = trashEntry?.value
+                const nextTrashBookIds = Array.isArray(trashValue) ? trashValue.map((item) => String(item)) : []
+                const nextNoteBookIds = Array.from(new Set(bookmarks.map((item) => item.bookId)))
+                const nextHighlightBookIds = Array.from(new Set(highlights.map((item) => item.bookId)))
+
+                setProgressMap((previous) => (areProgressMapsEqual(previous, map) ? previous : map))
+                setFavoriteBookIds((previous) => (areStringListsEqual(previous, nextFavoriteBookIds) ? previous : nextFavoriteBookIds))
+                setTrashBookIds((previous) => (areStringListsEqual(previous, nextTrashBookIds) ? previous : nextTrashBookIds))
+                setNoteBookIds((previous) => (areStringListsEqual(previous, nextNoteBookIds) ? previous : nextNoteBookIds))
+                setHighlightBookIds((previous) => (areStringListsEqual(previous, nextHighlightBookIds) ? previous : nextHighlightBookIds))
+                setAllHighlights(highlights)
+                setAllBookmarks(bookmarks)
+            })().finally(() => {
+                if (metaRefreshTaskRef.current === task) {
+                    metaRefreshTaskRef.current = null
+                }
+            })
+
+            metaRefreshTaskRef.current = task
+            return task
         }
+
         void loadAllMeta()
-        const handleFocus = () => { void loadAllMeta() }
+        const handleFocus = () => {
+            if (document.visibilityState === 'hidden') return
+            void loadAllMeta()
+        }
         document.addEventListener('visibilitychange', handleFocus)
         window.addEventListener('focus', handleFocus)
         return () => {
             document.removeEventListener('visibilitychange', handleFocus)
             window.removeEventListener('focus', handleFocus)
         }
-    }, [books])
+    }, [])
 
     useEffect(() => {
         const closeMenu = () => {

@@ -97,14 +97,30 @@ function resolveSortTargetKey(clientX: number, clientY: number, sortContextKey: 
     return target.dataset.sortKey || null
 }
 
+const bookCoverCache = new Map<string, string | null>()
+
 function LazyCoverImage({ bookId, format, alt, compact }: { bookId: string; format?: string; alt: string; compact?: boolean }) {
-    const [cover, setCover] = useState<string | null>(null)
-    const [loaded, setLoaded] = useState(false)
+    const [cover, setCover] = useState<string | null>(() => bookCoverCache.get(bookId) ?? null)
+    const [loaded, setLoaded] = useState(() => Boolean(bookCoverCache.get(bookId)))
 
     useEffect(() => {
         let cancelled = false
+        const cachedCover = bookCoverCache.has(bookId) ? (bookCoverCache.get(bookId) ?? null) : null
+        if (cachedCover) {
+            setCover(cachedCover)
+            setLoaded(true)
+        } else if (bookCoverCache.has(bookId)) {
+            setCover(null)
+            setLoaded(false)
+        }
+
         getBookCover(bookId).then((url) => {
-            if (!cancelled) setCover(url ?? null)
+            if (cancelled) return
+            const nextCover = url ?? null
+            const previousCachedCover = bookCoverCache.has(bookId) ? (bookCoverCache.get(bookId) ?? null) : null
+            bookCoverCache.set(bookId, nextCover)
+            setCover((previous) => (previous === nextCover ? previous : nextCover))
+            setLoaded(Boolean(nextCover) && previousCachedCover === nextCover)
         })
         return () => { cancelled = true }
     }, [bookId])
@@ -119,6 +135,11 @@ function LazyCoverImage({ bookId, format, alt, compact }: { bookId: string; form
             className={compact ? undefined : styles.coverImage}
             style={{ opacity: loaded ? 1 : 0, transition: 'opacity 0.15s', width: '100%', height: '100%', objectFit: 'cover' }}
             onLoad={() => setLoaded(true)}
+            onError={() => {
+                bookCoverCache.set(bookId, null)
+                setCover(null)
+                setLoaded(false)
+            }}
         />
     )
 }
@@ -256,6 +277,10 @@ function VirtualItemGrid({
     const [layoutResetToken, forceLayoutReset] = useReducer((value: number) => value + 1, 0)
     const [draggingKey, setDraggingKey] = useState<string | null>(null)
     const suppressClickUntilRef = useRef(0)
+    const itemSignature = useMemo(
+        () => items.map((item) => `${item.type}:${item.key}`).join('\u001f'),
+        [items],
+    )
     const sortGestureRef = useRef<{
         timeoutId: number | null
         active: boolean
@@ -296,7 +321,7 @@ function VirtualItemGrid({
         setMeasuredRowHeights(new Map())
         setLayout(null)
         resetSortGesture()
-    }, [items])
+    }, [itemSignature])
 
     useEffect(() => resetSortGesture, [])
 
