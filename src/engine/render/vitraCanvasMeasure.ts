@@ -1,5 +1,6 @@
 import type { BlockMetrics } from '../types/vitraPagination'
 import { clampNumber } from '../../utils/mathUtils'
+import { estimateLineWidth, invalidateCharWidthTable } from './charWidthTable'
 
 const COMPLEX_LAYOUT_SELECTOR = 'img,svg,video,audio,canvas,table,math,pre,code,figure,iframe,object,embed,input,textarea,select,button'
 const NON_BREAKABLE_TAGS = new Set(['img', 'svg', 'video', 'audio', 'canvas', 'table', 'pre', 'code', 'figure', 'math'])
@@ -16,6 +17,7 @@ const STYLE_FACTOR_CACHE = new Map<string, number>()
  */
 export function invalidateCanvasMeasureCache(): void {
     STYLE_FACTOR_CACHE.clear()
+    invalidateCharWidthTable()
 }
 
 interface CanvasProgressPayload {
@@ -130,6 +132,8 @@ function estimateTextLines(
     text: string,
     contentWidth: number,
     letterSpacing: number,
+    fontSize: number,
+    font: string,
 ): number {
     if (!text) return 1
     const lines = text.split('\n')
@@ -137,7 +141,7 @@ function estimateTextLines(
 
     for (const line of lines) {
         const source = line.length > 0 ? line : ' '
-        const width = ctx.measureText(source).width + Math.max(0, source.length - 1) * letterSpacing
+        const width = estimateLineWidth(ctx, source, fontSize, font) + Math.max(0, source.length - 1) * letterSpacing
         totalLines += Math.max(1, Math.ceil(width / contentWidth))
     }
     return Math.max(1, totalLines)
@@ -233,7 +237,7 @@ function collectCanvasMetric(
         }
     }
 
-    const lines = estimateTextLines(state.context, normalizedText, contentWidth, letterSpacing)
+    const lines = estimateTextLines(state.context, normalizedText, contentWidth, letterSpacing, Math.max(8, parseCssNumber(style.fontSize, 16)), font)
     const rawHeight = Math.max(1, lines * lineHeight + blockChromeHeight)
     const styleKey = `${font}|${lineHeight}|${letterSpacing}|${contentWidth}|${blockChromeHeight}`
     const factor = resolveCorrectionFactor(styleKey, rawHeight, element, state, normalizedText)
