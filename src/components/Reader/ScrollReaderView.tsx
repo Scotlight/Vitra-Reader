@@ -104,7 +104,7 @@ const HIGHLIGHT_IDLE_TIMEOUT_MS = 600;
 const CHAPTER_PLACEHOLDER_MIN_HEIGHT_PX = 240;
 const CHAPTER_PLACEHOLDER_DEFAULT_HEIGHT_PX = 800;
 const SCROLL_HEDGE_EPSILON_PX = 0.1;
-const INSTANT_SCROLL_BEHAVIOR = 'instant' as any;
+const INSTANT_SCROLL_BEHAVIOR: ScrollBehavior = 'auto';
 const RANGE_HYDRATION_OVERSCAN_SEGMENTS = 3;
 const RANGE_HYDRATION_PRELOAD_MARGIN_PX = 720;
 const GLOBAL_VIRTUAL_SEGMENT_BUDGET = 18;
@@ -178,6 +178,12 @@ function markChapterAsMounted(chapterEl: HTMLElement, height: number): void {
     chapterEl.style.height = '';
     chapterEl.style.minHeight = '';
     chapterEl.removeAttribute('data-chapter-state');
+}
+
+function releaseChapterSegmentNodes(chapterEl: HTMLElement): void {
+    chapterEl.querySelectorAll('section[data-shadow-segment-index]').forEach((segmentEl) => {
+        segmentPool.release(segmentEl as HTMLElement);
+    });
 }
 
 function getVectorContentContainer(node: ParentNode | null): HTMLElement | null {
@@ -678,6 +684,18 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         unobserveResizeNode(chapterEl);
     }, [unobserveResizeNode]);
 
+    const cleanupMountedChapterDom = useCallback((chapterId: string, chapterEl: HTMLElement) => {
+        cleanupVirtualChapterRuntime(chapterId);
+        unobserveChapterResizeNodes(chapterEl);
+        releaseChapterSegmentNodes(chapterEl);
+        releaseMediaResources(chapterEl);
+    }, [cleanupVirtualChapterRuntime, unobserveChapterResizeNodes]);
+
+    const collapseChapterDomToPlaceholder = useCallback((chapterId: string, chapterEl: HTMLElement, height: number) => {
+        cleanupMountedChapterDom(chapterId, chapterEl);
+        markChapterAsPlaceholder(chapterEl, height);
+    }, [cleanupMountedChapterDom]);
+
     const resetResizeObservers = useCallback(() => {
         observedResizeNodesRef.current.forEach((node) => {
             resizeObserverRef.current?.unobserve(node);
@@ -927,13 +945,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             vectorReloadTargets.forEach((chapter) => {
                 const chapterEl = listEl.querySelector(`[data-chapter-id="${chapter.id}"]`) as HTMLElement | null;
                 if (!chapterEl) return;
-                cleanupVirtualChapterRuntime(chapter.id);
-                unobserveChapterResizeNodes(chapterEl);
-                chapterEl.querySelectorAll('section[data-shadow-segment-index]').forEach((segmentEl) => {
-                    segmentPool.release(segmentEl as HTMLElement);
-                });
-                releaseMediaResources(chapterEl);
-                markChapterAsPlaceholder(chapterEl, chapter.height);
+                collapseChapterDomToPlaceholder(chapter.id, chapterEl, chapter.height);
             });
         }
 
@@ -975,7 +987,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 });
             });
         }
-    }, [cleanupVirtualChapterRuntime, loadChapter, readerStyles, renderedHighlightsRef, unobserveChapterResizeNodes]);
+    }, [collapseChapterDomToPlaceholder, loadChapter, readerStyles, renderedHighlightsRef]);
 
     const runPredictivePrefetch = useCallback(() => {
         if (isUserScrollingRef.current) return;
@@ -1312,14 +1324,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 if (listEl) {
                     const domEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
                     if (domEl) {
-                        cleanupVirtualChapterRuntime(ch.id);
-                        // 先 unobserve 再 release，避免清空段内容时 ResizeObserver 记录额外高度变动
-                        unobserveChapterResizeNodes(domEl);
-                        domEl.querySelectorAll('section[data-shadow-segment-index]').forEach(seg => {
-                            segmentPool.release(seg as HTMLElement);
-                        });
-                        releaseMediaResources(domEl);
-                        markChapterAsPlaceholder(domEl, ch.height);
+                        collapseChapterDomToPlaceholder(ch.id, domEl, ch.height);
                     }
                 }
                 // Free resources
@@ -1349,7 +1354,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         const timer = setTimeout(checkUnload, UNLOAD_COOLDOWN_MS);
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [cleanupVirtualChapterRuntime, currentSpineIndex, provider, unobserveChapterResizeNodes]);
+    }, [collapseChapterDomToPlaceholder, currentSpineIndex, provider]);
 
     // ── Current Chapter Detection ──
 
@@ -1593,13 +1598,8 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 const el = node as HTMLElement;
                 const chapterId = el.getAttribute('data-chapter-id');
                 if (chapterId) {
-                    cleanupVirtualChapterRuntime(chapterId);
+                    cleanupMountedChapterDom(chapterId, el);
                 }
-                // 释放段池中的段元素
-                el.querySelectorAll('[data-shadow-segment-index]').forEach(seg => {
-                    segmentPool.release(seg as HTMLElement);
-                });
-                releaseMediaResources(el);
                 el.remove();
             });
         }
@@ -1619,7 +1619,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         loadChapter(targetSpineIndex, 'initial');
     }, [
         cancelIdlePrefetch,
-        cleanupVirtualChapterRuntime,
+        cleanupMountedChapterDom,
         loadChapter,
         onChapterChange,
         revealSearchInChapter,

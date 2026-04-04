@@ -1,0 +1,14 @@
+{
+  "runId": "20260404-212016-vector-virtualization-batch-11",
+  "stage": "plan_execute",
+  "status": "completed",
+  "changedFiles": [
+    "src/components/Reader/ScrollReaderView.tsx",
+    "docs/requirements/2026-04-04-vector-virtualization-batch-11.md",
+    "docs/plans/2026-04-04-vector-virtualization-batch-11-execution-plan.md"
+  ],
+  "implemented": [
+    "去掉 ScrollReaderView 中最后一个生产 any。",
+    "抽取并复用章节 DOM 清理辅助函数，统一样式切换、章节卸载和整页跳转清理路径。"
+  ]
+}

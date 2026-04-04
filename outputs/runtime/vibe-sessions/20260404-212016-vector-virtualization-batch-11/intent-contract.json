@@ -1,0 +1,30 @@
+{
+  "runId": "20260404-212016-vector-virtualization-batch-11",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续推进阅读器主链代码卫生，去掉剩余生产 any 并收口 ScrollReaderView 的重复 DOM 清理逻辑。",
+  "deliverable": [
+    "去掉 ScrollReaderView 中最后一个生产 any",
+    "统一的章节 DOM 清理辅助函数",
+    "第十一批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前十一批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "阅读器主链范围不再存在生产 any",
+    "ScrollReaderView 的章节 DOM 清理逻辑不再多处复制",
+    "类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不清理测试代码里的 any",
+    "本轮不修改未跟踪审计文档"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}
