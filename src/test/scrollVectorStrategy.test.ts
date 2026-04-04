@@ -4,6 +4,7 @@ import type { SegmentMeta } from '../engine/types/vectorRender';
 import {
     canRestoreWindowedVectorPlaceholder,
     computeGlobalVirtualSegmentMountPlan,
+    partitionStyleChangeTargets,
     shouldBypassShadowQueueForSegmentMetas,
 } from '../components/Reader/scrollVectorStrategy';
 
@@ -49,6 +50,39 @@ describe('scrollVectorStrategy', () => {
         ];
 
         expect(shouldBypassShadowQueueForSegmentMetas(segmentMetas)).toBe(true);
+    });
+
+    it('样式切换时把向量章节分到重新预处理队列，普通章节保留常规重渲染', () => {
+        const partition = partitionStyleChangeTargets([
+            {
+                id: 'ch-0',
+                spineIndex: 0,
+                status: 'mounted' as const,
+                segmentMetas: [
+                    createSegment(0, 180_000, 320),
+                    createSegment(1, 180_000, 320),
+                    createSegment(2, 180_000, 320),
+                ],
+            },
+            {
+                id: 'ch-1',
+                spineIndex: 1,
+                status: 'ready' as const,
+                segmentMetas: [createSegment(0, 40_000, 240)],
+            },
+            {
+                id: 'ch-2',
+                spineIndex: 2,
+                status: 'placeholder' as const,
+                segmentMetas: [
+                    createSegment(0, 180_000, 320),
+                    createSegment(1, 180_000, 320),
+                ],
+            },
+        ]);
+
+        expect(partition.vectorReloadTargets.map((chapter) => chapter.spineIndex)).toEqual([0]);
+        expect(partition.shadowRerenderTargets.map((chapter) => chapter.spineIndex)).toEqual([1]);
     });
 
     it('跨章节预算控制只保留最接近视口的全局段集合', () => {

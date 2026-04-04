@@ -1,0 +1,30 @@
+{
+  "runId": "20260404-194825-vector-virtualization-batch-7",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续推进向量化虚拟渲染，修正样式切换后的向量章节重建。",
+  "deliverable": [
+    "样式切换分流纯函数",
+    "向量章节的重新预处理链路",
+    "第七批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前七批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "向量章节样式切换后不再沿用旧 segmentMetas",
+    "普通章节仍然走 shadowQueue",
+    "测试、类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不修改未跟踪审计文档",
+    "本轮不处理 worker 同步降级"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe 继续`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}

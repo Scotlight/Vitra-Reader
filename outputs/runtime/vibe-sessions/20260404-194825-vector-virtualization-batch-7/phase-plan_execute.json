@@ -1,0 +1,17 @@
+{
+  "runId": "20260404-194825-vector-virtualization-batch-7",
+  "stage": "plan_execute",
+  "status": "completed",
+  "changedFiles": [
+    "src/components/Reader/ScrollReaderView.tsx",
+    "src/components/Reader/scrollVectorStrategy.ts",
+    "src/test/scrollVectorStrategy.test.ts",
+    "docs/requirements/2026-04-04-vector-virtualization-batch-7.md",
+    "docs/plans/2026-04-04-vector-virtualization-batch-7-execution-plan.md"
+  ],
+  "implemented": [
+    "样式切换时把向量章节与普通章节分流处理。",
+    "向量章节降为 placeholder 后重新调用 loadChapter 生成新样式下的 segmentMetas。",
+    "普通章节继续沿用 shadowQueue 重渲染。"
+  ]
+}

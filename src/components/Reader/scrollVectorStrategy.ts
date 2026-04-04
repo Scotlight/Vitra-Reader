@@ -11,6 +11,11 @@ export interface WindowedVectorCacheCandidate {
     vectorStyleKey?: string;
 }
 
+export interface StyleChangeChapterCandidate extends WindowedVectorCacheCandidate {
+    spineIndex: number;
+    id: string;
+}
+
 export interface VirtualMountPlanChapter {
     chapterId: string;
     chapterTop: number;
@@ -59,6 +64,34 @@ export function canRestoreWindowedVectorPlaceholder(
         && chapter.segmentMetas.length > 0
         && chapter.vectorStyleKey === currentReaderStyleKey,
     );
+}
+
+export function partitionStyleChangeTargets<T extends StyleChangeChapterCandidate>(
+    chapters: readonly T[],
+): {
+    vectorReloadTargets: T[];
+    shadowRerenderTargets: T[];
+} {
+    const vectorReloadTargets: T[] = [];
+    const shadowRerenderTargets: T[] = [];
+
+    chapters.forEach((chapter) => {
+        if (chapter.status !== 'mounted' && chapter.status !== 'ready') {
+            return;
+        }
+
+        if (shouldBypassShadowQueueForSegmentMetas(chapter.segmentMetas)) {
+            vectorReloadTargets.push(chapter);
+            return;
+        }
+
+        shadowRerenderTargets.push(chapter);
+    });
+
+    return {
+        vectorReloadTargets,
+        shadowRerenderTargets,
+    };
 }
 
 function resolveSegmentHeight(segment: SegmentMeta): number {

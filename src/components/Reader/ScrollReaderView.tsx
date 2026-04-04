@@ -28,6 +28,7 @@ import { captureAnchorInfo, calculateAnchorDelta, findBestAnchor } from '../../u
 import {
     canRestoreWindowedVectorPlaceholder,
     computeGlobalVirtualSegmentMountPlan,
+    partitionStyleChangeTargets,
     shouldBypassShadowQueueForSegmentMetas,
 } from './scrollVectorStrategy';
 import styles from './ScrollReaderView.module.css';
@@ -291,6 +292,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     // rAF 批处理：收集同帧内完成的所有 shadow-ready 事件，合并为一次 setChapters
     const pendingReadyRef = useRef<Array<{ spineIndex: number; node: HTMLElement; height: number }>>([]);
     const pendingReadyRafRef = useRef<number | null>(null);
+    const styleReloadRafRef = useRef<number | null>(null);
     const pendingDeltaRef = useRef(0);
     const flushRafRef = useRef<number | null>(null);
     const unlockAdjustingRafRef = useRef<number | null>(null);
@@ -900,13 +902,40 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         );
         if (rerenderTargets.length === 0) return;
 
+        const {
+            vectorReloadTargets,
+            shadowRerenderTargets,
+        } = partitionStyleChangeTargets(rerenderTargets);
+        if (vectorReloadTargets.length === 0 && shadowRerenderTargets.length === 0) return;
+
         const rerenderIndexes = new Set(rerenderTargets.map((chapter) => chapter.spineIndex));
-        const rerenderQueue = rerenderTargets.map((chapter) => ({
+        const vectorReloadIndexes = new Set(vectorReloadTargets.map((chapter) => chapter.spineIndex));
+        const shadowRerenderIndexes = new Set(shadowRerenderTargets.map((chapter) => chapter.spineIndex));
+        const rerenderQueue = shadowRerenderTargets.map((chapter) => ({
             ...chapter,
             domNode: null,
             vectorStyleKey: nextKey,
             status: 'shadow-rendering' as const,
         }));
+
+        vectorReloadTargets.forEach((chapter) => {
+            chapterVectorsRef.current.delete(chapter.id);
+        });
+
+        const listEl = chapterListRef.current;
+        if (listEl) {
+            vectorReloadTargets.forEach((chapter) => {
+                const chapterEl = listEl.querySelector(`[data-chapter-id="${chapter.id}"]`) as HTMLElement | null;
+                if (!chapterEl) return;
+                cleanupVirtualChapterRuntime(chapter.id);
+                unobserveChapterResizeNodes(chapterEl);
+                chapterEl.querySelectorAll('section[data-shadow-segment-index]').forEach((segmentEl) => {
+                    segmentPool.release(segmentEl as HTMLElement);
+                });
+                releaseMediaResources(chapterEl);
+                markChapterAsPlaceholder(chapterEl, chapter.height);
+            });
+        }
 
         renderedHighlightsRef.current.clear();
         pendingReadyRef.current = pendingReadyRef.current.filter((item) => !rerenderIndexes.has(item.spineIndex));
@@ -915,11 +944,38 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             ...rerenderQueue,
         ]);
         setChapters((prev) => prev.map((chapter) =>
-            rerenderIndexes.has(chapter.spineIndex)
+            vectorReloadIndexes.has(chapter.spineIndex)
+                ? {
+                    ...chapter,
+                    htmlContent: '',
+                    htmlFragments: [],
+                    segmentMetas: undefined,
+                    domNode: null,
+                    height: resolveChapterPlaceholderHeight(chapter.height),
+                    vectorStyleKey: nextKey,
+                    status: 'placeholder' as const,
+                }
+                : shadowRerenderIndexes.has(chapter.spineIndex)
                 ? { ...chapter, domNode: null, vectorStyleKey: nextKey, status: 'shadow-rendering' as const }
                 : chapter
         ));
-    }, [readerStyles, renderedHighlightsRef]);
+
+        if (styleReloadRafRef.current !== null) {
+            cancelAnimationFrame(styleReloadRafRef.current);
+            styleReloadRafRef.current = null;
+        }
+        if (vectorReloadTargets.length > 0) {
+            styleReloadRafRef.current = requestAnimationFrame(() => {
+                styleReloadRafRef.current = null;
+                vectorReloadTargets.forEach((chapter) => {
+                    const direction = chapter.spineIndex < lastKnownAnchorIndexRef.current
+                        ? 'prev'
+                        : (chapter.spineIndex > lastKnownAnchorIndexRef.current ? 'next' : 'initial');
+                    void loadChapter(chapter.spineIndex, direction);
+                });
+            });
+        }
+    }, [cleanupVirtualChapterRuntime, loadChapter, readerStyles, renderedHighlightsRef, unobserveChapterResizeNodes]);
 
     const runPredictivePrefetch = useCallback(() => {
         if (isUserScrollingRef.current) return;
@@ -1015,6 +1071,10 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             if (pendingReadyRafRef.current !== null) {
                 cancelAnimationFrame(pendingReadyRafRef.current);
                 pendingReadyRafRef.current = null;
+            }
+            if (styleReloadRafRef.current !== null) {
+                cancelAnimationFrame(styleReloadRafRef.current);
+                styleReloadRafRef.current = null;
             }
             if (virtualMeasureRafRef.current !== null) {
                 cancelAnimationFrame(virtualMeasureRafRef.current);
