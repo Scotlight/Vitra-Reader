@@ -65,6 +65,31 @@ const HYDRATE_MEDIA_MAX_TRACKED_IMAGES = 4;
 /** 模块级段 DOM 节点池单例 */
 export const segmentPool = new SegmentDomPool();
 
+/** 提前触发图片加载，让浏览器在 measure/render 阶段之前开始下载 */
+const IMG_SRC_PATTERN = /<img[^>]+src=["']([^"']+)["']/gi;
+const PREFETCH_MAX_IMAGES = 12;
+const prefetchedUrls = new Set<string>();
+
+function prefetchImagesFromHtml(html: string): void {
+  IMG_SRC_PATTERN.lastIndex = 0;
+  let count = 0;
+  let match: RegExpExecArray | null;
+  while ((match = IMG_SRC_PATTERN.exec(html)) !== null && count < PREFETCH_MAX_IMAGES) {
+    const src = match[1];
+    if (!src || prefetchedUrls.has(src) || src.startsWith('data:')) continue;
+    prefetchedUrls.add(src);
+    // 使用 <link rel="prefetch"> 让浏览器后台加载，不阻塞主线程
+    const link = document.createElement('link');
+    link.rel = 'prefetch';
+    link.as = 'image';
+    link.href = src;
+    document.head.appendChild(link);
+    count++;
+  }
+  // 限制 prefetchedUrls 集合大小
+  if (prefetchedUrls.size > 500) prefetchedUrls.clear();
+}
+
 interface ChapterVectorSegment {
   index: number;
   nodes: ChildNode[];
@@ -80,6 +105,7 @@ interface ShadowRenderContext {
   vectorSegments: ChapterVectorSegment[];
   segmentEls: HTMLElement[];
   initialSegmentCount: number;
+  windowedVirtualized: boolean;
 }
 
 async function yieldToBrowser(): Promise<void> {
@@ -262,27 +288,11 @@ async function appendHtmlFragmentsChunked(
 function normalizeHtmlFragments(
   htmlFragments: readonly string[] | undefined,
   htmlContent: string,
-  segmentMetas?: readonly SegmentMeta[],
 ): readonly string[] {
   if (!htmlFragments || htmlFragments.length === 0) {
-    if (segmentMetas && segmentMetas.length > 0) {
-      return segmentMetas
-        .map((segment) => segment.htmlContent)
-        .filter((fragment) => fragment.length > 0);
-    }
     return [htmlContent];
   }
   return htmlFragments.filter((fragment) => fragment.length > 0);
-}
-
-function getSegmentMetaTotalChars(segmentMetas?: readonly SegmentMeta[]): number {
-  if (!segmentMetas || segmentMetas.length === 0) return 0;
-  return segmentMetas.reduce((total, segment) => total + segment.charCount, 0);
-}
-
-function hasSegmentMetaMedia(segmentMetas?: readonly SegmentMeta[]): boolean {
-  if (!segmentMetas || segmentMetas.length === 0) return false;
-  return segmentMetas.some((segment) => segment.hasMedia);
 }
 
 function hasLayoutSensitiveMedia(html: string): boolean {
@@ -470,7 +480,7 @@ export function ShadowRenderer({
             return {
               cleanedHtml: htmlContent,
               processedStyles: externalStyles,
-              fragments: normalizeHtmlFragments(htmlFragments, htmlContent, segmentMetas),
+              fragments: normalizeHtmlFragments(htmlFragments, htmlContent),
             };
           }
           return buildLocalProcessedPayload(htmlContent, externalStyles, chapterId);
@@ -479,13 +489,12 @@ export function ShadowRenderer({
         const cleanedHtml = processed.cleanedHtml;
         const processedStyles = processed.processedStyles;
         const normalizedFragments = processed.fragments;
-        const chapterSize = cleanedHtml.length > 0
-          ? cleanedHtml.length
-          : getSegmentMetaTotalChars(segmentMetas);
+        const chapterSize = cleanedHtml.length;
         const isLargeChapter = chapterSize >= LARGE_CHAPTER_HTML_THRESHOLD;
-        const mediaSensitiveChapter = cleanedHtml.length > 0
-          ? hasLayoutSensitiveMedia(cleanedHtml)
-          : hasSegmentMetaMedia(segmentMetas);
+        const mediaSensitiveChapter = hasLayoutSensitiveMedia(cleanedHtml);
+
+        // 资源预热：在 measure 阶段之前提前触发图片加载
+        prefetchImagesFromHtml(cleanedHtml);
 
         const vectorSegments = await runVitraRenderStage(trace, 'measure', () => {
           if (mode !== 'scroll' || !isLargeChapter) return [];
@@ -526,12 +535,19 @@ export function ShadowRenderer({
           const contentDiv = document.createElement('div');
           contentDiv.style.display = 'flow-root';
           const canUseVectorized = vectorPlan.enabled;
+          const isWorkerVectorized = Boolean(mode === 'scroll' && segmentMetas && segmentMetas.length > 0 && canUseVectorized);
           const segmentEls: HTMLElement[] = [];
           const initialSegmentCount = mediaSensitiveChapter
             ? vectorSegments.length
             : vectorPlan.initialSegmentCount;
 
-          if (canUseVectorized) {
+          if (isWorkerVectorized) {
+            chapterWrapper.setAttribute('data-vitra-vectorized', 'true');
+            contentDiv.setAttribute('data-vitra-vector-content', 'true');
+            contentDiv.style.position = 'relative';
+            contentDiv.style.height = `${Math.max(1, vectorSegments.reduce((sum, segment) => sum + segment.estimatedHeight, 0))}px`;
+            contentDiv.style.minHeight = contentDiv.style.height;
+          } else if (canUseVectorized) {
             vectorSegments.forEach((segment, segmentIndex) => {
               const segmentEl = segmentPool.acquire();
               segmentEl.setAttribute('data-shadow-segment-index', String(segmentIndex));
@@ -613,6 +629,7 @@ export function ShadowRenderer({
             vectorSegments,
             segmentEls,
             initialSegmentCount,
+            windowedVirtualized: isWorkerVectorized,
           };
         });
 
@@ -625,13 +642,15 @@ export function ShadowRenderer({
             vectorSegments: activeSegments,
             segmentEls: activeSegmentEls,
             initialSegmentCount: activeInitialSegmentCount,
+            windowedVirtualized,
           } = renderContext;
 
           if (!canUseVectorized || activeSegments.length <= activeInitialSegmentCount) return;
+          if (windowedVirtualized) return;
 
           // 若 segmentMetas 存在（Worker路径），跳过全量 rIC 循环，交由 ScrollReaderView IO 驱动
-          const isWorkerVectorized = segmentMetas && segmentMetas.length > 0;
-          if (isWorkerVectorized) {
+          const shouldDeferHydration = segmentMetas && segmentMetas.length > 0;
+          if (shouldDeferHydration) {
             console.log(
               `[ShadowRenderer] Chapter "${chapterId}" using IO-driven hydration (${activeSegments.length - activeInitialSegmentCount} deferred segments)`,
             );

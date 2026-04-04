@@ -31,6 +31,7 @@ describe('estimateLineWidth - ASCII 查表', () => {
         expect(ctx.measureText).not.toHaveBeenCalled()
         expect(width1).toBeGreaterThan(0)
         expect(width2).toBeGreaterThan(0)
+        expect(callsAfterBuild).toBeGreaterThan(0)
         // 采样用 0.6px@1px，实际宽度 = 0.6 * 16 * charCount
         expect(width2).toBeCloseTo(0.6 * 16 * 5, 1)
     })

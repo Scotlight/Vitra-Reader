@@ -1,0 +1,30 @@
+{
+  "runId": "20260404-105031-vector-virtualization-batch-1",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "按快照恢复代码，并推进真正的向量化虚拟渲染主链。",
+  "deliverable": [
+    "真正虚拟化的滚动大章节主链",
+    "需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "保留快照恢复结果",
+    "不改分页模式",
+    "只提交本轮相关文件"
+  ],
+  "acceptanceCriteria": [
+    "大章节滚动路径只挂载可视范围段",
+    "段离开范围后回收到对象池",
+    "TypeScript 检查通过",
+    "生产构建通过"
+  ],
+  "nonGoals": [
+    "本轮不重写全文搜索索引",
+    "本轮不重写高亮索引"
+  ],
+  "assumptions": [
+    "用户重复发出 `$vibe` 且要求“做完几个就推送”，视为允许按批次自主推进并提交。",
+    "本轮提交只包含代码主链和运行时文档，不包含调查期间生成的未跟踪资料。"
+  ]
+}

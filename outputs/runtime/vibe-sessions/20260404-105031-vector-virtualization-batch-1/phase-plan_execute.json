@@ -1,0 +1,14 @@
+{
+  "runId": "20260404-105031-vector-virtualization-batch-1",
+  "stage": "plan_execute",
+  "status": "completed",
+  "changedFiles": [
+    "src/components/Reader/ScrollReaderView.tsx",
+    "src/components/Reader/ShadowRenderer.tsx"
+  ],
+  "implemented": [
+    "ShadowRenderer 的滚动 Worker 向量化路径改为输出虚拟化容器。",
+    "ScrollReaderView 新增 VirtualChapterRuntime、可视范围挂载、节点回收、测量回写。",
+    "搜索跳转在虚拟化章节上增加显式全量物化兼容。"
+  ]
+}

@@ -20,7 +20,7 @@ import {
 const FRAGMENT_TARGET_CHARS = 120_000;
 const FRAGMENT_HARD_MAX_CHARS = 180_000;
 const VECTOR_MIN_SEGMENT_EST_HEIGHT = 96;
-const VECTORIZE_HTML_LENGTH_THRESHOLD = 450_000;
+const VECTORIZE_HTML_LENGTH_THRESHOLD = 150_000;
 
 interface AppendSegmentOptions {
   segments: SegmentMeta[];
@@ -54,11 +54,9 @@ export function preprocessChapterCore(input: ChapterPreprocessInput): ChapterPre
     segmentMetas = vectorizeHtmlToSegmentMetas(cleanedHtml, input.vectorConfig);
   }
 
-  const canUseSegmentPayload = Boolean(segmentMetas && segmentMetas.length > 0);
-
   return {
-    htmlContent: canUseSegmentPayload ? '' : cleanedHtml,
-    htmlFragments: canUseSegmentPayload ? [] : splitHtmlIntoFragments(cleanedHtml),
+    htmlContent: cleanedHtml,
+    htmlFragments: splitHtmlIntoFragments(cleanedHtml),
     externalStyles: scopedStyles,
     removedTagCount: sanitized.removedTagCount,
     removedAttributeCount: sanitized.removedAttributeCount,

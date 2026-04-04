@@ -25,6 +25,7 @@ import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../uti
 import { clampNumber } from '../../utils/mathUtils';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
 import { releaseMediaResources } from '../../utils/mediaResourceCleanup';
+import { captureAnchorInfo, calculateAnchorDelta, findBestAnchor } from '../../utils/anchorDetection';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
@@ -40,6 +41,16 @@ interface LoadedChapter {
     height: number;
     status: 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder';
     mountedAt?: number;
+}
+
+interface VirtualChapterRuntime {
+    chapterId: string;
+    spineIndex: number;
+    chapterEl: HTMLElement;
+    contentEl: HTMLElement;
+    vector: ChapterMetaVector;
+    activeSegmentEls: Map<number, HTMLElement>;
+    fullyMaterialized: boolean;
 }
 
 type PipelineState =
@@ -75,8 +86,8 @@ export interface ScrollReaderHandle {
 // ── Constants ──
 
 const PRELOAD_THRESHOLD_PX = 600;
-// 上方章节保留 30 章缓冲，避免回滚时频繁重挂载导致 CPU 抖动
-const UNLOAD_ABOVE_RADIUS = 30;
+// 上方章节保留 10 章缓冲（占位符高度保持机制可防止坐标系崩溃）
+const UNLOAD_ABOVE_RADIUS = 10;
 // 下方章节超出 3 章时才卸载（下方消失不影响当前 scrollTop）
 const UNLOAD_BELOW_RADIUS = 3;
 const UNLOAD_COOLDOWN_MS = 3000;
@@ -88,9 +99,10 @@ const HIGHLIGHT_IDLE_TIMEOUT_MS = 600;
 const CHAPTER_PLACEHOLDER_MIN_HEIGHT_PX = 240;
 const CHAPTER_PLACEHOLDER_DEFAULT_HEIGHT_PX = 800;
 const SCROLL_HEDGE_EPSILON_PX = 0.1;
-const INSTANT_SCROLL_BEHAVIOR: ScrollBehavior = 'auto';
+const INSTANT_SCROLL_BEHAVIOR = 'instant' as any;
 const RANGE_HYDRATION_OVERSCAN_SEGMENTS = 3;
 const RANGE_HYDRATION_PRELOAD_MARGIN_PX = 720;
+const VIRTUAL_SEGMENT_MIN_HEIGHT_PX = 96;
 
 // ── 物理引擎调参常量 ──
 const PHYSICS_FRICTION_NUMERATOR = 26;
@@ -161,6 +173,39 @@ function markChapterAsMounted(chapterEl: HTMLElement, height: number): void {
     chapterEl.removeAttribute('data-chapter-state');
 }
 
+function getVectorContentContainer(node: ParentNode | null): HTMLElement | null {
+    if (!node) return null;
+    return node.querySelector('[data-vitra-vector-content="true"]') as HTMLElement | null;
+}
+
+function resolveVirtualSegmentHeight(segment: SegmentMeta): number {
+    return Math.max(VIRTUAL_SEGMENT_MIN_HEIGHT_PX, segment.realHeight ?? segment.estimatedHeight);
+}
+
+function updateVirtualContentHeight(contentEl: HTMLElement, vector: ChapterMetaVector): void {
+    const totalHeight = Math.max(1, vector.totalEstimatedHeight);
+    contentEl.style.height = `${totalHeight}px`;
+    contentEl.style.minHeight = `${totalHeight}px`;
+    contentEl.setAttribute('data-vitra-vector-total-height', String(totalHeight));
+}
+
+function updateVirtualSegmentLayout(segmentEl: HTMLElement, segment: SegmentMeta): void {
+    segmentEl.style.transform = `translateY(${Math.max(0, segment.offsetY)}px)`;
+    segmentEl.style.containIntrinsicSize = `${resolveVirtualSegmentHeight(segment)}px`;
+}
+
+function insertVirtualSegmentInOrder(
+    container: HTMLElement,
+    activeSegmentEls: ReadonlyMap<number, HTMLElement>,
+    nextIndex: number,
+    segmentEl: HTMLElement,
+): void {
+    const ordered = Array.from(activeSegmentEls.entries())
+        .sort((a, b) => a[0] - b[0]);
+    const nextSibling = ordered.find(([index]) => index > nextIndex)?.[1] ?? null;
+    container.insertBefore(segmentEl, nextSibling);
+}
+
 
 
 // ── Component ──
@@ -200,6 +245,10 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     const observedResizeNodesRef = useRef<Set<HTMLElement>>(new Set());
     const observedResizeHeightsRef = useRef<WeakMap<HTMLElement, number>>(new WeakMap());
     const chapterVectorsRef = useRef<Map<string, ChapterMetaVector>>(new Map());
+    const virtualChaptersRef = useRef<Map<string, VirtualChapterRuntime>>(new Map());
+    const virtualMeasureQueueRef = useRef<Map<string, { chapterId: string; segIndex: number; el: HTMLElement }>>(new Map());
+    const virtualMeasureRafRef = useRef<number | null>(null);
+    const syncVirtualizedSegmentsRef = useRef<(scrollTop: number, viewportHeight: number) => void>(() => {});
 
     // ── Selection Menu (shared hook) ──
     const getHighlightContainer = useCallback((spineIndex: number): HTMLElement | null => {
@@ -408,6 +457,172 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         resizeObserverRef.current?.unobserve(node);
     }, []);
 
+    const refreshVirtualChapterLayout = useCallback((runtime: VirtualChapterRuntime) => {
+        updateVirtualContentHeight(runtime.contentEl, runtime.vector);
+        runtime.activeSegmentEls.forEach((segmentEl, index) => {
+            const meta = runtime.vector.segments[index];
+            if (!meta) return;
+            updateVirtualSegmentLayout(segmentEl, meta);
+        });
+    }, []);
+
+    const cleanupVirtualChapterRuntime = useCallback((chapterId: string) => {
+        const runtime = virtualChaptersRef.current.get(chapterId);
+        if (!runtime) return;
+
+        runtime.activeSegmentEls.forEach((segmentEl) => {
+            unobserveResizeNode(segmentEl);
+            if (segmentEl.isConnected) {
+                segmentEl.remove();
+            }
+            segmentPool.release(segmentEl);
+        });
+        runtime.activeSegmentEls.clear();
+        virtualChaptersRef.current.delete(chapterId);
+    }, [unobserveResizeNode]);
+
+    const enqueueVirtualMeasurement = useCallback((chapterId: string, segIndex: number, el: HTMLElement) => {
+        virtualMeasureQueueRef.current.set(`${chapterId}:${segIndex}`, { chapterId, segIndex, el });
+        if (virtualMeasureRafRef.current !== null) return;
+
+        virtualMeasureRafRef.current = requestAnimationFrame(() => {
+            virtualMeasureRafRef.current = null;
+            const viewport = viewportRef.current;
+            const queued = Array.from(virtualMeasureQueueRef.current.values());
+            virtualMeasureQueueRef.current.clear();
+            if (!viewport || queued.length === 0) return;
+
+            const anchorElement = findBestAnchor(viewport);
+            const anchorBefore = captureAnchorInfo(anchorElement);
+            const groupedUpdates = new Map<string, Map<number, number>>();
+
+            queued.forEach(({ chapterId, segIndex, el }) => {
+                const runtime = virtualChaptersRef.current.get(chapterId);
+                if (!runtime || !el.isConnected) return;
+                if (!runtime.activeSegmentEls.has(segIndex)) return;
+                const realHeight = Math.max(VIRTUAL_SEGMENT_MIN_HEIGHT_PX, el.getBoundingClientRect().height);
+                let chapterUpdates = groupedUpdates.get(chapterId);
+                if (!chapterUpdates) {
+                    chapterUpdates = new Map<number, number>();
+                    groupedUpdates.set(chapterId, chapterUpdates);
+                }
+                chapterUpdates.set(segIndex, realHeight);
+            });
+
+            if (groupedUpdates.size === 0) return;
+
+            let needsCompensation = false;
+            const heightUpdates = new Map<number, number>();
+            groupedUpdates.forEach((chapterUpdates, chapterId) => {
+                const runtime = virtualChaptersRef.current.get(chapterId);
+                if (!runtime) return;
+                const updates = Array.from(chapterUpdates.entries()).map(([index, realHeight]) => ({ index, realHeight }));
+                const totalDelta = batchUpdateSegmentHeights(runtime.vector, updates);
+                if (Math.abs(totalDelta) > SCROLL_HEDGE_EPSILON_PX) {
+                    needsCompensation = true;
+                }
+                refreshVirtualChapterLayout(runtime);
+                heightUpdates.set(runtime.spineIndex, runtime.vector.totalEstimatedHeight);
+            });
+
+            if (heightUpdates.size > 0) {
+                setChapters((prev) => prev.map((chapter) => {
+                    const nextHeight = heightUpdates.get(chapter.spineIndex);
+                    if (nextHeight === undefined) return chapter;
+                    if (Math.abs(chapter.height - nextHeight) <= SCROLL_HEDGE_EPSILON_PX) return chapter;
+                    return { ...chapter, height: nextHeight };
+                }));
+            }
+
+            if (needsCompensation && anchorBefore.element.isConnected) {
+                const anchorAfter = captureAnchorInfo(anchorBefore.element);
+                const deltaY = calculateAnchorDelta(anchorBefore, anchorAfter);
+                if (Math.abs(deltaY) > SCROLL_HEDGE_EPSILON_PX) {
+                    pendingDeltaRef.current += deltaY;
+                    requestFlush();
+                }
+            }
+
+            syncVirtualizedSegmentsRef.current(viewport.scrollTop, viewport.clientHeight);
+        });
+    }, [refreshVirtualChapterLayout, requestFlush]);
+
+    const mountVirtualSegment = useCallback((runtime: VirtualChapterRuntime, segIndex: number): void => {
+        const meta = runtime.vector.segments[segIndex];
+        if (!meta) return;
+
+        const existing = runtime.activeSegmentEls.get(segIndex);
+        if (existing) {
+            updateVirtualSegmentLayout(existing, meta);
+            return;
+        }
+
+        const segmentEl = segmentPool.acquire();
+        segmentEl.setAttribute('data-shadow-segment-index', String(segIndex));
+        segmentEl.setAttribute('data-shadow-segment-state', 'hydrated');
+        segmentEl.setAttribute('data-vitra-virtual-segment', 'true');
+        segmentEl.setAttribute('data-vitra-chapter-id', runtime.chapterId);
+        segmentEl.style.position = 'absolute';
+        segmentEl.style.top = '0';
+        segmentEl.style.left = '0';
+        segmentEl.style.right = '0';
+        segmentEl.style.width = '100%';
+        segmentEl.style.contain = 'layout style paint';
+        segmentEl.style.minHeight = '0px';
+        segmentEl.innerHTML = meta.htmlContent;
+        updateVirtualSegmentLayout(segmentEl, meta);
+
+        insertVirtualSegmentInOrder(runtime.contentEl, runtime.activeSegmentEls, segIndex, segmentEl);
+        runtime.activeSegmentEls.set(segIndex, segmentEl);
+        observeResizeNode(segmentEl);
+
+        if (!meta.measured || meta.hasMedia) {
+            enqueueVirtualMeasurement(runtime.chapterId, segIndex, segmentEl);
+        }
+    }, [enqueueVirtualMeasurement, observeResizeNode]);
+
+    const releaseVirtualSegment = useCallback((runtime: VirtualChapterRuntime, segIndex: number): void => {
+        const segmentEl = runtime.activeSegmentEls.get(segIndex);
+        if (!segmentEl) return;
+        runtime.activeSegmentEls.delete(segIndex);
+        unobserveResizeNode(segmentEl);
+        if (segmentEl.isConnected) {
+            segmentEl.remove();
+        }
+        segmentPool.release(segmentEl);
+    }, [unobserveResizeNode]);
+
+    const registerVirtualChapterRuntime = useCallback((chapterId: string, spineIndex: number, chapterEl: HTMLElement) => {
+        const vector = chapterVectorsRef.current.get(chapterId);
+        const contentEl = getVectorContentContainer(chapterEl);
+        if (!vector || !contentEl) {
+            cleanupVirtualChapterRuntime(chapterId);
+            return;
+        }
+
+        cleanupVirtualChapterRuntime(chapterId);
+        updateVirtualContentHeight(contentEl, vector);
+        virtualChaptersRef.current.set(chapterId, {
+            chapterId,
+            spineIndex,
+            chapterEl,
+            contentEl,
+            vector,
+            activeSegmentEls: new Map<number, HTMLElement>(),
+            fullyMaterialized: false,
+        });
+    }, [cleanupVirtualChapterRuntime]);
+
+    const materializeVirtualChapterFully = useCallback((chapterId: string) => {
+        const runtime = virtualChaptersRef.current.get(chapterId);
+        if (!runtime || runtime.fullyMaterialized) return;
+        for (let index = 0; index < runtime.vector.segments.length; index += 1) {
+            mountVirtualSegment(runtime, index);
+        }
+        runtime.fullyMaterialized = true;
+        refreshVirtualChapterLayout(runtime);
+    }, [mountVirtualSegment, refreshVirtualChapterLayout]);
+
     const observeChapterResizeNodes = useCallback((chapterEl: HTMLElement | null) => {
         if (!chapterEl) return;
         const segments = Array.from(
@@ -445,6 +660,16 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 const target = entry.target as HTMLElement;
                 const nextHeight = Math.max(1, entry.contentRect.height);
                 observedResizeHeightsRef.current.set(target, nextHeight);
+
+                if (target.getAttribute('data-vitra-virtual-segment') !== 'true') {
+                    return;
+                }
+
+                const chapterId = target.getAttribute('data-vitra-chapter-id');
+                const segIndexRaw = target.getAttribute('data-shadow-segment-index');
+                const segIndex = segIndexRaw ? Number.parseInt(segIndexRaw, 10) : -1;
+                if (!chapterId || segIndex < 0) return;
+                enqueueVirtualMeasurement(chapterId, segIndex, target);
             });
         });
 
@@ -456,7 +681,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 resizeObserverRef.current = null;
             }
         };
-    }, [resetResizeObservers]);
+    }, [enqueueVirtualMeasurement, resetResizeObservers]);
 
     // Pending shadow renders queue
     const [shadowQueue, setShadowQueue] = useState<LoadedChapter[]>([]);
@@ -702,6 +927,10 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 cancelAnimationFrame(pendingReadyRafRef.current);
                 pendingReadyRafRef.current = null;
             }
+            if (virtualMeasureRafRef.current !== null) {
+                cancelAnimationFrame(virtualMeasureRafRef.current);
+                virtualMeasureRafRef.current = null;
+            }
             if (flushRafRef.current !== null) {
                 cancelAnimationFrame(flushRafRef.current);
                 flushRafRef.current = null;
@@ -710,11 +939,15 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 cancelAnimationFrame(unlockAdjustingRafRef.current);
                 unlockAdjustingRafRef.current = null;
             }
+            virtualMeasureQueueRef.current.clear();
+            virtualChaptersRef.current.forEach((_runtime, chapterId) => {
+                cleanupVirtualChapterRuntime(chapterId);
+            });
             pendingReadyRef.current = [];
             pendingDeltaRef.current = 0;
             ignoreScrollEventRef.current = false;
         };
-    }, []);
+    }, [cleanupVirtualChapterRuntime]);
 
     /** 强制 hydrate 指定段元素（供 jumpToSpine/applyHighlights 使用） */
     const forceHydrateSegment = useCallback((segmentEl: HTMLElement) => {
@@ -758,6 +991,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 chapterEl.setAttribute('data-chapter-id', ch.id);
                 chapterEl.className = styles.chapterBlock;
             }
+            cleanupVirtualChapterRuntime(ch.id);
             unobserveChapterResizeNodes(chapterEl);
             markChapterAsMounted(chapterEl, ch.height);
             chapterEl.replaceChildren();
@@ -778,6 +1012,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                     listEl.insertBefore(chapterEl, existingNodes[targetIndex] || null);
                 }
             }
+            registerVirtualChapterRuntime(ch.id, ch.spineIndex, chapterEl);
             observeChapterResizeNodes(chapterEl);
         });
 
@@ -802,6 +1037,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             for (const ch of mountedChapters) {
                 const el = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
                 if (el) {
+                    materializeVirtualChapterFully(ch.id);
                     const range = findTextInDOM(el, searchText);
                     if (range) {
                         const rect = range.getBoundingClientRect();
@@ -817,7 +1053,16 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         if (!isInitialized && chapters.some(ch => ch.status === 'ready' || ch.status === 'mounted')) {
             setIsInitialized(true);
         }
-    }, [chapters, initialScrollOffset, isInitialized, observeChapterResizeNodes, unobserveChapterResizeNodes]);
+    }, [
+        chapters,
+        cleanupVirtualChapterRuntime,
+        initialScrollOffset,
+        isInitialized,
+        materializeVirtualChapterFully,
+        observeChapterResizeNodes,
+        registerVirtualChapterRuntime,
+        unobserveChapterResizeNodes,
+    ]);
 
     // ── Scroll Event Handler ──
 
@@ -944,6 +1189,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 if (listEl) {
                     const domEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
                     if (domEl) {
+                        cleanupVirtualChapterRuntime(ch.id);
                         // 先 unobserve 再 release，避免清空段内容时 ResizeObserver 记录额外高度变动
                         unobserveChapterResizeNodes(domEl);
                         domEl.querySelectorAll('section[data-shadow-segment-index]').forEach(seg => {
@@ -980,7 +1226,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         const timer = setTimeout(checkUnload, UNLOAD_COOLDOWN_MS);
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentSpineIndex, provider, unobserveChapterResizeNodes]);
+    }, [cleanupVirtualChapterRuntime, currentSpineIndex, provider, unobserveChapterResizeNodes]);
 
     // ── Current Chapter Detection ──
 
@@ -1131,6 +1377,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                     // If searchText, find and scroll to it
                     if (searchText) {
                         pendingSearchTextRef.current = null;
+                        materializeVirtualChapterFully(`ch-${targetSpineIndex}`);
                         // 强制 hydrate 所有 placeholder 段以确保搜索可达
                         domEl.querySelectorAll('[data-shadow-segment-state="placeholder"]').forEach(seg => {
                             forceHydrateSegment(seg as HTMLElement);
@@ -1162,8 +1409,12 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             const chapterNodes = listEl.querySelectorAll('[data-chapter-id]');
             chapterNodes.forEach(node => {
                 const el = node as HTMLElement;
+                const chapterId = el.getAttribute('data-chapter-id');
+                if (chapterId) {
+                    cleanupVirtualChapterRuntime(chapterId);
+                }
                 // 释放段池中的段元素
-                el.querySelectorAll('[data-shadow-segment]').forEach(seg => {
+                el.querySelectorAll('[data-shadow-segment-index]').forEach(seg => {
                     segmentPool.release(seg as HTMLElement);
                 });
                 releaseMediaResources(el);
@@ -1184,7 +1435,18 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
         // loadChapter uses chaptersRef (always current), so no stale closure issue
         loadChapter(targetSpineIndex, 'initial');
-    }, [cancelIdlePrefetch, forceHydrateSegment, loadChapter, onChapterChange, resetResizeObservers, stop, updateCurrentChapter, updateProgress]);
+    }, [
+        cancelIdlePrefetch,
+        cleanupVirtualChapterRuntime,
+        forceHydrateSegment,
+        loadChapter,
+        materializeVirtualChapterFully,
+        onChapterChange,
+        resetResizeObservers,
+        stop,
+        updateCurrentChapter,
+        updateProgress,
+    ]);
 
     useEffect(() => {
         const listEl = chapterListRef.current;
@@ -1291,10 +1553,16 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         chapterEl: HTMLElement,
         spineIndex: number,
     ) => {
-        // 强制 hydrate 所有 placeholder 段以确保高亮可达
-        chapterEl.querySelectorAll('[data-shadow-segment-state="placeholder"]').forEach(seg => {
-            forceHydrateSegment(seg as HTMLElement);
-        });
+        const runtime = virtualChaptersRef.current.get(`ch-${spineIndex}`);
+        if (!runtime) {
+            // 强制 hydrate 所有 placeholder 段以确保高亮可达
+            chapterEl.querySelectorAll('[data-shadow-segment-state="placeholder"]').forEach(seg => {
+                forceHydrateSegment(seg as HTMLElement);
+            });
+        }
+        const highlightRoots = runtime
+            ? Array.from(runtime.activeSegmentEls.values())
+            : [chapterEl];
         db.highlights.where('bookId').equals(bookId).toArray().then(highlights => {
             const matching = highlights.filter(h => {
                 if (h.cfiRange.startsWith('vitra:') || h.cfiRange.startsWith('bdise:')) {
@@ -1308,10 +1576,12 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             });
             for (const h of matching) {
                 if (renderedHighlightsRef.current.has(h.id)) continue;
-                const range = findTextInDOM(chapterEl, h.text);
-                if (range) {
+                for (const rootEl of highlightRoots) {
+                    const range = findTextInDOM(rootEl, h.text);
+                    if (!range) continue;
                     highlightRange(range, h.id, h.color);
                     renderedHighlightsRef.current.add(h.id);
+                    break;
                 }
             }
         }).catch(err => console.warn('[ScrollReader] Highlight load failed:', err));
@@ -1440,9 +1710,52 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         });
     }, []);
 
+    const syncVirtualizedSegmentsByRange = useCallback((scrollTop: number, viewportHeight: number) => {
+        if (viewportHeight <= 0) return;
+
+        const preloadTop = Math.max(0, scrollTop - RANGE_HYDRATION_PRELOAD_MARGIN_PX);
+        const preloadBottom = scrollTop + viewportHeight + RANGE_HYDRATION_PRELOAD_MARGIN_PX;
+
+        virtualChaptersRef.current.forEach((runtime) => {
+            refreshVirtualChapterLayout(runtime);
+            if (runtime.fullyMaterialized) return;
+
+            const chapterTop = runtime.chapterEl.offsetTop;
+            const chapterBottom = chapterTop + runtime.vector.totalEstimatedHeight;
+            let startIndex = 0;
+            let endIndex = -1;
+
+            if (!(chapterBottom < preloadTop || chapterTop > preloadBottom)) {
+                const localScrollTop = Math.max(0, scrollTop - chapterTop);
+                const nextRange = computeVisibleRange(
+                    runtime.vector.segments,
+                    localScrollTop,
+                    viewportHeight,
+                    RANGE_HYDRATION_OVERSCAN_SEGMENTS,
+                );
+                startIndex = nextRange.startIndex;
+                endIndex = nextRange.endIndex;
+            }
+
+            Array.from(runtime.activeSegmentEls.keys()).forEach((index) => {
+                if (index < startIndex || index > endIndex) {
+                    releaseVirtualSegment(runtime, index);
+                }
+            });
+
+            for (let index = startIndex; index <= endIndex; index += 1) {
+                mountVirtualSegment(runtime, index);
+            }
+        });
+    }, [mountVirtualSegment, refreshVirtualChapterLayout, releaseVirtualSegment]);
+
+    syncVirtualizedSegmentsRef.current = syncVirtualizedSegmentsByRange;
+
     const enqueueVisibleSegmentsByRange = useCallback((scrollTop: number, viewportHeight: number) => {
         const listEl = chapterListRef.current;
         if (!listEl || viewportHeight <= 0) return;
+
+        syncVirtualizedSegmentsByRange(scrollTop, viewportHeight);
 
         const preloadTop = Math.max(0, scrollTop - RANGE_HYDRATION_PRELOAD_MARGIN_PX);
         const preloadBottom = scrollTop + viewportHeight + RANGE_HYDRATION_PRELOAD_MARGIN_PX;
@@ -1452,6 +1765,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         for (const chapterEl of chapterEls) {
             const chapterId = chapterEl.getAttribute('data-chapter-id');
             if (!chapterId) continue;
+            if (virtualChaptersRef.current.has(chapterId)) continue;
 
             const vector = chapterVectorsRef.current.get(chapterId);
             if (!vector || vector.segments.length === 0) continue;
@@ -1479,7 +1793,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         if (needsFlush && hydrationRafRef.current === null) {
             hydrationRafRef.current = requestAnimationFrame(flushHydrationQueue);
         }
-    }, [flushHydrationQueue]);
+    }, [flushHydrationQueue, syncVirtualizedSegmentsByRange]);
 
     useEffect(() => {
         const viewport = viewportRef.current;

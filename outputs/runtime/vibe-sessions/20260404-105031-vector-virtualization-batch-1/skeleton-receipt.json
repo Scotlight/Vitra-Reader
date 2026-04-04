@@ -1,0 +1,16 @@
+{
+  "runId": "20260404-105031-vector-virtualization-batch-1",
+  "stage": "skeleton_check",
+  "cwd": "D:/0010/.A_project/epub reader",
+  "branch": "main",
+  "dirtyTrackedFiles": [
+    "src/components/Reader/ScrollReaderView.tsx",
+    "src/components/Reader/ShadowRenderer.tsx",
+    "src/engine/render/chapterPreprocessCore.ts",
+    "src/test/vitraCanvasMeasure.test.ts"
+  ],
+  "notes": [
+    "快照恢复后的主链文件已存在本地修改。",
+    "docs/ 和 doc/ 下存在大量未跟踪调查材料，本轮不纳入提交范围。"
+  ]
+}
