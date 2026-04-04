@@ -1,0 +1,16 @@
+{
+  "runId": "20260404-211048-vector-virtualization-batch-10",
+  "stage": "plan_execute",
+  "status": "completed",
+  "changedFiles": [
+    "src/engine/render/chapterPreprocessService.ts",
+    "src/test/chapterPreprocessService.test.ts",
+    "docs/requirements/2026-04-04-vector-virtualization-batch-10.md",
+    "docs/plans/2026-04-04-vector-virtualization-batch-10-execution-plan.md"
+  ],
+  "implemented": [
+    "worker 不可用、初始化失败、超时和运行时错误时统一同步降级到 preprocessChapterCore。",
+    "大章节动态超时提升到最高 60 秒。",
+    "新增 chapterPreprocessService 回归测试。"
+  ]
+}

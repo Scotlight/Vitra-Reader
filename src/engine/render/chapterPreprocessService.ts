@@ -4,15 +4,19 @@ import type {
     ChapterPreprocessResponse,
     ChapterPreprocessResult,
 } from '../types/chapterPreprocess'
+import { preprocessChapterCore } from './chapterPreprocessCore'
 
 const DEFAULT_TIMEOUT_MS = 2500
 
 /** 根据 HTML 大小动态计算超时（避免大章节误超时） */
-function computeDynamicTimeout(htmlLength: number, baseTimeout: number): number {
+export function resolveChapterPreprocessTimeout(htmlLength: number, baseTimeout: number): number {
     if (htmlLength < 100_000) return Math.max(1500, baseTimeout)
-    if (htmlLength < 300_000) return 3500
-    if (htmlLength < 500_000) return 5000
-    return 8000
+    if (htmlLength < 300_000) return Math.max(3500, baseTimeout)
+    if (htmlLength < 500_000) return Math.max(5000, baseTimeout)
+    if (htmlLength < 1_000_000) return Math.max(10_000, baseTimeout)
+    if (htmlLength < 2_500_000) return Math.max(20_000, baseTimeout)
+    if (htmlLength < 5_000_000) return Math.max(40_000, baseTimeout)
+    return Math.max(60_000, baseTimeout)
 }
 
 interface PendingTask {
@@ -130,6 +134,10 @@ function preprocessByWorker(
     })
 }
 
+function preprocessSynchronously(payload: ChapterPreprocessInput): ChapterPreprocessResult {
+    return preprocessChapterCore(payload)
+}
+
 export async function preprocessChapterContent(
     payload: ChapterPreprocessInput,
     timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -139,16 +147,20 @@ export async function preprocessChapterContent(
         externalStyles: payload.externalStyles || [],
     }
 
-    const effectiveTimeout = computeDynamicTimeout(
+    const effectiveTimeout = resolveChapterPreprocessTimeout(
         payload.htmlContent?.length || 0,
         timeoutMs,
     )
-    const worker = ensureWorker()
 
     try {
+        const worker = ensureWorker()
         return await preprocessByWorker(worker, normalizedPayload, effectiveTimeout)
     } catch (error) {
         resetWorker()
-        throw (error instanceof Error ? error : new Error(String(error)))
+        console.warn(
+            '[ChapterPreprocess] Worker unavailable, fallback to sync core:',
+            error instanceof Error ? error.message : String(error),
+        )
+        return preprocessSynchronously(normalizedPayload)
     }
 }

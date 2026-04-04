@@ -1,0 +1,31 @@
+{
+  "runId": "20260404-211048-vector-virtualization-batch-10",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续推进向量化虚拟渲染，补齐 chapterPreprocessService 的同步降级和大章节超时。",
+  "deliverable": [
+    "worker 失败时的同步降级",
+    "更长的大章节动态超时",
+    "chapterPreprocessService 回归测试",
+    "第十批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前十批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "worker 不可用或失败时同步降级到 preprocessChapterCore",
+    "大章节动态超时最高支持 60 秒",
+    "测试、类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不把 provider 输入改成真正字节流",
+    "本轮不修改未跟踪审计文档"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe 继续`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}
