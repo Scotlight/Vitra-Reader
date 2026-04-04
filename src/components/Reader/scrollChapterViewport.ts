@@ -4,10 +4,15 @@ export interface ChapterViewportEntry {
     readonly bottom: number
 }
 
-interface ChapterViewportMatch {
+export interface ChapterViewportMatch {
     readonly bottom: number
     readonly spineIndex: number
     readonly top: number
+}
+
+export interface ViewportChapterState {
+    readonly currentChapter: ChapterViewportMatch | null
+    readonly progress: { spineIndex: number; progress: number } | null
 }
 
 function clampUnit(value: number): number {
@@ -65,5 +70,17 @@ export function resolveViewportChapterProgress(
     return {
         spineIndex: matched.spineIndex,
         progress: clampUnit((matched.spineIndex + localProgress) / totalChapters),
+    }
+}
+
+export function resolveViewportChapterState(
+    chapters: readonly ChapterViewportEntry[],
+    chapterProbeOffset: number,
+    progressOffset: number,
+    totalChapters: number,
+): ViewportChapterState {
+    return {
+        currentChapter: findChapterAtViewportOffset(chapters, chapterProbeOffset),
+        progress: resolveViewportChapterProgress(chapters, progressOffset, totalChapters),
     }
 }

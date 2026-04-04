@@ -1,0 +1,17 @@
+{
+  "runId": "20260404-222019-vector-virtualization-batch-14",
+  "stage": "plan_execute",
+  "status": "completed",
+  "changedFiles": [
+    "src/components/Reader/scrollChapterViewport.ts",
+    "src/components/Reader/ScrollReaderView.tsx",
+    "src/test/scrollChapterViewport.test.ts",
+    "docs/requirements/2026-04-04-vector-virtualization-batch-14.md",
+    "docs/plans/2026-04-04-vector-virtualization-batch-14-execution-plan.md"
+  ],
+  "implemented": [
+    "新增章节视口综合状态纯函数。",
+    "ScrollReaderView 的滚动、跳转和搜索定位路径改用统一的视口状态同步函数。",
+    "补充综合状态解析测试。"
+  ]
+}

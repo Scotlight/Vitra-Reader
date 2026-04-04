@@ -3,6 +3,7 @@ import {
     findAncestorChapterSpineIndex,
     findChapterAtViewportOffset,
     parseChapterSpineIndex,
+    resolveViewportChapterState,
     resolveViewportChapterProgress,
 } from '../components/Reader/scrollChapterViewport'
 
@@ -52,5 +53,24 @@ describe('scrollChapterViewport', () => {
         ], 999, 3)
 
         expect(resolved).toBeNull()
+    })
+
+    it('一次返回当前章节和进度状态', () => {
+        const resolved = resolveViewportChapterState([
+            { spineIndex: 0, top: 0, bottom: 400 },
+            { spineIndex: 1, top: 400, bottom: 800 },
+        ], 120, 600, 4)
+
+        expect(resolved).toEqual({
+            currentChapter: {
+                spineIndex: 0,
+                top: 0,
+                bottom: 400,
+            },
+            progress: {
+                spineIndex: 1,
+                progress: 0.375,
+            },
+        })
     })
 })

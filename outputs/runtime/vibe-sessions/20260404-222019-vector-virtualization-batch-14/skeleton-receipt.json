@@ -1,0 +1,11 @@
+{
+  "runId": "20260404-222019-vector-virtualization-batch-14",
+  "stage": "skeleton_check",
+  "cwd": "D:/0010/.A_project/epub reader",
+  "branch": "main",
+  "head": "b8ff1b2",
+  "notes": [
+    "代码工作树只有调查目录和审计材料未跟踪。",
+    "上一批章节 DOM 辅助函数复用已经推送到 origin/main。"
+  ]
+}

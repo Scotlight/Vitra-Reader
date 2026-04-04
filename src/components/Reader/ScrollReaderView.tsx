@@ -33,9 +33,8 @@ import {
 } from './scrollVectorStrategy';
 import {
     findAncestorChapterSpineIndex,
-    findChapterAtViewportOffset,
     parseChapterSpineIndex,
-    resolveViewportChapterProgress,
+    resolveViewportChapterState,
     type ChapterViewportEntry,
 } from './scrollChapterViewport';
 import styles from './ScrollReaderView.module.css';
@@ -1221,6 +1220,54 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         unobserveChapterResizeNodes,
     ]);
 
+    const syncViewportChapterState = useCallback((
+        scrollTop: number,
+        viewportHeight: number,
+        options?: {
+            persistProgress?: boolean
+            syncCurrentChapter?: boolean
+        },
+    ) => {
+        const listEl = chapterListRef.current;
+        if (!listEl) return;
+
+        const resolved = resolveViewportChapterState(
+            collectChapterViewportEntries(listEl),
+            scrollTop + Math.min(
+                viewportHeight * CHAPTER_DETECTION_ANCHOR_RATIO,
+                CHAPTER_DETECTION_ANCHOR_MAX_PX,
+            ),
+            scrollTop + viewportHeight / 2,
+            spineItems.length,
+        );
+        const syncCurrentChapter = options?.syncCurrentChapter !== false;
+        const persistProgress = options?.persistProgress !== false;
+
+        if (syncCurrentChapter && resolved.currentChapter) {
+            lastKnownAnchorIndexRef.current = resolved.currentChapter.spineIndex;
+            if (resolved.currentChapter.spineIndex !== currentSpineIndex) {
+                setCurrentSpineIndex(resolved.currentChapter.spineIndex);
+                if (onChapterChange && spineItems[resolved.currentChapter.spineIndex]) {
+                    onChapterChange(
+                        spineItems[resolved.currentChapter.spineIndex].id,
+                        spineItems[resolved.currentChapter.spineIndex].href,
+                    );
+                }
+            }
+        }
+
+        if (!persistProgress || !resolved.progress) return;
+
+        onProgressChange?.(resolved.progress.progress);
+        db.progress.put({
+            bookId,
+            location: `vitra:${resolved.progress.spineIndex}:${scrollTop}`,
+            percentage: resolved.progress.progress,
+            currentChapter: spineItems[resolved.progress.spineIndex]?.href || '',
+            updatedAt: Date.now(),
+        }).catch(err => console.warn('[ScrollReader] Progress save failed:', err));
+    }, [bookId, currentSpineIndex, onChapterChange, onProgressChange, spineItems]);
+
     // ── Scroll Event Handler ──
 
     useEffect(() => {
@@ -1276,15 +1323,20 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 }
             }
 
-            // Update current chapter based on scroll position
-            updateCurrentChapter(scrollTop, viewportHeight);
+            syncViewportChapterState(scrollTop, viewportHeight, {
+                persistProgress: false,
+                syncCurrentChapter: true,
+            });
 
             // Debounced progress update
             if (progressTimerRef.current) {
                 window.clearTimeout(progressTimerRef.current);
             }
             progressTimerRef.current = window.setTimeout(() => {
-                updateProgress(scrollTop, viewportHeight);
+                syncViewportChapterState(scrollTop, viewportHeight, {
+                    persistProgress: true,
+                    syncCurrentChapter: false,
+                });
             }, 200);
         };
 
@@ -1309,6 +1361,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         onChapterChange,
         onProgressChange,
         bookId,
+        syncViewportChapterState,
     ]);
 
     // ── Chapter Unloading ──
@@ -1378,74 +1431,19 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [collapseChapterDomToPlaceholder, currentSpineIndex, provider]);
 
-    // ── Current Chapter Detection ──
-
-    const updateCurrentChapter = useCallback((scrollTop: number, viewportHeight: number) => {
-        const listEl = chapterListRef.current;
-        if (!listEl) return;
-
-        const chapterProbeLine = scrollTop + Math.min(
-            viewportHeight * CHAPTER_DETECTION_ANCHOR_RATIO,
-            CHAPTER_DETECTION_ANCHOR_MAX_PX,
-        );
-        const matched = findChapterAtViewportOffset(
-            collectChapterViewportEntries(listEl),
-            chapterProbeLine,
-        );
-        if (!matched) return;
-
-        lastKnownAnchorIndexRef.current = matched.spineIndex;
-        if (matched.spineIndex !== currentSpineIndex) {
-            setCurrentSpineIndex(matched.spineIndex);
-            if (onChapterChange && spineItems[matched.spineIndex]) {
-                onChapterChange(spineItems[matched.spineIndex].id, spineItems[matched.spineIndex].href);
-            }
-        }
-    }, [currentSpineIndex, spineItems, onChapterChange]);
-
-    // ── Progress Calculation ──
-
-    const updateProgress = useCallback((
-        scrollTop: number,
-        viewportHeight: number,
-    ) => {
-        if (spineItems.length === 0) return;
-
-        // Find which chapter is in view
-        const listEl = chapterListRef.current;
-        if (!listEl) return;
-
-        const viewportMid = scrollTop + viewportHeight / 2;
-        const resolved = resolveViewportChapterProgress(
-            collectChapterViewportEntries(listEl),
-            viewportMid,
-            spineItems.length,
-        );
-        if (!resolved) return;
-
-        onProgressChange?.(resolved.progress);
-
-        // Persist progress
-        db.progress.put({
-            bookId,
-            location: `vitra:${resolved.spineIndex}:${scrollTop}`,
-            percentage: resolved.progress,
-            currentChapter: spineItems[resolved.spineIndex]?.href || '',
-            updatedAt: Date.now(),
-        }).catch(err => console.warn('[ScrollReader] Progress save failed:', err));
-    }, [spineItems, bookId, onProgressChange]);
-
     const commitViewportScroll = useCallback((
         viewport: HTMLDivElement,
         nextScrollTop: number,
-        syncDerivedState: boolean = false,
+        syncOptions?: {
+            persistProgress?: boolean
+            syncCurrentChapter?: boolean
+        },
     ) => {
         viewport.scrollTop = nextScrollTop;
         lastScrollTopRef.current = viewport.scrollTop;
-        if (!syncDerivedState) return;
-        updateCurrentChapter(viewport.scrollTop, viewport.clientHeight);
-        updateProgress(viewport.scrollTop, viewport.clientHeight);
-    }, [updateCurrentChapter, updateProgress]);
+        if (!syncOptions) return;
+        syncViewportChapterState(viewport.scrollTop, viewport.clientHeight, syncOptions);
+    }, [syncViewportChapterState]);
 
     const findVirtualSearchTargetIndex = useCallback((chapterId: string, searchText: string): number => {
         const vector = chapterVectorsRef.current.get(chapterId);
@@ -1556,19 +1554,27 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             if (listEl && viewport) {
                 const domEl = listEl.querySelector(`[data-chapter-id="ch-${targetSpineIndex}"]`) as HTMLElement | null;
                 if (domEl) {
-                    commitViewportScroll(viewport, domEl.offsetTop, true);
+                    commitViewportScroll(viewport, domEl.offsetTop, {
+                        persistProgress: true,
+                        syncCurrentChapter: true,
+                    });
 
                     requestAnimationFrame(() => {
                         if (jumpGenerationRef.current !== generation) return;
-                        commitViewportScroll(viewport, domEl.offsetTop, true);
+                        commitViewportScroll(viewport, domEl.offsetTop, {
+                            persistProgress: true,
+                            syncCurrentChapter: true,
+                        });
                     });
 
                     // If searchText, find and scroll to it
                     if (searchText) {
                         pendingSearchTextRef.current = null;
                         if (revealSearchInChapter(domEl, `ch-${targetSpineIndex}`, searchText)) {
-                            updateCurrentChapter(viewport.scrollTop, viewport.clientHeight);
-                            updateProgress(viewport.scrollTop, viewport.clientHeight);
+                            syncViewportChapterState(viewport.scrollTop, viewport.clientHeight, {
+                                persistProgress: true,
+                                syncCurrentChapter: true,
+                            });
                         }
                     }
                 }
@@ -1620,8 +1626,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         revealSearchInChapter,
         resetResizeObservers,
         stop,
-        updateCurrentChapter,
-        updateProgress,
+        syncViewportChapterState,
     ]);
 
     useEffect(() => {

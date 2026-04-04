@@ -1,0 +1,31 @@
+{
+  "runId": "20260404-222019-vector-virtualization-batch-14",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续推进 ScrollReaderView 拆分，统一章节视口派生状态解析。",
+  "deliverable": [
+    "章节视口综合状态纯函数",
+    "统一的视口状态同步函数",
+    "对应测试",
+    "第十四批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前十四批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "ScrollReaderView 不再分别调用两套章节检测和进度计算逻辑",
+    "视口综合状态解析有测试覆盖",
+    "测试、类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不继续拆 loadChapter 主流程",
+    "本轮不修改未跟踪审计文档"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}
