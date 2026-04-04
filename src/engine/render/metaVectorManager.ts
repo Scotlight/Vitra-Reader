@@ -93,8 +93,11 @@ export function buildChapterMetaVector(
   segments: SegmentMeta[],
 ): ChapterMetaVector {
   let totalHeight = 0;
+  let allMeasured = true;
   for (const seg of segments) {
+    seg.offsetY = totalHeight;
     totalHeight += seg.realHeight ?? seg.estimatedHeight;
+    if (!seg.measured) allMeasured = false;
   }
 
   return {
@@ -103,6 +106,6 @@ export function buildChapterMetaVector(
     segments,
     totalEstimatedHeight: totalHeight,
     totalMeasuredHeight: totalHeight,
-    fullyMeasured: false,
+    fullyMeasured: allMeasured,
   };
 }

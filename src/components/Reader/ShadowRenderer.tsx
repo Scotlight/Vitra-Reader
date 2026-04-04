@@ -400,6 +400,7 @@ export function ShadowRenderer({
   const containerRef = useRef<HTMLDivElement>(null);
   const hasReportedRef = useRef(false);
   const currentChapterIdRef = useRef(chapterId);
+  const hasVectorSegmentInput = Boolean(mode === 'scroll' && segmentMetas && segmentMetas.length > 0);
 
   /** 构建阅读器内容样式 CSS（已作用域化到 chapterId） */
   const buildContentCss = useCallback(() => {
@@ -448,7 +449,7 @@ export function ShadowRenderer({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !htmlContent) return;
+    if (!container || (!htmlContent && !hasVectorSegmentInput)) return;
 
     // Reset on chapterId change
     if (currentChapterIdRef.current !== chapterId) {
@@ -489,15 +490,21 @@ export function ShadowRenderer({
         const cleanedHtml = processed.cleanedHtml;
         const processedStyles = processed.processedStyles;
         const normalizedFragments = processed.fragments;
-        const chapterSize = cleanedHtml.length;
-        const isLargeChapter = chapterSize >= LARGE_CHAPTER_HTML_THRESHOLD;
-        const mediaSensitiveChapter = hasLayoutSensitiveMedia(cleanedHtml);
+        const chapterSize = cleanedHtml.length > 0
+          ? cleanedHtml.length
+          : (segmentMetas?.reduce((sum, meta) => sum + meta.charCount, 0) || 0);
+        const isLargeChapter = chapterSize >= LARGE_CHAPTER_HTML_THRESHOLD || hasVectorSegmentInput;
+        const mediaSensitiveChapter = cleanedHtml.length > 0
+          ? hasLayoutSensitiveMedia(cleanedHtml)
+          : Boolean(segmentMetas?.some((meta) => meta.hasMedia));
 
         // 资源预热：在 measure 阶段之前提前触发图片加载
-        prefetchImagesFromHtml(cleanedHtml);
+        if (cleanedHtml.length > 0) {
+          prefetchImagesFromHtml(cleanedHtml);
+        }
 
         const vectorSegments = await runVitraRenderStage(trace, 'measure', () => {
-          if (mode !== 'scroll' || !isLargeChapter) return [];
+          if (mode !== 'scroll' || (!isLargeChapter && !hasVectorSegmentInput)) return [];
           // 优先使用 Worker 侧 segmentMetas，转为内部 ChapterVectorSegment 兼容格式
           if (segmentMetas && segmentMetas.length > 0) {
             return segmentMetas.map((meta): ChapterVectorSegment => ({
@@ -604,7 +611,7 @@ export function ShadowRenderer({
           if (cancelled) return null;
 
           await waitForAssetLoad(chapterWrapper, {
-            chapterSizeHint: cleanedHtml.length,
+            chapterSizeHint: chapterSize,
             timeoutMs: mediaSensitiveChapter
               ? MEDIA_SENSITIVE_LOAD_TIMEOUT_MS
               : (canUseVectorized ? RENDER_VECTORIZED_LOAD_TIMEOUT_MS : (isLargeChapter ? RENDER_LARGE_CHAPTER_LOAD_TIMEOUT_MS : undefined)),
@@ -733,7 +740,7 @@ export function ShadowRenderer({
       }
       document.fonts?.removeEventListener?.('loadingdone', handleFontLoaded);
     };
-  }, [htmlContent, htmlFragments, segmentMetas, chapterId, externalStyles, preprocessed, onReady, onError, buildContentCss]);
+  }, [htmlContent, htmlFragments, segmentMetas, chapterId, externalStyles, preprocessed, onReady, onError, buildContentCss, hasVectorSegmentInput, mode]);
 
   return (
     <div

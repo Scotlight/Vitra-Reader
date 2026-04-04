@@ -37,6 +37,7 @@ interface LoadedChapter {
     htmlFragments: string[];
     externalStyles: string[];
     segmentMetas?: SegmentMeta[];
+    vectorStyleKey?: string;
     domNode: HTMLElement | null;
     height: number;
     status: 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder';
@@ -742,13 +743,22 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         pipelineRef.current = 'pre-fetching';
 
         const chapterId = `ch-${spineIndex}`;
+        const currentReaderStyleKey = JSON.stringify(readerStyles);
+        const canRestoreFromVectorCache = Boolean(
+            existingChapter?.status === 'placeholder'
+            && existingChapter.segmentMetas
+            && existingChapter.segmentMetas.length > 0
+            && existingChapter.vectorStyleKey === currentReaderStyleKey
+        );
 
         const loadingChapter: LoadedChapter = {
             spineIndex,
             id: chapterId,
             htmlContent: '',
             htmlFragments: [],
-            externalStyles: [],
+            externalStyles: existingChapter?.externalStyles || [],
+            segmentMetas: existingChapter?.segmentMetas,
+            vectorStyleKey: existingChapter?.vectorStyleKey ?? currentReaderStyleKey,
             domNode: null,
             height: existingChapter?.height || 0,
             status: 'loading',
@@ -763,6 +773,22 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         });
 
         try {
+            if (canRestoreFromVectorCache) {
+                const restored: LoadedChapter = {
+                    ...loadingChapter,
+                    status: 'shadow-rendering',
+                    vectorStyleKey: currentReaderStyleKey,
+                };
+
+                console.log(`[ScrollReader] Restore vector cache: spine ${spineIndex}`);
+                setChapters(prev =>
+                    prev.map(ch => ch.spineIndex === spineIndex ? restored : ch)
+                );
+                setShadowQueue(prev => [...prev, restored]);
+                pipelineRef.current = 'rendering-offscreen';
+                return;
+            }
+
             const html = await provider.extractChapterHtml(spineIndex);
             let chapterStyles: string[] = [];
             try {
@@ -793,6 +819,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 htmlFragments: preprocessed.htmlFragments,
                 externalStyles: preprocessed.externalStyles,
                 segmentMetas: preprocessed.segmentMetas,
+                vectorStyleKey: currentReaderStyleKey,
                 status: 'shadow-rendering',
             };
 
@@ -836,6 +863,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         const rerenderQueue = rerenderTargets.map((chapter) => ({
             ...chapter,
             domNode: null,
+            vectorStyleKey: nextKey,
             status: 'shadow-rendering' as const,
         }));
 
@@ -847,7 +875,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         ]);
         setChapters((prev) => prev.map((chapter) =>
             rerenderIndexes.has(chapter.spineIndex)
-                ? { ...chapter, domNode: null, status: 'shadow-rendering' as const }
+                ? { ...chapter, domNode: null, vectorStyleKey: nextKey, status: 'shadow-rendering' as const }
                 : chapter
         ));
     }, [readerStyles, renderedHighlightsRef]);
@@ -1206,7 +1234,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                     ...ch,
                     htmlContent: '',
                     htmlFragments: [],
-                    externalStyles: [],
+                    externalStyles: ch.externalStyles,
                     domNode: null,
                     height: resolveChapterPlaceholderHeight(ch.height),
                     status: 'placeholder',
