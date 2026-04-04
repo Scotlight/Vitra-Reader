@@ -648,11 +648,11 @@ export function ShadowRenderer({
           if (!canUseVectorized || activeSegments.length <= activeInitialSegmentCount) return;
           if (windowedVirtualized) return;
 
-          // 若 segmentMetas 存在（Worker路径），跳过全量 rIC 循环，交由 ScrollReaderView IO 驱动
+          // Worker 向量化路径已经交给 ScrollReaderView 的窗口化同步器管理
           const shouldDeferHydration = segmentMetas && segmentMetas.length > 0;
           if (shouldDeferHydration) {
             console.log(
-              `[ShadowRenderer] Chapter "${chapterId}" using IO-driven hydration (${activeSegments.length - activeInitialSegmentCount} deferred segments)`,
+              `[ShadowRenderer] Chapter "${chapterId}" delegated to ScrollReaderView windowed virtualization (${activeSegments.length - activeInitialSegmentCount} deferred segments)`,
             );
             return;
           }
