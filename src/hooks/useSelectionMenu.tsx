@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { db } from '../services/storageService';
+import { db, type Highlight } from '../services/storageService';
 import { findTextInDOM, highlightRange } from '../utils/textFinder';
 import { getProviderLabel, translateText } from '../services/translateService';
 import { SelectionMenu } from '../components/Reader/SelectionMenu';
@@ -37,6 +37,7 @@ export interface UseSelectionMenuOptions {
     onSelectionSearch?: (keyword: string) => void;
     /** 根据 spineIndex 获取高亮渲染的 DOM 容器 */
     getHighlightContainer: (spineIndex: number) => HTMLElement | null;
+    onHighlightCreated?: (highlight: Highlight, spineIndex: number) => void;
 }
 
 const INITIAL_SELECTION: SelectionMenuState = { visible: false, x: 0, y: 0, text: '', spineIndex: -1 };
@@ -46,7 +47,7 @@ const INITIAL_TRANSLATE: TranslateDialogState = {
     loading: false, error: '', providerLabel: '-', fromCache: false,
 };
 
-export function useSelectionMenu({ bookId, onSelectionSearch, getHighlightContainer }: UseSelectionMenuOptions) {
+export function useSelectionMenu({ bookId, onSelectionSearch, getHighlightContainer, onHighlightCreated }: UseSelectionMenuOptions) {
     const [selectionMenu, setSelectionMenu] = useState<SelectionMenuState>(INITIAL_SELECTION);
     const [noteDialog, setNoteDialog] = useState<NoteDialogState>(INITIAL_NOTE);
     const [translateDialog, setTranslateDialog] = useState<TranslateDialogState>(INITIAL_TRANSLATE);
@@ -68,10 +69,19 @@ export function useSelectionMenu({ bookId, onSelectionSearch, getHighlightContai
         const { text, spineIndex } = selectionMenu;
         const id = crypto.randomUUID();
         const cfiRange = `vitra:${spineIndex}`;
+        const createdAt = Date.now();
 
         await db.highlights.add({
-            id, bookId, cfiRange, color, text, createdAt: Date.now(),
+            id, bookId, cfiRange, color, text, createdAt,
         });
+        onHighlightCreated?.({
+            id,
+            bookId,
+            cfiRange,
+            color,
+            text,
+            createdAt,
+        }, spineIndex);
 
         const container = getHighlightContainer(spineIndex);
         if (container) {
@@ -82,7 +92,7 @@ export function useSelectionMenu({ bookId, onSelectionSearch, getHighlightContai
             }
         }
         dismissMenu();
-    }, [selectionMenu, bookId, getHighlightContainer, dismissMenu]);
+    }, [selectionMenu, bookId, getHighlightContainer, dismissMenu, onHighlightCreated]);
 
     const handleAddNote = useCallback(() => {
         setNoteDialog({

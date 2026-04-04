@@ -1,0 +1,25 @@
+{
+  "runId": "20260404-112825-vector-virtualization-batch-2",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续向向量化虚拟渲染前进，补齐窗口化后的搜索与高亮兼容。",
+  "deliverable": [
+    "虚拟化章节搜索按段定位",
+    "虚拟段高亮重放",
+    "相关验证和回执"
+  ],
+  "constraints": [
+    "不破坏上一批窗口化主链",
+    "不改分页模式",
+    "不提交调查目录"
+  ],
+  "acceptanceCriteria": [
+    "搜索跳转不再永久全量物化章节",
+    "高亮可在段节点回收后恢复",
+    "类型检查、定向测试、生产构建通过"
+  ],
+  "nonGoals": [
+    "不实现全文索引",
+    "不实现重复文本精确锚点"
+  ]
+}

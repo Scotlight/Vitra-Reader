@@ -1,0 +1,17 @@
+{
+  "runId": "20260404-112825-vector-virtualization-batch-2",
+  "stage": "plan_execute",
+  "status": "completed",
+  "changedFiles": [
+    "src/components/Reader/ScrollReaderView.tsx",
+    "src/hooks/useSelectionMenu.tsx",
+    "src/utils/textFinder.ts",
+    "src/test/textFinder.test.ts"
+  ],
+  "implemented": [
+    "虚拟化章节搜索按段定位并精准滚动。",
+    "高亮记录缓存并在虚拟段挂载时重放。",
+    "新增高亮创建回传，避免缓存落后于会话状态。",
+    "修正跨段空白规范化匹配。"
+  ]
+}

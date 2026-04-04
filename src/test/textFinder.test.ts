@@ -65,6 +65,14 @@ describe('findTextAcrossSegments', () => {
         expect(result).not.toBeNull()
     })
 
+    it('跨段空白规范化匹配', () => {
+        const seg1 = makeContainer('<p>first   part</p>')
+        const seg2 = makeContainer('<p> second</p>')
+        const result = findTextAcrossSegments([seg1, seg2], 'first part second')
+        expect(result).not.toBeNull()
+        expect(result!.length).toBeGreaterThan(0)
+    })
+
     it('空段数组返回 null', () => {
         expect(findTextAcrossSegments([], 'text')).toBeNull()
     })

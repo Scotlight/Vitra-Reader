@@ -122,17 +122,33 @@ export function findTextAcrossSegments(
         }
     }
 
-    const idx = accumulated.indexOf(searchText)
-    if (idx === -1) {
-        // Fallback: normalized whitespace
+    let matchStart = accumulated.indexOf(searchText)
+    let matchLength = searchText.length
+
+    if (matchStart === -1) {
+        const origIndices: number[] = []
+        let prevWasSpace = false
+        for (let i = 0; i < accumulated.length; i++) {
+            const isSpace = /\s/.test(accumulated[i])
+            if (isSpace && prevWasSpace) continue
+            origIndices.push(i)
+            prevWasSpace = isSpace
+        }
+
         const normalizedAccum = accumulated.replace(/\s+/g, ' ')
         const normalizedSearch = searchText.replace(/\s+/g, ' ')
         const normIdx = normalizedAccum.indexOf(normalizedSearch)
         if (normIdx === -1) return null
+
+        matchStart = origIndices[normIdx] ?? 0
+        const normEnd = normIdx + normalizedSearch.length
+        const mappedEnd = normEnd < origIndices.length
+            ? (origIndices[normEnd] ?? accumulated.length)
+            : accumulated.length
+        matchLength = Math.max(0, mappedEnd - matchStart)
     }
 
-    const matchStart = idx >= 0 ? idx : 0
-    const matchEnd = matchStart + searchText.length
+    const matchEnd = matchStart + matchLength
 
     // 定位 start 和 end 的 text node
     let startNode: Text | null = null
