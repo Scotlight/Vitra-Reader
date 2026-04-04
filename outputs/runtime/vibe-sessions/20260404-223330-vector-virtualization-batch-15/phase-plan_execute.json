@@ -1,0 +1,17 @@
+{
+  "runId": "20260404-223330-vector-virtualization-batch-15",
+  "stage": "plan_execute",
+  "status": "completed",
+  "changedFiles": [
+    "src/components/Reader/scrollChapterJump.ts",
+    "src/components/Reader/ScrollReaderView.tsx",
+    "src/test/scrollChapterJump.test.ts",
+    "docs/requirements/2026-04-04-vector-virtualization-batch-15.md",
+    "docs/plans/2026-04-04-vector-virtualization-batch-15-execution-plan.md"
+  ],
+  "implemented": [
+    "提炼跳转方向、已挂载章节判定和章节 DOM id 纯函数。",
+    "jumpToSpine 拆分为同步目标章节、复用已挂载路径和重置重载路径。",
+    "新增 scrollChapterJump 单元测试。"
+  ]
+}

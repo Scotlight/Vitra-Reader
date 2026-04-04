@@ -37,6 +37,11 @@ import {
     resolveViewportChapterState,
     type ChapterViewportEntry,
 } from './scrollChapterViewport';
+import {
+    findMountedJumpTarget,
+    resolveChapterDomId,
+    resolveJumpLoadDirection,
+} from './scrollChapterJump';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
@@ -1509,30 +1514,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
     revealSearchInChapterRef.current = revealSearchInChapter;
 
-
-
-    // ── TOC Jump ──
-
-    const jumpToSpine = useCallback(async (targetSpineIndex: number, searchText?: string) => {
-        if (targetSpineIndex < 0 || targetSpineIndex >= spineItemsRef.current.length) return;
-
-        // 递增跳转代数，使上一次未完成的跳转自动失效
-        const generation = ++jumpGenerationRef.current;
-
-        cancelIdlePrefetch();
-        isUserScrollingRef.current = false;
-        if (scrollIdleTimerRef.current !== null) {
-            window.clearTimeout(scrollIdleTimerRef.current);
-            scrollIdleTimerRef.current = null;
-        }
-        pendingSearchTextRef.current = searchText || null;
-        initialScrollDone.current = true;
-        stop();
-        if (progressTimerRef.current) {
-            window.clearTimeout(progressTimerRef.current);
-            progressTimerRef.current = null;
-        }
-
+    const syncJumpTargetChapter = useCallback((targetSpineIndex: number) => {
         setCurrentSpineIndex(targetSpineIndex);
         lastKnownAnchorIndexRef.current = targetSpineIndex;
         if (onChapterChange && spineItemsRef.current[targetSpineIndex]) {
@@ -1541,48 +1523,51 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 spineItemsRef.current[targetSpineIndex].href,
             );
         }
+    }, [onChapterChange]);
 
-        // Check if already mounted
-        const existing = chaptersRef.current.find(ch =>
-            ch.spineIndex === targetSpineIndex && ch.status === 'mounted'
-        );
+    const tryJumpToMountedChapter = useCallback((
+        targetSpineIndex: number,
+        generation: number,
+        searchText?: string,
+    ): boolean => {
+        const existing = findMountedJumpTarget(chaptersRef.current, targetSpineIndex);
+        if (!existing) return false;
 
-        if (existing) {
-            // Scroll to it
-            const listEl = chapterListRef.current;
-            const viewport = viewportRef.current;
-            if (listEl && viewport) {
-                const domEl = listEl.querySelector(`[data-chapter-id="ch-${targetSpineIndex}"]`) as HTMLElement | null;
-                if (domEl) {
-                    commitViewportScroll(viewport, domEl.offsetTop, {
-                        persistProgress: true,
-                        syncCurrentChapter: true,
-                    });
+        const listEl = chapterListRef.current;
+        const viewport = viewportRef.current;
+        if (!listEl || !viewport) return true;
 
-                    requestAnimationFrame(() => {
-                        if (jumpGenerationRef.current !== generation) return;
-                        commitViewportScroll(viewport, domEl.offsetTop, {
-                            persistProgress: true,
-                            syncCurrentChapter: true,
-                        });
-                    });
+        const domEl = listEl.querySelector(`[data-chapter-id="${resolveChapterDomId(targetSpineIndex)}"]`) as HTMLElement | null;
+        if (!domEl) return true;
 
-                    // If searchText, find and scroll to it
-                    if (searchText) {
-                        pendingSearchTextRef.current = null;
-                        if (revealSearchInChapter(domEl, `ch-${targetSpineIndex}`, searchText)) {
-                            syncViewportChapterState(viewport.scrollTop, viewport.clientHeight, {
-                                persistProgress: true,
-                                syncCurrentChapter: true,
-                            });
-                        }
-                    }
-                }
-            }
-            return;
+        commitViewportScroll(viewport, domEl.offsetTop, {
+            persistProgress: true,
+            syncCurrentChapter: true,
+        });
+
+        requestAnimationFrame(() => {
+            if (jumpGenerationRef.current !== generation) return;
+            commitViewportScroll(viewport, domEl.offsetTop, {
+                persistProgress: true,
+                syncCurrentChapter: true,
+            });
+        });
+
+        if (!searchText) {
+            return true;
         }
 
-        // Clear all chapters and load from the target
+        pendingSearchTextRef.current = null;
+        if (revealSearchInChapter(domEl, resolveChapterDomId(targetSpineIndex), searchText)) {
+            syncViewportChapterState(viewport.scrollTop, viewport.clientHeight, {
+                persistProgress: true,
+                syncCurrentChapter: true,
+            });
+        }
+        return true;
+    }, [commitViewportScroll, revealSearchInChapter, syncViewportChapterState]);
+
+    const resetReaderForJump = useCallback((targetSpineIndex: number) => {
         const viewport = viewportRef.current;
         if (viewport) {
             viewport.scrollTop = 0;
@@ -1609,24 +1594,54 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         setShadowQueue([]);
         loadingLockRef.current.clear();
         pipelineRef.current = 'idle';
-        setCurrentSpineIndex(targetSpineIndex);
-        lastKnownAnchorIndexRef.current = targetSpineIndex;
+        syncJumpTargetChapter(targetSpineIndex);
+    }, [cleanupMountedChapterDom, resetResizeObservers, syncJumpTargetChapter]);
+
+
+
+    // ── TOC Jump ──
+
+    const jumpToSpine = useCallback(async (targetSpineIndex: number, searchText?: string) => {
+        if (targetSpineIndex < 0 || targetSpineIndex >= spineItemsRef.current.length) return;
+
+        // 递增跳转代数，使上一次未完成的跳转自动失效
+        const generation = ++jumpGenerationRef.current;
+        const previousAnchorIndex = lastKnownAnchorIndexRef.current;
+
+        cancelIdlePrefetch();
+        isUserScrollingRef.current = false;
+        if (scrollIdleTimerRef.current !== null) {
+            window.clearTimeout(scrollIdleTimerRef.current);
+            scrollIdleTimerRef.current = null;
+        }
+        pendingSearchTextRef.current = searchText || null;
+        initialScrollDone.current = true;
+        stop();
+        if (progressTimerRef.current) {
+            window.clearTimeout(progressTimerRef.current);
+            progressTimerRef.current = null;
+        }
+
+        syncJumpTargetChapter(targetSpineIndex);
+
+        if (tryJumpToMountedChapter(targetSpineIndex, generation, searchText)) {
+            return;
+        }
+
+        resetReaderForJump(targetSpineIndex);
 
         // 跳转代数检查：如果在清理过程中又触发了新的跳转，放弃本次加载
         if (jumpGenerationRef.current !== generation) return;
 
         // loadChapter uses chaptersRef (always current), so no stale closure issue
-        loadChapter(targetSpineIndex, 'initial');
+        loadChapter(targetSpineIndex, resolveJumpLoadDirection(targetSpineIndex, previousAnchorIndex));
     }, [
         cancelIdlePrefetch,
-        cleanupMountedChapterDom,
-        commitViewportScroll,
         loadChapter,
-        onChapterChange,
-        revealSearchInChapter,
-        resetResizeObservers,
+        resetReaderForJump,
         stop,
-        syncViewportChapterState,
+        syncJumpTargetChapter,
+        tryJumpToMountedChapter,
     ]);
 
     useEffect(() => {

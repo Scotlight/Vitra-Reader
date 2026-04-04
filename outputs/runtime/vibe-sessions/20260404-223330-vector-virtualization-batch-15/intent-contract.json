@@ -1,0 +1,31 @@
+{
+  "runId": "20260404-223330-vector-virtualization-batch-15",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续推进 ScrollReaderView 拆分，收口 jumpToSpine 的方向判定和分支结构。",
+  "deliverable": [
+    "scrollChapterJump 工具模块",
+    "拆分后的 jumpToSpine 本地辅助步骤",
+    "对应测试",
+    "第十五批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前十五批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "jumpToSpine 不再直接承载全部方向判定和分支细节",
+    "跳转方向与已挂载章节判定有测试覆盖",
+    "测试、类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不继续拆 loadChapter 主流程",
+    "本轮不修改未跟踪审计文档"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}
