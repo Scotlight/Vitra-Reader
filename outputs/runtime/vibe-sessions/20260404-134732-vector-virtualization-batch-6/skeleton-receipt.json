@@ -1,0 +1,11 @@
+{
+  "runId": "20260404-134732-vector-virtualization-batch-6",
+  "stage": "skeleton_check",
+  "cwd": "D:/0010/.A_project/epub reader",
+  "branch": "main",
+  "head": "f4eff46",
+  "notes": [
+    "代码工作树干净，只有调查目录、审计材料和恢复脚本处于未跟踪状态。",
+    "前五批向量化虚拟渲染提交已经推送到 origin/main。"
+  ]
+}

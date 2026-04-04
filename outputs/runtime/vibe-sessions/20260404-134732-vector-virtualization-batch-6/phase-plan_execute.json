@@ -1,0 +1,18 @@
+{
+  "runId": "20260404-134732-vector-virtualization-batch-6",
+  "stage": "plan_execute",
+  "status": "completed",
+  "changedFiles": [
+    "src/components/Reader/ScrollReaderView.tsx",
+    "src/components/Reader/scrollVectorStrategy.ts",
+    "src/test/scrollVectorStrategy.test.ts",
+    "src/test/metaVectorManager.test.ts",
+    "docs/requirements/2026-04-04-vector-virtualization-batch-6.md",
+    "docs/plans/2026-04-04-vector-virtualization-batch-6-execution-plan.md"
+  ],
+  "implemented": [
+    "ScrollReaderView 改为先计算跨章节全局挂载计划，再统一挂载和回收虚拟段。",
+    "窗口化分流、placeholder 缓存恢复和全局预算规划提炼为纯函数。",
+    "新增预算控制、缓存恢复、队列绕过和已测量段恢复测试。"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "runId": "20260404-134732-vector-virtualization-batch-6",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续推进向量化虚拟渲染，把章节内窗口化扩展为跨章节全局节点预算控制。",
+  "deliverable": [
+    "跨章节全局虚拟段预算控制",
+    "向量缓存恢复与窗口化分流纯函数",
+    "第六批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前五批已经落地的窗口化主链",
+    "不改分页模式",
+    "不提交调查目录和其他未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "多章节预加载时真实挂载段数受全局预算限制",
+    "命中向量化计划的章节继续绕过 shadowQueue",
+    "向量缓存恢复与已测量段恢复有测试覆盖",
+    "测试、TypeScript 检查与生产构建通过"
+  ],
+  "nonGoals": [
+    "本轮不处理未跟踪审计文档的提交",
+    "本轮不重写 ShadowRenderer 的普通章节路径"
+  ],
+  "assumptions": [
+    "用户多次发出 `$vibe 继续`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入本轮提交。"
+  ]
+}

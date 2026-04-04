@@ -16,9 +16,7 @@ import { findTextAcrossSegments, findTextInDOM, highlightRange } from '../../uti
 import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService';
 import {
     buildChapterMetaVector,
-    buildVitraVectorRenderPlan,
     batchUpdateSegmentHeights,
-    computeVisibleRange,
     type ChapterMetaVector,
     type SegmentMeta,
 } from '../../engine';
@@ -27,6 +25,11 @@ import { clampNumber } from '../../utils/mathUtils';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
 import { releaseMediaResources } from '../../utils/mediaResourceCleanup';
 import { captureAnchorInfo, calculateAnchorDelta, findBestAnchor } from '../../utils/anchorDetection';
+import {
+    canRestoreWindowedVectorPlaceholder,
+    computeGlobalVirtualSegmentMountPlan,
+    shouldBypassShadowQueueForSegmentMetas,
+} from './scrollVectorStrategy';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
@@ -103,6 +106,7 @@ const SCROLL_HEDGE_EPSILON_PX = 0.1;
 const INSTANT_SCROLL_BEHAVIOR = 'instant' as any;
 const RANGE_HYDRATION_OVERSCAN_SEGMENTS = 3;
 const RANGE_HYDRATION_PRELOAD_MARGIN_PX = 720;
+const GLOBAL_VIRTUAL_SEGMENT_BUDGET = 18;
 const VIRTUAL_SEGMENT_MIN_HEIGHT_PX = 96;
 const SEARCH_SEGMENT_WINDOW_RADIUS = 1;
 
@@ -212,18 +216,8 @@ function normalizeSearchText(input: string): string {
     return input.replace(/\s+/g, ' ').trim();
 }
 
-function resolveVectorChapterSize(segmentMetas: readonly SegmentMeta[] | undefined): number {
-    if (!segmentMetas || segmentMetas.length === 0) return 0;
-    return segmentMetas.reduce((sum, segment) => sum + segment.charCount, 0);
-}
-
 function shouldUseWindowedVectorChapter(segmentMetas: readonly SegmentMeta[] | undefined): boolean {
-    if (!segmentMetas || segmentMetas.length === 0) return false;
-    return buildVitraVectorRenderPlan({
-        mode: 'scroll',
-        chapterSize: resolveVectorChapterSize(segmentMetas),
-        segmentCount: segmentMetas.length,
-    }).enabled;
+    return shouldBypassShadowQueueForSegmentMetas(segmentMetas);
 }
 
 
@@ -791,11 +785,9 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
         const chapterId = `ch-${spineIndex}`;
         const currentReaderStyleKey = JSON.stringify(readerStyles);
-        const canRestoreFromVectorCache = Boolean(
-            existingChapter?.status === 'placeholder'
-            && existingChapter.segmentMetas
-            && existingChapter.segmentMetas.length > 0
-            && existingChapter.vectorStyleKey === currentReaderStyleKey
+        const canRestoreFromVectorCache = canRestoreWindowedVectorPlaceholder(
+            existingChapter,
+            currentReaderStyleKey,
         );
 
         const loadingChapter: LoadedChapter = {
@@ -1761,38 +1753,40 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     const syncVirtualizedSegmentsByRange = useCallback((scrollTop: number, viewportHeight: number) => {
         if (viewportHeight <= 0) return;
 
-        const preloadTop = Math.max(0, scrollTop - RANGE_HYDRATION_PRELOAD_MARGIN_PX);
-        const preloadBottom = scrollTop + viewportHeight + RANGE_HYDRATION_PRELOAD_MARGIN_PX;
-
-        virtualChaptersRef.current.forEach((runtime) => {
+        const runtimes = Array.from(virtualChaptersRef.current.values());
+        runtimes.forEach((runtime) => {
             refreshVirtualChapterLayout(runtime);
+        });
 
-            const chapterTop = runtime.chapterEl.offsetTop;
-            const chapterBottom = chapterTop + runtime.vector.totalEstimatedHeight;
-            let startIndex = 0;
-            let endIndex = -1;
+        const mountPlan = computeGlobalVirtualSegmentMountPlan(
+            runtimes.map((runtime) => ({
+                chapterId: runtime.chapterId,
+                chapterTop: runtime.chapterEl.offsetTop,
+                vector: runtime.vector,
+            })),
+            scrollTop,
+            viewportHeight,
+            {
+                overscanSegments: RANGE_HYDRATION_OVERSCAN_SEGMENTS,
+                preloadMarginPx: RANGE_HYDRATION_PRELOAD_MARGIN_PX,
+                globalSegmentBudget: GLOBAL_VIRTUAL_SEGMENT_BUDGET,
+            },
+        );
 
-            if (!(chapterBottom < preloadTop || chapterTop > preloadBottom)) {
-                const localScrollTop = Math.max(0, scrollTop - chapterTop);
-                const nextRange = computeVisibleRange(
-                    runtime.vector.segments,
-                    localScrollTop,
-                    viewportHeight,
-                    RANGE_HYDRATION_OVERSCAN_SEGMENTS,
-                );
-                startIndex = nextRange.startIndex;
-                endIndex = nextRange.endIndex;
-            }
+        runtimes.forEach((runtime) => {
+            const nextIndices = new Set(mountPlan.get(runtime.chapterId) ?? []);
 
             Array.from(runtime.activeSegmentEls.keys()).forEach((index) => {
-                if (index < startIndex || index > endIndex) {
+                if (!nextIndices.has(index)) {
                     releaseVirtualSegment(runtime, index);
                 }
             });
 
-            for (let index = startIndex; index <= endIndex; index += 1) {
-                mountVirtualSegment(runtime, index);
-            }
+            Array.from(nextIndices)
+                .sort((left, right) => left - right)
+                .forEach((index) => {
+                    mountVirtualSegment(runtime, index);
+                });
         });
     }, [mountVirtualSegment, refreshVirtualChapterLayout, releaseVirtualSegment]);
 
