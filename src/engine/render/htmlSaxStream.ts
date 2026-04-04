@@ -43,6 +43,11 @@ export interface HtmlSaxScanResult {
   readonly mediaTagOffsets: number[];
 }
 
+export interface HtmlSaxStreamHandlers {
+  onBlockBoundary?: (offset: number) => void | boolean;
+  onMediaTag?: (offset: number) => void | boolean;
+}
+
 function isWhitespace(charCode: number): boolean {
   return charCode === 0x20 || charCode === 0x0A || charCode === 0x09 || charCode === 0x0D || charCode === 0x0C;
 }
@@ -130,11 +135,9 @@ function readTagToken(html: string, start: number): HtmlTagToken | null {
  * - 不构建 DOM，不做正则全量匹配
  * - 分块推进（chunk），按标签事件收集边界与媒体位点
  */
-export function scanHtmlBySaxStream(html: string): HtmlSaxScanResult {
-  const blockBoundaryOffsets: number[] = [];
-  const mediaTagOffsets: number[] = [];
+export function streamHtmlBySaxStream(html: string, handlers: HtmlSaxStreamHandlers): void {
   if (!html) {
-    return { blockBoundaryOffsets, mediaTagOffsets };
+    return;
   }
 
   let cursor = 0;
@@ -159,14 +162,32 @@ export function scanHtmlBySaxStream(html: string): HtmlSaxScanResult {
       }
 
       if (token.isClosing && BLOCK_BOUNDARY_TAGS.has(token.name)) {
-        blockBoundaryOffsets.push(token.end);
+        if (handlers.onBlockBoundary?.(token.end) === false) {
+          return;
+        }
       } else if (!token.isClosing && MEDIA_TAGS.has(token.name)) {
-        mediaTagOffsets.push(token.start);
+        if (handlers.onMediaTag?.(token.start) === false) {
+          return;
+        }
       }
 
       cursor = token.end;
     }
   }
+}
+
+export function scanHtmlBySaxStream(html: string): HtmlSaxScanResult {
+  const blockBoundaryOffsets: number[] = [];
+  const mediaTagOffsets: number[] = [];
+
+  streamHtmlBySaxStream(html, {
+    onBlockBoundary(offset) {
+      blockBoundaryOffsets.push(offset);
+    },
+    onMediaTag(offset) {
+      mediaTagOffsets.push(offset);
+    },
+  });
 
   return { blockBoundaryOffsets, mediaTagOffsets };
 }

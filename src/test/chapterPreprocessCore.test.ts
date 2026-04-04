@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { preprocessChapterCore } from '../engine/render/chapterPreprocessCore'
+import { preprocessChapterCore, vectorizeHtmlToSegmentMetas } from '../engine/render/chapterPreprocessCore'
 
 describe('chapterPreprocessCore', () => {
     it('大章节向量化后不再同时返回三份 HTML 载荷', () => {
@@ -25,5 +25,22 @@ describe('chapterPreprocessCore', () => {
         expect(result.htmlContent).toBe('')
         expect(result.htmlFragments).toEqual([])
         expect(result.segmentMetas?.every((segment) => segment.htmlContent.length > 0)).toBe(true)
+    })
+
+    it('流式向量化不会把切点之后的媒体标记污染到前一段', () => {
+        const html = `${'<p>alpha</p>'.repeat(600)}<img src="cover.jpg">${'<p>omega</p>'.repeat(600)}`
+        const segments = vectorizeHtmlToSegmentMetas(html, {
+            targetChars: 4_000,
+            fontSize: 16,
+            pageWidth: 900,
+            lineHeight: 1.6,
+            paragraphSpacing: 12,
+        })
+
+        expect(segments.length).toBeGreaterThan(1)
+        expect(segments.some((segment) => segment.hasMedia)).toBe(true)
+        const firstMediaIndex = segments.findIndex((segment) => segment.hasMedia)
+        expect(firstMediaIndex).toBeGreaterThan(0)
+        expect(segments.slice(0, firstMediaIndex).every((segment) => !segment.hasMedia)).toBe(true)
     })
 })

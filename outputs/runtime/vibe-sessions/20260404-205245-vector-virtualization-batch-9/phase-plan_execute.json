@@ -1,0 +1,18 @@
+{
+  "runId": "20260404-205245-vector-virtualization-batch-9",
+  "stage": "plan_execute",
+  "status": "completed",
+  "changedFiles": [
+    "src/engine/render/htmlSaxStream.ts",
+    "src/engine/render/chapterPreprocessCore.ts",
+    "src/test/htmlSaxStream.test.ts",
+    "src/test/chapterPreprocessCore.test.ts",
+    "docs/requirements/2026-04-04-vector-virtualization-batch-9.md",
+    "docs/plans/2026-04-04-vector-virtualization-batch-9-execution-plan.md"
+  ],
+  "implemented": [
+    "新增回调式 SAX 扫描接口，并让分片与向量落段按回调边扫描边消费。",
+    "真正命中向量化计划的大章节不再同时返回 htmlContent 和 htmlFragments。",
+    "补充流式扫描一致性、提前停止、媒体归属与大章节去重载荷测试。"
+  ]
+}

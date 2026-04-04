@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scanHtmlBySaxStream, consumeMediaOffsetInRange } from '../engine/render/htmlSaxStream'
+import { scanHtmlBySaxStream, consumeMediaOffsetInRange, streamHtmlBySaxStream } from '../engine/render/htmlSaxStream'
 
 describe('scanHtmlBySaxStream — 块边界检测', () => {
     it('空字符串返回空数组', () => {
@@ -108,5 +108,40 @@ describe('consumeMediaOffsetInRange', () => {
     it('空偏移数组返回 false', () => {
         const cursor = { value: 0 }
         expect(consumeMediaOffsetInRange([], 0, 100, cursor)).toBe(false)
+    })
+})
+
+describe('streamHtmlBySaxStream', () => {
+    it('流式回调结果与聚合扫描一致', () => {
+        const html = '<p>a</p><img src="a.jpg"><div>b</div><video src="c.mp4"></video>'
+        const blockBoundaryOffsets: number[] = []
+        const mediaTagOffsets: number[] = []
+
+        streamHtmlBySaxStream(html, {
+            onBlockBoundary(offset) {
+                blockBoundaryOffsets.push(offset)
+            },
+            onMediaTag(offset) {
+                mediaTagOffsets.push(offset)
+            },
+        })
+
+        const aggregated = scanHtmlBySaxStream(html)
+        expect(blockBoundaryOffsets).toEqual(aggregated.blockBoundaryOffsets)
+        expect(mediaTagOffsets).toEqual(aggregated.mediaTagOffsets)
+    })
+
+    it('回调返回 false 时提前停止扫描', () => {
+        const html = '<p>a</p><p>b</p><p>c</p>'
+        const blockBoundaryOffsets: number[] = []
+
+        streamHtmlBySaxStream(html, {
+            onBlockBoundary(offset) {
+                blockBoundaryOffsets.push(offset)
+                return false
+            },
+        })
+
+        expect(blockBoundaryOffsets).toHaveLength(1)
     })
 })

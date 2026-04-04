@@ -3,6 +3,7 @@ import type {
   ChapterPreprocessResult,
 } from '../types/chapterPreprocess';
 import type { SegmentMeta, VectorizeConfig } from '../types/vectorRender';
+import { buildVitraVectorRenderPlan } from './vitraVectorPlanner';
 import {
   sanitizeChapterHtml,
   sanitizeStyleSheets,
@@ -13,8 +14,7 @@ import {
   scopeStyles,
 } from '../../utils/styleProcessor';
 import {
-  consumeMediaOffsetInRange,
-  scanHtmlBySaxStream,
+  streamHtmlBySaxStream,
 } from './htmlSaxStream';
 
 const FRAGMENT_TARGET_CHARS = 120_000;
@@ -40,6 +40,18 @@ function cutsInsideTag(html: string, index: number): boolean {
   return left > right;
 }
 
+function shouldDropFullHtmlPayload(
+  cleanedHtml: string,
+  segmentMetas: readonly SegmentMeta[] | undefined,
+): boolean {
+  if (!segmentMetas || segmentMetas.length === 0) return false;
+  return buildVitraVectorRenderPlan({
+    mode: 'scroll',
+    chapterSize: cleanedHtml.length,
+    segmentCount: segmentMetas.length,
+  }).enabled;
+}
+
 export function preprocessChapterCore(input: ChapterPreprocessInput): ChapterPreprocessResult {
   const sanitized = sanitizeChapterHtml(input.htmlContent);
   const inlineStyles = sanitizeStyleSheets(extractStyles(sanitized.htmlContent));
@@ -53,10 +65,11 @@ export function preprocessChapterCore(input: ChapterPreprocessInput): ChapterPre
   if (input.vectorize && cleanedHtml.length >= VECTORIZE_HTML_LENGTH_THRESHOLD && input.vectorConfig) {
     segmentMetas = vectorizeHtmlToSegmentMetas(cleanedHtml, input.vectorConfig);
   }
+  const shouldDropHtmlPayload = shouldDropFullHtmlPayload(cleanedHtml, segmentMetas);
 
   return {
-    htmlContent: cleanedHtml,
-    htmlFragments: splitHtmlIntoFragments(cleanedHtml),
+    htmlContent: shouldDropHtmlPayload ? '' : cleanedHtml,
+    htmlFragments: shouldDropHtmlPayload ? [] : splitHtmlIntoFragments(cleanedHtml),
     externalStyles: scopedStyles,
     removedTagCount: sanitized.removedTagCount,
     removedAttributeCount: sanitized.removedAttributeCount,
@@ -88,26 +101,34 @@ function splitHtmlIntoFragments(html: string): string[] {
     return [html];
   }
 
-  const { blockBoundaryOffsets } = scanHtmlBySaxStream(html);
   const fragments: string[] = [];
   let start = 0;
   let lastSafeCut = 0;
+  let fallbackToWholeHtml = false;
 
-  for (const end of blockBoundaryOffsets) {
-    if (end - start < FRAGMENT_TARGET_CHARS) {
-      lastSafeCut = end;
-      continue;
-    }
+  streamHtmlBySaxStream(html, {
+    onBlockBoundary(end) {
+      if (end - start < FRAGMENT_TARGET_CHARS) {
+        lastSafeCut = end;
+        return;
+      }
 
-    const hardCut = Math.min(end, start + FRAGMENT_HARD_MAX_CHARS);
-    const cutPoint = lastSafeCut > start ? lastSafeCut : hardCut;
-    if (cutsInsideTag(html, cutPoint)) {
-      return [html];
-    }
+      const hardCut = Math.min(end, start + FRAGMENT_HARD_MAX_CHARS);
+      const cutPoint = lastSafeCut > start ? lastSafeCut : hardCut;
+      if (cutsInsideTag(html, cutPoint)) {
+        fallbackToWholeHtml = true;
+        return false;
+      }
 
-    fragments.push(html.slice(start, cutPoint));
-    start = cutPoint;
-    lastSafeCut = cutPoint;
+      fragments.push(html.slice(start, cutPoint));
+      start = cutPoint;
+      lastSafeCut = cutPoint;
+      return;
+    },
+  });
+
+  if (fallbackToWholeHtml) {
+    return [html];
   }
 
   const tailFragments = buildTailFragments(html, start);
@@ -156,9 +177,40 @@ function appendSegmentMeta(options: AppendSegmentOptions): number {
   return offsetY + estimatedHeight;
 }
 
+function consumeQueuedMediaOffsets(
+  mediaOffsets: number[],
+  cursorRef: { value: number },
+  end: number,
+): boolean {
+  let cursor = cursorRef.value;
+  let hasMedia = false;
+  while (cursor < mediaOffsets.length && mediaOffsets[cursor] < end) {
+    hasMedia = true;
+    cursor += 1;
+  }
+
+  if (cursor > 0) {
+    mediaOffsets.splice(0, cursor);
+    cursor = 0;
+  }
+  cursorRef.value = cursor;
+  return hasMedia;
+}
+
+function detectAnyMediaTag(html: string): boolean {
+  let hasMedia = false;
+  streamHtmlBySaxStream(html, {
+    onMediaTag() {
+      hasMedia = true;
+      return false;
+    },
+  });
+  return hasMedia;
+}
+
 /**
  * Worker 侧流式/SAX 向量化：
- * - 分块扫描标签事件，不使用 matchAll 全量正则遍历
+ * - 以 SAX 回调按序消费，不预先构造完整边界数组
  * - 仅在落段时 slice 内容，避免频繁中间分配
  */
 export function vectorizeHtmlToSegmentMetas(
@@ -166,55 +218,57 @@ export function vectorizeHtmlToSegmentMetas(
   config: VectorizeConfig,
 ): SegmentMeta[] {
   const targetChars = Math.max(4_000, config.targetChars || 16_000);
-  const scanResult = scanHtmlBySaxStream(html);
 
   if (!html || html.length <= targetChars) {
-    return [buildSingleSegmentMeta(html, 0, config, scanResult.mediaTagOffsets.length > 0)];
+    return [buildSingleSegmentMeta(html, 0, config, detectAnyMediaTag(html))];
   }
 
   const segments: SegmentMeta[] = [];
+  const pendingMediaOffsets: number[] = [];
   const mediaCursor = { value: 0 };
   let start = 0;
   let lastSafeCut = 0;
   let cumulativeOffsetY = 0;
+  let fallbackToSingleSegment = false;
 
-  for (const end of scanResult.blockBoundaryOffsets) {
-    if (end - start < targetChars) {
-      lastSafeCut = end;
-      continue;
-    }
+  streamHtmlBySaxStream(html, {
+    onMediaTag(offset) {
+      pendingMediaOffsets.push(offset);
+    },
+    onBlockBoundary(end) {
+      if (end - start < targetChars) {
+        lastSafeCut = end;
+        return;
+      }
 
-    const cutPoint = lastSafeCut > start ? lastSafeCut : end;
-    if (cutsInsideTag(html, cutPoint)) {
-      return [buildSingleSegmentMeta(html, 0, config, scanResult.mediaTagOffsets.length > 0)];
-    }
+      const cutPoint = lastSafeCut > start ? lastSafeCut : end;
+      if (cutsInsideTag(html, cutPoint)) {
+        fallbackToSingleSegment = true;
+        return false;
+      }
 
-    const hasMedia = consumeMediaOffsetInRange(
-      scanResult.mediaTagOffsets,
-      start,
-      cutPoint,
-      mediaCursor,
-    );
-    cumulativeOffsetY = appendSegmentMeta({
-      segments,
-      html,
-      start,
-      end: cutPoint,
-      offsetY: cumulativeOffsetY,
-      hasMedia,
-      config,
-    });
-    start = cutPoint;
-    lastSafeCut = cutPoint;
+      const hasMedia = consumeQueuedMediaOffsets(pendingMediaOffsets, mediaCursor, cutPoint);
+      cumulativeOffsetY = appendSegmentMeta({
+        segments,
+        html,
+        start,
+        end: cutPoint,
+        offsetY: cumulativeOffsetY,
+        hasMedia,
+        config,
+      });
+      start = cutPoint;
+      lastSafeCut = cutPoint;
+      return;
+    },
+  });
+
+  if (fallbackToSingleSegment) {
+    return [buildSingleSegmentMeta(html, 0, config, detectAnyMediaTag(html))];
   }
 
   if (start < html.length) {
-    const hasMedia = consumeMediaOffsetInRange(
-      scanResult.mediaTagOffsets,
-      start,
-      html.length,
-      mediaCursor,
-    );
+    const hasMedia = pendingMediaOffsets.length > 0;
     appendSegmentMeta({
       segments,
       html,
@@ -227,7 +281,7 @@ export function vectorizeHtmlToSegmentMetas(
   }
 
   if (segments.length === 0) {
-    return [buildSingleSegmentMeta(html, 0, config, scanResult.mediaTagOffsets.length > 0)];
+    return [buildSingleSegmentMeta(html, 0, config, pendingMediaOffsets.length > 0)];
   }
   return segments;
 }
