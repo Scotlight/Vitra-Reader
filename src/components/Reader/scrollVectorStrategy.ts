@@ -113,6 +113,22 @@ function resolveDistanceToViewportCenter(
     };
 }
 
+function compareVirtualMountCandidates(left: VirtualMountCandidate, right: VirtualMountCandidate): number {
+    if (left.visible !== right.visible) {
+        return left.visible ? -1 : 1;
+    }
+    if (left.distanceToViewportCenter !== right.distanceToViewportCenter) {
+        return left.distanceToViewportCenter - right.distanceToViewportCenter;
+    }
+    if (left.chapterTop !== right.chapterTop) {
+        return left.chapterTop - right.chapterTop;
+    }
+    if (left.offsetY !== right.offsetY) {
+        return left.offsetY - right.offsetY;
+    }
+    return left.segmentIndex - right.segmentIndex;
+}
+
 export function computeGlobalVirtualSegmentMountPlan(
     chapters: readonly VirtualMountPlanChapter[],
     scrollTop: number,
@@ -169,25 +185,19 @@ export function computeGlobalVirtualSegmentMountPlan(
         }
     });
 
-    candidates
-        .sort((left, right) => {
-            if (left.visible !== right.visible) {
-                return left.visible ? -1 : 1;
-            }
-            if (left.distanceToViewportCenter !== right.distanceToViewportCenter) {
-                return left.distanceToViewportCenter - right.distanceToViewportCenter;
-            }
-            if (left.chapterTop !== right.chapterTop) {
-                return left.chapterTop - right.chapterTop;
-            }
-            if (left.offsetY !== right.offsetY) {
-                return left.offsetY - right.offsetY;
-            }
-            return left.segmentIndex - right.segmentIndex;
-        });
+    const visibleCandidates = candidates
+        .filter((candidate) => candidate.visible)
+        .sort(compareVirtualMountCandidates);
+    const preloadCandidates = candidates
+        .filter((candidate) => !candidate.visible)
+        .sort(compareVirtualMountCandidates);
+    const effectiveBudget = Math.max(options.globalSegmentBudget, visibleCandidates.length);
 
-    candidates
-        .slice(0, options.globalSegmentBudget)
+    [
+        ...visibleCandidates,
+        ...preloadCandidates,
+    ]
+        .slice(0, effectiveBudget)
         .forEach((candidate) => {
             const indices = plan.get(candidate.chapterId) ?? [];
             indices.push(candidate.segmentIndex);

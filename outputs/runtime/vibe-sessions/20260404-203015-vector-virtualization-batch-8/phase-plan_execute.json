@@ -1,0 +1,15 @@
+{
+  "runId": "20260404-203015-vector-virtualization-batch-8",
+  "stage": "plan_execute",
+  "status": "completed",
+  "changedFiles": [
+    "src/components/Reader/scrollVectorStrategy.ts",
+    "src/test/scrollVectorStrategy.test.ts",
+    "docs/requirements/2026-04-04-vector-virtualization-batch-8.md",
+    "docs/plans/2026-04-04-vector-virtualization-batch-8-execution-plan.md"
+  ],
+  "implemented": [
+    "全局虚拟段预算先保留全部可见段，再补充预算范围内的非可见预加载段。",
+    "补充预算低于可见段数量时仍保留全部可见段的测试。"
+  ]
+}

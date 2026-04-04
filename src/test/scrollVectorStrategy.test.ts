@@ -109,4 +109,23 @@ describe('scrollVectorStrategy', () => {
         expect(plan.get('ch-0')).toEqual([2]);
         expect(plan.get('ch-1')).toEqual([0]);
     });
+
+    it('预算低于可见段数量时仍然保留全部可见段', () => {
+        const chapter = buildChapterMetaVector('ch-0', 0, [
+            createSegment(0, 180_000, 40),
+            createSegment(1, 180_000, 40),
+            createSegment(2, 180_000, 40),
+            createSegment(3, 180_000, 40),
+        ]);
+
+        const plan = computeGlobalVirtualSegmentMountPlan([
+            { chapterId: 'ch-0', chapterTop: 0, vector: chapter },
+        ], 0, 120, {
+            overscanSegments: 0,
+            preloadMarginPx: 0,
+            globalSegmentBudget: 2,
+        });
+
+        expect(plan.get('ch-0')).toEqual([0, 1, 2, 3]);
+    });
 });
