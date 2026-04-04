@@ -1,0 +1,17 @@
+{
+  "runId": "20260404-220202-vector-virtualization-batch-13",
+  "stage": "plan_execute",
+  "status": "completed",
+  "changedFiles": [
+    "src/components/Reader/scrollChapterViewport.ts",
+    "src/components/Reader/ScrollReaderView.tsx",
+    "src/test/scrollChapterViewport.test.ts",
+    "docs/requirements/2026-04-04-vector-virtualization-batch-13.md",
+    "docs/plans/2026-04-04-vector-virtualization-batch-13-execution-plan.md"
+  ],
+  "implemented": [
+    "新增章节 DOM 父链回溯辅助函数。",
+    "提炼视口滚动提交辅助函数，统一 scrollTop 与派生状态同步。",
+    "选择菜单和 jumpToSpine 改用新辅助函数。"
+  ]
+}

@@ -32,6 +32,7 @@ import {
     shouldBypassShadowQueueForSegmentMetas,
 } from './scrollVectorStrategy';
 import {
+    findAncestorChapterSpineIndex,
     findChapterAtViewportOffset,
     parseChapterSpineIndex,
     resolveViewportChapterProgress,
@@ -1434,6 +1435,18 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         }).catch(err => console.warn('[ScrollReader] Progress save failed:', err));
     }, [spineItems, bookId, onProgressChange]);
 
+    const commitViewportScroll = useCallback((
+        viewport: HTMLDivElement,
+        nextScrollTop: number,
+        syncDerivedState: boolean = false,
+    ) => {
+        viewport.scrollTop = nextScrollTop;
+        lastScrollTopRef.current = viewport.scrollTop;
+        if (!syncDerivedState) return;
+        updateCurrentChapter(viewport.scrollTop, viewport.clientHeight);
+        updateProgress(viewport.scrollTop, viewport.clientHeight);
+    }, [updateCurrentChapter, updateProgress]);
+
     const findVirtualSearchTargetIndex = useCallback((chapterId: string, searchText: string): number => {
         const vector = chapterVectorsRef.current.get(chapterId);
         if (!vector || vector.segments.length === 0) return -1;
@@ -1461,8 +1474,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             if (!range) return false;
             const rect = range.getBoundingClientRect();
             const vpRect = viewport.getBoundingClientRect();
-            viewport.scrollTop += rect.top - vpRect.top;
-            lastScrollTopRef.current = viewport.scrollTop;
+            commitViewportScroll(viewport, viewport.scrollTop + rect.top - vpRect.top);
             return true;
         }
 
@@ -1478,8 +1490,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
         const targetSegment = runtime.vector.segments[targetIndex];
         if (!targetSegment) return false;
-        viewport.scrollTop = runtime.chapterEl.offsetTop + targetSegment.offsetY;
-        lastScrollTopRef.current = viewport.scrollTop;
+        commitViewportScroll(viewport, runtime.chapterEl.offsetTop + targetSegment.offsetY);
         syncVirtualizedSegmentsRef.current(viewport.scrollTop, viewport.clientHeight);
 
         requestAnimationFrame(() => {
@@ -1492,12 +1503,11 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             if (!primaryRange) return;
             const rect = primaryRange.getBoundingClientRect();
             const vpRect = viewport.getBoundingClientRect();
-            viewport.scrollTop += rect.top - vpRect.top;
-            lastScrollTopRef.current = viewport.scrollTop;
+            commitViewportScroll(viewport, viewport.scrollTop + rect.top - vpRect.top);
         });
 
         return true;
-    }, [findVirtualSearchTargetIndex, mountVirtualSegment, refreshVirtualChapterLayout]);
+    }, [commitViewportScroll, findVirtualSearchTargetIndex, mountVirtualSegment, refreshVirtualChapterLayout]);
 
     revealSearchInChapterRef.current = revealSearchInChapter;
 
@@ -1546,17 +1556,11 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             if (listEl && viewport) {
                 const domEl = listEl.querySelector(`[data-chapter-id="ch-${targetSpineIndex}"]`) as HTMLElement | null;
                 if (domEl) {
-                    viewport.scrollTop = domEl.offsetTop;
-                    lastScrollTopRef.current = viewport.scrollTop;
-                    updateCurrentChapter(viewport.scrollTop, viewport.clientHeight);
-                    updateProgress(viewport.scrollTop, viewport.clientHeight);
+                    commitViewportScroll(viewport, domEl.offsetTop, true);
 
                     requestAnimationFrame(() => {
                         if (jumpGenerationRef.current !== generation) return;
-                        viewport.scrollTop = domEl.offsetTop;
-                        lastScrollTopRef.current = viewport.scrollTop;
-                        updateCurrentChapter(viewport.scrollTop, viewport.clientHeight);
-                        updateProgress(viewport.scrollTop, viewport.clientHeight);
+                        commitViewportScroll(viewport, domEl.offsetTop, true);
                     });
 
                     // If searchText, find and scroll to it
@@ -1610,6 +1614,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     }, [
         cancelIdlePrefetch,
         cleanupMountedChapterDom,
+        commitViewportScroll,
         loadChapter,
         onChapterChange,
         revealSearchInChapter,
@@ -1668,20 +1673,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             const range = sel.getRangeAt(0);
             const rect = range.getBoundingClientRect();
 
-            // Find which chapter this selection belongs to
-            let node: Node | null = range.startContainer;
-            let spineIdx = -1;
-            while (node && node !== viewport) {
-                if (node instanceof HTMLElement) {
-                    const chId = node.getAttribute('data-chapter-id');
-                    if (chId) {
-                        const match = chId.match(/^ch-(\d+)$/);
-                        if (match) spineIdx = parseInt(match[1], 10);
-                        break;
-                    }
-                }
-                node = node.parentNode;
-            }
+            const spineIdx = findAncestorChapterSpineIndex(range.startContainer, viewport);
 
             setSelectionMenu({
                 visible: true,

@@ -1,0 +1,31 @@
+{
+  "runId": "20260404-220202-vector-virtualization-batch-13",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续推进 ScrollReaderView 拆分，收口章节 DOM 回溯和视口滚动同步。",
+  "deliverable": [
+    "章节 DOM 回溯辅助函数",
+    "视口滚动提交辅助函数",
+    "对应测试",
+    "第十三批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前十三批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "选择菜单链路不再手写章节 ID 正则回溯",
+    "jumpToSpine 不再重复手写滚动状态同步",
+    "测试、类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不继续拆 loadChapter 主流程",
+    "本轮不修改未跟踪审计文档"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}

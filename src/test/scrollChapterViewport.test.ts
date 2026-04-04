@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+    findAncestorChapterSpineIndex,
     findChapterAtViewportOffset,
     parseChapterSpineIndex,
     resolveViewportChapterProgress,
@@ -10,6 +11,18 @@ describe('scrollChapterViewport', () => {
         expect(parseChapterSpineIndex('ch-12')).toBe(12)
         expect(parseChapterSpineIndex('chapter-12')).toBeNull()
         expect(parseChapterSpineIndex(null)).toBeNull()
+    })
+
+    it('沿 DOM 父链回溯章节 spineIndex', () => {
+        const chapterEl = document.createElement('div')
+        chapterEl.setAttribute('data-chapter-id', 'ch-7')
+        const paragraph = document.createElement('p')
+        const text = document.createTextNode('hello')
+        paragraph.appendChild(text)
+        chapterEl.appendChild(paragraph)
+
+        expect(findAncestorChapterSpineIndex(text, document.body)).toBe(7)
+        expect(findAncestorChapterSpineIndex(text, chapterEl)).toBe(-1)
     })
 
     it('根据视口偏移匹配章节', () => {

@@ -21,6 +21,20 @@ export function parseChapterSpineIndex(chapterIdAttr: string | null): number | n
     return Number.parseInt(match[1], 10)
 }
 
+export function findAncestorChapterSpineIndex(startNode: Node | null, stopNode: Node | null): number {
+    let current: Node | null = startNode
+    while (current && current !== stopNode) {
+        if (current instanceof HTMLElement) {
+            const spineIndex = parseChapterSpineIndex(current.getAttribute('data-chapter-id'))
+            if (spineIndex !== null) {
+                return spineIndex
+            }
+        }
+        current = current.parentNode
+    }
+    return -1
+}
+
 export function findChapterAtViewportOffset(
     chapters: readonly ChapterViewportEntry[],
     offset: number,
