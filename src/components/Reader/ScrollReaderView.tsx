@@ -3,7 +3,7 @@ import {
     forwardRef, useImperativeHandle, useMemo
 } from 'react';
 import type { ContentProvider, SpineItemInfo } from '../../engine/core/contentProvider';
-import { ShadowRenderer, ReaderStyleConfig, segmentPool } from './ShadowRenderer';
+import { ShadowRenderer, ReaderStyleConfig, createWindowedVectorChapterShell, segmentPool } from './ShadowRenderer';
 import {
     shouldPreloadChapter,
     detectScrollDirection,
@@ -16,6 +16,7 @@ import { findTextAcrossSegments, findTextInDOM, highlightRange } from '../../uti
 import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService';
 import {
     buildChapterMetaVector,
+    buildVitraVectorRenderPlan,
     batchUpdateSegmentHeights,
     computeVisibleRange,
     type ChapterMetaVector,
@@ -209,6 +210,20 @@ function insertVirtualSegmentInOrder(
 
 function normalizeSearchText(input: string): string {
     return input.replace(/\s+/g, ' ').trim();
+}
+
+function resolveVectorChapterSize(segmentMetas: readonly SegmentMeta[] | undefined): number {
+    if (!segmentMetas || segmentMetas.length === 0) return 0;
+    return segmentMetas.reduce((sum, segment) => sum + segment.charCount, 0);
+}
+
+function shouldUseWindowedVectorChapter(segmentMetas: readonly SegmentMeta[] | undefined): boolean {
+    if (!segmentMetas || segmentMetas.length === 0) return false;
+    return buildVitraVectorRenderPlan({
+        mode: 'scroll',
+        chapterSize: resolveVectorChapterSize(segmentMetas),
+        segmentCount: segmentMetas.length,
+    }).enabled;
 }
 
 
@@ -728,6 +743,37 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
     // ── Chapter Loading ──
 
+    const commitWindowedVectorChapter = useCallback((chapter: LoadedChapter, previousHeight: number) => {
+        const segmentMetas = chapter.segmentMetas;
+        if (!shouldUseWindowedVectorChapter(segmentMetas) || !segmentMetas) {
+            return false;
+        }
+
+        const vector = buildChapterMetaVector(chapter.id, chapter.spineIndex, segmentMetas);
+        chapterVectorsRef.current.set(chapter.id, vector);
+        const height = Math.max(1, vector.totalEstimatedHeight);
+        const node = createWindowedVectorChapterShell({
+            chapterId: chapter.id,
+            externalStyles: chapter.externalStyles,
+            readerStyles,
+            totalHeight: height,
+        });
+
+        setChapters(prev => prev.map((item) =>
+            item.spineIndex === chapter.spineIndex
+                ? { ...chapter, domNode: node, height, status: 'ready' as const }
+                : item
+        ));
+        pipelineRef.current = 'idle';
+
+        if (chapter.spineIndex < lastKnownAnchorIndexRef.current) {
+            pendingDeltaRef.current += height - previousHeight;
+            requestFlush();
+        }
+
+        return true;
+    }, [readerStyles, requestFlush]);
+
     const loadChapter = useCallback(async (
         spineIndex: number,
         direction: 'prev' | 'next' | 'initial',
@@ -738,6 +784,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
         const existingChapter = chaptersRef.current.find(ch => ch.spineIndex === spineIndex);
         if (existingChapter && existingChapter.status !== 'placeholder') return;
+        const previousHeight = existingChapter?.height || 0;
 
         loadingLockRef.current.add(spineIndex);
         pipelineRef.current = 'pre-fetching';
@@ -760,7 +807,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             segmentMetas: existingChapter?.segmentMetas,
             vectorStyleKey: existingChapter?.vectorStyleKey ?? currentReaderStyleKey,
             domNode: null,
-            height: existingChapter?.height || 0,
+            height: previousHeight,
             status: 'loading',
         };
 
@@ -781,11 +828,13 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 };
 
                 console.log(`[ScrollReader] Restore vector cache: spine ${spineIndex}`);
-                setChapters(prev =>
-                    prev.map(ch => ch.spineIndex === spineIndex ? restored : ch)
-                );
-                setShadowQueue(prev => [...prev, restored]);
-                pipelineRef.current = 'rendering-offscreen';
+                if (!commitWindowedVectorChapter(restored, previousHeight)) {
+                    setChapters(prev =>
+                        prev.map(ch => ch.spineIndex === spineIndex ? restored : ch)
+                    );
+                    setShadowQueue(prev => [...prev, restored]);
+                    pipelineRef.current = 'rendering-offscreen';
+                }
                 return;
             }
 
@@ -823,13 +872,13 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 status: 'shadow-rendering',
             };
 
-            // Update in list and add to shadow queue
-            setChapters(prev =>
-                prev.map(ch => ch.spineIndex === spineIndex ? loaded : ch)
-            );
-            setShadowQueue(prev => [...prev, loaded]);
-
-            pipelineRef.current = 'rendering-offscreen';
+            if (!commitWindowedVectorChapter(loaded, previousHeight)) {
+                setChapters(prev =>
+                    prev.map(ch => ch.spineIndex === spineIndex ? loaded : ch)
+                );
+                setShadowQueue(prev => [...prev, loaded]);
+                pipelineRef.current = 'rendering-offscreen';
+            }
         } catch (error) {
             console.error(`[ScrollReader] Failed to load chapter ${spineIndex}:`, error);
             if (existingChapter?.status === 'placeholder') {
@@ -843,7 +892,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         } finally {
             loadingLockRef.current.delete(spineIndex);
         }
-    }, [provider, readerStyles]);
+    }, [commitWindowedVectorChapter, provider, readerStyles]);
 
     const readerStylesKeyRef = useRef('');
     useEffect(() => {

@@ -108,6 +108,92 @@ interface ShadowRenderContext {
   windowedVirtualized: boolean;
 }
 
+function buildScopedReaderContentCss(
+  chapterId: string,
+  readerStyles: ReaderStyleConfig,
+): string {
+  const {
+    textColor, bgColor, fontSize, fontFamily,
+    lineHeight, paragraphSpacing, textIndentEm, letterSpacing, textAlign,
+    isPdfDarkMode,
+  } = readerStyles;
+  const scope = `[data-chapter-id="${chapterId}"]`;
+
+  const pdfDarkModeCss = isPdfDarkMode ? `
+      ${scope} .pdf-page-layer img {
+        filter: invert(0.6) brightness(1.3);
+      }
+    ` : '';
+
+  return `
+      ${buildReaderCssTemplate({
+        textColor,
+        bgColor,
+        fontSize,
+        fontFamily,
+        lineHeight,
+        paragraphSpacing,
+        letterSpacing,
+        textAlign,
+      }, {
+        scope,
+        applyColumns: false,
+        textIndentEm,
+      })}
+      ${scope} *:not(img):not(svg):not(path):not(video):not(canvas) {
+        color: var(--reader-text-color, ${textColor}) !important;
+      }
+      ${scope} h1, ${scope} h2, ${scope} h3, ${scope} h4, ${scope} h5, ${scope} h6 {
+        margin-top: 1em !important;
+        margin-bottom: 0.5em !important;
+      }
+      ${scope} hr, ${scope} .break, ${scope} [style*="page-break"] {
+        display: none !important;
+      }
+      ${pdfDarkModeCss}
+    `;
+}
+
+export function createWindowedVectorChapterShell(options: {
+  chapterId: string;
+  externalStyles?: string[];
+  readerStyles: ReaderStyleConfig;
+  totalHeight: number;
+}): HTMLElement {
+  const {
+    chapterId,
+    externalStyles = [],
+    readerStyles,
+    totalHeight,
+  } = options;
+
+  const chapterWrapper = document.createElement('div');
+  chapterWrapper.setAttribute('data-chapter-id', chapterId);
+  chapterWrapper.className = 'chapter-content';
+  chapterWrapper.style.width = '100%';
+  chapterWrapper.style.position = 'relative';
+  chapterWrapper.style.display = 'flow-root';
+  chapterWrapper.setAttribute('data-vitra-vectorized', 'true');
+
+  const styleEl = document.createElement('style');
+  styleEl.textContent = [
+    generateCSSOverride(chapterId),
+    externalStyles.join('\n'),
+    buildScopedReaderContentCss(chapterId, readerStyles),
+  ].join('\n');
+  chapterWrapper.appendChild(styleEl);
+
+  const contentDiv = document.createElement('div');
+  contentDiv.style.display = 'flow-root';
+  contentDiv.style.position = 'relative';
+  contentDiv.style.height = `${Math.max(1, totalHeight)}px`;
+  contentDiv.style.minHeight = contentDiv.style.height;
+  contentDiv.setAttribute('data-vitra-vector-content', 'true');
+  chapterWrapper.appendChild(contentDiv);
+
+  return chapterWrapper;
+}
+
 async function yieldToBrowser(): Promise<void> {
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve());
@@ -404,47 +490,7 @@ export function ShadowRenderer({
 
   /** 构建阅读器内容样式 CSS（已作用域化到 chapterId） */
   const buildContentCss = useCallback(() => {
-    const {
-      textColor, bgColor, fontSize, fontFamily,
-      lineHeight, paragraphSpacing, textIndentEm, letterSpacing, textAlign,
-      isPdfDarkMode,
-    } = readerStyles;
-    const scope = `[data-chapter-id="${chapterId}"]`;
-
-    // PDF 暗色模式：温和反色（60%）+ 亮度补偿
-    const pdfDarkModeCss = isPdfDarkMode ? `
-      ${scope} .pdf-page-layer img {
-        filter: invert(0.6) brightness(1.3);
-      }
-    ` : '';
-
-    return `
-      ${buildReaderCssTemplate({
-        textColor,
-        bgColor,
-        fontSize,
-        fontFamily,
-        lineHeight,
-        paragraphSpacing,
-        letterSpacing,
-        textAlign,
-      }, {
-        scope,
-        applyColumns: false,
-        textIndentEm,
-      })}
-      ${scope} *:not(img):not(svg):not(path):not(video):not(canvas) {
-        color: var(--reader-text-color, ${textColor}) !important;
-      }
-      ${scope} h1, ${scope} h2, ${scope} h3, ${scope} h4, ${scope} h5, ${scope} h6 {
-        margin-top: 1em !important;
-        margin-bottom: 0.5em !important;
-      }
-      ${scope} hr, ${scope} .break, ${scope} [style*="page-break"] {
-        display: none !important;
-      }
-      ${pdfDarkModeCss}
-    `;
+    return buildScopedReaderContentCss(chapterId, readerStyles);
   }, [readerStyles, chapterId]);
 
   useEffect(() => {
