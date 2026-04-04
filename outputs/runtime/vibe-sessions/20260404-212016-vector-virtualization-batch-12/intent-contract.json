@@ -1,0 +1,31 @@
+{
+  "runId": "20260404-212016-vector-virtualization-batch-12",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续推进阅读器主链拆分，提炼章节视口匹配与进度计算纯函数。",
+  "deliverable": [
+    "scrollChapterViewport 工具模块",
+    "ScrollReaderView 去重逻辑接入",
+    "对应单元测试",
+    "第十二批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前十二批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "ScrollReaderView 不再重复实现章节 ID 解析与视口命中判断",
+    "章节命中和进度计算有测试覆盖",
+    "测试、类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不继续拆 jumpToSpine 主流程",
+    "本轮不修改未跟踪审计文档"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}

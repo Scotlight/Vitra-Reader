@@ -1,0 +1,11 @@
+{
+  "runId": "20260404-212016-vector-virtualization-batch-12",
+  "stage": "skeleton_check",
+  "cwd": "D:/0010/.A_project/epub reader",
+  "branch": "main",
+  "head": "db5240f",
+  "notes": [
+    "代码工作树只有调查目录和审计材料未跟踪。",
+    "上一批 ScrollReaderView 清理收口已经推送到 origin/main。"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "runId": "20260404-212016-vector-virtualization-batch-12",
+  "stage": "verification",
+  "status": "completed",
+  "commands": [
+    {
+      "command": "npx vitest run src/test/scrollChapterViewport.test.ts",
+      "result": "passed"
+    },
+    {
+      "command": "npx tsc --pretty false --noEmit",
+      "result": "passed"
+    },
+    {
+      "command": "npm run build --silent",
+      "result": "passed",
+      "notes": [
+        "保留既有 chunk warning，不是本批引入的问题。"
+      ]
+    }
+  ]
+}

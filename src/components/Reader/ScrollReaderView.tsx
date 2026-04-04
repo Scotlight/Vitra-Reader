@@ -31,6 +31,12 @@ import {
     partitionStyleChangeTargets,
     shouldBypassShadowQueueForSegmentMetas,
 } from './scrollVectorStrategy';
+import {
+    findChapterAtViewportOffset,
+    parseChapterSpineIndex,
+    resolveViewportChapterProgress,
+    type ChapterViewportEntry,
+} from './scrollChapterViewport';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
@@ -221,6 +227,21 @@ function insertVirtualSegmentInOrder(
 
 function normalizeSearchText(input: string): string {
     return input.replace(/\s+/g, ' ').trim();
+}
+
+function collectChapterViewportEntries(listEl: HTMLElement): ChapterViewportEntry[] {
+    return Array.from(listEl.querySelectorAll('[data-chapter-id]'))
+        .map((node) => {
+            const el = node as HTMLElement;
+            const spineIndex = parseChapterSpineIndex(el.getAttribute('data-chapter-id'));
+            if (spineIndex === null) return null;
+            return {
+                spineIndex,
+                top: el.offsetTop,
+                bottom: el.offsetTop + el.offsetHeight,
+            };
+        })
+        .filter((entry): entry is ChapterViewportEntry => entry !== null);
 }
 
 function shouldUseWindowedVectorChapter(segmentMetas: readonly SegmentMeta[] | undefined): boolean {
@@ -1366,27 +1387,17 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             viewportHeight * CHAPTER_DETECTION_ANCHOR_RATIO,
             CHAPTER_DETECTION_ANCHOR_MAX_PX,
         );
-        const chapterEls = Array.from(listEl.querySelectorAll('[data-chapter-id]')) as HTMLElement[];
+        const matched = findChapterAtViewportOffset(
+            collectChapterViewportEntries(listEl),
+            chapterProbeLine,
+        );
+        if (!matched) return;
 
-        for (const el of chapterEls) {
-            const top = el.offsetTop;
-            const bottom = top + el.offsetHeight;
-
-            if (chapterProbeLine >= top && chapterProbeLine < bottom) {
-                const chapterIdAttr = el.getAttribute('data-chapter-id') || '';
-                const match = chapterIdAttr.match(/^ch-(\d+)$/);
-                if (match) {
-                    const spineIdx = Number(match[1]);
-                    lastKnownAnchorIndexRef.current = spineIdx;
-                    if (spineIdx !== currentSpineIndex) {
-                        setCurrentSpineIndex(spineIdx);
-                        // Report chapter change
-                        if (onChapterChange && spineItems[spineIdx]) {
-                            onChapterChange(spineItems[spineIdx].id, spineItems[spineIdx].href);
-                        }
-                    }
-                }
-                break;
+        lastKnownAnchorIndexRef.current = matched.spineIndex;
+        if (matched.spineIndex !== currentSpineIndex) {
+            setCurrentSpineIndex(matched.spineIndex);
+            if (onChapterChange && spineItems[matched.spineIndex]) {
+                onChapterChange(spineItems[matched.spineIndex].id, spineItems[matched.spineIndex].href);
             }
         }
     }, [currentSpineIndex, spineItems, onChapterChange]);
@@ -1404,45 +1415,24 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         if (!listEl) return;
 
         const viewportMid = scrollTop + viewportHeight / 2;
-        const chapterEls = Array.from(listEl.querySelectorAll('[data-chapter-id]')) as HTMLElement[];
+        const resolved = resolveViewportChapterProgress(
+            collectChapterViewportEntries(listEl),
+            viewportMid,
+            spineItems.length,
+        );
+        if (!resolved) return;
 
-        let chapterProgress = 0;
-        let resolvedSpineIndex = currentSpineIndex;
-        let hasMatchedChapter = false;
-
-        for (const el of chapterEls) {
-            const top = el.offsetTop;
-            const bottom = top + el.offsetHeight;
-            const chapterIdAttr = el.getAttribute('data-chapter-id') || '';
-            const match = chapterIdAttr.match(/^ch-(\d+)$/);
-
-            if (match && viewportMid >= top && viewportMid < bottom) {
-                const spineIdx = parseInt(match[1], 10);
-                const localProgress = el.offsetHeight > 0
-                    ? Math.max(0, Math.min(1, (viewportMid - top) / el.offsetHeight))
-                    : 0;
-
-                resolvedSpineIndex = spineIdx;
-                chapterProgress = (spineIdx + localProgress) / spineItems.length;
-                hasMatchedChapter = true;
-                break;
-            }
-        }
-
-        if (!hasMatchedChapter) return;
-
-        const progress = Math.max(0, Math.min(1, chapterProgress));
-        onProgressChange?.(progress);
+        onProgressChange?.(resolved.progress);
 
         // Persist progress
         db.progress.put({
             bookId,
-            location: `vitra:${resolvedSpineIndex}:${scrollTop}`,
-            percentage: progress,
-            currentChapter: spineItems[resolvedSpineIndex]?.href || '',
+            location: `vitra:${resolved.spineIndex}:${scrollTop}`,
+            percentage: resolved.progress,
+            currentChapter: spineItems[resolved.spineIndex]?.href || '',
             updatedAt: Date.now(),
         }).catch(err => console.warn('[ScrollReader] Progress save failed:', err));
-    }, [spineItems, bookId, currentSpineIndex, onProgressChange]);
+    }, [spineItems, bookId, onProgressChange]);
 
     const findVirtualSearchTargetIndex = useCallback((chapterId: string, searchText: string): number => {
         const vector = chapterVectorsRef.current.get(chapterId);
