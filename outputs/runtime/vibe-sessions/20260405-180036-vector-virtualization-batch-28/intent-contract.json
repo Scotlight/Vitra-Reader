@@ -1,0 +1,31 @@
+{
+  "runId": "20260405-180036-vector-virtualization-batch-28",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续提升跨视图一致性，把选择菜单状态解析 helper 扩展给分页视图复用。",
+  "deliverable": [
+    "扩展后的 scrollSelectionState helper",
+    "PaginatedReaderView 选择链路接入",
+    "对应测试",
+    "第二十八批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前二十八批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "PaginatedReaderView 不再自己拼装选择菜单状态",
+    "helper fallback spineIndex 有测试覆盖",
+    "测试、类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不继续拆分页测量状态机",
+    "本轮不修改未跟踪审计文档"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}

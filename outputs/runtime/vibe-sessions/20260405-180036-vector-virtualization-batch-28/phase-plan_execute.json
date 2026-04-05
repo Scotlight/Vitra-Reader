@@ -1,0 +1,17 @@
+{
+  "runId": "20260405-180036-vector-virtualization-batch-28",
+  "stage": "plan_execute",
+  "status": "completed",
+  "changedFiles": [
+    "src/components/Reader/scrollSelectionState.ts",
+    "src/components/Reader/PaginatedReaderView.tsx",
+    "src/test/scrollSelectionState.test.ts",
+    "docs/requirements/2026-04-05-vector-virtualization-batch-28.md",
+    "docs/plans/2026-04-05-vector-virtualization-batch-28-execution-plan.md"
+  ],
+  "implemented": [
+    "扩展 scrollSelectionState 支持 fallback spineIndex。",
+    "PaginatedReaderView 复用统一的选择菜单状态解析 helper。",
+    "把分页视图重新接回统一的章节抓取与预处理 helper。"
+  ]
+}

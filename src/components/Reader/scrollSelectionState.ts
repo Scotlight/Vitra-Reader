@@ -10,6 +10,7 @@ export interface ScrollSelectionState {
 export function resolveScrollSelectionState(
     selection: Selection | null,
     viewport: HTMLElement | null,
+    fallbackSpineIndex: number = -1,
 ): ScrollSelectionState | null {
     if (!selection || !viewport) return null
 
@@ -18,7 +19,8 @@ export function resolveScrollSelectionState(
 
     const range = selection.getRangeAt(0)
     const rect = range.getBoundingClientRect()
-    const spineIndex = findAncestorChapterSpineIndex(range.startContainer, viewport)
+    const detectedSpineIndex = findAncestorChapterSpineIndex(range.startContainer, viewport)
+    const spineIndex = detectedSpineIndex >= 0 ? detectedSpineIndex : fallbackSpineIndex
 
     return {
         spineIndex,

@@ -71,4 +71,23 @@ describe('scrollSelectionState', () => {
 
         expect(resolveScrollSelectionState(selection, viewport)?.spineIndex).toBe(-1)
     })
+
+    it('无章节祖先时回退到提供的 spineIndex', () => {
+        const viewport = document.createElement('div')
+        const textNode = document.createTextNode('plain text')
+        viewport.appendChild(textNode)
+        document.body.appendChild(viewport)
+
+        const selection = window.getSelection()
+        const range = document.createRange()
+        range.setStart(textNode, 0)
+        range.setEnd(textNode, 5)
+        Object.defineProperty(range, 'getBoundingClientRect', {
+            value: () => createRect(0, 10, 20, 6),
+        })
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+
+        expect(resolveScrollSelectionState(selection, viewport, 9)?.spineIndex).toBe(9)
+    })
 })

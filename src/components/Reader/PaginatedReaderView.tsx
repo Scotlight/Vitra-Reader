@@ -11,6 +11,7 @@ import { findTextInDOM, highlightRange } from '../../utils/textFinder';
 import { startMeasure, type VitraMeasureHandle, type PageBoundary } from '../../engine';
 import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
 import { fetchAndPreprocessChapter } from './scrollChapterFetch';
+import { resolveScrollSelectionState } from './scrollSelectionState';
 import styles from './PaginatedReaderView.module.css';
 
 const HIGHLIGHT_IDLE_TIMEOUT_MS = 600;
@@ -629,17 +630,18 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         if (!viewport) return;
 
         const handleMouseUp = () => {
-            const sel = window.getSelection();
-            const text = sel?.toString().trim();
-            if (!text || !sel?.rangeCount) return;
-            const range = sel.getRangeAt(0);
-            const rect = range.getBoundingClientRect();
+            const nextState = resolveScrollSelectionState(
+                window.getSelection(),
+                viewport,
+                currentSpineIndexRef.current,
+            );
+            if (!nextState) return;
             setSelectionMenu({
                 visible: true,
-                x: rect.left + rect.width / 2,
-                y: rect.top - 10,
-                text,
-                spineIndex: currentSpineIndexRef.current,
+                x: nextState.x,
+                y: nextState.y,
+                text: nextState.text,
+                spineIndex: nextState.spineIndex,
             });
         };
 
