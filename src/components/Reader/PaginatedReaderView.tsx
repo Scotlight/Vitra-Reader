@@ -16,6 +16,7 @@ import {
     hasRenderableChapterContent,
     resolvePaginatedFallbackIndex,
 } from './paginatedChapterLoad';
+import { resolveNextPaginatedTarget, resolvePrevPaginatedTarget } from './paginatedChapterJump';
 import { createPaginatedProgressRecord, resolvePaginatedProgress } from './paginatedProgress';
 import { resolveScrollSelectionState } from './scrollSelectionState';
 import styles from './PaginatedReaderView.module.css';
@@ -496,58 +497,40 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     }, []);
 
     const nextPage = useCallback(() => {
-        if (currentPageRef.current < totalPagesRef.current - 1) {
-            let next = currentPageRef.current + 1;
-            while (next < totalPagesRef.current && isPageLikelyBlank(next)) {
-                next += 1;
-            }
-            if (next < totalPagesRef.current) {
-                goToPage(next);
-                return;
-            }
+        const nextTarget = resolveNextPaginatedTarget({
+            currentPage: currentPageRef.current,
+            currentSpineIndex: currentSpineIndexRef.current,
+            isPageLikelyBlank,
+            totalPages: totalPagesRef.current,
+            totalSpines: spineItemsRef.current.length,
+        })
 
-            const nextIdx = currentSpineIndexRef.current + 1;
-            if (nextIdx < spineItemsRef.current.length) {
-                setCurrentSpineIndex(nextIdx);
-                setCurrentPage(0);
-                currentPageRef.current = 0;
-                loadChapter(nextIdx, false);
-            }
-        } else {
-            // Next chapter
-            const nextIdx = currentSpineIndexRef.current + 1;
-            if (nextIdx < spineItemsRef.current.length) {
-                setCurrentSpineIndex(nextIdx);
-                setCurrentPage(0);
-                currentPageRef.current = 0;
-                loadChapter(nextIdx, false); // 去第一页
-            }
+        if (nextTarget.kind === 'page') {
+            goToPage(nextTarget.page)
+            return
+        }
+        if (nextTarget.kind === 'chapter') {
+            setCurrentSpineIndex(nextTarget.spineIndex)
+            setCurrentPage(0)
+            currentPageRef.current = 0
+            loadChapter(nextTarget.spineIndex, nextTarget.goToLastPage)
         }
     }, [goToPage, loadChapter, isPageLikelyBlank]);
 
     const prevPage = useCallback(() => {
-        if (currentPageRef.current > 0) {
-            let prev = currentPageRef.current - 1;
-            while (prev >= 0 && isPageLikelyBlank(prev)) {
-                prev -= 1;
-            }
-            if (prev >= 0) {
-                goToPage(prev);
-                return;
-            }
+        const prevTarget = resolvePrevPaginatedTarget({
+            currentPage: currentPageRef.current,
+            currentSpineIndex: currentSpineIndexRef.current,
+            isPageLikelyBlank,
+        })
 
-            const prevIdx = currentSpineIndexRef.current - 1;
-            if (prevIdx >= 0) {
-                setCurrentSpineIndex(prevIdx);
-                loadChapter(prevIdx, true);
-            }
-        } else {
-            // Previous chapter, go to last page
-            const prevIdx = currentSpineIndexRef.current - 1;
-            if (prevIdx >= 0) {
-                setCurrentSpineIndex(prevIdx);
-                loadChapter(prevIdx, true); // 去最后一页
-            }
+        if (prevTarget.kind === 'page') {
+            goToPage(prevTarget.page)
+            return
+        }
+        if (prevTarget.kind === 'chapter') {
+            setCurrentSpineIndex(prevTarget.spineIndex)
+            loadChapter(prevTarget.spineIndex, prevTarget.goToLastPage)
         }
     }, [goToPage, loadChapter, isPageLikelyBlank]);
 
