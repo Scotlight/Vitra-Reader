@@ -48,6 +48,7 @@ import {
     createVectorRestoreChapterState,
     type LoadedChapterState,
 } from './scrollChapterLoad';
+import { fetchAndPreprocessChapter } from './scrollChapterFetch';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
@@ -863,28 +864,18 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 return;
             }
 
-            const html = await provider.extractChapterHtml(spineIndex);
-            let chapterStyles: string[] = [];
-            try {
-                chapterStyles = await provider.extractChapterStyles(spineIndex);
-            } catch {
-                // Styles are optional
-            }
-
-            const preprocessed = await preprocessChapterContent({
+            const preprocessed = await fetchAndPreprocessChapter({
                 chapterId,
-                spineIndex,
                 chapterHref: currentSpineItems[spineIndex]?.href,
-                htmlContent: html,
-                externalStyles: chapterStyles,
-                vectorize: true,
-                vectorConfig: {
-                    targetChars: 16_000,
+                provider,
+                readerStyles: {
                     fontSize: readerStyles.fontSize,
-                    pageWidth: readerStyles.pageWidth,
                     lineHeight: readerStyles.lineHeight,
+                    pageWidth: readerStyles.pageWidth,
                     paragraphSpacing: readerStyles.paragraphSpacing,
                 },
+                spineIndex,
+                preprocess: preprocessChapterContent,
             });
 
             const loaded = createPreprocessedChapterState(
