@@ -1,0 +1,11 @@
+{
+  "runId": "20260405-195118-library-main-virtualization-batch-1",
+  "stage": "skeleton_check",
+  "cwd": "D:/0010/.A_project/epub reader",
+  "branch": "main",
+  "head": "6c59ba2",
+  "notes": [
+    "主页面虚拟网格 helper 已存在，但组件级回归覆盖缺失。",
+    "工作树只有调查目录和审计材料未跟踪。"
+  ]
+}

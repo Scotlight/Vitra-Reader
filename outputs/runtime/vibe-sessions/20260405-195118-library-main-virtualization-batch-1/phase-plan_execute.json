@@ -1,0 +1,15 @@
+{
+  "runId": "20260405-195118-library-main-virtualization-batch-1",
+  "stage": "plan_execute",
+  "status": "completed",
+  "changedFiles": [
+    "src/test/bookGridVirtualFlow.test.tsx",
+    "docs/requirements/2026-04-05-library-main-virtualization-batch-1.md",
+    "docs/plans/2026-04-05-library-main-virtualization-batch-1-execution-plan.md"
+  ],
+  "implemented": [
+    "新增 BookGrid 组件级虚拟化测试。",
+    "覆盖初次布局后的虚拟行窗口。",
+    "覆盖滚动后可见行范围切换。"
+  ]
+}

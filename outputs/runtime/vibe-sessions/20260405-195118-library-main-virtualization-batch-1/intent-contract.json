@@ -1,0 +1,28 @@
+{
+  "runId": "20260405-195118-library-main-virtualization-batch-1",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "为主页面虚拟化补齐 BookGrid 的组件级回归测试。",
+  "deliverable": [
+    "BookGrid 组件测试",
+    "主页面虚拟化第一批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不改主页面运行时代码",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "BookGrid 只渲染窗口内行有测试覆盖",
+    "滚动后可见行切换有测试覆盖",
+    "测试、类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不改 LibraryView 业务状态机",
+    "本轮不改拖拽排序行为"
+  ],
+  "assumptions": [
+    "用户要求持续推进直到专项完成，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}
