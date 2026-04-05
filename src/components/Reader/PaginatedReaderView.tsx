@@ -8,9 +8,9 @@ import { useSelectionMenu } from '../../hooks/useSelectionMenu';
 import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
 import { db } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
-import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService';
 import { startMeasure, type VitraMeasureHandle, type PageBoundary } from '../../engine';
 import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
+import { fetchAndPreprocessChapter } from './scrollChapterFetch';
 import styles from './PaginatedReaderView.module.css';
 
 const HIGHLIGHT_IDLE_TIMEOUT_MS = 600;
@@ -162,17 +162,18 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         pageMapReadyRef.current = false;
         renderedHighlightsRef.current.clear();
         try {
-            const rawHtml = await provider.extractChapterHtml(spineIndex);
-
-            let chapterStyles: string[] = [];
-            try { chapterStyles = await provider.extractChapterStyles(spineIndex); } catch { /* optional */ }
-
-            const preprocessed = await preprocessChapterContent({
+            const preprocessed = await fetchAndPreprocessChapter({
                 chapterId: `pch-${spineIndex}`,
-                spineIndex,
                 chapterHref: spineItemsRef.current[spineIndex]?.href,
-                htmlContent: rawHtml,
-                externalStyles: chapterStyles,
+                provider,
+                readerStyles: {
+                    fontSize: readerStyles.fontSize,
+                    lineHeight: readerStyles.lineHeight,
+                    pageWidth: readerStyles.pageWidth,
+                    paragraphSpacing: readerStyles.paragraphSpacing,
+                },
+                spineIndex,
+                vectorize: false,
             });
 
             const html = preprocessed.htmlContent;

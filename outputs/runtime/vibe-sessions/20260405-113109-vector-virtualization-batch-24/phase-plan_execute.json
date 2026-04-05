@@ -1,0 +1,17 @@
+{
+  "runId": "20260405-113109-vector-virtualization-batch-24",
+  "stage": "plan_execute",
+  "status": "completed",
+  "changedFiles": [
+    "src/components/Reader/scrollChapterFetch.ts",
+    "src/components/Reader/PaginatedReaderView.tsx",
+    "src/test/scrollChapterFetch.test.ts",
+    "docs/requirements/2026-04-05-vector-virtualization-batch-24.md",
+    "docs/plans/2026-04-05-vector-virtualization-batch-24-execution-plan.md"
+  ],
+  "implemented": [
+    "泛化 scrollChapterFetch helper，支持可选向量化参数。",
+    "PaginatedReaderView 改用统一的章节抓取与预处理 helper。",
+    "补充 helper 的非向量化测试。"
+  ]
+}

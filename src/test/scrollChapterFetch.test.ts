@@ -87,4 +87,38 @@ describe('scrollChapterFetch', () => {
             externalStyles: [],
         }))
     })
+
+    it('非向量化调用时不注入 vectorConfig', async () => {
+        const preprocess = vi.fn().mockResolvedValue({
+            htmlContent: '<p>done</p>',
+            htmlFragments: [],
+            externalStyles: [],
+            removedTagCount: 0,
+            removedAttributeCount: 0,
+            usedFallback: false,
+            stylesScoped: true,
+        })
+
+        await fetchAndPreprocessChapter({
+            chapterId: 'pch-1',
+            provider: {
+                extractChapterHtml: vi.fn().mockResolvedValue('<p>body</p>'),
+                extractChapterStyles: vi.fn().mockResolvedValue([]),
+            },
+            readerStyles: {
+                fontSize: 18,
+                lineHeight: 1.8,
+                pageWidth: 880,
+                paragraphSpacing: 10,
+            },
+            spineIndex: 0,
+            preprocess,
+            vectorize: false,
+        })
+
+        expect(preprocess).toHaveBeenCalledWith(expect.objectContaining({
+            vectorize: false,
+            vectorConfig: undefined,
+        }))
+    })
 })

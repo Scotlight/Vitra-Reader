@@ -26,6 +26,7 @@ export async function fetchAndPreprocessChapter(input: {
     readerStyles: ScrollChapterVectorStyleInput
     spineIndex: number
     preprocess?: typeof preprocessChapterContent
+    vectorize?: boolean
 }): Promise<ChapterPreprocessResult> {
     const {
         chapterId,
@@ -34,6 +35,7 @@ export async function fetchAndPreprocessChapter(input: {
         readerStyles,
         spineIndex,
         preprocess = preprocessChapterContent,
+        vectorize = true,
     } = input
 
     const html = await provider.extractChapterHtml(spineIndex)
@@ -50,7 +52,7 @@ export async function fetchAndPreprocessChapter(input: {
         chapterHref,
         htmlContent: html,
         externalStyles: chapterStyles,
-        vectorize: true,
-        vectorConfig: buildScrollChapterVectorConfig(readerStyles),
+        vectorize,
+        vectorConfig: vectorize ? buildScrollChapterVectorConfig(readerStyles) : undefined,
     })
 }
