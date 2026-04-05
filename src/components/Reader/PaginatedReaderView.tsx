@@ -16,6 +16,7 @@ import {
     hasRenderableChapterContent,
     resolvePaginatedFallbackIndex,
 } from './paginatedChapterLoad';
+import { createPaginatedProgressRecord, resolvePaginatedProgress } from './paginatedProgress';
 import { resolveScrollSelectionState } from './scrollSelectionState';
 import styles from './PaginatedReaderView.module.css';
 
@@ -561,21 +562,26 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     const progressTimerRef = useRef<number | null>(null);
     useEffect(() => {
         if (spineItems.length === 0 || isLoading) return;
-        const chapterProgress = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
-        const progress = (currentSpineIndex + Math.min(1, chapterProgress)) / spineItems.length;
-        const clamped = Math.max(0, Math.min(1, progress));
-        onProgressChange?.(clamped);
+        const resolved = resolvePaginatedProgress(
+            currentPage,
+            currentSpineIndex,
+            totalPages,
+            spineItems.length,
+        );
+        if (!resolved) return;
+        onProgressChange?.(resolved.progress);
 
         // 500ms debounce，避免翻页时频繁写 IndexedDB
         if (progressTimerRef.current) window.clearTimeout(progressTimerRef.current);
         progressTimerRef.current = window.setTimeout(() => {
-            db.progress.put({
+            db.progress.put(createPaginatedProgressRecord({
                 bookId,
-                location: `vitra:${currentSpineIndex}:${currentPage}`,
-                percentage: clamped,
-                currentChapter: spineItems[currentSpineIndex]?.href || '',
+                currentChapterHref: spineItems[currentSpineIndex]?.href || '',
+                currentPage,
+                currentSpineIndex,
+                percentage: resolved.progress,
                 updatedAt: Date.now(),
-            }).catch(err => console.warn('[PaginatedReader] Progress save failed:', err));
+            })).catch(err => console.warn('[PaginatedReader] Progress save failed:', err));
         }, 500);
 
         return () => {

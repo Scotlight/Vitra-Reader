@@ -1,0 +1,31 @@
+{
+  "runId": "20260405-184721-vector-virtualization-batch-30",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续推进分页视图状态机拆分，提炼进度计算与持久化 helper。",
+  "deliverable": [
+    "paginatedProgress 工具模块",
+    "PaginatedReaderView 接入",
+    "对应测试",
+    "第三十批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前三十批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "PaginatedReaderView 不再直接手写进度计算公式和持久化 payload 组装",
+    "helper 有测试覆盖",
+    "测试、类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不继续拆分页翻页交互状态机",
+    "本轮不修改未跟踪审计文档"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}
