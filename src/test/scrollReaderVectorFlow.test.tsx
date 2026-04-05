@@ -123,6 +123,19 @@ function createVectorizedPreprocessResult(fontSize: number) {
     }
 }
 
+function createNonVectorPreprocessResult() {
+    return {
+        htmlContent: '<p>small chapter</p>',
+        htmlFragments: ['<p>small chapter</p>'],
+        externalStyles: ['p{}'],
+        removedTagCount: 0,
+        removedAttributeCount: 0,
+        usedFallback: false,
+        stylesScoped: true,
+        segmentMetas: [createSegment(0, 20_000)],
+    }
+}
+
 function createProvider() {
     const spineItems: SpineItemInfo[] = [
         { index: 0, href: 'chapter-1.xhtml', id: 'chapter-1', linear: true },
@@ -241,5 +254,27 @@ describe('ScrollReaderView vector flow', () => {
         expect(lastCall.vectorConfig.fontSize).toBe(20)
         expect(provider.extractChapterHtml).toHaveBeenCalledTimes(2)
         expect(mocks.shadowRendererSpy).not.toHaveBeenCalled()
+    })
+
+    it('小章节不命中向量化计划时仍然走 ShadowRenderer', async () => {
+        const provider = createProvider()
+        mocks.preprocessChapterContentMock.mockResolvedValue(createNonVectorPreprocessResult())
+
+        render(
+            <ScrollReaderView
+                provider={provider}
+                bookId="book-1"
+                readerStyles={DEFAULT_READER_STYLES}
+            />
+        )
+
+        await flushUi()
+
+        await waitFor(() => {
+            expect(mocks.shadowRendererSpy).toHaveBeenCalled()
+        })
+
+        expect(provider.extractChapterHtml).toHaveBeenCalledTimes(1)
+        expect(mocks.preprocessChapterContentMock).toHaveBeenCalledTimes(1)
     })
 })
