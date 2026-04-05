@@ -6,6 +6,7 @@ import type { PageBoundary } from '../engine/types/vitraPagination'
 
 const mocks = vi.hoisted(() => ({
     fetchAndPreprocessChapterMock: vi.fn(),
+    setSelectionMenuMock: vi.fn(),
     startMeasureMock: vi.fn(),
     shadowRendererSpy: vi.fn(),
 }))
@@ -25,7 +26,7 @@ vi.mock('../engine', async () => {
 vi.mock('../hooks/useSelectionMenu', () => ({
     useSelectionMenu: () => ({
         selectionMenu: { visible: false, x: 0, y: 0, text: '', spineIndex: -1 },
-        setSelectionMenu: vi.fn(),
+        setSelectionMenu: mocks.setSelectionMenuMock,
         renderedHighlightsRef: { current: new Set<string>() },
         renderSelectionUI: () => null,
     }),
@@ -123,6 +124,7 @@ async function flushUi(): Promise<void> {
 describe('PaginatedReaderView flow', () => {
     beforeEach(() => {
         mocks.fetchAndPreprocessChapterMock.mockReset()
+        mocks.setSelectionMenuMock.mockReset()
         mocks.startMeasureMock.mockReset()
         mocks.shadowRendererSpy.mockReset()
         mocks.fetchAndPreprocessChapterMock.mockResolvedValue({
@@ -259,5 +261,57 @@ describe('PaginatedReaderView flow', () => {
 
         expect(mocks.fetchAndPreprocessChapterMock.mock.calls[0][0]).toMatchObject({ spineIndex: 0 })
         expect(mocks.fetchAndPreprocessChapterMock.mock.calls[1][0]).toMatchObject({ spineIndex: 1 })
+    })
+
+    it('文本选择后通过统一 helper 设置选择菜单状态', async () => {
+        const provider = createProvider()
+        const view = render(
+            <PaginatedReaderView
+                provider={provider}
+                bookId="book-1"
+                pageTurnMode="paginated-single"
+                readerStyles={DEFAULT_READER_STYLES}
+            />
+        )
+
+        await flushUi()
+
+        const viewport = view.container.querySelector('[class*="viewport"]') as HTMLElement
+        const column = view.container.querySelector('[class*="columnContainer"]') as HTMLElement
+        const textNode = document.createTextNode('hello world')
+        column.appendChild(textNode)
+
+        const selection = window.getSelection()
+        const range = document.createRange()
+        range.setStart(textNode, 0)
+        range.setEnd(textNode, 5)
+        Object.defineProperty(range, 'getBoundingClientRect', {
+            value: () => ({
+                left: 10,
+                top: 20,
+                width: 30,
+                height: 8,
+                right: 40,
+                bottom: 28,
+                x: 10,
+                y: 20,
+                toJSON: () => ({}),
+            }),
+        })
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+
+        await act(async () => {
+            viewport.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+            await Promise.resolve()
+        })
+
+        expect(mocks.setSelectionMenuMock).toHaveBeenCalledWith({
+            visible: true,
+            x: 25,
+            y: 10,
+            text: 'hello',
+            spineIndex: 0,
+        })
     })
 })
