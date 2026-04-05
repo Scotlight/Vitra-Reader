@@ -1,0 +1,31 @@
+{
+  "runId": "20260405-100135-vector-virtualization-batch-20",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续推进 ScrollReaderView 拆分，提炼样式切换 rerender plan helper。",
+  "deliverable": [
+    "scrollChapterRerender 工具模块",
+    "readerStyles effect 接入",
+    "对应测试",
+    "第二十批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前二十批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "readerStyles effect 不再直接拼装索引集、queue 和章节映射",
+    "rerender plan helper 有测试覆盖",
+    "测试、类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不继续拆 loadChapter 的异步 I/O",
+    "本轮不修改未跟踪审计文档"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}

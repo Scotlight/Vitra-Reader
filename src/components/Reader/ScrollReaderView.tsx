@@ -28,7 +28,6 @@ import { captureAnchorInfo, calculateAnchorDelta, findBestAnchor } from '../../u
 import {
     canRestoreWindowedVectorPlaceholder,
     computeGlobalVirtualSegmentMountPlan,
-    partitionStyleChangeTargets,
     shouldBypassShadowQueueForSegmentMetas,
 } from './scrollVectorStrategy';
 import {
@@ -53,6 +52,12 @@ import {
     type LoadedChapterState,
 } from './scrollChapterLoad';
 import { fetchAndPreprocessChapter } from './scrollChapterFetch';
+import {
+    applyStyleChangeToChapters,
+    createStyleChangeRerenderPlan,
+    filterPendingReadyForStyleChange,
+    mergeShadowQueueForStyleChange,
+} from './scrollChapterRerender';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
@@ -903,34 +908,16 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         }
         readerStylesKeyRef.current = nextKey;
 
-        const rerenderTargets = chaptersRef.current.filter((chapter) =>
-            chapter.status === 'mounted' || chapter.status === 'ready'
-        );
-        if (rerenderTargets.length === 0) return;
+        const plan = createStyleChangeRerenderPlan(chaptersRef.current, nextKey);
+        if (plan.vectorReloadTargets.length === 0 && plan.shadowRerenderTargets.length === 0) return;
 
-        const {
-            vectorReloadTargets,
-            shadowRerenderTargets,
-        } = partitionStyleChangeTargets(rerenderTargets);
-        if (vectorReloadTargets.length === 0 && shadowRerenderTargets.length === 0) return;
-
-        const rerenderIndexes = new Set(rerenderTargets.map((chapter) => chapter.spineIndex));
-        const vectorReloadIndexes = new Set(vectorReloadTargets.map((chapter) => chapter.spineIndex));
-        const shadowRerenderIndexes = new Set(shadowRerenderTargets.map((chapter) => chapter.spineIndex));
-        const rerenderQueue = shadowRerenderTargets.map((chapter) => ({
-            ...chapter,
-            domNode: null,
-            vectorStyleKey: nextKey,
-            status: 'shadow-rendering' as const,
-        }));
-
-        vectorReloadTargets.forEach((chapter) => {
+        plan.vectorReloadTargets.forEach((chapter) => {
             chapterVectorsRef.current.delete(chapter.id);
         });
 
         const listEl = chapterListRef.current;
         if (listEl) {
-            vectorReloadTargets.forEach((chapter) => {
+            plan.vectorReloadTargets.forEach((chapter) => {
                 const chapterEl = listEl.querySelector(`[data-chapter-id="${chapter.id}"]`) as HTMLElement | null;
                 if (!chapterEl) return;
                 collapseChapterDomToPlaceholder(chapter.id, chapterEl, chapter.height);
@@ -938,36 +925,23 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         }
 
         renderedHighlightsRef.current.clear();
-        pendingReadyRef.current = pendingReadyRef.current.filter((item) => !rerenderIndexes.has(item.spineIndex));
-        setShadowQueue((prev) => [
-            ...prev.filter((chapter) => !rerenderIndexes.has(chapter.spineIndex)),
-            ...rerenderQueue,
-        ]);
-        setChapters((prev) => prev.map((chapter) =>
-            vectorReloadIndexes.has(chapter.spineIndex)
-                ? {
-                    ...chapter,
-                    htmlContent: '',
-                    htmlFragments: [],
-                    segmentMetas: undefined,
-                    domNode: null,
-                    height: resolveChapterPlaceholderHeight(chapter.height),
-                    vectorStyleKey: nextKey,
-                    status: 'placeholder' as const,
-                }
-                : shadowRerenderIndexes.has(chapter.spineIndex)
-                ? { ...chapter, domNode: null, vectorStyleKey: nextKey, status: 'shadow-rendering' as const }
-                : chapter
+        pendingReadyRef.current = filterPendingReadyForStyleChange(pendingReadyRef.current, plan);
+        setShadowQueue((prev) => mergeShadowQueueForStyleChange(prev, plan));
+        setChapters((prev) => applyStyleChangeToChapters(
+            prev,
+            plan,
+            nextKey,
+            resolveChapterPlaceholderHeight,
         ));
 
         if (styleReloadRafRef.current !== null) {
             cancelAnimationFrame(styleReloadRafRef.current);
             styleReloadRafRef.current = null;
         }
-        if (vectorReloadTargets.length > 0) {
+        if (plan.vectorReloadTargets.length > 0) {
             styleReloadRafRef.current = requestAnimationFrame(() => {
                 styleReloadRafRef.current = null;
-                vectorReloadTargets.forEach((chapter) => {
+                plan.vectorReloadTargets.forEach((chapter) => {
                     const direction = chapter.spineIndex < lastKnownAnchorIndexRef.current
                         ? 'prev'
                         : (chapter.spineIndex > lastKnownAnchorIndexRef.current ? 'next' : 'initial');
