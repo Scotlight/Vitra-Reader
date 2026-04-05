@@ -1,0 +1,28 @@
+{
+  "runId": "20260405-124051-vector-virtualization-batch-27",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续提高分页视图可信度，补充空章节 fallback 组件级回归测试。",
+  "deliverable": [
+    "paginatedReaderFlow 测试扩展",
+    "第二十七批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前二十七批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "分页视图空章节 fallback 有组件测试覆盖",
+    "测试、类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不修改运行时代码",
+    "本轮不修改未跟踪审计文档"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}

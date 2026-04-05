@@ -91,10 +91,9 @@ class ResizeObserverMock {
     disconnect() {}
 }
 
-function createProvider() {
-    const spineItems: SpineItemInfo[] = [
-        { index: 0, href: 'chapter-1.xhtml', id: 'chapter-1', linear: true },
-    ]
+function createProvider(spineItems: SpineItemInfo[] = [
+    { index: 0, href: 'chapter-1.xhtml', id: 'chapter-1', linear: true },
+]) {
 
     const provider: ContentProvider = {
         init: async () => undefined,
@@ -215,5 +214,50 @@ describe('PaginatedReaderView flow', () => {
         await waitFor(() => {
             expect(mocks.fetchAndPreprocessChapterMock).toHaveBeenCalledTimes(2)
         })
+    })
+
+    it('空章节会自动 fallback 到相邻章节', async () => {
+        const provider = createProvider([
+            { index: 0, href: 'chapter-1.xhtml', id: 'chapter-1', linear: true },
+            { index: 1, href: 'chapter-2.xhtml', id: 'chapter-2', linear: true },
+        ])
+
+        mocks.fetchAndPreprocessChapterMock
+            .mockResolvedValueOnce({
+                htmlContent: '',
+                htmlFragments: [],
+                externalStyles: [],
+                removedTagCount: 0,
+                removedAttributeCount: 0,
+                usedFallback: false,
+                stylesScoped: true,
+            })
+            .mockResolvedValueOnce({
+                htmlContent: '<p>chapter-2</p>',
+                htmlFragments: ['<p>chapter-2</p>'],
+                externalStyles: [],
+                removedTagCount: 0,
+                removedAttributeCount: 0,
+                usedFallback: false,
+                stylesScoped: true,
+            })
+
+        render(
+            <PaginatedReaderView
+                provider={provider}
+                bookId="book-1"
+                pageTurnMode="paginated-single"
+                readerStyles={DEFAULT_READER_STYLES}
+            />
+        )
+
+        await flushUi()
+
+        await waitFor(() => {
+            expect(mocks.fetchAndPreprocessChapterMock).toHaveBeenCalledTimes(2)
+        })
+
+        expect(mocks.fetchAndPreprocessChapterMock.mock.calls[0][0]).toMatchObject({ spineIndex: 0 })
+        expect(mocks.fetchAndPreprocessChapterMock.mock.calls[1][0]).toMatchObject({ spineIndex: 1 })
     })
 })
