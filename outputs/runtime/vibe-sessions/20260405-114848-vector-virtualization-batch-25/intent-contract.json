@@ -1,0 +1,29 @@
+{
+  "runId": "20260405-114848-vector-virtualization-batch-25",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续推进专项交付，把当前真实状态沉淀为正式审计文档。",
+  "deliverable": [
+    "正式跟踪的 vitra-engine-audit.md",
+    "第二十五批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前二十五批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "审计文档准确反映当前真实主链",
+    "文档明确列出剩余尾项",
+    "验证命令能够映射到当前代码事实"
+  ],
+  "nonGoals": [
+    "本轮不修改运行时代码",
+    "本轮不处理调查原始材料入库"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "runId": "20260405-114848-vector-virtualization-batch-25",
+  "stage": "verification",
+  "status": "completed",
+  "commands": [
+    {
+      "command": "rg -n \"computeGlobalVirtualSegmentMountPlan|createWindowedVectorChapterShell|fetchAndPreprocessChapter|resolveChapterPreprocessTimeout|streamHtmlBySaxStream\" src/components/Reader src/engine/render -S",
+      "result": "passed"
+    },
+    {
+      "command": "git diff -- docs/vitra-engine-audit.md",
+      "result": "passed"
+    }
+  ]
+}
