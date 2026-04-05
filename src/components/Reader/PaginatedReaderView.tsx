@@ -11,6 +11,11 @@ import { findTextInDOM, highlightRange } from '../../utils/textFinder';
 import { startMeasure, type VitraMeasureHandle, type PageBoundary } from '../../engine';
 import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
 import { fetchAndPreprocessChapter } from './scrollChapterFetch';
+import {
+    createPaginatedShadowData,
+    hasRenderableChapterContent,
+    resolvePaginatedFallbackIndex,
+} from './paginatedChapterLoad';
 import { resolveScrollSelectionState } from './scrollSelectionState';
 import styles from './PaginatedReaderView.module.css';
 
@@ -177,20 +182,13 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 vectorize: false,
             });
 
-            const html = preprocessed.htmlContent;
-
-            const plainText = html
-                .replace(/<script[\s\S]*?<\/script>/gi, '')
-                .replace(/<style[\s\S]*?<\/style>/gi, '')
-                .replace(/<[^>]+>/g, ' ')
-                .replace(/&nbsp;/gi, ' ')
-                .trim();
-            const hasMedia = /<(img|svg|video|audio|canvas|table|math|object|embed)\b/i.test(html);
-            const hasRenderableContent = plainText.length > 0 || hasMedia;
-
-            if (!hasRenderableContent) {
-                const fallbackIndex = goToLastPage ? spineIndex - 1 : spineIndex + 1;
-                if (fallbackIndex >= 0 && fallbackIndex < spineItemsRef.current.length) {
+            if (!hasRenderableChapterContent(preprocessed.htmlContent)) {
+                const fallbackIndex = resolvePaginatedFallbackIndex(
+                    spineIndex,
+                    goToLastPage,
+                    spineItemsRef.current.length,
+                );
+                if (fallbackIndex !== null) {
                     setCurrentSpineIndex(fallbackIndex);
                     currentSpineIndexRef.current = fallbackIndex;
                     await loadChapter(fallbackIndex, goToLastPage, visited);
@@ -198,12 +196,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 }
             }
 
-            setShadowData({
-                htmlContent: html,
-                htmlFragments: preprocessed.htmlFragments,
-                externalStyles: preprocessed.externalStyles,
-                chapterId: `pch-${spineIndex}`,
-            });
+            setShadowData(createPaginatedShadowData(`pch-${spineIndex}`, preprocessed));
         } catch (err) {
             console.error(`[PaginatedReader] Failed to load chapter ${spineIndex}:`, err);
             pageBoundariesRef.current = [];
