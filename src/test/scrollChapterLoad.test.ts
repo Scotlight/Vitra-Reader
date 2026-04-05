@@ -5,6 +5,7 @@ import {
     createPreprocessedChapterState,
     createVectorRestoreChapterState,
     insertLoadingChapterState,
+    queueChapterForShadowRender,
     replaceChapterState,
     rollbackFailedChapterState,
 } from '../components/Reader/scrollChapterLoad'
@@ -90,6 +91,14 @@ describe('scrollChapterLoad', () => {
 
         expect(replaceChapterState([loadingChapter], updatedChapter)).toEqual([updatedChapter])
         expect(appendShadowQueueChapter([loadingChapter], updatedChapter)).toEqual([updatedChapter])
+        expect(queueChapterForShadowRender({
+            chapter: updatedChapter,
+            chapters: [loadingChapter],
+            shadowQueue: [loadingChapter],
+        })).toEqual({
+            chapters: [updatedChapter],
+            shadowQueue: [updatedChapter],
+        })
     })
 
     it('失败回滚时恢复 placeholder 或移除新章节', () => {

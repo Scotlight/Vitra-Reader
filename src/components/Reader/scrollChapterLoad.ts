@@ -108,6 +108,20 @@ export function appendShadowQueueChapter(
     ]
 }
 
+export function queueChapterForShadowRender(input: {
+    chapter: LoadedChapterState
+    chapters: readonly LoadedChapterState[]
+    shadowQueue: readonly LoadedChapterState[]
+}): {
+    chapters: LoadedChapterState[]
+    shadowQueue: LoadedChapterState[]
+} {
+    return {
+        chapters: replaceChapterState(input.chapters, input.chapter),
+        shadowQueue: appendShadowQueueChapter(input.shadowQueue, input.chapter),
+    }
+}
+
 export function rollbackFailedChapterState(
     chapters: readonly LoadedChapterState[],
     spineIndex: number,

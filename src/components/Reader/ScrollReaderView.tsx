@@ -42,12 +42,11 @@ import {
 } from './scrollChapterJump';
 import { resolveScrollSelectionState } from './scrollSelectionState';
 import {
-    appendShadowQueueChapter,
     createLoadingChapterState,
     createPreprocessedChapterState,
     createVectorRestoreChapterState,
     insertLoadingChapterState,
-    replaceChapterState,
+    queueChapterForShadowRender,
     rollbackFailedChapterState,
     type LoadedChapterState,
 } from './scrollChapterLoad';
@@ -287,6 +286,8 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
     const [chapters, setChapters] = useState<LoadedChapter[]>([]);
     const chaptersRef = useRef<LoadedChapter[]>([]);
+    const [shadowQueue, setShadowQueue] = useState<LoadedChapter[]>([]);
+    const shadowQueueRef = useRef<LoadedChapter[]>([]);
     const [spineItems, setSpineItems] = useState<SpineItemInfo[]>([]);
     const spineItemsRef = useRef<SpineItemInfo[]>([]);
     const [currentSpineIndex, setCurrentSpineIndex] = useState(initialSpineIndex);
@@ -340,6 +341,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
     // Keep refs in sync with state
     chaptersRef.current = chapters;
+    shadowQueueRef.current = shadowQueue;
 
     const normalizedSmoothConfig = useMemo(() => ({
         enabled: smoothConfig.enabled !== false,
@@ -763,9 +765,6 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         };
     }, [enqueueVirtualMeasurement, resetResizeObservers]);
 
-    // Pending shadow renders queue
-    const [shadowQueue, setShadowQueue] = useState<LoadedChapter[]>([]);
-
     // ── Spine Initialization ──
 
     useEffect(() => {
@@ -858,8 +857,16 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
                 console.log(`[ScrollReader] Restore vector cache: spine ${spineIndex}`);
                 if (!commitWindowedVectorChapter(restored, previousHeight)) {
-                    setChapters((prev) => replaceChapterState(prev, restored));
-                    setShadowQueue((prev) => appendShadowQueueChapter(prev, restored));
+                    setChapters((prev) => queueChapterForShadowRender({
+                        chapter: restored,
+                        chapters: prev,
+                        shadowQueue: shadowQueueRef.current,
+                    }).chapters);
+                    setShadowQueue((prev) => queueChapterForShadowRender({
+                        chapter: restored,
+                        chapters: chaptersRef.current,
+                        shadowQueue: prev,
+                    }).shadowQueue);
                     pipelineRef.current = 'rendering-offscreen';
                 }
                 return;
@@ -886,8 +893,16 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             );
 
             if (!commitWindowedVectorChapter(loaded, previousHeight)) {
-                setChapters((prev) => replaceChapterState(prev, loaded));
-                setShadowQueue((prev) => appendShadowQueueChapter(prev, loaded));
+                setChapters((prev) => queueChapterForShadowRender({
+                    chapter: loaded,
+                    chapters: prev,
+                    shadowQueue: shadowQueueRef.current,
+                }).chapters);
+                setShadowQueue((prev) => queueChapterForShadowRender({
+                    chapter: loaded,
+                    chapters: chaptersRef.current,
+                    shadowQueue: prev,
+                }).shadowQueue);
                 pipelineRef.current = 'rendering-offscreen';
             }
         } catch (error) {
