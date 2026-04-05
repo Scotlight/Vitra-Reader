@@ -43,9 +43,13 @@ import {
 } from './scrollChapterJump';
 import { resolveScrollSelectionState } from './scrollSelectionState';
 import {
+    appendShadowQueueChapter,
     createLoadingChapterState,
     createPreprocessedChapterState,
     createVectorRestoreChapterState,
+    insertLoadingChapterState,
+    replaceChapterState,
+    rollbackFailedChapterState,
     type LoadedChapterState,
 } from './scrollChapterLoad';
 import { fetchAndPreprocessChapter } from './scrollChapterFetch';
@@ -838,13 +842,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             spineIndex,
         });
 
-        setChapters(prev => {
-            if (existingChapter) {
-                return prev.map(ch => ch.spineIndex === spineIndex ? loadingChapter : ch);
-            }
-            if (direction === 'prev') return [loadingChapter, ...prev];
-            return [...prev, loadingChapter];
-        });
+        setChapters((prev) => insertLoadingChapterState(prev, loadingChapter, existingChapter, direction));
 
         try {
             if (canRestoreFromVectorCache) {
@@ -855,10 +853,8 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
                 console.log(`[ScrollReader] Restore vector cache: spine ${spineIndex}`);
                 if (!commitWindowedVectorChapter(restored, previousHeight)) {
-                    setChapters(prev =>
-                        prev.map(ch => ch.spineIndex === spineIndex ? restored : ch)
-                    );
-                    setShadowQueue(prev => [...prev, restored]);
+                    setChapters((prev) => replaceChapterState(prev, restored));
+                    setShadowQueue((prev) => appendShadowQueueChapter(prev, restored));
                     pipelineRef.current = 'rendering-offscreen';
                 }
                 return;
@@ -885,21 +881,13 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             );
 
             if (!commitWindowedVectorChapter(loaded, previousHeight)) {
-                setChapters(prev =>
-                    prev.map(ch => ch.spineIndex === spineIndex ? loaded : ch)
-                );
-                setShadowQueue(prev => [...prev, loaded]);
+                setChapters((prev) => replaceChapterState(prev, loaded));
+                setShadowQueue((prev) => appendShadowQueueChapter(prev, loaded));
                 pipelineRef.current = 'rendering-offscreen';
             }
         } catch (error) {
             console.error(`[ScrollReader] Failed to load chapter ${spineIndex}:`, error);
-            if (existingChapter?.status === 'placeholder') {
-                setChapters(prev =>
-                    prev.map(ch => ch.spineIndex === spineIndex ? existingChapter : ch)
-                );
-            } else {
-                setChapters(prev => prev.filter(ch => ch.spineIndex !== spineIndex));
-            }
+            setChapters((prev) => rollbackFailedChapterState(prev, spineIndex, existingChapter));
             pipelineRef.current = 'idle';
         } finally {
             loadingLockRef.current.delete(spineIndex);

@@ -1,0 +1,11 @@
+{
+  "runId": "20260405-095225-vector-virtualization-batch-19",
+  "stage": "skeleton_check",
+  "cwd": "D:/0010/.A_project/epub reader",
+  "branch": "main",
+  "head": "75f10c5",
+  "notes": [
+    "代码工作树只有调查目录和审计材料未跟踪。",
+    "上一批章节抓取与预处理 helper 已经推送到 origin/main。"
+  ]
+}

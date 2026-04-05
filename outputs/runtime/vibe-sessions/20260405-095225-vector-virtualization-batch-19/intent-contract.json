@@ -1,0 +1,31 @@
+{
+  "runId": "20260405-095225-vector-virtualization-batch-19",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续推进 ScrollReaderView 拆分，提炼 loadChapter 的状态更新 helper。",
+  "deliverable": [
+    "增强后的 scrollChapterLoad 工具模块",
+    "loadChapter 状态更新接入",
+    "对应测试",
+    "第十九批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前十九批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "loadChapter 不再直接手写 loading 插入、入队和失败回滚数组更新",
+    "状态更新 helper 有测试覆盖",
+    "测试、类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不继续拆 loadChapter 的异步 I/O 顺序",
+    "本轮不修改未跟踪审计文档"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}

@@ -2,6 +2,7 @@ import type { ChapterPreprocessResult } from '../../engine/types/chapterPreproce
 import type { SegmentMeta } from '../../engine/types/vectorRender'
 
 export type LoadedChapterStatus = 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder'
+export type ChapterInsertDirection = 'prev' | 'next' | 'initial'
 
 export interface LoadedChapterState {
     spineIndex: number
@@ -69,4 +70,51 @@ export function createPreprocessedChapterState(
         vectorStyleKey: currentReaderStyleKey,
         status: 'shadow-rendering',
     }
+}
+
+export function insertLoadingChapterState(
+    chapters: readonly LoadedChapterState[],
+    loadingChapter: LoadedChapterState,
+    existingChapter: LoadedChapterState | undefined,
+    direction: ChapterInsertDirection,
+): LoadedChapterState[] {
+    if (existingChapter) {
+        return chapters.map((chapter) =>
+            chapter.spineIndex === loadingChapter.spineIndex ? loadingChapter : chapter
+        )
+    }
+    if (direction === 'prev') {
+        return [loadingChapter, ...chapters]
+    }
+    return [...chapters, loadingChapter]
+}
+
+export function replaceChapterState(
+    chapters: readonly LoadedChapterState[],
+    nextChapter: LoadedChapterState,
+): LoadedChapterState[] {
+    return chapters.map((chapter) =>
+        chapter.spineIndex === nextChapter.spineIndex ? nextChapter : chapter
+    )
+}
+
+export function appendShadowQueueChapter(
+    queue: readonly LoadedChapterState[],
+    chapter: LoadedChapterState,
+): LoadedChapterState[] {
+    return [
+        ...queue.filter((item) => item.spineIndex !== chapter.spineIndex),
+        chapter,
+    ]
+}
+
+export function rollbackFailedChapterState(
+    chapters: readonly LoadedChapterState[],
+    spineIndex: number,
+    existingChapter: LoadedChapterState | undefined,
+): LoadedChapterState[] {
+    if (existingChapter?.status === 'placeholder') {
+        return replaceChapterState(chapters, existingChapter)
+    }
+    return chapters.filter((chapter) => chapter.spineIndex !== spineIndex)
 }
