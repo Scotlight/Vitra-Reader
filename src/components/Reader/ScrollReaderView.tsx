@@ -32,7 +32,6 @@ import {
     shouldBypassShadowQueueForSegmentMetas,
 } from './scrollVectorStrategy';
 import {
-    findAncestorChapterSpineIndex,
     parseChapterSpineIndex,
     resolveViewportChapterState,
     type ChapterViewportEntry,
@@ -42,6 +41,7 @@ import {
     resolveChapterDomId,
     resolveJumpLoadDirection,
 } from './scrollChapterJump';
+import { resolveScrollSelectionState } from './scrollSelectionState';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
@@ -1684,23 +1684,14 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         if (!viewport) return;
 
         const handleMouseUp = () => {
-            const sel = window.getSelection();
-            const text = sel?.toString().trim();
-            if (!text || !sel?.rangeCount) {
-                return;
-            }
-
-            const range = sel.getRangeAt(0);
-            const rect = range.getBoundingClientRect();
-
-            const spineIdx = findAncestorChapterSpineIndex(range.startContainer, viewport);
-
+            const nextState = resolveScrollSelectionState(window.getSelection(), viewport);
+            if (!nextState) return;
             setSelectionMenu({
                 visible: true,
-                x: rect.left + rect.width / 2,
-                y: rect.top - 10,
-                text,
-                spineIndex: spineIdx,
+                x: nextState.x,
+                y: nextState.y,
+                text: nextState.text,
+                spineIndex: nextState.spineIndex,
             });
         };
 

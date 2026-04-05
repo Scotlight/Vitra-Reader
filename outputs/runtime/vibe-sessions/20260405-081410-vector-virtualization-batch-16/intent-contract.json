@@ -1,0 +1,31 @@
+{
+  "runId": "20260405-081410-vector-virtualization-batch-16",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续推进 ScrollReaderView 拆分，提炼选择菜单状态解析辅助函数。",
+  "deliverable": [
+    "scrollSelectionState 工具模块",
+    "ScrollReaderView 选择链路接入",
+    "对应测试",
+    "第十六批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前十六批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "ScrollReaderView 不再自己组装选择菜单状态",
+    "选择菜单状态解析有测试覆盖",
+    "测试、类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不继续拆 loadChapter 主流程",
+    "本轮不修改未跟踪审计文档"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}
