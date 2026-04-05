@@ -1,0 +1,29 @@
+{
+  "runId": "20260405-103704-vector-virtualization-batch-22",
+  "stage": "deep_interview",
+  "autonomyMode": "benchmark_autonomous",
+  "goal": "继续推进向量化渲染专项，补充 ScrollReaderView 向量路径的组件级回归测试。",
+  "deliverable": [
+    "scrollReaderVectorFlow 组件测试",
+    "第22批需求与执行计划文档",
+    "验证与清理回执"
+  ],
+  "constraints": [
+    "不回退前二十二批主链能力",
+    "不改分页模式",
+    "不提交调查目录和未跟踪材料"
+  ],
+  "acceptanceCriteria": [
+    "向量章节初次加载绕过 ShadowRenderer 有测试覆盖",
+    "样式切换重新预处理有测试覆盖",
+    "测试、类型检查和构建通过"
+  ],
+  "nonGoals": [
+    "本轮不修改 ScrollReaderView 运行时代码",
+    "本轮不修改未跟踪审计文档"
+  ],
+  "assumptions": [
+    "用户持续发出 `$vibe`，视为允许按批次自主推进并提交。",
+    "未跟踪调查材料保持原样，不纳入提交。"
+  ]
+}
