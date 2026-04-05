@@ -1,0 +1,65 @@
+import { describe, expect, it } from 'vitest'
+import {
+    createLoadingChapterState,
+    createPreprocessedChapterState,
+    createVectorRestoreChapterState,
+} from '../components/Reader/scrollChapterLoad'
+
+describe('scrollChapterLoad', () => {
+    it('根据现有 placeholder 初始化 loading 章节状态', () => {
+        const chapter = createLoadingChapterState({
+            chapterId: 'ch-2',
+            currentReaderStyleKey: 'style-a',
+            existingChapter: {
+                externalStyles: ['body{}'],
+                height: 480,
+                segmentMetas: [],
+                vectorStyleKey: 'style-old',
+            },
+            spineIndex: 2,
+        })
+
+        expect(chapter).toMatchObject({
+            spineIndex: 2,
+            id: 'ch-2',
+            externalStyles: ['body{}'],
+            height: 480,
+            vectorStyleKey: 'style-old',
+            status: 'loading',
+        })
+    })
+
+    it('向量缓存恢复章节切到 shadow-rendering 并刷新样式键', () => {
+        const restored = createVectorRestoreChapterState(createLoadingChapterState({
+            chapterId: 'ch-1',
+            currentReaderStyleKey: 'style-a',
+            spineIndex: 1,
+        }), 'style-b')
+
+        expect(restored.status).toBe('shadow-rendering')
+        expect(restored.vectorStyleKey).toBe('style-b')
+    })
+
+    it('预处理结果装配为 shadow-rendering 章节状态', () => {
+        const loadingChapter = createLoadingChapterState({
+            chapterId: 'ch-3',
+            currentReaderStyleKey: 'style-a',
+            spineIndex: 3,
+        })
+
+        const loaded = createPreprocessedChapterState(loadingChapter, {
+            htmlContent: '<p>body</p>',
+            htmlFragments: ['<p>body</p>'],
+            externalStyles: ['p{}'],
+            segmentMetas: [],
+        }, 'style-c')
+
+        expect(loaded).toMatchObject({
+            htmlContent: '<p>body</p>',
+            htmlFragments: ['<p>body</p>'],
+            externalStyles: ['p{}'],
+            vectorStyleKey: 'style-c',
+            status: 'shadow-rendering',
+        })
+    })
+})

@@ -42,23 +42,17 @@ import {
     resolveJumpLoadDirection,
 } from './scrollChapterJump';
 import { resolveScrollSelectionState } from './scrollSelectionState';
+import {
+    createLoadingChapterState,
+    createPreprocessedChapterState,
+    createVectorRestoreChapterState,
+    type LoadedChapterState,
+} from './scrollChapterLoad';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
 
-interface LoadedChapter {
-    spineIndex: number;
-    id: string;
-    htmlContent: string;
-    htmlFragments: string[];
-    externalStyles: string[];
-    segmentMetas?: SegmentMeta[];
-    vectorStyleKey?: string;
-    domNode: HTMLElement | null;
-    height: number;
-    status: 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder';
-    mountedAt?: number;
-}
+type LoadedChapter = LoadedChapterState;
 
 interface VirtualChapterRuntime {
     chapterId: string;
@@ -836,18 +830,12 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
             currentReaderStyleKey,
         );
 
-        const loadingChapter: LoadedChapter = {
+        const loadingChapter = createLoadingChapterState({
+            chapterId,
+            currentReaderStyleKey,
+            existingChapter,
             spineIndex,
-            id: chapterId,
-            htmlContent: '',
-            htmlFragments: [],
-            externalStyles: existingChapter?.externalStyles || [],
-            segmentMetas: existingChapter?.segmentMetas,
-            vectorStyleKey: existingChapter?.vectorStyleKey ?? currentReaderStyleKey,
-            domNode: null,
-            height: previousHeight,
-            status: 'loading',
-        };
+        });
 
         setChapters(prev => {
             if (existingChapter) {
@@ -859,11 +847,10 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
         try {
             if (canRestoreFromVectorCache) {
-                const restored: LoadedChapter = {
-                    ...loadingChapter,
-                    status: 'shadow-rendering',
-                    vectorStyleKey: currentReaderStyleKey,
-                };
+                const restored = createVectorRestoreChapterState(
+                    loadingChapter,
+                    currentReaderStyleKey,
+                );
 
                 console.log(`[ScrollReader] Restore vector cache: spine ${spineIndex}`);
                 if (!commitWindowedVectorChapter(restored, previousHeight)) {
@@ -900,15 +887,11 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 },
             });
 
-            const loaded: LoadedChapter = {
-                ...loadingChapter,
-                htmlContent: preprocessed.htmlContent,
-                htmlFragments: preprocessed.htmlFragments,
-                externalStyles: preprocessed.externalStyles,
-                segmentMetas: preprocessed.segmentMetas,
-                vectorStyleKey: currentReaderStyleKey,
-                status: 'shadow-rendering',
-            };
+            const loaded = createPreprocessedChapterState(
+                loadingChapter,
+                preprocessed,
+                currentReaderStyleKey,
+            );
 
             if (!commitWindowedVectorChapter(loaded, previousHeight)) {
                 setChapters(prev =>
