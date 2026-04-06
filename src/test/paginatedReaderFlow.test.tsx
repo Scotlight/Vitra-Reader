@@ -5,14 +5,14 @@ import type { ReaderStyleConfig } from '../components/Reader/ShadowRenderer'
 import type { PageBoundary } from '../engine/types/vitraPagination'
 
 const mocks = vi.hoisted(() => ({
-    fetchAndPreprocessChapterMock: vi.fn(),
+    preprocessChapterContentMock: vi.fn(),
     setSelectionMenuMock: vi.fn(),
     startMeasureMock: vi.fn(),
     shadowRendererSpy: vi.fn(),
 }))
 
-vi.mock('../components/Reader/scrollChapterFetch', () => ({
-    fetchAndPreprocessChapter: mocks.fetchAndPreprocessChapterMock,
+vi.mock('../engine/render/chapterPreprocessService', () => ({
+    preprocessChapterContent: mocks.preprocessChapterContentMock,
 }))
 
 vi.mock('../engine', async () => {
@@ -34,6 +34,9 @@ vi.mock('../hooks/useSelectionMenu', () => ({
 
 vi.mock('../services/storageService', () => ({
     db: {
+        progress: {
+            put: async () => undefined,
+        },
         highlights: {
             where: () => ({
                 equals: () => ({
@@ -123,11 +126,11 @@ async function flushUi(): Promise<void> {
 
 describe('PaginatedReaderView flow', () => {
     beforeEach(() => {
-        mocks.fetchAndPreprocessChapterMock.mockReset()
+        mocks.preprocessChapterContentMock.mockReset()
         mocks.setSelectionMenuMock.mockReset()
         mocks.startMeasureMock.mockReset()
         mocks.shadowRendererSpy.mockReset()
-        mocks.fetchAndPreprocessChapterMock.mockResolvedValue({
+        mocks.preprocessChapterContentMock.mockResolvedValue({
             htmlContent: '<p>body</p>',
             htmlFragments: [],
             externalStyles: ['p{}'],
@@ -166,7 +169,7 @@ describe('PaginatedReaderView flow', () => {
         vi.unstubAllGlobals()
     })
 
-    it('初次加载通过 fetchAndPreprocessChapter 抓取分页章节，并关闭向量化', async () => {
+    it('初次加载会抓取章节并执行预处理', async () => {
         const provider = createProvider()
 
         render(
@@ -181,11 +184,10 @@ describe('PaginatedReaderView flow', () => {
         await flushUi()
 
         await waitFor(() => {
-            expect(mocks.fetchAndPreprocessChapterMock).toHaveBeenCalledTimes(1)
+            expect(mocks.preprocessChapterContentMock).toHaveBeenCalledTimes(1)
         })
 
-        const firstCall = mocks.fetchAndPreprocessChapterMock.mock.calls[0][0] as { vectorize: boolean }
-        expect(firstCall.vectorize).toBe(false)
+        expect(provider.extractChapterHtml).toHaveBeenCalledWith(0)
         expect(mocks.shadowRendererSpy).toHaveBeenCalled()
     })
 
@@ -214,7 +216,52 @@ describe('PaginatedReaderView flow', () => {
         await flushUi()
 
         await waitFor(() => {
-            expect(mocks.fetchAndPreprocessChapterMock).toHaveBeenCalledTimes(2)
+            expect(mocks.preprocessChapterContentMock).toHaveBeenCalledTimes(2)
+        })
+    })
+
+    it('逻辑页图少于视觉页数时，右翻页直接进入下一章', async () => {
+        const provider = createProvider([
+            { index: 0, href: 'chapter-1.xhtml', id: 'chapter-1', linear: true },
+            { index: 1, href: 'chapter-2.xhtml', id: 'chapter-2', linear: true },
+        ])
+
+        mocks.startMeasureMock.mockReturnValue({
+            abort: vi.fn(),
+            result: Promise.resolve<PageBoundary[]>([
+                { sectionIndex: 0, startBlock: 0, endBlock: 1, startOffset: 0, endOffset: 760 },
+            ]),
+        })
+
+        Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+            configurable: true,
+            get() { return 2400 },
+        })
+
+        render(
+            <PaginatedReaderView
+                provider={provider}
+                bookId="book-1"
+                pageTurnMode="paginated-single"
+                readerStyles={DEFAULT_READER_STYLES}
+            />
+        )
+
+        await flushUi()
+
+        await waitFor(() => {
+            expect(mocks.startMeasureMock).toHaveBeenCalledTimes(1)
+        })
+        await flushUi()
+
+        await act(async () => {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+            await new Promise((resolve) => window.setTimeout(resolve, 200))
+        })
+        await flushUi()
+
+        await waitFor(() => {
+            expect(provider.extractChapterHtml).toHaveBeenNthCalledWith(2, 1)
         })
     })
 
@@ -224,7 +271,7 @@ describe('PaginatedReaderView flow', () => {
             { index: 1, href: 'chapter-2.xhtml', id: 'chapter-2', linear: true },
         ])
 
-        mocks.fetchAndPreprocessChapterMock
+        mocks.preprocessChapterContentMock
             .mockResolvedValueOnce({
                 htmlContent: '',
                 htmlFragments: [],
@@ -256,11 +303,11 @@ describe('PaginatedReaderView flow', () => {
         await flushUi()
 
         await waitFor(() => {
-            expect(mocks.fetchAndPreprocessChapterMock).toHaveBeenCalledTimes(2)
+            expect(mocks.preprocessChapterContentMock).toHaveBeenCalledTimes(2)
         })
 
-        expect(mocks.fetchAndPreprocessChapterMock.mock.calls[0][0]).toMatchObject({ spineIndex: 0 })
-        expect(mocks.fetchAndPreprocessChapterMock.mock.calls[1][0]).toMatchObject({ spineIndex: 1 })
+        expect(mocks.preprocessChapterContentMock.mock.calls[0][0]).toMatchObject({ spineIndex: 0 })
+        expect(mocks.preprocessChapterContentMock.mock.calls[1][0]).toMatchObject({ spineIndex: 1 })
     })
 
     it('文本选择后通过统一 helper 设置选择菜单状态', async () => {

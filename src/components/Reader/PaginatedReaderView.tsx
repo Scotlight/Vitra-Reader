@@ -8,20 +8,29 @@ import { useSelectionMenu } from '../../hooks/useSelectionMenu';
 import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
 import { db } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
+import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService';
 import { startMeasure, type VitraMeasureHandle, type PageBoundary } from '../../engine';
 import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
-import { fetchAndPreprocessChapter } from './scrollChapterFetch';
-import {
-    createPaginatedShadowData,
-    hasRenderableChapterContent,
-    resolvePaginatedFallbackIndex,
-} from './paginatedChapterLoad';
-import { resolveNextPaginatedTarget, resolvePrevPaginatedTarget } from './paginatedChapterJump';
-import { createPaginatedProgressRecord, resolvePaginatedProgress } from './paginatedProgress';
-import { resolveScrollSelectionState } from './scrollSelectionState';
 import styles from './PaginatedReaderView.module.css';
 
 const HIGHLIGHT_IDLE_TIMEOUT_MS = 600;
+
+function resolveVisualPageCount(scrollWidth: number, viewportWidth: number): number {
+    if (viewportWidth <= 0) return 1;
+    return Math.max(1, Math.ceil((scrollWidth / viewportWidth) - 0.001));
+}
+
+function resolveEffectiveTotalPages(
+    visualPages: number,
+    logicalPages: number,
+    pageMapReady: boolean,
+): number {
+    const safeVisualPages = Math.max(1, visualPages);
+    if (!pageMapReady || logicalPages <= 0) {
+        return safeVisualPages;
+    }
+    return Math.max(1, logicalPages);
+}
 
 interface PaginatedReaderViewProps {
     provider: ContentProvider;
@@ -104,6 +113,31 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         }
     }, [])
 
+    const syncPaginationStateFromLayout = useCallback(() => {
+        const viewport = viewportRef.current;
+        const container = columnRef.current;
+        if (!viewport || !container) return;
+
+        const viewportWidth = Math.max(1, viewport.clientWidth);
+        const visualPages = resolveVisualPageCount(container.scrollWidth, viewportWidth);
+        const logicalPages = pageBoundariesRef.current.length;
+        const effectivePages = resolveEffectiveTotalPages(
+            visualPages,
+            logicalPages,
+            pageMapReadyRef.current,
+        );
+
+        setTotalPages(effectivePages);
+        totalPagesRef.current = effectivePages;
+
+        const clampedPage = Math.max(0, Math.min(currentPageRef.current, effectivePages - 1));
+        if (clampedPage === currentPageRef.current) return;
+
+        setCurrentPage(clampedPage);
+        currentPageRef.current = clampedPage;
+        setDisplayPage(clampedPage);
+    }, [])
+
     const measureBoundariesInShadow = useCallback(async (
         sourceNode: HTMLElement,
         viewportHeight: number,
@@ -130,8 +164,12 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         if (measureSeq !== paginationMeasureSeqRef.current) return []
         paginationMeasureHandleRef.current = null
         pageMapReadyRef.current = true
+        requestAnimationFrame(() => {
+            if (measureSeq !== paginationMeasureSeqRef.current) return
+            syncPaginationStateFromLayout()
+        })
         return boundaries
-    }, [abortPaginationMeasure])
+    }, [abortPaginationMeasure, syncPaginationStateFromLayout])
 
     useEffect(() => {
         return () => {
@@ -170,27 +208,33 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         pageMapReadyRef.current = false;
         renderedHighlightsRef.current.clear();
         try {
-            const preprocessed = await fetchAndPreprocessChapter({
+            const rawHtml = await provider.extractChapterHtml(spineIndex);
+
+            let chapterStyles: string[] = [];
+            try { chapterStyles = await provider.extractChapterStyles(spineIndex); } catch { /* optional */ }
+
+            const preprocessed = await preprocessChapterContent({
                 chapterId: `pch-${spineIndex}`,
-                chapterHref: spineItemsRef.current[spineIndex]?.href,
-                provider,
-                readerStyles: {
-                    fontSize: readerStyles.fontSize,
-                    lineHeight: readerStyles.lineHeight,
-                    pageWidth: readerStyles.pageWidth,
-                    paragraphSpacing: readerStyles.paragraphSpacing,
-                },
                 spineIndex,
-                vectorize: false,
+                chapterHref: spineItemsRef.current[spineIndex]?.href,
+                htmlContent: rawHtml,
+                externalStyles: chapterStyles,
             });
 
-            if (!hasRenderableChapterContent(preprocessed.htmlContent)) {
-                const fallbackIndex = resolvePaginatedFallbackIndex(
-                    spineIndex,
-                    goToLastPage,
-                    spineItemsRef.current.length,
-                );
-                if (fallbackIndex !== null) {
+            const html = preprocessed.htmlContent;
+
+            const plainText = html
+                .replace(/<script[\s\S]*?<\/script>/gi, '')
+                .replace(/<style[\s\S]*?<\/style>/gi, '')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/&nbsp;/gi, ' ')
+                .trim();
+            const hasMedia = /<(img|svg|video|audio|canvas|table|math|object|embed)\b/i.test(html);
+            const hasRenderableContent = plainText.length > 0 || hasMedia;
+
+            if (!hasRenderableContent) {
+                const fallbackIndex = goToLastPage ? spineIndex - 1 : spineIndex + 1;
+                if (fallbackIndex >= 0 && fallbackIndex < spineItemsRef.current.length) {
                     setCurrentSpineIndex(fallbackIndex);
                     currentSpineIndexRef.current = fallbackIndex;
                     await loadChapter(fallbackIndex, goToLastPage, visited);
@@ -198,7 +242,12 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 }
             }
 
-            setShadowData(createPaginatedShadowData(`pch-${spineIndex}`, preprocessed));
+            setShadowData({
+                htmlContent: html,
+                htmlFragments: preprocessed.htmlFragments,
+                externalStyles: preprocessed.externalStyles,
+                chapterId: `pch-${spineIndex}`,
+            });
         } catch (err) {
             console.error(`[PaginatedReader] Failed to load chapter ${spineIndex}:`, err);
             pageBoundariesRef.current = [];
@@ -301,22 +350,26 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         requestAnimationFrame(() => {
             if (w <= 0) return;
             const boundaries = pageBoundariesRef.current;
-            const rawPages = container.scrollWidth / w;
-            const pages = Math.max(1, Math.ceil(rawPages - 0.001));
-            const logicalPages = Math.max(1, boundaries.length || pages);
-            if (Math.abs(logicalPages - pages) >= 3) {
+            const visualPages = resolveVisualPageCount(container.scrollWidth, w);
+            const logicalPages = boundaries.length;
+            const totalPagesForChapter = resolveEffectiveTotalPages(
+                visualPages,
+                logicalPages,
+                pageMapReadyRef.current,
+            );
+            if (logicalPages > 0 && Math.abs(logicalPages - visualPages) >= 1) {
                 console.warn(
-                    `[PaginatedReader] Visual pages (${pages}) diverge from logical map (${logicalPages})`,
+                    `[PaginatedReader] Visual pages (${visualPages}) diverge from logical map (${logicalPages})`,
                 );
             }
-            setTotalPages(pages);
-            totalPagesRef.current = pages;
+            setTotalPages(totalPagesForChapter);
+            totalPagesRef.current = totalPagesForChapter;
 
             // 如果需要跳转到最后一页
             let targetPage = 0;
             let shouldJumpToLastPage = false;
             if (pendingLastPageRef.current) {
-                targetPage = pages - 1;
+                targetPage = totalPagesForChapter - 1;
                 shouldJumpToLastPage = true;
                 pendingLastPageRef.current = false;
             }
@@ -330,7 +383,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                     const rect = range.getBoundingClientRect();
                     const containerRect = container.getBoundingClientRect();
                     targetPage = Math.floor((rect.left - containerRect.left + container.scrollLeft) / w);
-                    targetPage = Math.max(0, Math.min(targetPage, pages - 1));
+                    targetPage = Math.max(0, Math.min(targetPage, totalPagesForChapter - 1));
                 }
             }
 
@@ -394,12 +447,17 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 if (disposed || w <= 0 || h <= 0) return;
 
                 container.style.height = `${h}px`;
-                const pages = Math.max(1, Math.ceil(container.scrollWidth / w));
+                const visualPages = resolveVisualPageCount(container.scrollWidth, w);
+                const effectivePages = resolveEffectiveTotalPages(
+                    visualPages,
+                    pageBoundariesRef.current.length,
+                    pageMapReadyRef.current,
+                );
                 const anchorBasedPage = Math.floor(anchorX / w);
-                const nextPage = Math.max(0, Math.min(anchorBasedPage, pages - 1));
+                const nextPage = Math.max(0, Math.min(anchorBasedPage, effectivePages - 1));
 
-                setTotalPages(pages);
-                totalPagesRef.current = pages;
+                setTotalPages(effectivePages);
+                totalPagesRef.current = effectivePages;
 
                 setCurrentPage(nextPage);
                 currentPageRef.current = nextPage;
@@ -457,7 +515,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         const pageWidth = viewport.clientWidth;
         if (pageWidth <= 0) return false;
         const logicalPages = pageBoundariesRef.current.length;
-        if (pageMapReadyRef.current && logicalPages > 0 && pageIndex >= logicalPages + 1) return true;
+        if (pageMapReadyRef.current && logicalPages > 0 && pageIndex >= logicalPages) return true;
 
         const pageLeft = pageIndex * pageWidth;
         const pageRight = pageLeft + pageWidth;
@@ -497,40 +555,58 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     }, []);
 
     const nextPage = useCallback(() => {
-        const nextTarget = resolveNextPaginatedTarget({
-            currentPage: currentPageRef.current,
-            currentSpineIndex: currentSpineIndexRef.current,
-            isPageLikelyBlank,
-            totalPages: totalPagesRef.current,
-            totalSpines: spineItemsRef.current.length,
-        })
+        if (currentPageRef.current < totalPagesRef.current - 1) {
+            let next = currentPageRef.current + 1;
+            while (next < totalPagesRef.current && isPageLikelyBlank(next)) {
+                next += 1;
+            }
+            if (next < totalPagesRef.current) {
+                goToPage(next);
+                return;
+            }
 
-        if (nextTarget.kind === 'page') {
-            goToPage(nextTarget.page)
-            return
-        }
-        if (nextTarget.kind === 'chapter') {
-            setCurrentSpineIndex(nextTarget.spineIndex)
-            setCurrentPage(0)
-            currentPageRef.current = 0
-            loadChapter(nextTarget.spineIndex, nextTarget.goToLastPage)
+            const nextIdx = currentSpineIndexRef.current + 1;
+            if (nextIdx < spineItemsRef.current.length) {
+                setCurrentSpineIndex(nextIdx);
+                setCurrentPage(0);
+                currentPageRef.current = 0;
+                loadChapter(nextIdx, false);
+            }
+        } else {
+            // Next chapter
+            const nextIdx = currentSpineIndexRef.current + 1;
+            if (nextIdx < spineItemsRef.current.length) {
+                setCurrentSpineIndex(nextIdx);
+                setCurrentPage(0);
+                currentPageRef.current = 0;
+                loadChapter(nextIdx, false); // 去第一页
+            }
         }
     }, [goToPage, loadChapter, isPageLikelyBlank]);
 
     const prevPage = useCallback(() => {
-        const prevTarget = resolvePrevPaginatedTarget({
-            currentPage: currentPageRef.current,
-            currentSpineIndex: currentSpineIndexRef.current,
-            isPageLikelyBlank,
-        })
+        if (currentPageRef.current > 0) {
+            let prev = currentPageRef.current - 1;
+            while (prev >= 0 && isPageLikelyBlank(prev)) {
+                prev -= 1;
+            }
+            if (prev >= 0) {
+                goToPage(prev);
+                return;
+            }
 
-        if (prevTarget.kind === 'page') {
-            goToPage(prevTarget.page)
-            return
-        }
-        if (prevTarget.kind === 'chapter') {
-            setCurrentSpineIndex(prevTarget.spineIndex)
-            loadChapter(prevTarget.spineIndex, prevTarget.goToLastPage)
+            const prevIdx = currentSpineIndexRef.current - 1;
+            if (prevIdx >= 0) {
+                setCurrentSpineIndex(prevIdx);
+                loadChapter(prevIdx, true);
+            }
+        } else {
+            // Previous chapter, go to last page
+            const prevIdx = currentSpineIndexRef.current - 1;
+            if (prevIdx >= 0) {
+                setCurrentSpineIndex(prevIdx);
+                loadChapter(prevIdx, true); // 去最后一页
+            }
         }
     }, [goToPage, loadChapter, isPageLikelyBlank]);
 
@@ -545,26 +621,21 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     const progressTimerRef = useRef<number | null>(null);
     useEffect(() => {
         if (spineItems.length === 0 || isLoading) return;
-        const resolved = resolvePaginatedProgress(
-            currentPage,
-            currentSpineIndex,
-            totalPages,
-            spineItems.length,
-        );
-        if (!resolved) return;
-        onProgressChange?.(resolved.progress);
+        const chapterProgress = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
+        const progress = (currentSpineIndex + Math.min(1, chapterProgress)) / spineItems.length;
+        const clamped = Math.max(0, Math.min(1, progress));
+        onProgressChange?.(clamped);
 
         // 500ms debounce，避免翻页时频繁写 IndexedDB
         if (progressTimerRef.current) window.clearTimeout(progressTimerRef.current);
         progressTimerRef.current = window.setTimeout(() => {
-            db.progress.put(createPaginatedProgressRecord({
+            db.progress.put({
                 bookId,
-                currentChapterHref: spineItems[currentSpineIndex]?.href || '',
-                currentPage,
-                currentSpineIndex,
-                percentage: resolved.progress,
+                location: `vitra:${currentSpineIndex}:${currentPage}`,
+                percentage: clamped,
+                currentChapter: spineItems[currentSpineIndex]?.href || '',
                 updatedAt: Date.now(),
-            })).catch(err => console.warn('[PaginatedReader] Progress save failed:', err));
+            }).catch(err => console.warn('[PaginatedReader] Progress save failed:', err));
         }, 500);
 
         return () => {
@@ -612,18 +683,17 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         if (!viewport) return;
 
         const handleMouseUp = () => {
-            const nextState = resolveScrollSelectionState(
-                window.getSelection(),
-                viewport,
-                currentSpineIndexRef.current,
-            );
-            if (!nextState) return;
+            const sel = window.getSelection();
+            const text = sel?.toString().trim();
+            if (!text || !sel?.rangeCount) return;
+            const range = sel.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
             setSelectionMenu({
                 visible: true,
-                x: nextState.x,
-                y: nextState.y,
-                text: nextState.text,
-                spineIndex: nextState.spineIndex,
+                x: rect.left + rect.width / 2,
+                y: rect.top - 10,
+                text,
+                spineIndex: currentSpineIndexRef.current,
             });
         };
 

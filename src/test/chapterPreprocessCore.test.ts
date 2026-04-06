@@ -43,4 +43,27 @@ describe('chapterPreprocessCore', () => {
         expect(firstMediaIndex).toBeGreaterThan(0)
         expect(segments.slice(0, firstMediaIndex).every((segment) => !segment.hasMedia)).toBe(true)
     })
+
+    it('单段回退时保留原始 html 载荷，避免大章节空白', () => {
+        const htmlContent = `<p>${'x'.repeat(500_000)}</p>`
+
+        const result = preprocessChapterCore({
+            chapterId: 'chapter-2',
+            spineIndex: 1,
+            htmlContent,
+            externalStyles: [],
+            vectorize: true,
+            vectorConfig: {
+                targetChars: 16_000,
+                fontSize: 16,
+                pageWidth: 900,
+                lineHeight: 1.6,
+                paragraphSpacing: 12,
+            },
+        })
+
+        expect(result.segmentMetas?.length).toBe(1)
+        expect(result.htmlContent).toBe(htmlContent)
+        expect(result.htmlFragments.length).toBeGreaterThan(0)
+    })
 })

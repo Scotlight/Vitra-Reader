@@ -14,13 +14,14 @@ import {
   scopeStyles,
 } from '../../utils/styleProcessor';
 import {
-  streamHtmlBySaxStream,
+  consumeMediaOffsetInRange,
+  scanHtmlBySaxStream,
 } from './htmlSaxStream';
 
 const FRAGMENT_TARGET_CHARS = 120_000;
 const FRAGMENT_HARD_MAX_CHARS = 180_000;
 const VECTOR_MIN_SEGMENT_EST_HEIGHT = 96;
-const VECTORIZE_HTML_LENGTH_THRESHOLD = 150_000;
+const VECTORIZE_HTML_LENGTH_THRESHOLD = 450_000;
 
 interface AppendSegmentOptions {
   segments: SegmentMeta[];
@@ -65,6 +66,7 @@ export function preprocessChapterCore(input: ChapterPreprocessInput): ChapterPre
   if (input.vectorize && cleanedHtml.length >= VECTORIZE_HTML_LENGTH_THRESHOLD && input.vectorConfig) {
     segmentMetas = vectorizeHtmlToSegmentMetas(cleanedHtml, input.vectorConfig);
   }
+
   const shouldDropHtmlPayload = shouldDropFullHtmlPayload(cleanedHtml, segmentMetas);
 
   return {
@@ -101,34 +103,26 @@ function splitHtmlIntoFragments(html: string): string[] {
     return [html];
   }
 
+  const { blockBoundaryOffsets } = scanHtmlBySaxStream(html);
   const fragments: string[] = [];
   let start = 0;
   let lastSafeCut = 0;
-  let fallbackToWholeHtml = false;
 
-  streamHtmlBySaxStream(html, {
-    onBlockBoundary(end) {
-      if (end - start < FRAGMENT_TARGET_CHARS) {
-        lastSafeCut = end;
-        return;
-      }
+  for (const end of blockBoundaryOffsets) {
+    if (end - start < FRAGMENT_TARGET_CHARS) {
+      lastSafeCut = end;
+      continue;
+    }
 
-      const hardCut = Math.min(end, start + FRAGMENT_HARD_MAX_CHARS);
-      const cutPoint = lastSafeCut > start ? lastSafeCut : hardCut;
-      if (cutsInsideTag(html, cutPoint)) {
-        fallbackToWholeHtml = true;
-        return false;
-      }
+    const hardCut = Math.min(end, start + FRAGMENT_HARD_MAX_CHARS);
+    const cutPoint = lastSafeCut > start ? lastSafeCut : hardCut;
+    if (cutsInsideTag(html, cutPoint)) {
+      return [html];
+    }
 
-      fragments.push(html.slice(start, cutPoint));
-      start = cutPoint;
-      lastSafeCut = cutPoint;
-      return;
-    },
-  });
-
-  if (fallbackToWholeHtml) {
-    return [html];
+    fragments.push(html.slice(start, cutPoint));
+    start = cutPoint;
+    lastSafeCut = cutPoint;
   }
 
   const tailFragments = buildTailFragments(html, start);
@@ -177,40 +171,9 @@ function appendSegmentMeta(options: AppendSegmentOptions): number {
   return offsetY + estimatedHeight;
 }
 
-function consumeQueuedMediaOffsets(
-  mediaOffsets: number[],
-  cursorRef: { value: number },
-  end: number,
-): boolean {
-  let cursor = cursorRef.value;
-  let hasMedia = false;
-  while (cursor < mediaOffsets.length && mediaOffsets[cursor] < end) {
-    hasMedia = true;
-    cursor += 1;
-  }
-
-  if (cursor > 0) {
-    mediaOffsets.splice(0, cursor);
-    cursor = 0;
-  }
-  cursorRef.value = cursor;
-  return hasMedia;
-}
-
-function detectAnyMediaTag(html: string): boolean {
-  let hasMedia = false;
-  streamHtmlBySaxStream(html, {
-    onMediaTag() {
-      hasMedia = true;
-      return false;
-    },
-  });
-  return hasMedia;
-}
-
 /**
  * Worker 侧流式/SAX 向量化：
- * - 以 SAX 回调按序消费，不预先构造完整边界数组
+ * - 分块扫描标签事件，不使用 matchAll 全量正则遍历
  * - 仅在落段时 slice 内容，避免频繁中间分配
  */
 export function vectorizeHtmlToSegmentMetas(
@@ -218,57 +181,55 @@ export function vectorizeHtmlToSegmentMetas(
   config: VectorizeConfig,
 ): SegmentMeta[] {
   const targetChars = Math.max(4_000, config.targetChars || 16_000);
+  const scanResult = scanHtmlBySaxStream(html);
 
   if (!html || html.length <= targetChars) {
-    return [buildSingleSegmentMeta(html, 0, config, detectAnyMediaTag(html))];
+    return [buildSingleSegmentMeta(html, 0, config, scanResult.mediaTagOffsets.length > 0)];
   }
 
   const segments: SegmentMeta[] = [];
-  const pendingMediaOffsets: number[] = [];
   const mediaCursor = { value: 0 };
   let start = 0;
   let lastSafeCut = 0;
   let cumulativeOffsetY = 0;
-  let fallbackToSingleSegment = false;
 
-  streamHtmlBySaxStream(html, {
-    onMediaTag(offset) {
-      pendingMediaOffsets.push(offset);
-    },
-    onBlockBoundary(end) {
-      if (end - start < targetChars) {
-        lastSafeCut = end;
-        return;
-      }
+  for (const end of scanResult.blockBoundaryOffsets) {
+    if (end - start < targetChars) {
+      lastSafeCut = end;
+      continue;
+    }
 
-      const cutPoint = lastSafeCut > start ? lastSafeCut : end;
-      if (cutsInsideTag(html, cutPoint)) {
-        fallbackToSingleSegment = true;
-        return false;
-      }
+    const cutPoint = lastSafeCut > start ? lastSafeCut : end;
+    if (cutsInsideTag(html, cutPoint)) {
+      return [buildSingleSegmentMeta(html, 0, config, scanResult.mediaTagOffsets.length > 0)];
+    }
 
-      const hasMedia = consumeQueuedMediaOffsets(pendingMediaOffsets, mediaCursor, cutPoint);
-      cumulativeOffsetY = appendSegmentMeta({
-        segments,
-        html,
-        start,
-        end: cutPoint,
-        offsetY: cumulativeOffsetY,
-        hasMedia,
-        config,
-      });
-      start = cutPoint;
-      lastSafeCut = cutPoint;
-      return;
-    },
-  });
-
-  if (fallbackToSingleSegment) {
-    return [buildSingleSegmentMeta(html, 0, config, detectAnyMediaTag(html))];
+    const hasMedia = consumeMediaOffsetInRange(
+      scanResult.mediaTagOffsets,
+      start,
+      cutPoint,
+      mediaCursor,
+    );
+    cumulativeOffsetY = appendSegmentMeta({
+      segments,
+      html,
+      start,
+      end: cutPoint,
+      offsetY: cumulativeOffsetY,
+      hasMedia,
+      config,
+    });
+    start = cutPoint;
+    lastSafeCut = cutPoint;
   }
 
   if (start < html.length) {
-    const hasMedia = pendingMediaOffsets.length > 0;
+    const hasMedia = consumeMediaOffsetInRange(
+      scanResult.mediaTagOffsets,
+      start,
+      html.length,
+      mediaCursor,
+    );
     appendSegmentMeta({
       segments,
       html,
@@ -281,7 +242,7 @@ export function vectorizeHtmlToSegmentMetas(
   }
 
   if (segments.length === 0) {
-    return [buildSingleSegmentMeta(html, 0, config, pendingMediaOffsets.length > 0)];
+    return [buildSingleSegmentMeta(html, 0, config, scanResult.mediaTagOffsets.length > 0)];
   }
   return segments;
 }

@@ -65,31 +65,6 @@ const HYDRATE_MEDIA_MAX_TRACKED_IMAGES = 4;
 /** 模块级段 DOM 节点池单例 */
 export const segmentPool = new SegmentDomPool();
 
-/** 提前触发图片加载，让浏览器在 measure/render 阶段之前开始下载 */
-const IMG_SRC_PATTERN = /<img[^>]+src=["']([^"']+)["']/gi;
-const PREFETCH_MAX_IMAGES = 12;
-const prefetchedUrls = new Set<string>();
-
-function prefetchImagesFromHtml(html: string): void {
-  IMG_SRC_PATTERN.lastIndex = 0;
-  let count = 0;
-  let match: RegExpExecArray | null;
-  while ((match = IMG_SRC_PATTERN.exec(html)) !== null && count < PREFETCH_MAX_IMAGES) {
-    const src = match[1];
-    if (!src || prefetchedUrls.has(src) || src.startsWith('data:')) continue;
-    prefetchedUrls.add(src);
-    // 使用 <link rel="prefetch"> 让浏览器后台加载，不阻塞主线程
-    const link = document.createElement('link');
-    link.rel = 'prefetch';
-    link.as = 'image';
-    link.href = src;
-    document.head.appendChild(link);
-    count++;
-  }
-  // 限制 prefetchedUrls 集合大小
-  if (prefetchedUrls.size > 500) prefetchedUrls.clear();
-}
-
 interface ChapterVectorSegment {
   index: number;
   nodes: ChildNode[];
@@ -105,93 +80,6 @@ interface ShadowRenderContext {
   vectorSegments: ChapterVectorSegment[];
   segmentEls: HTMLElement[];
   initialSegmentCount: number;
-  windowedVirtualized: boolean;
-}
-
-function buildScopedReaderContentCss(
-  chapterId: string,
-  readerStyles: ReaderStyleConfig,
-): string {
-  const {
-    textColor, bgColor, fontSize, fontFamily,
-    lineHeight, paragraphSpacing, textIndentEm, letterSpacing, textAlign,
-    isPdfDarkMode,
-  } = readerStyles;
-  const scope = `[data-chapter-id="${chapterId}"]`;
-
-  const pdfDarkModeCss = isPdfDarkMode ? `
-      ${scope} .pdf-page-layer img {
-        filter: invert(0.6) brightness(1.3);
-      }
-    ` : '';
-
-  return `
-      ${buildReaderCssTemplate({
-        textColor,
-        bgColor,
-        fontSize,
-        fontFamily,
-        lineHeight,
-        paragraphSpacing,
-        letterSpacing,
-        textAlign,
-      }, {
-        scope,
-        applyColumns: false,
-        textIndentEm,
-      })}
-      ${scope} *:not(img):not(svg):not(path):not(video):not(canvas) {
-        color: var(--reader-text-color, ${textColor}) !important;
-      }
-      ${scope} h1, ${scope} h2, ${scope} h3, ${scope} h4, ${scope} h5, ${scope} h6 {
-        margin-top: 1em !important;
-        margin-bottom: 0.5em !important;
-      }
-      ${scope} hr, ${scope} .break, ${scope} [style*="page-break"] {
-        display: none !important;
-      }
-      ${pdfDarkModeCss}
-    `;
-}
-
-export function createWindowedVectorChapterShell(options: {
-  chapterId: string;
-  externalStyles?: string[];
-  readerStyles: ReaderStyleConfig;
-  totalHeight: number;
-}): HTMLElement {
-  const {
-    chapterId,
-    externalStyles = [],
-    readerStyles,
-    totalHeight,
-  } = options;
-
-  const chapterWrapper = document.createElement('div');
-  chapterWrapper.setAttribute('data-chapter-id', chapterId);
-  chapterWrapper.className = 'chapter-content';
-  chapterWrapper.style.width = '100%';
-  chapterWrapper.style.position = 'relative';
-  chapterWrapper.style.display = 'flow-root';
-  chapterWrapper.setAttribute('data-vitra-vectorized', 'true');
-
-  const styleEl = document.createElement('style');
-  styleEl.textContent = [
-    generateCSSOverride(chapterId),
-    externalStyles.join('\n'),
-    buildScopedReaderContentCss(chapterId, readerStyles),
-  ].join('\n');
-  chapterWrapper.appendChild(styleEl);
-
-  const contentDiv = document.createElement('div');
-  contentDiv.style.display = 'flow-root';
-  contentDiv.style.position = 'relative';
-  contentDiv.style.height = `${Math.max(1, totalHeight)}px`;
-  contentDiv.style.minHeight = contentDiv.style.height;
-  contentDiv.setAttribute('data-vitra-vector-content', 'true');
-  chapterWrapper.appendChild(contentDiv);
-
-  return chapterWrapper;
 }
 
 async function yieldToBrowser(): Promise<void> {
@@ -374,11 +262,27 @@ async function appendHtmlFragmentsChunked(
 function normalizeHtmlFragments(
   htmlFragments: readonly string[] | undefined,
   htmlContent: string,
+  segmentMetas?: readonly SegmentMeta[],
 ): readonly string[] {
   if (!htmlFragments || htmlFragments.length === 0) {
+    if (segmentMetas && segmentMetas.length > 0) {
+      return segmentMetas
+        .map((segment) => segment.htmlContent)
+        .filter((fragment) => fragment.length > 0);
+    }
     return [htmlContent];
   }
   return htmlFragments.filter((fragment) => fragment.length > 0);
+}
+
+function getSegmentMetaTotalChars(segmentMetas?: readonly SegmentMeta[]): number {
+  if (!segmentMetas || segmentMetas.length === 0) return 0;
+  return segmentMetas.reduce((total, segment) => total + segment.charCount, 0);
+}
+
+function hasSegmentMetaMedia(segmentMetas?: readonly SegmentMeta[]): boolean {
+  if (!segmentMetas || segmentMetas.length === 0) return false;
+  return segmentMetas.some((segment) => segment.hasMedia);
 }
 
 function hasLayoutSensitiveMedia(html: string): boolean {
@@ -434,6 +338,99 @@ export interface ReaderStyleConfig {
   isPdfDarkMode?: boolean;
 }
 
+interface CreateWindowedVectorChapterShellOptions {
+  chapterId: string;
+  externalStyles?: readonly string[];
+  readerStyles: ReaderStyleConfig;
+  segmentMetas: readonly SegmentMeta[];
+}
+
+function buildScopedContentCss(chapterId: string, readerStyles: ReaderStyleConfig): string {
+  const {
+    textColor, bgColor, fontSize, fontFamily,
+    lineHeight, paragraphSpacing, textIndentEm, letterSpacing, textAlign,
+    isPdfDarkMode,
+  } = readerStyles;
+  const scope = `[data-chapter-id="${chapterId}"]`;
+
+  const pdfDarkModeCss = isPdfDarkMode ? `
+    ${scope} .pdf-page-layer img {
+      filter: invert(0.6) brightness(1.3);
+    }
+  ` : '';
+
+  return `
+    ${buildReaderCssTemplate({
+      textColor,
+      bgColor,
+      fontSize,
+      fontFamily,
+      lineHeight,
+      paragraphSpacing,
+      letterSpacing,
+      textAlign,
+    }, {
+      scope,
+      applyColumns: false,
+      textIndentEm,
+    })}
+    ${scope} *:not(img):not(svg):not(path):not(video):not(canvas) {
+      color: var(--reader-text-color, ${textColor}) !important;
+    }
+    ${scope} h1, ${scope} h2, ${scope} h3, ${scope} h4, ${scope} h5, ${scope} h6 {
+      margin-top: 1em !important;
+      margin-bottom: 0.5em !important;
+    }
+    ${scope} hr, ${scope} .break, ${scope} [style*="page-break"] {
+      display: none !important;
+    }
+    ${pdfDarkModeCss}
+  `;
+}
+
+export function createWindowedVectorChapterShell(options: CreateWindowedVectorChapterShellOptions): {
+  node: HTMLElement;
+  height: number;
+} {
+  const {
+    chapterId,
+    externalStyles = [],
+    readerStyles,
+    segmentMetas,
+  } = options;
+
+  const chapterWrapper = document.createElement('div');
+  chapterWrapper.className = 'chapter-content';
+  chapterWrapper.setAttribute('data-vitra-vectorized', 'true');
+  chapterWrapper.style.width = '100%';
+  chapterWrapper.style.position = 'relative';
+  chapterWrapper.style.display = 'flow-root';
+
+  const styleEl = document.createElement('style');
+  styleEl.textContent = [
+    generateCSSOverride(chapterId),
+    externalStyles.join('\n'),
+    buildScopedContentCss(chapterId, readerStyles),
+  ].join('\n');
+  chapterWrapper.appendChild(styleEl);
+
+  const contentDiv = document.createElement('div');
+  contentDiv.style.display = 'flow-root';
+  contentDiv.setAttribute('data-vitra-vector-content', 'true');
+  const totalHeight = Math.max(1, segmentMetas.reduce((total, segment) => total + segment.estimatedHeight, 0));
+  contentDiv.style.position = 'relative';
+  contentDiv.style.height = `${totalHeight}px`;
+  contentDiv.style.minHeight = `${totalHeight}px`;
+  contentDiv.setAttribute('data-vitra-vector-total-height', String(totalHeight));
+
+  chapterWrapper.appendChild(contentDiv);
+
+  return {
+    node: chapterWrapper,
+    height: totalHeight,
+  };
+}
+
 export interface ShadowRendererProps {
   /** 章节 HTML 内容 */
   htmlContent: string;
@@ -486,16 +483,16 @@ export function ShadowRenderer({
   const containerRef = useRef<HTMLDivElement>(null);
   const hasReportedRef = useRef(false);
   const currentChapterIdRef = useRef(chapterId);
-  const hasVectorSegmentInput = Boolean(mode === 'scroll' && segmentMetas && segmentMetas.length > 0);
 
   /** 构建阅读器内容样式 CSS（已作用域化到 chapterId） */
   const buildContentCss = useCallback(() => {
-    return buildScopedReaderContentCss(chapterId, readerStyles);
+    return buildScopedContentCss(chapterId, readerStyles);
   }, [readerStyles, chapterId]);
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || (!htmlContent && !hasVectorSegmentInput)) return;
+    if (!container) return;
+    if (!htmlContent && htmlFragments.length === 0 && (!segmentMetas || segmentMetas.length === 0)) return;
 
     // Reset on chapterId change
     if (currentChapterIdRef.current !== chapterId) {
@@ -527,7 +524,7 @@ export function ShadowRenderer({
             return {
               cleanedHtml: htmlContent,
               processedStyles: externalStyles,
-              fragments: normalizeHtmlFragments(htmlFragments, htmlContent),
+              fragments: normalizeHtmlFragments(htmlFragments, htmlContent, segmentMetas),
             };
           }
           return buildLocalProcessedPayload(htmlContent, externalStyles, chapterId);
@@ -538,19 +535,14 @@ export function ShadowRenderer({
         const normalizedFragments = processed.fragments;
         const chapterSize = cleanedHtml.length > 0
           ? cleanedHtml.length
-          : (segmentMetas?.reduce((sum, meta) => sum + meta.charCount, 0) || 0);
-        const isLargeChapter = chapterSize >= LARGE_CHAPTER_HTML_THRESHOLD || hasVectorSegmentInput;
+          : getSegmentMetaTotalChars(segmentMetas);
+        const isLargeChapter = chapterSize >= LARGE_CHAPTER_HTML_THRESHOLD;
         const mediaSensitiveChapter = cleanedHtml.length > 0
           ? hasLayoutSensitiveMedia(cleanedHtml)
-          : Boolean(segmentMetas?.some((meta) => meta.hasMedia));
-
-        // 资源预热：在 measure 阶段之前提前触发图片加载
-        if (cleanedHtml.length > 0) {
-          prefetchImagesFromHtml(cleanedHtml);
-        }
+          : hasSegmentMetaMedia(segmentMetas);
 
         const vectorSegments = await runVitraRenderStage(trace, 'measure', () => {
-          if (mode !== 'scroll' || (!isLargeChapter && !hasVectorSegmentInput)) return [];
+          if (mode !== 'scroll' || !isLargeChapter) return [];
           // 优先使用 Worker 侧 segmentMetas，转为内部 ChapterVectorSegment 兼容格式
           if (segmentMetas && segmentMetas.length > 0) {
             return segmentMetas.map((meta): ChapterVectorSegment => ({
@@ -588,19 +580,12 @@ export function ShadowRenderer({
           const contentDiv = document.createElement('div');
           contentDiv.style.display = 'flow-root';
           const canUseVectorized = vectorPlan.enabled;
-          const isWorkerVectorized = Boolean(mode === 'scroll' && segmentMetas && segmentMetas.length > 0 && canUseVectorized);
           const segmentEls: HTMLElement[] = [];
           const initialSegmentCount = mediaSensitiveChapter
             ? vectorSegments.length
             : vectorPlan.initialSegmentCount;
 
-          if (isWorkerVectorized) {
-            chapterWrapper.setAttribute('data-vitra-vectorized', 'true');
-            contentDiv.setAttribute('data-vitra-vector-content', 'true');
-            contentDiv.style.position = 'relative';
-            contentDiv.style.height = `${Math.max(1, vectorSegments.reduce((sum, segment) => sum + segment.estimatedHeight, 0))}px`;
-            contentDiv.style.minHeight = contentDiv.style.height;
-          } else if (canUseVectorized) {
+          if (canUseVectorized) {
             vectorSegments.forEach((segment, segmentIndex) => {
               const segmentEl = segmentPool.acquire();
               segmentEl.setAttribute('data-shadow-segment-index', String(segmentIndex));
@@ -657,7 +642,7 @@ export function ShadowRenderer({
           if (cancelled) return null;
 
           await waitForAssetLoad(chapterWrapper, {
-            chapterSizeHint: chapterSize,
+            chapterSizeHint: cleanedHtml.length,
             timeoutMs: mediaSensitiveChapter
               ? MEDIA_SENSITIVE_LOAD_TIMEOUT_MS
               : (canUseVectorized ? RENDER_VECTORIZED_LOAD_TIMEOUT_MS : (isLargeChapter ? RENDER_LARGE_CHAPTER_LOAD_TIMEOUT_MS : undefined)),
@@ -682,7 +667,6 @@ export function ShadowRenderer({
             vectorSegments,
             segmentEls,
             initialSegmentCount,
-            windowedVirtualized: isWorkerVectorized,
           };
         });
 
@@ -695,17 +679,15 @@ export function ShadowRenderer({
             vectorSegments: activeSegments,
             segmentEls: activeSegmentEls,
             initialSegmentCount: activeInitialSegmentCount,
-            windowedVirtualized,
           } = renderContext;
 
           if (!canUseVectorized || activeSegments.length <= activeInitialSegmentCount) return;
-          if (windowedVirtualized) return;
 
-          // Worker 向量化路径已经交给 ScrollReaderView 的窗口化同步器管理
-          const shouldDeferHydration = segmentMetas && segmentMetas.length > 0;
-          if (shouldDeferHydration) {
+          // 若 segmentMetas 存在（Worker路径），跳过全量 rIC 循环，交由 ScrollReaderView IO 驱动
+          const isWorkerVectorized = segmentMetas && segmentMetas.length > 0;
+          if (isWorkerVectorized) {
             console.log(
-              `[ShadowRenderer] Chapter "${chapterId}" delegated to ScrollReaderView windowed virtualization (${activeSegments.length - activeInitialSegmentCount} deferred segments)`,
+              `[ShadowRenderer] Chapter "${chapterId}" using IO-driven hydration (${activeSegments.length - activeInitialSegmentCount} deferred segments)`,
             );
             return;
           }
@@ -786,7 +768,7 @@ export function ShadowRenderer({
       }
       document.fonts?.removeEventListener?.('loadingdone', handleFontLoaded);
     };
-  }, [htmlContent, htmlFragments, segmentMetas, chapterId, externalStyles, preprocessed, onReady, onError, buildContentCss, hasVectorSegmentInput, mode]);
+  }, [htmlContent, htmlFragments, segmentMetas, chapterId, externalStyles, preprocessed, onReady, onError, buildContentCss]);
 
   return (
     <div

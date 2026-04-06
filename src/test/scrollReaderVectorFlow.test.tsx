@@ -62,11 +62,25 @@ vi.mock('../utils/idleScheduler', () => ({
 }))
 
 vi.mock('../components/Reader/ShadowRenderer', async () => {
+    const React = await import('react')
     const actual = await vi.importActual<typeof import('../components/Reader/ShadowRenderer')>('../components/Reader/ShadowRenderer')
     return {
         ...actual,
-        ShadowRenderer: () => {
-            mocks.shadowRendererSpy()
+        ShadowRenderer: (props: {
+            chapterId: string
+            htmlContent: string
+            segmentMetas?: SegmentMeta[]
+            onReady: (node: HTMLElement, height: number) => void
+        }) => {
+            mocks.shadowRendererSpy(props.chapterId)
+            React.useEffect(() => {
+                const node = document.createElement('div')
+                if (props.segmentMetas && props.segmentMetas.length > 1) {
+                    node.setAttribute('data-vitra-vectorized', 'true')
+                }
+                node.innerHTML = props.htmlContent || '<p>shadow-fallback</p>'
+                props.onReady(node, 600)
+            }, [props])
             return null
         },
     }
@@ -197,7 +211,7 @@ describe('ScrollReaderView vector flow', () => {
         vi.unstubAllGlobals()
     })
 
-    it('大章节初次加载直接进入向量章节外壳，不渲染 ShadowRenderer', async () => {
+    it('大章节初次加载直接进入向量章节外壳', async () => {
         const provider = createProvider()
         mocks.preprocessChapterContentMock.mockResolvedValue(createVectorizedPreprocessResult(16))
 
@@ -220,7 +234,7 @@ describe('ScrollReaderView vector flow', () => {
         expect(mocks.preprocessChapterContentMock).toHaveBeenCalledTimes(1)
     })
 
-    it('样式切换后重新预处理向量章节，并继续绕过 ShadowRenderer', async () => {
+    it('样式切换后重新预处理向量章节，并继续走直接外壳路径', async () => {
         const provider = createProvider()
         mocks.preprocessChapterContentMock.mockImplementation(async (input: { vectorConfig: { fontSize: number } }) => (
             createVectorizedPreprocessResult(input.vectorConfig.fontSize)
