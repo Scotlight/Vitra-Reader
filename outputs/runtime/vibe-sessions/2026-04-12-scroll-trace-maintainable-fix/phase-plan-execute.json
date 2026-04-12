@@ -1,0 +1,22 @@
+{
+  "runId": "2026-04-12-scroll-trace-maintainable-fix",
+  "phase": "plan_execute",
+  "timestamp": "2026-04-12T16:58:00+08:00",
+  "changedFiles": [
+    "src/components/Reader/ReaderView.tsx",
+    "src/components/Reader/ScrollReaderView.tsx",
+    "src/components/Reader/ShadowRenderer.tsx"
+  ],
+  "verification": [
+    {
+      "command": "powershell.exe -Command \"npm run build --silent\"",
+      "result": "passed"
+    }
+  ],
+  "notes": [
+    "ReaderView stabilized ScrollReaderView props to reduce parent-driven rerenders.",
+    "ScrollReaderView merged viewport scans, cached highlights in memory, and removed passive full-chapter highlight materialization.",
+    "ShadowRenderer capped media-sensitive seed segments and removed seed correction reflow."
+  ],
+  "status": "completed"
+}

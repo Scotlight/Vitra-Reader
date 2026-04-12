@@ -1,0 +1,25 @@
+{
+  "runId": "2026-04-12-scroll-trace-maintainable-fix",
+  "stage": "phase_cleanup",
+  "timestamp": "2026-04-12T16:59:00+08:00",
+  "tempArtifactsRemoved": [],
+  "nodeAudit": {
+    "performed": false,
+    "reason": "this run only executed local build commands and did not start a dedicated long-lived node process outside the build toolchain"
+  },
+  "repoHygiene": {
+    "keptDirtyPathsOutsideRun": [
+      "src/components/Reader/PaginatedReaderView.tsx",
+      "src/engine/render/chapterPreprocessService.ts",
+      "doc/**",
+      "docs/chat_export/**",
+      "docs/virtual-render/**"
+    ],
+    "reason": "these paths pre-existed or were out of scope for this run and were intentionally not staged"
+  },
+  "openRisks": [
+    "Passive highlights now wait for the relevant segment to hydrate instead of forcing whole-chapter materialization.",
+    "This run did not re-profile the two traces after code changes; only build verification was executed."
+  ],
+  "status": "completed"
+}

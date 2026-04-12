@@ -117,6 +117,25 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         bookFormat,
         settings.themeId,
     ])
+    const scrollSmoothConfig = useMemo(() => ({
+        enabled: settings.smoothScrollEnabled,
+        stepSizePx: settings.smoothStepSizePx,
+        animationTimeMs: settings.smoothAnimationTimeMs,
+        accelerationDeltaMs: settings.smoothAccelerationDeltaMs,
+        accelerationMax: settings.smoothAccelerationMax,
+        tailToHeadRatio: settings.smoothTailToHeadRatio,
+        easing: settings.smoothAnimationEasing,
+        reverseWheelDirection: settings.smoothReverseWheelDirection,
+    }), [
+        settings.smoothScrollEnabled,
+        settings.smoothStepSizePx,
+        settings.smoothAnimationTimeMs,
+        settings.smoothAccelerationDeltaMs,
+        settings.smoothAccelerationMax,
+        settings.smoothTailToHeadRatio,
+        settings.smoothAnimationEasing,
+        settings.smoothReverseWheelDirection,
+    ])
 
     useEffect(() => {
         providerRef.current = provider
@@ -161,6 +180,10 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const handleChapterChange = useCallback((_label: string, href: string) => {
         setCurrentSectionHref(normalizeTocHref(href))
     }, [])
+    const handleSelectionSearch = useCallback((keyword: string) => {
+        setSearchQuery(keyword)
+        openSearchPanelWithKeyword(keyword)
+    }, [openSearchPanelWithKeyword])
 
     const currentChapterLabel = findCurrentChapterLabel(toc, currentSectionHref)
     const headerHeight = Math.max(36, Math.min(96, Number(settings.headerHeight) || 48))
@@ -233,23 +256,11 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                             bookId={bookId}
                             initialSpineIndex={vitraScrollParams.initialSpineIndex}
                             initialScrollOffset={vitraScrollParams.initialScrollOffset}
-                            smoothConfig={{
-                                enabled: settings.smoothScrollEnabled,
-                                stepSizePx: settings.smoothStepSizePx,
-                                animationTimeMs: settings.smoothAnimationTimeMs,
-                                accelerationDeltaMs: settings.smoothAccelerationDeltaMs,
-                                accelerationMax: settings.smoothAccelerationMax,
-                                tailToHeadRatio: settings.smoothTailToHeadRatio,
-                                easing: settings.smoothAnimationEasing,
-                                reverseWheelDirection: settings.smoothReverseWheelDirection,
-                            }}
+                            smoothConfig={scrollSmoothConfig}
                             readerStyles={readerStyleConfig}
                             onProgressChange={setCurrentProgress}
                             onChapterChange={handleChapterChange}
-                            onSelectionSearch={(keyword) => {
-                                setSearchQuery(keyword)
-                                openSearchPanelWithKeyword(keyword)
-                            }}
+                            onSelectionSearch={handleSelectionSearch}
                         />
                     )}
 
@@ -264,10 +275,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                             readerStyles={readerStyleConfig}
                             onProgressChange={setCurrentProgress}
                             onChapterChange={handleChapterChange}
-                            onSelectionSearch={(keyword) => {
-                                setSearchQuery(keyword)
-                                openSearchPanelWithKeyword(keyword)
-                            }}
+                            onSelectionSearch={handleSelectionSearch}
                         />
                     )}
                 </div>

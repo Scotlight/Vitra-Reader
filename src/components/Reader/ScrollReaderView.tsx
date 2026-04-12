@@ -1,6 +1,6 @@
 import {
     useRef, useEffect, useState, useCallback, useLayoutEffect,
-    forwardRef, useImperativeHandle, useMemo
+    forwardRef, memo, useImperativeHandle, useMemo
 } from 'react';
 import type { ContentProvider, SpineItemInfo } from '../../engine/core/contentProvider';
 import { ShadowRenderer, ReaderStyleConfig, createWindowedVectorChapterShell, segmentPool } from './ShadowRenderer';
@@ -11,7 +11,7 @@ import {
 } from '../../utils/scrollDetection';
 import { useScrollInertia } from '../../hooks/useScrollInertia';
 import { useScrollEvents } from '../../hooks/useScrollEvents';
-import { db } from '../../services/storageService';
+import { db, type Highlight } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
 import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService';
 import {
@@ -86,6 +86,12 @@ export interface ScrollReaderHandle {
     jumpToSpine: (spineIndex: number, searchText?: string) => Promise<void>;
 }
 
+interface ViewportDerivedMetrics {
+    activeSpineIndex: number | null;
+    progressSpineIndex: number | null;
+    progress: number | null;
+}
+
 // ── Constants ──
 
 const PRELOAD_THRESHOLD_PX = 600;
@@ -107,6 +113,7 @@ const RANGE_HYDRATION_OVERSCAN_SEGMENTS = 3;
 const RANGE_HYDRATION_PRELOAD_MARGIN_PX = 720;
 const GLOBAL_VIRTUAL_SEGMENT_BUDGET = 24;
 const VIRTUAL_SEGMENT_MIN_HEIGHT_PX = 96;
+const PROGRESS_REPORT_EPSILON = 0.002;
 
 // ── 物理引擎调参常量 ──
 const PHYSICS_FRICTION_NUMERATOR = 26;
@@ -215,11 +222,72 @@ function insertVirtualSegmentInOrder(
     container.insertBefore(segmentEl, nextSibling);
 }
 
+function resolveHighlightSpineIndex(cfiRange: string): number | null {
+    if (cfiRange.startsWith('vitra:') || cfiRange.startsWith('bdise:')) {
+        const parsed = Number.parseInt(cfiRange.split(':')[1] || '', 10);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    if (cfiRange.startsWith('epubcfi(')) {
+        const match = cfiRange.match(/^epubcfi\(\/\d+\/(\d+)/);
+        if (!match) return null;
+        const parsed = Number.parseInt(match[1], 10);
+        return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed / 2) - 1) : null;
+    }
+    return null;
+}
+
+function resolveViewportDerivedMetrics(
+    listEl: HTMLElement,
+    scrollTop: number,
+    viewportHeight: number,
+    totalChapterCount: number,
+): ViewportDerivedMetrics {
+    const chapterProbeLine = scrollTop + Math.min(
+        viewportHeight * CHAPTER_DETECTION_ANCHOR_RATIO,
+        CHAPTER_DETECTION_ANCHOR_MAX_PX,
+    );
+    const viewportMid = scrollTop + viewportHeight / 2;
+    const chapterEls = Array.from(listEl.querySelectorAll('[data-chapter-id]')) as HTMLElement[];
+    let activeSpineIndex: number | null = null;
+    let progressSpineIndex: number | null = null;
+    let progress: number | null = null;
+
+    for (const el of chapterEls) {
+        const chapterIdAttr = el.getAttribute('data-chapter-id') || '';
+        const match = chapterIdAttr.match(/^ch-(\d+)$/);
+        if (!match) continue;
+
+        const spineIndex = Number.parseInt(match[1], 10);
+        const top = el.offsetTop;
+        const height = el.offsetHeight;
+        const bottom = top + height;
+
+        if (activeSpineIndex === null && chapterProbeLine >= top && chapterProbeLine < bottom) {
+            activeSpineIndex = spineIndex;
+        }
+
+        if (progressSpineIndex === null && viewportMid >= top && viewportMid < bottom) {
+            progressSpineIndex = spineIndex;
+            progress = height > 0 ? Math.max(0, Math.min(1, (spineIndex + ((viewportMid - top) / height)) / Math.max(1, totalChapterCount))) : 0;
+        }
+
+        if (activeSpineIndex !== null && progressSpineIndex !== null) {
+            break;
+        }
+    }
+
+    return {
+        activeSpineIndex,
+        progressSpineIndex,
+        progress,
+    };
+}
+
 
 
 // ── Component ──
 
-export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewProps>(({
+const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderViewProps>(({
     provider,
     bookId,
     initialSpineIndex = 0,
@@ -256,6 +324,26 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     const chapterVectorsRef = useRef<Map<string, ChapterMetaVector>>(new Map());
     const virtualChaptersRef = useRef<Map<string, VirtualChapterRuntime>>(new Map());
     const virtualSyncRafRef = useRef<number | null>(null);
+    const [highlights, setHighlights] = useState<Highlight[]>([]);
+    const highlightDirtyChaptersRef = useRef<Set<number>>(new Set());
+    const lastReportedProgressRef = useRef<{ spineIndex: number; progress: number } | null>(null);
+    const pendingProgressSnapshotRef = useRef<{ spineIndex: number; progress: number; scrollTop: number } | null>(null);
+
+    const highlightsBySpineIndex = useMemo(() => {
+        const grouped = new Map<number, Highlight[]>();
+        highlights.forEach((highlight) => {
+            const spineIndex = resolveHighlightSpineIndex(highlight.cfiRange);
+            if (spineIndex === null) return;
+            const existing = grouped.get(spineIndex) ?? [];
+            existing.push(highlight);
+            grouped.set(spineIndex, existing);
+        });
+        return grouped;
+    }, [highlights]);
+
+    const handleHighlightCreated = useCallback((highlight: Highlight) => {
+        setHighlights((prev) => prev.some((item) => item.id === highlight.id) ? prev : [...prev, highlight]);
+    }, []);
 
     // ── Selection Menu (shared hook) ──
     const getHighlightContainer = useCallback((spineIndex: number): HTMLElement | null => {
@@ -267,7 +355,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         selectionMenu, setSelectionMenu,
         renderedHighlightsRef,
         renderSelectionUI,
-    } = useSelectionMenu({ bookId, onSelectionSearch, getHighlightContainer });
+    } = useSelectionMenu({ bookId, onSelectionSearch, getHighlightContainer, onHighlightCreated: handleHighlightCreated });
     const highlightIdleHandlesRef = useRef<Map<number, IdleTaskHandle>>(new Map());
     // rAF 批处理：收集同帧内完成的所有 shadow-ready 事件，合并为一次 setChapters
     const pendingReadyRef = useRef<Array<{ spineIndex: number; node: HTMLElement; height: number }>>([]);
@@ -283,6 +371,30 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
     // Keep refs in sync with state
     chaptersRef.current = chapters;
+
+    useEffect(() => {
+        let disposed = false;
+        renderedHighlightsRef.current.clear();
+        highlightDirtyChaptersRef.current.clear();
+        lastReportedProgressRef.current = null;
+        pendingProgressSnapshotRef.current = null;
+        setHighlights([]);
+
+        db.highlights.where('bookId').equals(bookId).toArray()
+            .then((loaded) => {
+                if (disposed) return;
+                setHighlights(loaded);
+            })
+            .catch((error) => {
+                if (!disposed) {
+                    console.warn('[ScrollReader] Highlight preload failed:', error);
+                }
+            });
+
+        return () => {
+            disposed = true;
+        };
+    }, [bookId, renderedHighlightsRef]);
 
     const normalizedSmoothConfig = useMemo(() => ({
         enabled: smoothConfig.enabled !== false,
@@ -1058,6 +1170,66 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         }
     }, [chapters, cleanupVirtualChapterRuntime, initialScrollOffset, isInitialized, mountVirtualSegment, observeChapterResizeNodes, refreshVirtualChapterLayout, registerVirtualChapterRuntime, unobserveChapterResizeNodes]);
 
+    const commitProgressSnapshot = useCallback((
+        snapshot: { spineIndex: number; progress: number; scrollTop: number } | null,
+    ) => {
+        if (!snapshot || spineItems.length === 0) return;
+
+        const previous = lastReportedProgressRef.current;
+        const progressChanged = !previous
+            || previous.spineIndex !== snapshot.spineIndex
+            || Math.abs(previous.progress - snapshot.progress) >= PROGRESS_REPORT_EPSILON;
+
+        if (!progressChanged) return;
+
+        lastReportedProgressRef.current = {
+            spineIndex: snapshot.spineIndex,
+            progress: snapshot.progress,
+        };
+        onProgressChange?.(snapshot.progress);
+        db.progress.put({
+            bookId,
+            location: `vitra:${snapshot.spineIndex}:${snapshot.scrollTop}`,
+            percentage: snapshot.progress,
+            currentChapter: spineItems[snapshot.spineIndex]?.href || '',
+            updatedAt: Date.now(),
+        }).catch(err => console.warn('[ScrollReader] Progress save failed:', err));
+    }, [spineItems, bookId, onProgressChange]);
+
+    const syncViewportState = useCallback((
+        scrollTop: number,
+        viewportHeight: number,
+        options: { commitProgress?: boolean } = {},
+    ) => {
+        if (spineItems.length === 0) return;
+
+        const listEl = chapterListRef.current;
+        if (!listEl) return;
+
+        const metrics = resolveViewportDerivedMetrics(listEl, scrollTop, viewportHeight, spineItems.length);
+        if (metrics.activeSpineIndex !== null) {
+            lastKnownAnchorIndexRef.current = metrics.activeSpineIndex;
+            if (metrics.activeSpineIndex !== currentSpineIndex) {
+                setCurrentSpineIndex(metrics.activeSpineIndex);
+                if (onChapterChange && spineItems[metrics.activeSpineIndex]) {
+                    onChapterChange(spineItems[metrics.activeSpineIndex].id, spineItems[metrics.activeSpineIndex].href);
+                }
+            }
+        }
+
+        if (metrics.progress !== null && metrics.progressSpineIndex !== null) {
+            const snapshot = {
+                spineIndex: metrics.progressSpineIndex,
+                progress: metrics.progress,
+                scrollTop,
+            };
+            pendingProgressSnapshotRef.current = snapshot;
+            if (options.commitProgress) {
+                commitProgressSnapshot(snapshot);
+            }
+        }
+    }, [spineItems, currentSpineIndex, onChapterChange, commitProgressSnapshot]);
+
     // ── Scroll Event Handler ──
 
     useEffect(() => {
@@ -1113,15 +1285,14 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 }
             }
 
-            // Update current chapter based on scroll position
-            updateCurrentChapter(scrollTop, viewportHeight);
+            syncViewportState(scrollTop, viewportHeight);
 
             // Debounced progress update
             if (progressTimerRef.current) {
                 window.clearTimeout(progressTimerRef.current);
             }
             progressTimerRef.current = window.setTimeout(() => {
-                updateProgress(scrollTop, viewportHeight);
+                commitProgressSnapshot(pendingProgressSnapshotRef.current);
             }, 200);
         };
 
@@ -1142,10 +1313,8 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         runPredictivePrefetch,
         scheduleIdlePrefetch,
         cancelIdlePrefetch,
-        currentSpineIndex,
-        onChapterChange,
-        onProgressChange,
-        bookId,
+        syncViewportState,
+        commitProgressSnapshot,
     ]);
 
     // ── Chapter Unloading ──
@@ -1179,6 +1348,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                     cancelIdleTask(idleHandle);
                     highlightIdleHandlesRef.current.delete(ch.spineIndex);
                 }
+                highlightDirtyChaptersRef.current.delete(ch.spineIndex);
                 cleanupVirtualChapterRuntime(ch.id);
                 // Remove DOM
                 if (listEl) {
@@ -1220,96 +1390,6 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cleanupVirtualChapterRuntime, currentSpineIndex, provider, unobserveChapterResizeNodes]);
-
-    // ── Current Chapter Detection ──
-
-    const updateCurrentChapter = useCallback((scrollTop: number, viewportHeight: number) => {
-        const listEl = chapterListRef.current;
-        if (!listEl) return;
-
-        const chapterProbeLine = scrollTop + Math.min(
-            viewportHeight * CHAPTER_DETECTION_ANCHOR_RATIO,
-            CHAPTER_DETECTION_ANCHOR_MAX_PX,
-        );
-        const chapterEls = Array.from(listEl.querySelectorAll('[data-chapter-id]')) as HTMLElement[];
-
-        for (const el of chapterEls) {
-            const top = el.offsetTop;
-            const bottom = top + el.offsetHeight;
-
-            if (chapterProbeLine >= top && chapterProbeLine < bottom) {
-                const chapterIdAttr = el.getAttribute('data-chapter-id') || '';
-                const match = chapterIdAttr.match(/^ch-(\d+)$/);
-                if (match) {
-                    const spineIdx = Number(match[1]);
-                    lastKnownAnchorIndexRef.current = spineIdx;
-                    if (spineIdx !== currentSpineIndex) {
-                        setCurrentSpineIndex(spineIdx);
-                        // Report chapter change
-                        if (onChapterChange && spineItems[spineIdx]) {
-                            onChapterChange(spineItems[spineIdx].id, spineItems[spineIdx].href);
-                        }
-                    }
-                }
-                break;
-            }
-        }
-    }, [currentSpineIndex, spineItems, onChapterChange]);
-
-    // ── Progress Calculation ──
-
-    const updateProgress = useCallback((
-        scrollTop: number,
-        viewportHeight: number,
-    ) => {
-        if (spineItems.length === 0) return;
-
-        // Find which chapter is in view
-        const listEl = chapterListRef.current;
-        if (!listEl) return;
-
-        const viewportMid = scrollTop + viewportHeight / 2;
-        const chapterEls = Array.from(listEl.querySelectorAll('[data-chapter-id]')) as HTMLElement[];
-
-        let chapterProgress = 0;
-        let resolvedSpineIndex = currentSpineIndex;
-        let hasMatchedChapter = false;
-
-        for (const el of chapterEls) {
-            const top = el.offsetTop;
-            const bottom = top + el.offsetHeight;
-            const chapterIdAttr = el.getAttribute('data-chapter-id') || '';
-            const match = chapterIdAttr.match(/^ch-(\d+)$/);
-
-            if (match && viewportMid >= top && viewportMid < bottom) {
-                const spineIdx = parseInt(match[1], 10);
-                const localProgress = el.offsetHeight > 0
-                    ? Math.max(0, Math.min(1, (viewportMid - top) / el.offsetHeight))
-                    : 0;
-
-                resolvedSpineIndex = spineIdx;
-                chapterProgress = (spineIdx + localProgress) / spineItems.length;
-                hasMatchedChapter = true;
-                break;
-            }
-        }
-
-        if (!hasMatchedChapter) return;
-
-        const progress = Math.max(0, Math.min(1, chapterProgress));
-        onProgressChange?.(progress);
-
-        // Persist progress
-        db.progress.put({
-            bookId,
-            location: `vitra:${resolvedSpineIndex}:${scrollTop}`,
-            percentage: progress,
-            currentChapter: spineItems[resolvedSpineIndex]?.href || '',
-            updatedAt: Date.now(),
-        }).catch(err => console.warn('[ScrollReader] Progress save failed:', err));
-    }, [spineItems, bookId, currentSpineIndex, onProgressChange]);
-
-
 
     // ── TOC Jump ──
 
@@ -1356,15 +1436,13 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
                 if (domEl) {
                     viewport.scrollTop = domEl.offsetTop;
                     lastScrollTopRef.current = viewport.scrollTop;
-                    updateCurrentChapter(viewport.scrollTop, viewport.clientHeight);
-                    updateProgress(viewport.scrollTop, viewport.clientHeight);
+                    syncViewportState(viewport.scrollTop, viewport.clientHeight, { commitProgress: true });
 
                     requestAnimationFrame(() => {
                         if (jumpGenerationRef.current !== generation) return;
                         viewport.scrollTop = domEl.offsetTop;
                         lastScrollTopRef.current = viewport.scrollTop;
-                        updateCurrentChapter(viewport.scrollTop, viewport.clientHeight);
-                        updateProgress(viewport.scrollTop, viewport.clientHeight);
+                        syncViewportState(viewport.scrollTop, viewport.clientHeight, { commitProgress: true });
                     });
 
                     // If searchText, find and scroll to it
@@ -1428,7 +1506,7 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
         // loadChapter uses chaptersRef (always current), so no stale closure issue
         loadChapter(targetSpineIndex, 'initial');
-    }, [cancelIdlePrefetch, cleanupVirtualChapterRuntime, forceHydrateSegment, loadChapter, materializeAllVirtualSegments, onChapterChange, resetResizeObservers, stop, updateCurrentChapter, updateProgress]);
+    }, [cancelIdlePrefetch, cleanupVirtualChapterRuntime, forceHydrateSegment, loadChapter, materializeAllVirtualSegments, onChapterChange, resetResizeObservers, stop, syncViewportState]);
 
     useEffect(() => {
         const listEl = chapterListRef.current;
@@ -1535,49 +1613,31 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
         chapterEl: HTMLElement,
         spineIndex: number,
     ) => {
-        const chapterId = chapterEl.getAttribute('data-chapter-id');
-        db.highlights.where('bookId').equals(bookId).toArray().then(highlights => {
-            const matching = highlights.filter(h => {
-                if (h.cfiRange.startsWith('vitra:') || h.cfiRange.startsWith('bdise:')) {
-                    return parseInt(h.cfiRange.split(':')[1], 10) === spineIndex;
-                }
-                if (h.cfiRange.startsWith('epubcfi(')) {
-                    const m = h.cfiRange.match(/^epubcfi\(\/\d+\/(\d+)/);
-                    return m ? Math.max(0, Math.floor(parseInt(m[1], 10) / 2) - 1) === spineIndex : false;
-                }
-                return false;
-            });
-            if (matching.length === 0) return;
-            if (chapterId) {
-                materializeAllVirtualSegments(chapterId);
-            }
-            // 强制 hydrate 所有 placeholder 段以确保高亮可达
-            chapterEl.querySelectorAll('[data-shadow-segment-state="placeholder"]').forEach(seg => {
-                forceHydrateSegment(seg as HTMLElement);
-            });
-            for (const h of matching) {
-                if (renderedHighlightsRef.current.has(h.id)) continue;
-                const range = findTextInDOM(chapterEl, h.text);
-                if (range) {
-                    highlightRange(range, h.id, h.color);
-                    renderedHighlightsRef.current.add(h.id);
-                }
-            }
-        }).catch(err => console.warn('[ScrollReader] Highlight load failed:', err));
-    }, [bookId, forceHydrateSegment, materializeAllVirtualSegments]);
+        const matching = highlightsBySpineIndex.get(spineIndex) ?? [];
+        if (matching.length === 0) return;
+
+        for (const highlight of matching) {
+            if (renderedHighlightsRef.current.has(highlight.id)) continue;
+            const range = findTextInDOM(chapterEl, highlight.text);
+            if (!range) continue;
+            highlightRange(range, highlight.id, highlight.color);
+            renderedHighlightsRef.current.add(highlight.id);
+        }
+    }, [highlightsBySpineIndex, renderedHighlightsRef]);
 
     const scheduleHighlightInjection = useCallback((chapterEl: HTMLElement, spineIndex: number) => {
-        const existing = highlightIdleHandlesRef.current.get(spineIndex);
-        if (existing !== undefined) {
-            cancelIdleTask(existing);
-            highlightIdleHandlesRef.current.delete(spineIndex);
-        }
+        if (!highlightDirtyChaptersRef.current.has(spineIndex)) return;
+        if ((highlightsBySpineIndex.get(spineIndex)?.length ?? 0) === 0) return;
+        if (highlightIdleHandlesRef.current.has(spineIndex)) return;
+
         const handle = scheduleIdleTask(() => {
             highlightIdleHandlesRef.current.delete(spineIndex);
+            if (!highlightDirtyChaptersRef.current.has(spineIndex)) return;
+            highlightDirtyChaptersRef.current.delete(spineIndex);
             applyHighlightsToChapter(chapterEl, spineIndex);
         }, { timeoutMs: HIGHLIGHT_IDLE_TIMEOUT_MS });
         highlightIdleHandlesRef.current.set(spineIndex, handle);
-    }, [applyHighlightsToChapter]);
+    }, [applyHighlightsToChapter, highlightsBySpineIndex]);
 
     // Apply highlights when chapters become mounted
     useLayoutEffect(() => {
@@ -1586,12 +1646,14 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
         const mountedChapters = chapters.filter(ch => ch.status === 'mounted');
         for (const ch of mountedChapters) {
+            if ((highlightsBySpineIndex.get(ch.spineIndex)?.length ?? 0) === 0) continue;
             const el = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
             if (el) {
+                highlightDirtyChaptersRef.current.add(ch.spineIndex);
                 scheduleHighlightInjection(el, ch.spineIndex);
             }
         }
-    }, [chapters, scheduleHighlightInjection]);
+    }, [chapters, highlightsBySpineIndex, scheduleHighlightInjection]);
 
     // ── Active-only 虚拟段同步 ──
 
@@ -1622,20 +1684,30 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
 
         runtimes.forEach((runtime) => {
             const nextIndices = new Set(mountPlan.get(runtime.chapterId) ?? []);
+            let virtualDomChanged = false;
 
             Array.from(runtime.activeSegmentEls.keys()).forEach((segmentIndex) => {
                 if (!nextIndices.has(segmentIndex)) {
+                    virtualDomChanged = true;
                     releaseVirtualSegment(runtime, segmentIndex);
                 }
             });
 
             Array.from(nextIndices).sort((a, b) => a - b).forEach((segmentIndex) => {
+                const alreadyMounted = runtime.activeSegmentEls.has(segmentIndex);
                 mountVirtualSegment(runtime, segmentIndex);
+                if (!alreadyMounted) {
+                    virtualDomChanged = true;
+                }
             });
 
             refreshVirtualChapterLayout(runtime);
+            if (virtualDomChanged && (highlightsBySpineIndex.get(runtime.spineIndex)?.length ?? 0) > 0) {
+                highlightDirtyChaptersRef.current.add(runtime.spineIndex);
+                scheduleHighlightInjection(runtime.chapterEl, runtime.spineIndex);
+            }
         });
-    }, [mountVirtualSegment, refreshVirtualChapterLayout, releaseVirtualSegment]);
+    }, [mountVirtualSegment, refreshVirtualChapterLayout, releaseVirtualSegment, highlightsBySpineIndex, scheduleHighlightInjection]);
 
     useEffect(() => {
         const viewport = viewportRef.current;
@@ -1728,4 +1800,6 @@ export const ScrollReaderView = forwardRef<ScrollReaderHandle, ScrollReaderViewP
     );
 });
 
-ScrollReaderView.displayName = 'ScrollReaderView';
+ScrollReaderViewComponent.displayName = 'ScrollReaderView';
+
+export const ScrollReaderView = memo(ScrollReaderViewComponent);

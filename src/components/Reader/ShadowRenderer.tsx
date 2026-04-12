@@ -1,5 +1,4 @@
 import { useRef, useEffect, useCallback } from 'react';
-import { clampNumber } from '../../utils/mathUtils';
 import styles from './ShadowRenderer.module.css';
 import { waitForAssetLoad, getContainerHeight } from '../../utils/assetLoader';
 import { generateCSSOverride, generatePaginatedCSSOverride, extractStyles, removeStyleTags, scopeStyles } from '../../utils/styleProcessor';
@@ -27,6 +26,7 @@ const SEGMENT_ASSET_SELECTOR = 'img,video,audio,source,svg,image';
 const MEDIA_LAYOUT_SELECTOR = 'img,video,picture,svg,canvas,figure,table,math';
 const MEDIA_SENSITIVE_LOAD_TIMEOUT_MS = 4_500;
 const MEDIA_SENSITIVE_MAX_TRACKED_IMAGES = 128;
+const MEDIA_SENSITIVE_INITIAL_SEGMENT_CAP = 6;
 
 // ── 高度估算参数 ──
 const EST_TEXT_NODE_MIN_CHAR_WEIGHT = 24;
@@ -46,8 +46,6 @@ const EST_LINE_HEIGHT_MIN_FACTOR = 1.25;
 const EST_LINE_HEIGHT_DEFAULT = 1.6;
 const EST_PARAGRAPH_SPACING_FACTOR_MIN = 1.04;
 const EST_PARAGRAPH_SPACING_NORMALIZE_DIVISOR = 220;
-const EST_HEIGHT_CORRECTION_MIN = 0.62;
-const EST_HEIGHT_CORRECTION_MAX = 2.4;
 
 // ── 渲染阶段资源加载参数 ──
 const RENDER_VECTORIZED_LOAD_TIMEOUT_MS = 3_500;
@@ -192,6 +190,19 @@ function applyPlaceholderSizing(segmentEl: HTMLElement, height: number): void {
   const safeHeight = Math.max(VECTOR_MIN_SEGMENT_EST_HEIGHT, Math.floor(height));
   segmentEl.style.minHeight = `${safeHeight}px`;
   segmentEl.style.containIntrinsicSize = `${safeHeight}px`;
+}
+
+function resolveInitialShadowSegmentCount(
+  totalSegments: number,
+  plannedInitialSegmentCount: number,
+  mediaSensitiveChapter: boolean,
+): number {
+  if (totalSegments <= 0) return 0;
+  if (!mediaSensitiveChapter) {
+    return Math.max(1, Math.min(totalSegments, plannedInitialSegmentCount));
+  }
+  const cappedCount = Math.max(plannedInitialSegmentCount, MEDIA_SENSITIVE_INITIAL_SEGMENT_CAP);
+  return Math.max(1, Math.min(totalSegments, cappedCount));
 }
 
 async function calibrateSegmentIntrinsicSizeBatch(targets: readonly HTMLElement[]): Promise<void> {
@@ -581,9 +592,13 @@ export function ShadowRenderer({
           contentDiv.style.display = 'flow-root';
           const canUseVectorized = vectorPlan.enabled;
           const segmentEls: HTMLElement[] = [];
-          const initialSegmentCount = mediaSensitiveChapter
-            ? vectorSegments.length
-            : vectorPlan.initialSegmentCount;
+          const initialSegmentCount = canUseVectorized
+            ? resolveInitialShadowSegmentCount(
+              vectorSegments.length,
+              vectorPlan.initialSegmentCount,
+              mediaSensitiveChapter,
+            )
+            : 0;
 
           if (canUseVectorized) {
             vectorSegments.forEach((segment, segmentIndex) => {
@@ -606,26 +621,6 @@ export function ShadowRenderer({
               contentDiv.appendChild(segmentEl);
               segmentEls.push(segmentEl);
             });
-
-            if (initialSegmentCount > 0 && vectorSegments.length > initialSegmentCount) {
-              void contentDiv.offsetHeight;
-              const measuredSeedHeight = segmentEls
-                .slice(0, initialSegmentCount)
-                .reduce((sum, el) => sum + Math.max(1, getContainerHeight(el)), 0);
-              const estimatedSeedHeight = vectorSegments
-                .slice(0, initialSegmentCount)
-                .reduce((sum, seg) => sum + seg.estimatedHeight, 0);
-              const correction = estimatedSeedHeight > 0
-                ? clampNumber(measuredSeedHeight / estimatedSeedHeight, EST_HEIGHT_CORRECTION_MIN, EST_HEIGHT_CORRECTION_MAX)
-                : 1;
-
-              for (let idx = initialSegmentCount; idx < vectorSegments.length; idx += 1) {
-                const placeholderEl = segmentEls[idx];
-                const seg = vectorSegments[idx];
-                if (!placeholderEl || !seg) continue;
-                applyPlaceholderSizing(placeholderEl, seg.estimatedHeight * correction);
-              }
-            }
           } else if (normalizedFragments.length > 1) {
             await appendHtmlFragmentsChunked(contentDiv, normalizedFragments);
           } else if (isLargeChapter) {
