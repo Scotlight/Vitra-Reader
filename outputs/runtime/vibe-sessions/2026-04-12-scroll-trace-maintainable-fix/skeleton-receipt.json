@@ -1,0 +1,32 @@
+{
+  "runId": "2026-04-12-scroll-trace-maintainable-fix",
+  "stage": "skeleton_check",
+  "timestamp": "2026-04-12T16:35:00+08:00",
+  "repo": {
+    "root": "D:/0010/.A_project/epub reader",
+    "branch": "main",
+    "dirty": true,
+    "dirtyPaths": [
+      "src/components/Reader/PaginatedReaderView.tsx",
+      "src/components/Reader/ScrollReaderView.tsx",
+      "src/engine/render/chapterPreprocessService.ts",
+      "doc/*.jsonl",
+      "doc/recovered/**",
+      "docs/chat_export/**",
+      "docs/virtual-render/**"
+    ]
+  },
+  "artifacts": {
+    "existingRequirements": [
+      "docs/requirements/2026-04-06-scroll-virtualization-formal-integration.md"
+    ],
+    "existingPlans": [
+      "docs/plans/2026-04-04-vector-render-restore-plan.md"
+    ]
+  },
+  "hazards": [
+    "working tree contains unrelated dirty files; execution must stage only run-owned artifacts before first push",
+    "user explicitly requested push-before-implementation; analysis artifacts must be committed separately from code changes"
+  ],
+  "authoritative": true
+}

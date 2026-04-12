@@ -1,0 +1,34 @@
+{
+  "runId": "2026-04-12-scroll-trace-maintainable-fix",
+  "stage": "deep_interview",
+  "timestamp": "2026-04-12T16:37:00+08:00",
+  "goal": "在不推翻现有 ShadowRenderer + ScrollReaderView 架构的前提下，修复 trace 中已确认的主线程 CPU 热点，并优先采用最易维护的实现方式。",
+  "deliverable": "一份冻结的需求文档、一份执行计划、一次仅包含分析产物的提交与推送、随后针对滚动阅读热点的代码实现与验证。",
+  "constraints": [
+    "保留 ShadowRenderer，不删除既有向量化与虚拟化架构",
+    "优先局部修复，避免大范围重写",
+    "先推送分析产物，再开始实现",
+    "不混入当前工作树中的无关改动",
+    "以简化代码路径、减少重复状态与减少跨层耦合为维护性优先准则"
+  ],
+  "acceptanceCriteria": [
+    "ScrollReaderView 不再在被动高亮注入时对每个章节重复查询 Dexie 并强制物化全部虚拟段",
+    "滚动阶段章节探测与进度计算合并为单次 DOM 扫描",
+    "父层进度更新不再把 ScrollReaderView 一起拖入无意义的父子联动重渲染",
+    "ShadowRenderer 去掉最重的种子段同步测量路径，并限制媒体敏感章节的首帧物化规模",
+    "完成后至少通过一次定向构建验证"
+  ],
+  "nonGoals": [
+    "本轮不处理 pdf.worker.mjs 的解析与解压成本",
+    "本轮不做分页模式架构重写",
+    "本轮不做数据库 schema 变更",
+    "本轮不做与当前 trace 无关的全局性能改造"
+  ],
+  "autonomyMode": "benchmark_autonomous",
+  "openQuestions": [],
+  "inferenceNotes": [
+    "用户已明确要求：先分析最易维护的实现方案，再先推送后实现，因此无需再等待额外确认",
+    "当前最重要的是把热点修复限定在 ScrollReaderView / ReaderView / ShadowRenderer 三处，避免扩散"
+  ],
+  "authoritative": true
+}
