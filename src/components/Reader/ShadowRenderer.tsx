@@ -651,7 +651,6 @@ export function ShadowRenderer({
           });
           if (cancelled) return null;
 
-          void chapterWrapper.offsetHeight;
           const height = getContainerHeight(chapterWrapper);
           console.log(`[ShadowRenderer] Chapter "${chapterId}" ready. Height: ${height}px`);
           hasReportedRef.current = true;
