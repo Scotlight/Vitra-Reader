@@ -219,48 +219,70 @@ export async function collectBlockMetricsIdle(
         })
     }
 
-    // 等待字体加载完成，确保 getBoundingClientRect 返回准确高度
     if (typeof document !== 'undefined' && document.fonts?.ready) {
         await document.fonts.ready
     }
 
     const batchSize = normalizeBatchSize(options.batchSize)
     const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS
-    const rootRect = root.getBoundingClientRect()
-    const rootScrollTop = root.scrollTop
     const nodes = Array.from(root.querySelectorAll(selector))
         .filter((node): node is HTMLElement => node instanceof HTMLElement)
 
+    ensureNotAborted(options.signal)
+
+    // 单次 Layout pass：批量读取所有几何数据，避免 yield 间隙被其他代码 invalidate
+    const rootRect = root.getBoundingClientRect()
+    const rootScrollTop = root.scrollTop
+    const snapshots: Array<{
+        visible: boolean
+        rect: DOMRect
+        tagName: string
+        element: HTMLElement
+    }> = new Array(nodes.length)
+    for (let i = 0; i < nodes.length; i++) {
+        const el = nodes[i]
+        const style = window.getComputedStyle(el)
+        const visible = style.display !== 'none'
+            && style.visibility !== 'hidden'
+            && Number(style.opacity || 1) !== 0
+        snapshots[i] = {
+            visible,
+            rect: el.getBoundingClientRect(),
+            tagName: el.tagName.toLowerCase(),
+            element: el,
+        }
+    }
+
+    // 纯计算阶段：分批构建 metrics，yield 不再触发 Layout
     const blocks: BlockMetrics[] = []
     let renderableIndex = 0
     const emitProgress = (processedCandidates: number) => {
         options.onBatchMeasured?.(blocks, {
             blocksMeasured: blocks.length,
             processedCandidates,
-            totalCandidates: nodes.length,
+            totalCandidates: snapshots.length,
         })
     }
 
-    for (let offset = 0; offset < nodes.length; offset += batchSize) {
+    for (let offset = 0; offset < snapshots.length; offset += batchSize) {
         ensureNotAborted(options.signal)
 
-        const chunk = nodes.slice(offset, offset + batchSize)
-        for (const element of chunk) {
-            ensureNotAborted(options.signal)
-
-            const metric = collectRenderableBlockMetric(
-                element,
-                rootRect,
-                rootScrollTop,
-                renderableIndex,
-            )
-            if (!metric) continue
-            blocks.push(metric)
+        const end = Math.min(snapshots.length, offset + batchSize)
+        for (let i = offset; i < end; i++) {
+            const snap = snapshots[i]
+            if (!snap.visible) continue
+            if (snap.rect.width <= 1 || snap.rect.height <= 1) continue
+            blocks.push({
+                element: toElementKey(snap.element, renderableIndex),
+                offsetTop: snap.rect.top - rootRect.top + rootScrollTop,
+                height: snap.rect.height,
+                isBreakable: isBreakableTag(snap.tagName),
+            })
             renderableIndex += 1
         }
-        emitProgress(Math.min(nodes.length, offset + chunk.length))
+        emitProgress(end)
 
-        if (offset + batchSize < nodes.length) {
+        if (offset + batchSize < snapshots.length) {
             await waitForIdle(idleTimeoutMs)
         }
     }
