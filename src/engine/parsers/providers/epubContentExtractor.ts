@@ -148,8 +148,13 @@ export async function extractChapterStyles(
  * 释放章节资源
  */
 export function unloadChapter(book: Book, spineIndex: number): void {
+    const bookInternal = book as unknown as EpubBookInternal;
+    const spineItems = bookInternal?.spine?.spineItems;
+    if (!Array.isArray(spineItems) || spineIndex < 0 || spineIndex >= spineItems.length) {
+        return;
+    }
     try {
-        const { spineItem } = lookupSpineItem(book, spineIndex);
+        const spineItem = spineItems[spineIndex];
         if (typeof spineItem.unload === 'function') {
             spineItem.unload();
         }

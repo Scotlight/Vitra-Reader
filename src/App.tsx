@@ -77,10 +77,11 @@ function App() {
         >
             {/* Main Content */}
             <main className={styles.main}>
-                {currentView === 'library' ? (
+                <div style={{ display: currentView === 'library' ? 'contents' : 'none' }}>
                     <LibraryView onOpenBook={handleOpenBook} />
-                ) : (
-                    <ReaderView bookId={currentBookId!} onBack={handleBackToLibrary} jumpTarget={jumpTarget} />
+                </div>
+                {currentView === 'reader' && currentBookId && (
+                    <ReaderView bookId={currentBookId} onBack={handleBackToLibrary} jumpTarget={jumpTarget} />
                 )}
             </main>
         </div>
