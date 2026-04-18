@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
-import type { ChapterMetaVector, SegmentMeta } from '../../engine';
-import { segmentPool } from './ShadowRenderer';
+import type { ChapterMetaVector, SegmentMeta } from '../../../engine';
+import { segmentPool } from '../ShadowRenderer';
 
 const VIRTUAL_SEGMENT_MIN_HEIGHT_PX = 96;
 

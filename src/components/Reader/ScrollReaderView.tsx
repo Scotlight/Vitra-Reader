@@ -4,7 +4,54 @@ import {
 } from 'react';
 import type { ContentProvider, SpineItemInfo } from '../../engine/core/contentProvider';
 import { ShadowRenderer, ReaderStyleConfig, createWindowedVectorChapterShell, segmentPool } from './ShadowRenderer';
-import { useVirtualChapterRuntime } from './useVirtualChapterRuntime';
+import { useVirtualChapterRuntime } from './scrollReader/useVirtualChapterRuntime';
+import type { LoadedChapter, PipelineState } from './scrollReader/scrollReaderTypes';
+import {
+    resolveChapterPlaceholderHeight,
+    markChapterAsPlaceholder,
+    markChapterAsMounted,
+    resolveHighlightSpineIndex,
+    resolveViewportDerivedMetrics,
+} from './scrollReader/scrollReaderHelpers';
+import {
+    PRELOAD_THRESHOLD_PX,
+    UNLOAD_ABOVE_RADIUS,
+    UNLOAD_BELOW_RADIUS,
+    UNLOAD_COOLDOWN_MS,
+    SCROLL_IDLE_RESUME_MS,
+    PREFETCH_IDLE_TIMEOUT_MS,
+    HIGHLIGHT_IDLE_TIMEOUT_MS,
+    SCROLL_HEDGE_EPSILON_PX,
+    INSTANT_SCROLL_BEHAVIOR,
+    RANGE_HYDRATION_OVERSCAN_SEGMENTS,
+    RANGE_HYDRATION_PRELOAD_MARGIN_PX,
+    GLOBAL_VIRTUAL_SEGMENT_BUDGET,
+    PROGRESS_REPORT_EPSILON,
+    PHYSICS_FRICTION_NUMERATOR,
+    PHYSICS_FRICTION_NO_EASING_OFFSET,
+    PHYSICS_FRICTION_MIN,
+    PHYSICS_FRICTION_MAX,
+    PHYSICS_STOP_THRESHOLD_EASING,
+    PHYSICS_STOP_THRESHOLD_LINEAR,
+    PHYSICS_SPRING_STIFFNESS,
+    PHYSICS_SPRING_DAMPING_EASING,
+    PHYSICS_SPRING_DAMPING_LINEAR,
+    INERTIA_IMPULSE_BLEND_BASE,
+    INERTIA_IMPULSE_BLEND_RATIO_SCALE,
+    INERTIA_IMPULSE_BLEND_MIN,
+    INERTIA_IMPULSE_BLEND_MAX,
+    INERTIA_IMPULSE_GAIN_BASE,
+    INERTIA_IMPULSE_GAIN_STEP_REF,
+    INERTIA_IMPULSE_GAIN_STEP_DIVISOR,
+    INERTIA_IMPULSE_GAIN_MIN,
+    INERTIA_IMPULSE_GAIN_MAX,
+    INERTIA_VELOCITY_STEP_FACTOR,
+    INERTIA_VELOCITY_ACCEL_FACTOR,
+    INERTIA_VELOCITY_MIN,
+    INERTIA_VELOCITY_MAX,
+    INERTIA_FRAME_CAP_EASING_MS,
+    INERTIA_FRAME_CAP_LINEAR_MS,
+} from './scrollReader/scrollReaderConstants';
 import {
     shouldPreloadChapter,
     detectScrollDirection,
@@ -15,10 +62,7 @@ import { useScrollEvents } from '../../hooks/useScrollEvents';
 import { db, type Highlight } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
 import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService';
-import {
-    buildChapterMetaVector,
-    type SegmentMeta,
-} from '../../engine';
+import { buildChapterMetaVector } from '../../engine';
 import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
 import { clampNumber } from '../../utils/mathUtils';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
@@ -32,25 +76,6 @@ import {
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
-
-interface LoadedChapter {
-    spineIndex: number;
-    id: string;
-    htmlContent: string;
-    htmlFragments: string[];
-    externalStyles: string[];
-    segmentMetas?: SegmentMeta[];
-    vectorStyleKey?: string;
-    domNode: HTMLElement | null;
-    height: number;
-    status: 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder';
-    mountedAt?: number;
-}
-
-type PipelineState =
-    | 'idle'
-    | 'pre-fetching'
-    | 'rendering-offscreen';
 
 interface ScrollReaderViewProps {
     provider: ContentProvider;
@@ -77,59 +102,8 @@ export interface ScrollReaderHandle {
     jumpToSpine: (spineIndex: number, searchText?: string) => Promise<void>;
 }
 
-interface ViewportDerivedMetrics {
-    activeSpineIndex: number | null;
-    progressSpineIndex: number | null;
-    progress: number | null;
-}
-
 // ── Constants ──
 
-const PRELOAD_THRESHOLD_PX = 600;
-// 上方章节保留 30 章缓冲，避免回滚时频繁重挂载导致 CPU 抖动
-const UNLOAD_ABOVE_RADIUS = 30;
-// 下方章节超出 3 章时才卸载（下方消失不影响当前 scrollTop）
-const UNLOAD_BELOW_RADIUS = 3;
-const UNLOAD_COOLDOWN_MS = 3000;
-const SCROLL_IDLE_RESUME_MS = 200;
-const PREFETCH_IDLE_TIMEOUT_MS = 120;
-const CHAPTER_DETECTION_ANCHOR_RATIO = 0.22;
-const CHAPTER_DETECTION_ANCHOR_MAX_PX = 140;
-const HIGHLIGHT_IDLE_TIMEOUT_MS = 600;
-const CHAPTER_PLACEHOLDER_MIN_HEIGHT_PX = 240;
-const CHAPTER_PLACEHOLDER_DEFAULT_HEIGHT_PX = 800;
-const SCROLL_HEDGE_EPSILON_PX = 0.1;
-const INSTANT_SCROLL_BEHAVIOR: ScrollBehavior = 'auto';
-const RANGE_HYDRATION_OVERSCAN_SEGMENTS = 3;
-const RANGE_HYDRATION_PRELOAD_MARGIN_PX = 720;
-const GLOBAL_VIRTUAL_SEGMENT_BUDGET = 24;
-const PROGRESS_REPORT_EPSILON = 0.002;
-
-// ── 物理引擎调参常量 ──
-const PHYSICS_FRICTION_NUMERATOR = 26;
-const PHYSICS_FRICTION_NO_EASING_OFFSET = 0.02;
-const PHYSICS_FRICTION_MIN = 0.04;
-const PHYSICS_FRICTION_MAX = 0.18;
-const PHYSICS_STOP_THRESHOLD_EASING = 0.08;
-const PHYSICS_STOP_THRESHOLD_LINEAR = 0.14;
-const PHYSICS_SPRING_STIFFNESS = 0.06;
-const PHYSICS_SPRING_DAMPING_EASING = 0.7;
-const PHYSICS_SPRING_DAMPING_LINEAR = 0.55;
-const INERTIA_IMPULSE_BLEND_BASE = 0.72;
-const INERTIA_IMPULSE_BLEND_RATIO_SCALE = 0.05;
-const INERTIA_IMPULSE_BLEND_MIN = 0.65;
-const INERTIA_IMPULSE_BLEND_MAX = 0.94;
-const INERTIA_IMPULSE_GAIN_BASE = 0.18;
-const INERTIA_IMPULSE_GAIN_STEP_REF = 120;
-const INERTIA_IMPULSE_GAIN_STEP_DIVISOR = 900;
-const INERTIA_IMPULSE_GAIN_MIN = 0.1;
-const INERTIA_IMPULSE_GAIN_MAX = 0.38;
-const INERTIA_VELOCITY_STEP_FACTOR = 0.75;
-const INERTIA_VELOCITY_ACCEL_FACTOR = 5;
-const INERTIA_VELOCITY_MIN = 48;
-const INERTIA_VELOCITY_MAX = 220;
-const INERTIA_FRAME_CAP_EASING_MS = 24;
-const INERTIA_FRAME_CAP_LINEAR_MS = 32;
 const DEFAULT_SMOOTH_CONFIG: NonNullable<ScrollReaderViewProps['smoothConfig']> = {
     enabled: true,
     stepSizePx: 120,
@@ -140,100 +114,6 @@ const DEFAULT_SMOOTH_CONFIG: NonNullable<ScrollReaderViewProps['smoothConfig']> 
     easing: true,
     reverseWheelDirection: false,
 };
-
-
-
-function resolveChapterPlaceholderHeight(height: number): number {
-    // 已被 ResizeObserver 实测过的高度：原值直接用，保留亚像素精度，杜绝舍入漂移
-    if (height > CHAPTER_PLACEHOLDER_MIN_HEIGHT_PX) return height;
-    return Math.max(
-        CHAPTER_PLACEHOLDER_MIN_HEIGHT_PX,
-        height || CHAPTER_PLACEHOLDER_DEFAULT_HEIGHT_PX,
-    );
-}
-
-function applyChapterShellStyles(chapterEl: HTMLElement, height: number): void {
-    chapterEl.style.contain = 'layout style paint';
-    chapterEl.style.display = 'flow-root';
-    chapterEl.style.contentVisibility = 'auto';
-    chapterEl.style.containIntrinsicSize = `${resolveChapterPlaceholderHeight(height)}px`;
-}
-
-function markChapterAsPlaceholder(chapterEl: HTMLElement, height: number): void {
-    const resolvedHeight = resolveChapterPlaceholderHeight(height);
-    applyChapterShellStyles(chapterEl, resolvedHeight);
-    chapterEl.style.height = `${resolvedHeight}px`;
-    chapterEl.style.minHeight = `${resolvedHeight}px`;
-    chapterEl.setAttribute('data-chapter-state', 'placeholder');
-}
-
-function markChapterAsMounted(chapterEl: HTMLElement, height: number): void {
-    applyChapterShellStyles(chapterEl, height);
-    chapterEl.style.height = '';
-    chapterEl.style.minHeight = '';
-    chapterEl.removeAttribute('data-chapter-state');
-}
-
-function resolveHighlightSpineIndex(cfiRange: string): number | null {
-    if (cfiRange.startsWith('vitra:') || cfiRange.startsWith('bdise:')) {
-        const parsed = Number.parseInt(cfiRange.split(':')[1] || '', 10);
-        return Number.isFinite(parsed) ? parsed : null;
-    }
-    if (cfiRange.startsWith('epubcfi(')) {
-        const match = cfiRange.match(/^epubcfi\(\/\d+\/(\d+)/);
-        if (!match) return null;
-        const parsed = Number.parseInt(match[1], 10);
-        return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed / 2) - 1) : null;
-    }
-    return null;
-}
-
-function resolveViewportDerivedMetrics(
-    listEl: HTMLElement,
-    scrollTop: number,
-    viewportHeight: number,
-    totalChapterCount: number,
-): ViewportDerivedMetrics {
-    const chapterProbeLine = scrollTop + Math.min(
-        viewportHeight * CHAPTER_DETECTION_ANCHOR_RATIO,
-        CHAPTER_DETECTION_ANCHOR_MAX_PX,
-    );
-    const viewportMid = scrollTop + viewportHeight / 2;
-    const chapterEls = Array.from(listEl.querySelectorAll('[data-chapter-id]')) as HTMLElement[];
-    let activeSpineIndex: number | null = null;
-    let progressSpineIndex: number | null = null;
-    let progress: number | null = null;
-
-    for (const el of chapterEls) {
-        const chapterIdAttr = el.getAttribute('data-chapter-id') || '';
-        const match = chapterIdAttr.match(/^ch-(\d+)$/);
-        if (!match) continue;
-
-        const spineIndex = Number.parseInt(match[1], 10);
-        const top = el.offsetTop;
-        const height = el.offsetHeight;
-        const bottom = top + height;
-
-        if (activeSpineIndex === null && chapterProbeLine >= top && chapterProbeLine < bottom) {
-            activeSpineIndex = spineIndex;
-        }
-
-        if (progressSpineIndex === null && viewportMid >= top && viewportMid < bottom) {
-            progressSpineIndex = spineIndex;
-            progress = height > 0 ? Math.max(0, Math.min(1, (spineIndex + ((viewportMid - top) / height)) / Math.max(1, totalChapterCount))) : 0;
-        }
-
-        if (activeSpineIndex !== null && progressSpineIndex !== null) {
-            break;
-        }
-    }
-
-    return {
-        activeSpineIndex,
-        progressSpineIndex,
-        progress,
-    };
-}
 
 
 
