@@ -15,23 +15,6 @@ import styles from './PaginatedReaderView.module.css';
 
 const HIGHLIGHT_IDLE_TIMEOUT_MS = 600;
 
-function resolveVisualPageCount(scrollWidth: number, viewportWidth: number): number {
-    if (viewportWidth <= 0) return 1;
-    return Math.max(1, Math.ceil((scrollWidth / viewportWidth) - 0.001));
-}
-
-function resolveEffectiveTotalPages(
-    visualPages: number,
-    logicalPages: number,
-    pageMapReady: boolean,
-): number {
-    const safeVisualPages = Math.max(1, visualPages);
-    if (!pageMapReady || logicalPages <= 0) {
-        return safeVisualPages;
-    }
-    return Math.max(1, logicalPages);
-}
-
 interface PaginatedReaderViewProps {
     provider: ContentProvider;
     bookId: string;
@@ -113,31 +96,6 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         }
     }, [])
 
-    const syncPaginationStateFromLayout = useCallback(() => {
-        const viewport = viewportRef.current;
-        const container = columnRef.current;
-        if (!viewport || !container) return;
-
-        const viewportWidth = Math.max(1, viewport.clientWidth);
-        const visualPages = resolveVisualPageCount(container.scrollWidth, viewportWidth);
-        const logicalPages = pageBoundariesRef.current.length;
-        const effectivePages = resolveEffectiveTotalPages(
-            visualPages,
-            logicalPages,
-            pageMapReadyRef.current,
-        );
-
-        setTotalPages(effectivePages);
-        totalPagesRef.current = effectivePages;
-
-        const clampedPage = Math.max(0, Math.min(currentPageRef.current, effectivePages - 1));
-        if (clampedPage === currentPageRef.current) return;
-
-        setCurrentPage(clampedPage);
-        currentPageRef.current = clampedPage;
-        setDisplayPage(clampedPage);
-    }, [])
-
     const measureBoundariesInShadow = useCallback(async (
         sourceNode: HTMLElement,
         viewportHeight: number,
@@ -164,12 +122,8 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         if (measureSeq !== paginationMeasureSeqRef.current) return []
         paginationMeasureHandleRef.current = null
         pageMapReadyRef.current = true
-        requestAnimationFrame(() => {
-            if (measureSeq !== paginationMeasureSeqRef.current) return
-            syncPaginationStateFromLayout()
-        })
         return boundaries
-    }, [abortPaginationMeasure, syncPaginationStateFromLayout])
+    }, [abortPaginationMeasure])
 
     useEffect(() => {
         return () => {
@@ -343,33 +297,26 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         releaseMediaResources(container);
         container.appendChild(chapterNode);
 
-        // 强制重排，确保上面的样式生效
-        void container.offsetHeight;
-
         // Calculate pagination after DOM settles
         requestAnimationFrame(() => {
             if (w <= 0) return;
             const boundaries = pageBoundariesRef.current;
-            const visualPages = resolveVisualPageCount(container.scrollWidth, w);
-            const logicalPages = boundaries.length;
-            const totalPagesForChapter = resolveEffectiveTotalPages(
-                visualPages,
-                logicalPages,
-                pageMapReadyRef.current,
-            );
-            if (logicalPages > 0 && Math.abs(logicalPages - visualPages) >= 1) {
+            const rawPages = container.scrollWidth / w;
+            const pages = Math.max(1, Math.ceil(rawPages - 0.001));
+            const logicalPages = Math.max(1, boundaries.length || pages);
+            if (Math.abs(logicalPages - pages) >= 3) {
                 console.warn(
-                    `[PaginatedReader] Visual pages (${visualPages}) diverge from logical map (${logicalPages})`,
+                    `[PaginatedReader] Visual pages (${pages}) diverge from logical map (${logicalPages})`,
                 );
             }
-            setTotalPages(totalPagesForChapter);
-            totalPagesRef.current = totalPagesForChapter;
+            setTotalPages(pages);
+            totalPagesRef.current = pages;
 
             // 如果需要跳转到最后一页
             let targetPage = 0;
             let shouldJumpToLastPage = false;
             if (pendingLastPageRef.current) {
-                targetPage = totalPagesForChapter - 1;
+                targetPage = pages - 1;
                 shouldJumpToLastPage = true;
                 pendingLastPageRef.current = false;
             }
@@ -383,7 +330,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                     const rect = range.getBoundingClientRect();
                     const containerRect = container.getBoundingClientRect();
                     targetPage = Math.floor((rect.left - containerRect.left + container.scrollLeft) / w);
-                    targetPage = Math.max(0, Math.min(targetPage, totalPagesForChapter - 1));
+                    targetPage = Math.max(0, Math.min(targetPage, pages - 1));
                 }
             }
 
@@ -447,17 +394,12 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 if (disposed || w <= 0 || h <= 0) return;
 
                 container.style.height = `${h}px`;
-                const visualPages = resolveVisualPageCount(container.scrollWidth, w);
-                const effectivePages = resolveEffectiveTotalPages(
-                    visualPages,
-                    pageBoundariesRef.current.length,
-                    pageMapReadyRef.current,
-                );
+                const pages = Math.max(1, Math.ceil(container.scrollWidth / w));
                 const anchorBasedPage = Math.floor(anchorX / w);
-                const nextPage = Math.max(0, Math.min(anchorBasedPage, effectivePages - 1));
+                const nextPage = Math.max(0, Math.min(anchorBasedPage, pages - 1));
 
-                setTotalPages(effectivePages);
-                totalPagesRef.current = effectivePages;
+                setTotalPages(pages);
+                totalPagesRef.current = pages;
 
                 setCurrentPage(nextPage);
                 currentPageRef.current = nextPage;
@@ -515,7 +457,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         const pageWidth = viewport.clientWidth;
         if (pageWidth <= 0) return false;
         const logicalPages = pageBoundariesRef.current.length;
-        if (pageMapReadyRef.current && logicalPages > 0 && pageIndex >= logicalPages) return true;
+        if (pageMapReadyRef.current && logicalPages > 0 && pageIndex >= logicalPages + 1) return true;
 
         const pageLeft = pageIndex * pageWidth;
         const pageRight = pageLeft + pageWidth;
