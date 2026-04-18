@@ -1,24 +1,20 @@
 import {
-    useRef, useEffect, useState, useCallback, useLayoutEffect,
+    useEffect, useState, useCallback, useLayoutEffect,
     forwardRef, memo, useImperativeHandle, useMemo
 } from 'react';
 import type { ContentProvider, SpineItemInfo } from '../../engine/core/contentProvider';
 import { ShadowRenderer, ReaderStyleConfig, createWindowedVectorChapterShell, segmentPool } from './ShadowRenderer';
 import { useVirtualChapterRuntime } from './scrollReader/useVirtualChapterRuntime';
-import type { LoadedChapter, PipelineState } from './scrollReader/scrollReaderTypes';
+import { useScrollReaderRefs } from './scrollReader/useScrollReaderRefs';
+import { useChapterUnloader } from './scrollReader/useChapterUnloader';
+import { useScrollHandler } from './scrollReader/useScrollHandler';
+import type { LoadedChapter } from './scrollReader/scrollReaderTypes';
 import {
-    resolveChapterPlaceholderHeight,
-    markChapterAsPlaceholder,
     markChapterAsMounted,
     resolveHighlightSpineIndex,
     resolveViewportDerivedMetrics,
 } from './scrollReader/scrollReaderHelpers';
 import {
-    PRELOAD_THRESHOLD_PX,
-    UNLOAD_ABOVE_RADIUS,
-    UNLOAD_BELOW_RADIUS,
-    UNLOAD_COOLDOWN_MS,
-    SCROLL_IDLE_RESUME_MS,
     PREFETCH_IDLE_TIMEOUT_MS,
     HIGHLIGHT_IDLE_TIMEOUT_MS,
     SCROLL_HEDGE_EPSILON_PX,
@@ -52,18 +48,13 @@ import {
     INERTIA_FRAME_CAP_EASING_MS,
     INERTIA_FRAME_CAP_LINEAR_MS,
 } from './scrollReader/scrollReaderConstants';
-import {
-    shouldPreloadChapter,
-    detectScrollDirection,
-    ScrollDirection,
-} from '../../utils/scrollDetection';
 import { useScrollInertia } from '../../hooks/useScrollInertia';
 import { useScrollEvents } from '../../hooks/useScrollEvents';
 import { db, type Highlight } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
 import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService';
 import { buildChapterMetaVector } from '../../engine';
-import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
+import { cancelIdleTask, scheduleIdleTask } from '../../utils/idleScheduler';
 import { clampNumber } from '../../utils/mathUtils';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
 import { releaseMediaResources } from '../../utils/mediaResourceCleanup';
@@ -130,34 +121,46 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
     onChapterChange,
     onSelectionSearch,
 }: ScrollReaderViewProps, ref) => {
-    const viewportRef = useRef<HTMLDivElement>(null);
-    const chapterListRef = useRef<HTMLDivElement>(null);
-    const lastScrollTopRef = useRef(0);
-    const pipelineRef = useRef<PipelineState>('idle');
-    const loadingLockRef = useRef<Set<number>>(new Set());
-    const progressTimerRef = useRef<number | null>(null);
-    const scrollIdleTimerRef = useRef<number | null>(null);
-    const idlePrefetchHandleRef = useRef<number | null>(null);
-    const isUserScrollingRef = useRef(false);
-    const initialScrollDone = useRef(false);
-    const pendingSearchTextRef = useRef<string | null>(null);
-    const jumpGenerationRef = useRef(0);
+    const refs = useScrollReaderRefs({ initialSpineIndex });
+    const {
+        viewportRef,
+        chapterListRef,
+        lastScrollTopRef,
+        pipelineRef,
+        loadingLockRef,
+        progressTimerRef,
+        scrollIdleTimerRef,
+        idlePrefetchHandleRef,
+        isUserScrollingRef,
+        initialScrollDone,
+        pendingSearchTextRef,
+        jumpGenerationRef,
+        chaptersRef,
+        spineItemsRef,
+        resizeObserverRef,
+        observedResizeNodesRef,
+        observedResizeHeightsRef,
+        virtualSyncRafRef,
+        highlightDirtyChaptersRef,
+        highlightIdleHandlesRef,
+        lastReportedProgressRef,
+        pendingProgressSnapshotRef,
+        pendingReadyRef,
+        pendingReadyRafRef,
+        pendingDeltaRef,
+        flushRafRef,
+        unlockAdjustingRafRef,
+        ignoreScrollEventRef,
+        lastKnownAnchorIndexRef,
+        readerStylesKeyRef,
+    } = refs;
 
     const [chapters, setChapters] = useState<LoadedChapter[]>([]);
-    const chaptersRef = useRef<LoadedChapter[]>([]);
     const [spineItems, setSpineItems] = useState<SpineItemInfo[]>([]);
-    const spineItemsRef = useRef<SpineItemInfo[]>([]);
     const [currentSpineIndex, setCurrentSpineIndex] = useState(initialSpineIndex);
 
     const [isInitialized, setIsInitialized] = useState(false);
-    const resizeObserverRef = useRef<ResizeObserver | null>(null);
-    const observedResizeNodesRef = useRef<Set<HTMLElement>>(new Set());
-    const observedResizeHeightsRef = useRef<WeakMap<HTMLElement, number>>(new WeakMap());
-    const virtualSyncRafRef = useRef<number | null>(null);
     const [highlights, setHighlights] = useState<Highlight[]>([]);
-    const highlightDirtyChaptersRef = useRef<Set<number>>(new Set());
-    const lastReportedProgressRef = useRef<{ spineIndex: number; progress: number } | null>(null);
-    const pendingProgressSnapshotRef = useRef<{ spineIndex: number; progress: number; scrollTop: number } | null>(null);
 
     const highlightsBySpineIndex = useMemo(() => {
         const grouped = new Map<number, Highlight[]>();
@@ -186,15 +189,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         renderedHighlightsRef,
         renderSelectionUI,
     } = useSelectionMenu({ bookId, onSelectionSearch, getHighlightContainer, onHighlightCreated: handleHighlightCreated });
-    const highlightIdleHandlesRef = useRef<Map<number, IdleTaskHandle>>(new Map());
-    // rAF 批处理：收集同帧内完成的所有 shadow-ready 事件，合并为一次 setChapters
-    const pendingReadyRef = useRef<Array<{ spineIndex: number; node: HTMLElement; height: number }>>([]);
-    const pendingReadyRafRef = useRef<number | null>(null);
-    const pendingDeltaRef = useRef(0);
-    const flushRafRef = useRef<number | null>(null);
-    const unlockAdjustingRafRef = useRef<number | null>(null);
-    const ignoreScrollEventRef = useRef(false);
-    const lastKnownAnchorIndexRef = useRef(initialSpineIndex);
     const shadowResourceExists = useCallback((url: string) => {
         return provider.isAssetUrlAvailable?.(url) ?? true;
     }, [provider]);
@@ -641,7 +635,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         }
     }, [provider, readerStyles]);
 
-    const readerStylesKeyRef = useRef('');
     useEffect(() => {
         const nextKey = JSON.stringify(readerStyles);
         if (readerStylesKeyRef.current === '' || readerStylesKeyRef.current === nextKey) {
@@ -1008,82 +1001,7 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
 
     // ── Scroll Event Handler ──
 
-    useEffect(() => {
-        const viewport = viewportRef.current;
-        if (!viewport) return;
-
-        const handleScroll = () => {
-            isUserScrollingRef.current = true;
-            cancelIdlePrefetch();
-            if (scrollIdleTimerRef.current !== null) {
-                window.clearTimeout(scrollIdleTimerRef.current);
-            }
-            scrollIdleTimerRef.current = window.setTimeout(() => {
-                isUserScrollingRef.current = false;
-                scheduleIdlePrefetch(() => {
-                    runPredictivePrefetch();
-                });
-            }, SCROLL_IDLE_RESUME_MS);
-
-            const scrollTop = viewport.scrollTop;
-            const viewportHeight = viewport.clientHeight;
-            const contentHeight = viewport.scrollHeight;
-            const previousScrollTop = lastScrollTopRef.current;
-            const rawDirection = detectScrollDirection(scrollTop, previousScrollTop);
-            const direction: ScrollDirection = Math.abs(scrollTop - previousScrollTop) < 0.5 ? 'none' : rawDirection;
-            lastScrollTopRef.current = scrollTop;
-
-
-            // Check if we need to preload
-            const needsPreload = shouldPreloadChapter(
-                scrollTop, viewportHeight, contentHeight, direction,
-                { threshold: PRELOAD_THRESHOLD_PX }
-            );
-
-            if (needsPreload && pipelineRef.current === 'idle') {
-                const sortedChapters = [...chaptersRef.current].sort((a, b) => a.spineIndex - b.spineIndex);
-                const mountedChapters = sortedChapters.filter(ch => ch.status === 'mounted');
-
-                if (mountedChapters.length === 0) {
-                    runPredictivePrefetch();
-                }
-
-                if (direction === 'up' && mountedChapters.length > 0) {
-                    const earliest = mountedChapters[0].spineIndex;
-                    if (earliest > 0) {
-                        loadChapter(earliest - 1, 'prev');
-                    }
-                } else if (direction === 'down' && mountedChapters.length > 0) {
-                    const latest = mountedChapters[mountedChapters.length - 1].spineIndex;
-                    if (latest < spineItems.length - 1) {
-                        loadChapter(latest + 1, 'next');
-                    }
-                }
-            }
-
-            syncViewportState(scrollTop, viewportHeight);
-
-            // Debounced progress update
-            if (progressTimerRef.current) {
-                window.clearTimeout(progressTimerRef.current);
-            }
-            progressTimerRef.current = window.setTimeout(() => {
-                commitProgressSnapshot(pendingProgressSnapshotRef.current);
-            }, 200);
-        };
-
-        viewport.addEventListener('scroll', handleScroll, { passive: true });
-        return () => {
-            viewport.removeEventListener('scroll', handleScroll);
-            if (scrollIdleTimerRef.current !== null) {
-                window.clearTimeout(scrollIdleTimerRef.current);
-                scrollIdleTimerRef.current = null;
-            }
-            if (progressTimerRef.current) {
-                window.clearTimeout(progressTimerRef.current);
-            }
-        };
-    }, [
+    useScrollHandler(refs, {
         spineItems,
         loadChapter,
         runPredictivePrefetch,
@@ -1091,81 +1009,18 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         cancelIdlePrefetch,
         syncViewportState,
         commitProgressSnapshot,
-    ]);
+    });
 
     // ── Chapter Unloading ──
 
-    useEffect(() => {
-        const checkUnload = () => {
-            const currentChapters = chaptersRef.current;
-            const mountedChapters = currentChapters.filter(ch => ch.status === 'mounted');
-            const now = Date.now();
-            const toUnload = mountedChapters
-                .filter(ch => {
-                    // 惯性滚动中禁止任何卸载，防止高度真空导致坐标系崩溃
-                    if (isUserScrollingRef.current) return false;
-                    const dist = ch.spineIndex - currentSpineIndex;
-                    // 上方章节：使用极大 radius（相当于永不卸载）
-                    // 下方章节：正常 radius
-                    const radius = dist < 0 ? UNLOAD_ABOVE_RADIUS : UNLOAD_BELOW_RADIUS;
-                    return Math.abs(dist) > radius
-                        && (!ch.mountedAt || now - ch.mountedAt > UNLOAD_COOLDOWN_MS);
-                })
-                .sort((a, b) =>
-                    Math.abs(b.spineIndex - currentSpineIndex) - Math.abs(a.spineIndex - currentSpineIndex)
-                );
-
-            if (toUnload.length === 0) return;
-
-            const listEl = chapterListRef.current;
-            toUnload.forEach(ch => {
-                const idleHandle = highlightIdleHandlesRef.current.get(ch.spineIndex);
-                if (idleHandle !== undefined) {
-                    cancelIdleTask(idleHandle);
-                    highlightIdleHandlesRef.current.delete(ch.spineIndex);
-                }
-                highlightDirtyChaptersRef.current.delete(ch.spineIndex);
-                cleanupVirtualChapterRuntime(ch.id);
-                // Remove DOM
-                if (listEl) {
-                    const domEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
-                    if (domEl) {
-                        // 先 unobserve 再 release，避免清空段内容时 ResizeObserver 记录额外高度变动
-                        unobserveChapterResizeNodes(domEl);
-                        domEl.querySelectorAll('section[data-shadow-segment-index]').forEach(seg => {
-                            segmentPool.release(seg as HTMLElement);
-                        });
-                        releaseMediaResources(domEl);
-                        markChapterAsPlaceholder(domEl, ch.height);
-                    }
-                }
-                // Free resources
-                provider.unloadChapter(ch.spineIndex);
-                // 清除 metaVector
-                chapterVectorsRef.current.delete(ch.id);
-            });
-
-            const unloadIds = new Set(toUnload.map(ch => ch.spineIndex));
-            setChapters(prev => prev.map(ch => {
-                if (!unloadIds.has(ch.spineIndex)) return ch;
-                return {
-                    ...ch,
-                    htmlContent: '',
-                    htmlFragments: [],
-                    domNode: null,
-                    height: resolveChapterPlaceholderHeight(ch.height),
-                    status: 'placeholder',
-                };
-            }));
-
-            console.log(`[ScrollReader] Collapsed to placeholders: ${toUnload.map(ch => ch.spineIndex).join(', ')}`);
-        };
-
-        // 延迟检查，避免在章节状态快速变化时频繁执行
-        const timer = setTimeout(checkUnload, UNLOAD_COOLDOWN_MS);
-        return () => clearTimeout(timer);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [cleanupVirtualChapterRuntime, currentSpineIndex, provider, unobserveChapterResizeNodes]);
+    useChapterUnloader(refs, {
+        provider,
+        currentSpineIndex,
+        cleanupVirtualChapterRuntime,
+        unobserveChapterResizeNodes,
+        chapterVectorsRef,
+        setChapters,
+    });
 
     // ── TOC Jump ──
 
