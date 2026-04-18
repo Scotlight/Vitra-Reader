@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useReaderSystemFonts } from '../Reader/useReaderSystemFonts'
 import { motion } from 'framer-motion'
 import { useLibraryStore } from '../../stores/useLibraryStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
@@ -46,8 +47,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
     const [progressMap, setProgressMap] = useState<Record<string, number>>({})
     const [activeNav, setActiveNav] = useState<'all' | 'fav' | 'notes' | 'highlight' | 'trash'>('all')
     const [sortMode, setSortMode] = useState<'lastRead' | 'addedAt' | 'title' | 'author'>('lastRead')
-    const [systemFonts, setSystemFonts] = useState<string[]>(['系统默认'])
-    const [loadingFonts, setLoadingFonts] = useState(false)
+    const { systemFonts, loadingFonts } = useReaderSystemFonts()
     const [favoriteBookIds, setFavoriteBookIds] = useState<string[]>([])
     const [trashBookIds, setTrashBookIds] = useState<string[]>([])
     const [noteBookIds, setNoteBookIds] = useState<string[]>([])
@@ -229,25 +229,6 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         }
     }, [])
 
-    useEffect(() => {
-        const loadFonts = async () => {
-            if (!window.electronAPI?.listSystemFonts) return
-            setLoadingFonts(true)
-            try {
-                const fonts = await window.electronAPI.listSystemFonts()
-                if (!fonts || fonts.length === 0) {
-                    setSystemFonts(['系统默认', '微软雅黑', '宋体', '楷体', '黑体', '仿宋'])
-                } else {
-                    setSystemFonts(['系统默认', ...fonts])
-                }
-            } catch {
-                setSystemFonts(['系统默认', '微软雅黑', '宋体', '楷体', '黑体', '仿宋'])
-            } finally {
-                setLoadingFonts(false)
-            }
-        }
-        void loadFonts()
-    }, [])
 
     const favoriteBookIdSet = useMemo(() => new Set(favoriteBookIds), [favoriteBookIds])
     const noteBookIdSet = useMemo(() => new Set(noteBookIds), [noteBookIds])
