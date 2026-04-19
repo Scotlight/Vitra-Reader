@@ -1,5 +1,5 @@
 import {
-    useEffect, useState, useCallback, useLayoutEffect,
+    useEffect, useState, useCallback,
     forwardRef, memo, useImperativeHandle, useMemo
 } from 'react';
 import type { ContentProvider, SpineItemInfo } from '../../engine/core/contentProvider';
@@ -12,14 +12,12 @@ import { useChapterLoader } from './scrollReader/useChapterLoader';
 import { useShadowRenderComplete } from './scrollReader/useShadowRenderComplete';
 import { useAtomicDomCommit } from './scrollReader/useAtomicDomCommit';
 import { useTocJump } from './scrollReader/useTocJump';
+import { useHighlightAndSelection } from './scrollReader/useHighlightAndSelection';
+import { useVirtualSegmentSync } from './scrollReader/useVirtualSegmentSync';
 import type { LoadedChapter } from './scrollReader/scrollReaderTypes';
 import { resolveHighlightSpineIndex } from './scrollReader/scrollReaderHelpers';
 import {
     PREFETCH_IDLE_TIMEOUT_MS,
-    HIGHLIGHT_IDLE_TIMEOUT_MS,
-    RANGE_HYDRATION_OVERSCAN_SEGMENTS,
-    RANGE_HYDRATION_PRELOAD_MARGIN_PX,
-    GLOBAL_VIRTUAL_SEGMENT_BUDGET,
     PHYSICS_FRICTION_NUMERATOR,
     PHYSICS_FRICTION_NO_EASING_OFFSET,
     PHYSICS_FRICTION_MIN,
@@ -48,11 +46,9 @@ import {
 import { useScrollInertia } from '../../hooks/useScrollInertia';
 import { useScrollEvents } from '../../hooks/useScrollEvents';
 import { db, type Highlight } from '../../services/storageService';
-import { findTextInDOM, highlightRange } from '../../utils/textFinder';
-import { cancelIdleTask, scheduleIdleTask } from '../../utils/idleScheduler';
+import { cancelIdleTask } from '../../utils/idleScheduler';
 import { clampNumber } from '../../utils/mathUtils';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
-import { computeGlobalVirtualSegmentMountPlan } from './scrollVectorStrategy';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
@@ -128,7 +124,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         highlightIdleHandlesRef,
         lastReportedProgressRef,
         pendingProgressSnapshotRef,
-        ignoreScrollEventRef,
         lastKnownAnchorIndexRef,
     } = refs;
 
@@ -532,198 +527,27 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         jumpToSpine
     }));
 
-    // ── Selection Detection ──
+    // ── Selection + Highlight ──
 
-    useEffect(() => {
-        const viewport = viewportRef.current;
-        if (!viewport) return;
-
-        const handleMouseUp = () => {
-            const sel = window.getSelection();
-            const text = sel?.toString().trim();
-            if (!text || !sel?.rangeCount) {
-                return;
-            }
-
-            const range = sel.getRangeAt(0);
-            const rect = range.getBoundingClientRect();
-
-            // Find which chapter this selection belongs to
-            let node: Node | null = range.startContainer;
-            let spineIdx = -1;
-            while (node && node !== viewport) {
-                if (node instanceof HTMLElement) {
-                    const chId = node.getAttribute('data-chapter-id');
-                    if (chId) {
-                        const match = chId.match(/^ch-(\d+)$/);
-                        if (match) spineIdx = parseInt(match[1], 10);
-                        break;
-                    }
-                }
-                node = node.parentNode;
-            }
-
-            setSelectionMenu({
-                visible: true,
-                x: rect.left + rect.width / 2,
-                y: rect.top - 10,
-                text,
-                spineIndex: spineIdx,
-            });
-        };
-
-        const handleContextMenu = (e: MouseEvent) => {
-            const sel = window.getSelection();
-            const text = sel?.toString().trim();
-            if (!text) return;
-            e.preventDefault();
-            handleMouseUp();
-        };
-
-        viewport.addEventListener('mouseup', handleMouseUp);
-        viewport.addEventListener('contextmenu', handleContextMenu);
-        return () => {
-            viewport.removeEventListener('mouseup', handleMouseUp);
-            viewport.removeEventListener('contextmenu', handleContextMenu);
-        };
-    }, []);
-
-    // Dismiss menu on scroll
-    useEffect(() => {
-        const viewport = viewportRef.current;
-        if (!viewport || !selectionMenu.visible) return;
-
-        const dismiss = () => setSelectionMenu(prev => ({ ...prev, visible: false }));
-        viewport.addEventListener('scroll', dismiss, { passive: true, once: true });
-        return () => viewport.removeEventListener('scroll', dismiss);
-    }, [selectionMenu.visible]);
-
-    // ── Highlight Rendering ──
-
-    const applyHighlightsToChapter = useCallback((
-        chapterEl: HTMLElement,
-        spineIndex: number,
-    ) => {
-        const matching = highlightsBySpineIndex.get(spineIndex) ?? [];
-        if (matching.length === 0) return;
-
-        for (const highlight of matching) {
-            if (renderedHighlightsRef.current.has(highlight.id)) continue;
-            const range = findTextInDOM(chapterEl, highlight.text);
-            if (!range) continue;
-            highlightRange(range, highlight.id, highlight.color);
-            renderedHighlightsRef.current.add(highlight.id);
-        }
-    }, [highlightsBySpineIndex, renderedHighlightsRef]);
-
-    const scheduleHighlightInjection = useCallback((chapterEl: HTMLElement, spineIndex: number) => {
-        if (!highlightDirtyChaptersRef.current.has(spineIndex)) return;
-        if ((highlightsBySpineIndex.get(spineIndex)?.length ?? 0) === 0) return;
-        if (highlightIdleHandlesRef.current.has(spineIndex)) return;
-
-        const handle = scheduleIdleTask(() => {
-            highlightIdleHandlesRef.current.delete(spineIndex);
-            if (!highlightDirtyChaptersRef.current.has(spineIndex)) return;
-            highlightDirtyChaptersRef.current.delete(spineIndex);
-            applyHighlightsToChapter(chapterEl, spineIndex);
-        }, { timeoutMs: HIGHLIGHT_IDLE_TIMEOUT_MS });
-        highlightIdleHandlesRef.current.set(spineIndex, handle);
-    }, [applyHighlightsToChapter, highlightsBySpineIndex]);
-
-    // Apply highlights when chapters become mounted
-    useLayoutEffect(() => {
-        const listEl = chapterListRef.current;
-        if (!listEl) return;
-
-        const mountedChapters = chapters.filter(ch => ch.status === 'mounted');
-        for (const ch of mountedChapters) {
-            if ((highlightsBySpineIndex.get(ch.spineIndex)?.length ?? 0) === 0) continue;
-            const el = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
-            if (el) {
-                highlightDirtyChaptersRef.current.add(ch.spineIndex);
-                scheduleHighlightInjection(el, ch.spineIndex);
-            }
-        }
-    }, [chapters, highlightsBySpineIndex, scheduleHighlightInjection]);
+    const { scheduleHighlightInjection } = useHighlightAndSelection(refs, {
+        chapters,
+        highlightsBySpineIndex,
+        renderedHighlightsRef,
+        selectionMenu,
+        setSelectionMenu,
+    });
 
     // ── Active-only 虚拟段同步 ──
 
-    const syncVirtualizedSegmentsByRange = useCallback((scrollTop: number, viewportHeight: number) => {
-        if (viewportHeight <= 0) return;
-
-        const runtimes = Array.from(virtualChaptersRef.current.values());
-        if (runtimes.length === 0) return;
-
-        runtimes.forEach((runtime) => {
-            refreshVirtualChapterLayout(runtime);
-        });
-
-        const mountPlan = computeGlobalVirtualSegmentMountPlan(
-            runtimes.map((runtime) => ({
-                chapterId: runtime.chapterId,
-                chapterTop: runtime.chapterEl.offsetTop,
-                vector: runtime.vector,
-            })),
-            scrollTop,
-            viewportHeight,
-            {
-                overscanSegments: RANGE_HYDRATION_OVERSCAN_SEGMENTS,
-                preloadMarginPx: RANGE_HYDRATION_PRELOAD_MARGIN_PX,
-                globalSegmentBudget: GLOBAL_VIRTUAL_SEGMENT_BUDGET,
-            },
-        );
-
-        runtimes.forEach((runtime) => {
-            const nextIndices = new Set(mountPlan.get(runtime.chapterId) ?? []);
-            let virtualDomChanged = false;
-
-            Array.from(runtime.activeSegmentEls.keys()).forEach((segmentIndex) => {
-                if (!nextIndices.has(segmentIndex)) {
-                    virtualDomChanged = true;
-                    releaseVirtualSegment(runtime, segmentIndex);
-                }
-            });
-
-            Array.from(nextIndices).sort((a, b) => a - b).forEach((segmentIndex) => {
-                const alreadyMounted = runtime.activeSegmentEls.has(segmentIndex);
-                mountVirtualSegment(runtime, segmentIndex);
-                if (!alreadyMounted) {
-                    virtualDomChanged = true;
-                }
-            });
-
-            refreshVirtualChapterLayout(runtime);
-            if (virtualDomChanged && (highlightsBySpineIndex.get(runtime.spineIndex)?.length ?? 0) > 0) {
-                highlightDirtyChaptersRef.current.add(runtime.spineIndex);
-                scheduleHighlightInjection(runtime.chapterEl, runtime.spineIndex);
-            }
-        });
-    }, [mountVirtualSegment, refreshVirtualChapterLayout, releaseVirtualSegment, highlightsBySpineIndex, scheduleHighlightInjection]);
-
-    useEffect(() => {
-        const viewport = viewportRef.current;
-        if (!viewport) return;
-
-        const scheduleVirtualSync = () => {
-            if (ignoreScrollEventRef.current) return;
-            if (virtualSyncRafRef.current !== null) return;
-            virtualSyncRafRef.current = requestAnimationFrame(() => {
-                virtualSyncRafRef.current = null;
-                syncVirtualizedSegmentsByRange(viewport.scrollTop, viewport.clientHeight);
-            });
-        };
-
-        scheduleVirtualSync();
-        viewport.addEventListener('scroll', scheduleVirtualSync, { passive: true });
-
-        return () => {
-            viewport.removeEventListener('scroll', scheduleVirtualSync);
-            if (virtualSyncRafRef.current !== null) {
-                cancelAnimationFrame(virtualSyncRafRef.current);
-                virtualSyncRafRef.current = null;
-            }
-        };
-    }, [chapters, syncVirtualizedSegmentsByRange]);
+    useVirtualSegmentSync(refs, {
+        chapters,
+        highlightsBySpineIndex,
+        virtualChaptersRef,
+        mountVirtualSegment,
+        releaseVirtualSegment,
+        refreshVirtualChapterLayout,
+        scheduleHighlightInjection,
+    });
 
     // ── Render ──
 
