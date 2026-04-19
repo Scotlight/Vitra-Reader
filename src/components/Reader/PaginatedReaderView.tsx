@@ -7,13 +7,12 @@ import { releaseMediaResources } from '../../utils/mediaResourceCleanup';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
 import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
 import { db } from '../../services/storageService';
-import { findTextInDOM, highlightRange } from '../../utils/textFinder';
+import { findTextInDOM } from '../../utils/textFinder';
 import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService';
 import { startMeasure, type VitraMeasureHandle, type PageBoundary } from '../../engine';
-import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../utils/idleScheduler';
+import { usePaginatedHighlights } from './paginatedReader/usePaginatedHighlights';
+import { usePaginatedNavigation } from './paginatedReader/usePaginatedNavigation';
 import styles from './PaginatedReaderView.module.css';
-
-const HIGHLIGHT_IDLE_TIMEOUT_MS = 600;
 
 interface PaginatedReaderViewProps {
     provider: ContentProvider;
@@ -52,7 +51,6 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     const paginationMeasureSeqRef = useRef(0);
     const paginationMeasureHandleRef = useRef<VitraMeasureHandle | null>(null);
     const paginationMeasureHostRef = useRef<HTMLDivElement>(null);
-    const highlightIdleHandleRef = useRef<IdleTaskHandle | null>(null);
 
     const [spineItems, setSpineItems] = useState<SpineItemInfo[]>([]);
     const [currentSpineIndex, setCurrentSpineIndex] = useState(initialSpineIndex);
@@ -88,6 +86,14 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     currentSpineIndexRef.current = currentSpineIndex;
     currentPageRef.current = currentPage;
     totalPagesRef.current = totalPages;
+
+    const { scheduleHighlightInjection } = usePaginatedHighlights({
+        bookId,
+        viewportRef,
+        currentSpineIndexRef,
+        renderedHighlightsRef,
+        setSelectionMenu,
+    });
 
     const abortPaginationMeasure = useCallback(() => {
         if (paginationMeasureHandleRef.current) {
@@ -211,6 +217,22 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         }
     }, [provider, abortPaginationMeasure]);
 
+    const { isPageLikelyBlank } = usePaginatedNavigation({
+        viewportRef,
+        columnRef,
+        pageBoundariesRef,
+        pageMapReadyRef,
+        currentPageRef,
+        totalPagesRef,
+        currentSpineIndexRef,
+        spineItemsRef,
+        setCurrentPage,
+        setDisplayPage,
+        setCurrentSpineIndex,
+        hideSelectionMenu: () => setSelectionMenu((previous) => ({ ...previous, visible: false })),
+        loadChapter,
+    });
+
     // ── Load initial chapter ──
     useEffect(() => {
         if (spineItems.length === 0) return;
@@ -234,50 +256,6 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
             console.warn('[PaginatedReader] Background block measurement failed:', error);
         });
     }, [measureBoundariesInShadow]);
-
-    // ── Highlights ──
-    const applyHighlights = useCallback((el: HTMLElement, spineIndex: number) => {
-        db.highlights.where('bookId').equals(bookId).toArray().then(highlights => {
-            const matching = highlights.filter(h => {
-                if (h.cfiRange.startsWith('vitra:') || h.cfiRange.startsWith('bdise:')) {
-                    return parseInt(h.cfiRange.split(':')[1], 10) === spineIndex;
-                }
-                if (h.cfiRange.startsWith('epubcfi(')) {
-                    const m = h.cfiRange.match(/^epubcfi\(\/\d+\/(\d+)/);
-                    return m ? Math.max(0, Math.floor(parseInt(m[1], 10) / 2) - 1) === spineIndex : false;
-                }
-                return false;
-            });
-            for (const h of matching) {
-                if (renderedHighlightsRef.current.has(h.id)) continue;
-                const range = findTextInDOM(el, h.text);
-                if (range) {
-                    highlightRange(range, h.id, h.color);
-                    renderedHighlightsRef.current.add(h.id);
-                }
-            }
-        }).catch(err => console.warn('[PaginatedReader] Highlight load failed:', err));
-    }, [bookId]);
-
-    const scheduleHighlightInjection = useCallback((el: HTMLElement, spineIndex: number) => {
-        if (highlightIdleHandleRef.current !== null) {
-            cancelIdleTask(highlightIdleHandleRef.current);
-            highlightIdleHandleRef.current = null;
-        }
-        highlightIdleHandleRef.current = scheduleIdleTask(() => {
-            highlightIdleHandleRef.current = null;
-            applyHighlights(el, spineIndex);
-        }, { timeoutMs: HIGHLIGHT_IDLE_TIMEOUT_MS });
-    }, [applyHighlights]);
-
-    useEffect(() => {
-        return () => {
-            if (highlightIdleHandleRef.current !== null) {
-                cancelIdleTask(highlightIdleHandleRef.current);
-                highlightIdleHandleRef.current = null;
-            }
-        };
-    }, []);
 
     // ── Mount chapter node + calculate pagination ──
     useEffect(() => {
@@ -449,109 +427,6 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         return viewport.clientWidth;
     }, []);
 
-    const isPageLikelyBlank = useCallback((pageIndex: number): boolean => {
-        const container = columnRef.current;
-        const viewport = viewportRef.current;
-        if (!container || !viewport) return false;
-
-        const pageWidth = viewport.clientWidth;
-        if (pageWidth <= 0) return false;
-        const logicalPages = pageBoundariesRef.current.length;
-        if (pageMapReadyRef.current && logicalPages > 0 && pageIndex >= logicalPages + 1) return true;
-
-        const pageLeft = pageIndex * pageWidth;
-        const pageRight = pageLeft + pageWidth;
-        const containerRect = container.getBoundingClientRect();
-
-        const candidates = container.querySelectorAll(
-            'p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, table, figure, img, svg, video, canvas'
-        );
-
-        for (const node of Array.from(candidates)) {
-            const element = node as HTMLElement;
-            const style = window.getComputedStyle(element);
-            if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity || 1) === 0) {
-                continue;
-            }
-
-            const rect = element.getBoundingClientRect();
-            if (rect.width < 2 || rect.height < 2) continue;
-
-            const left = rect.left - containerRect.left + container.scrollLeft;
-            const right = rect.right - containerRect.left + container.scrollLeft;
-
-            if (right > pageLeft + 6 && left < pageRight - 6) {
-                return false;
-            }
-        }
-
-        return true;
-    }, []);
-
-    // ── Page turning ──
-    const goToPage = useCallback((page: number) => {
-        setCurrentPage(page);
-        currentPageRef.current = page;
-        setDisplayPage(page); // 同步显示页码
-        setSelectionMenu(prev => ({ ...prev, visible: false }));
-    }, []);
-
-    const nextPage = useCallback(() => {
-        if (currentPageRef.current < totalPagesRef.current - 1) {
-            let next = currentPageRef.current + 1;
-            while (next < totalPagesRef.current && isPageLikelyBlank(next)) {
-                next += 1;
-            }
-            if (next < totalPagesRef.current) {
-                goToPage(next);
-                return;
-            }
-
-            const nextIdx = currentSpineIndexRef.current + 1;
-            if (nextIdx < spineItemsRef.current.length) {
-                setCurrentSpineIndex(nextIdx);
-                setCurrentPage(0);
-                currentPageRef.current = 0;
-                loadChapter(nextIdx, false);
-            }
-        } else {
-            // Next chapter
-            const nextIdx = currentSpineIndexRef.current + 1;
-            if (nextIdx < spineItemsRef.current.length) {
-                setCurrentSpineIndex(nextIdx);
-                setCurrentPage(0);
-                currentPageRef.current = 0;
-                loadChapter(nextIdx, false); // 去第一页
-            }
-        }
-    }, [goToPage, loadChapter, isPageLikelyBlank]);
-
-    const prevPage = useCallback(() => {
-        if (currentPageRef.current > 0) {
-            let prev = currentPageRef.current - 1;
-            while (prev >= 0 && isPageLikelyBlank(prev)) {
-                prev -= 1;
-            }
-            if (prev >= 0) {
-                goToPage(prev);
-                return;
-            }
-
-            const prevIdx = currentSpineIndexRef.current - 1;
-            if (prevIdx >= 0) {
-                setCurrentSpineIndex(prevIdx);
-                loadChapter(prevIdx, true);
-            }
-        } else {
-            // Previous chapter, go to last page
-            const prevIdx = currentSpineIndexRef.current - 1;
-            if (prevIdx >= 0) {
-                setCurrentSpineIndex(prevIdx);
-                loadChapter(prevIdx, true); // 去最后一页
-            }
-        }
-    }, [goToPage, loadChapter, isPageLikelyBlank]);
-
     // ── Report chapter change ──
     useEffect(() => {
         if (spineItems.length === 0) return;
@@ -584,75 +459,6 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
             if (progressTimerRef.current) window.clearTimeout(progressTimerRef.current);
         };
     }, [currentSpineIndex, currentPage, totalPages, spineItems, isLoading, bookId, onProgressChange]);
-
-    // ── Keyboard navigation ──
-    useEffect(() => {
-        const handler = (e: KeyboardEvent) => {
-            if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
-                e.preventDefault();
-                prevPage();
-            } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
-                e.preventDefault();
-                nextPage();
-            }
-        };
-        document.addEventListener('keydown', handler);
-        return () => document.removeEventListener('keydown', handler);
-    }, [prevPage, nextPage]);
-
-    // ── Click-to-turn on viewport edges ──
-    useEffect(() => {
-        const viewport = viewportRef.current;
-        if (!viewport) return;
-        let downX = 0, downY = 0;
-        const onDown = (e: MouseEvent) => { downX = e.clientX; downY = e.clientY; };
-        const onUp = (e: MouseEvent) => {
-            if (Math.abs(e.clientX - downX) > 5 || Math.abs(e.clientY - downY) > 5) return;
-            if (window.getSelection()?.toString()) return;
-            const rect = viewport.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            if (x < rect.width * 0.15) prevPage();
-            else if (x > rect.width * 0.85) nextPage();
-        };
-        viewport.addEventListener('mousedown', onDown);
-        viewport.addEventListener('mouseup', onUp);
-        return () => { viewport.removeEventListener('mousedown', onDown); viewport.removeEventListener('mouseup', onUp); };
-    }, [prevPage, nextPage]);
-
-    // ── Selection detection ──
-    useEffect(() => {
-        const viewport = viewportRef.current;
-        if (!viewport) return;
-
-        const handleMouseUp = () => {
-            const sel = window.getSelection();
-            const text = sel?.toString().trim();
-            if (!text || !sel?.rangeCount) return;
-            const range = sel.getRangeAt(0);
-            const rect = range.getBoundingClientRect();
-            setSelectionMenu({
-                visible: true,
-                x: rect.left + rect.width / 2,
-                y: rect.top - 10,
-                text,
-                spineIndex: currentSpineIndexRef.current,
-            });
-        };
-
-        const handleContextMenu = (e: MouseEvent) => {
-            const sel = window.getSelection();
-            if (!sel?.toString().trim()) return;
-            e.preventDefault();
-            handleMouseUp();
-        };
-
-        viewport.addEventListener('mouseup', handleMouseUp);
-        viewport.addEventListener('contextmenu', handleContextMenu);
-        return () => {
-            viewport.removeEventListener('mouseup', handleMouseUp);
-            viewport.removeEventListener('contextmenu', handleContextMenu);
-        };
-    }, []);
 
     // ── jumpToSpine (exposed via ref) ──
     const jumpToSpine = useCallback(async (targetSpineIndex: number, searchText?: string) => {
