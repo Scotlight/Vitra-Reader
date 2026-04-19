@@ -3,14 +3,14 @@ import styles from './LibraryView.module.css'
 
 // ─── 新建分组弹窗 ───────────────────────────────────
 
-interface CreateShelfModalProps {
-    newShelfName: string
-    setNewShelfName: (v: string) => void
+interface CreateGroupModalProps {
+    newGroupName: string
+    setNewGroupName: (v: string) => void
     onClose: () => void
     onCreate: () => void
 }
 
-export const CreateShelfModal = ({ newShelfName, setNewShelfName, onClose, onCreate }: CreateShelfModalProps) => (
+export const CreateGroupModal = ({ newGroupName, setNewGroupName, onClose, onCreate }: CreateGroupModalProps) => (
     <div className={styles.settingsModalOverlay} onClick={onClose}>
         <div className={styles.dialogPanel} onClick={(event) => event.stopPropagation()}>
             <div className={styles.settingsHeader}>
@@ -22,8 +22,8 @@ export const CreateShelfModal = ({ newShelfName, setNewShelfName, onClose, onCre
                 <input
                     className={styles.textInput}
                     type="text"
-                    value={newShelfName}
-                    onChange={(event) => setNewShelfName(event.target.value)}
+                    value={newGroupName}
+                    onChange={(event) => setNewGroupName(event.target.value)}
                 />
             </label>
             <div className={styles.rowActions}>
@@ -36,67 +36,67 @@ export const CreateShelfModal = ({ newShelfName, setNewShelfName, onClose, onCre
 
 // ─── 管理分组弹窗 ───────────────────────────────────
 
-interface ManageShelfModalProps {
-    shelves: GroupItem[]
-    manageSourceShelfId: string
-    setManageSourceShelfId: (v: string) => void
-    manageTargetShelfId: string
-    setManageTargetShelfId: (v: string) => void
+interface ManageGroupModalProps {
+    groups: GroupItem[]
+    manageSourceGroupId: string
+    setManageSourceGroupId: (v: string) => void
+    manageTargetGroupId: string
+    setManageTargetGroupId: (v: string) => void
     onClose: () => void
-    onRename: (shelfId: string, name: string) => void
-    onDissolve: (shelfId: string) => void
+    onRename: (groupId: string, name: string) => void
+    onDissolve: (groupId: string) => void
     onMoveBooks: (from: string, to: string) => void
 }
 
-export const ManageShelfModal = ({
-    shelves,
-    manageSourceShelfId,
-    setManageSourceShelfId,
-    manageTargetShelfId,
-    setManageTargetShelfId,
+export const ManageGroupModal = ({
+    groups,
+    manageSourceGroupId,
+    setManageSourceGroupId,
+    manageTargetGroupId,
+    setManageTargetGroupId,
     onClose,
     onRename,
     onDissolve,
     onMoveBooks,
-}: ManageShelfModalProps) => (
+}: ManageGroupModalProps) => (
     <div className={styles.settingsModalOverlay} onClick={onClose}>
         <div className={styles.dialogPanel} onClick={(event) => event.stopPropagation()}>
             <div className={styles.settingsHeader}>
                 <h3>管理分组</h3>
                 <button className={styles.closeBtn} onClick={onClose}>×</button>
             </div>
-            <div className={styles.manageShelfList}>
-                {shelves.map((shelf) => (
-                    <div key={shelf.id} className={styles.manageShelfRow}>
+            <div className={styles.manageGroupList}>
+                {groups.map((group) => (
+                    <div key={group.id} className={styles.manageGroupRow}>
                         <input
                             className={styles.textInput}
-                            defaultValue={shelf.name}
-                            onBlur={(event) => onRename(shelf.id, event.target.value)}
+                            defaultValue={group.name}
+                            onBlur={(event) => onRename(group.id, event.target.value)}
                         />
-                        <button className={styles.smallBtn} onClick={() => onDissolve(shelf.id)}>解散</button>
+                        <button className={styles.smallBtn} onClick={() => onDissolve(group.id)}>解散</button>
                     </div>
                 ))}
             </div>
-            {shelves.length > 1 && (
+            {groups.length > 1 && (
                 <div className={styles.manageMovePanel}>
                     <label className={styles.settingRow}>
                         <span>来源分组</span>
-                        <select value={manageSourceShelfId} onChange={(event) => setManageSourceShelfId(event.target.value)}>
-                            {shelves.map((shelf) => (
-                                <option key={shelf.id} value={shelf.id}>{shelf.name}</option>
+                        <select value={manageSourceGroupId} onChange={(event) => setManageSourceGroupId(event.target.value)}>
+                            {groups.map((group) => (
+                                <option key={group.id} value={group.id}>{group.name}</option>
                             ))}
                         </select>
                     </label>
                     <label className={styles.settingRow}>
                         <span>目标分组</span>
-                        <select value={manageTargetShelfId} onChange={(event) => setManageTargetShelfId(event.target.value)}>
-                            {shelves.map((shelf) => (
-                                <option key={shelf.id} value={shelf.id}>{shelf.name}</option>
+                        <select value={manageTargetGroupId} onChange={(event) => setManageTargetGroupId(event.target.value)}>
+                            {groups.map((group) => (
+                                <option key={group.id} value={group.id}>{group.name}</option>
                             ))}
                         </select>
                     </label>
                     <div className={styles.rowActions}>
-                        <button className={styles.syncPrimaryBtn} onClick={() => onMoveBooks(manageSourceShelfId, manageTargetShelfId)}>
+                        <button className={styles.syncPrimaryBtn} onClick={() => onMoveBooks(manageSourceGroupId, manageTargetGroupId)}>
                             移动全部图书到目标分组
                         </button>
                     </div>

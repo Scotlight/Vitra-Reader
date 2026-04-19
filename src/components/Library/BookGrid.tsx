@@ -179,7 +179,7 @@ function GridCard({
         'data-library-item': 'true',
         'data-sort-key': sortable ? item.key : undefined,
         'data-sort-context': sortable && sortContextKey ? sortContextKey : undefined,
-        className: `${item.type === 'book' ? styles.card : styles.shelfGroupCard} ${dragHandlers.draggingKey === item.key ? styles.dragSortingCard : ''}`,
+        className: `${item.type === 'book' ? styles.card : styles.groupCard} ${dragHandlers.draggingKey === item.key ? styles.dragSortingCard : ''}`,
         initial: false,
         whileHover: dragHandlers.draggingKey === item.key ? undefined : { y: -5, boxShadow: '0 8px 30px rgba(0,0,0,0.12)' },
         onClickCapture: dragHandlers.onClickCapture,
@@ -200,9 +200,9 @@ function GridCard({
                     event.stopPropagation()
                 }}
             >
-                <div className={styles.shelfGroupCovers}>
+                <div className={styles.groupCovers}>
                     {Array.from({ length: 4 }, (_, index) => item.group.books[index] ?? null).map((book, index) => (
-                        <div key={book?.id ?? `${item.group.id}-placeholder-${index}`} className={styles.shelfGroupCover}>
+                        <div key={book?.id ?? `${item.group.id}-placeholder-${index}`} className={styles.groupCover}>
                             {book ? (
                                 <LazyCoverImage bookId={book.id} format={book.format} alt={book.title} compact />
                             ) : (
@@ -211,7 +211,7 @@ function GridCard({
                         </div>
                     ))}
                 </div>
-                <div className={styles.shelfGroupMeta}>
+                <div className={styles.groupMeta}>
                     <strong>{item.group.name}</strong>
                     <span>{item.group.books.length} 本</span>
                 </div>

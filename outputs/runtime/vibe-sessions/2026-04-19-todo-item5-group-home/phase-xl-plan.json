@@ -1,0 +1,7 @@
+{
+  "stage": "xl_plan",
+  "status": "completed",
+  "grade": "M",
+  "output": "docs/plans/2026-04-19-todo-item5-group-home-execution-plan.md",
+  "reason": "单模块重命名与引用修复，验证链路清晰，不需要子代理并行"
+}

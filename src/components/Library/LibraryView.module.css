@@ -72,7 +72,7 @@
     opacity: 0.9;
 }
 
-.shelfTitle {
+.groupTitle {
     margin-top: 12px;
     font-size: 14px;
     font-weight: 700;
@@ -80,7 +80,7 @@
     padding: 4px 12px;
 }
 
-.shelfTree {
+.groupTree {
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -90,23 +90,23 @@
     padding-right: 4px;
 }
 
-.shelfNode {
+.groupNode {
     display: flex;
     flex-direction: column;
     gap: 2px;
 }
 
-.shelfNodeRow {
+.groupNodeRow {
     display: flex;
     align-items: center;
     border-radius: 10px;
 }
 
-.shelfNodeRowActive {
+.groupNodeRowActive {
     background: rgba(11, 155, 161, 0.18);
 }
 
-.shelfExpandBtn {
+.groupExpandBtn {
     border: none;
     background: transparent;
     color: var(--text-secondary);
@@ -120,11 +120,11 @@
     justify-content: center;
 }
 
-.shelfExpandBtn:hover {
+.groupExpandBtn:hover {
     background: rgba(0, 0, 0, 0.08);
 }
 
-.shelfItem {
+.groupItem {
     border: none;
     background: transparent;
     color: var(--text-primary);
@@ -140,11 +140,11 @@
     text-overflow: ellipsis;
 }
 
-.shelfItem:hover {
+.groupItem:hover {
     background: rgba(0, 0, 0, 0.06);
 }
 
-.shelfChildren {
+.groupChildren {
     margin-left: 28px;
     display: flex;
     flex-direction: column;
@@ -152,7 +152,7 @@
     padding: 2px 0 4px;
 }
 
-.shelfChildBook {
+.groupChildBook {
     border: none;
     background: transparent;
     color: var(--text-secondary);
@@ -166,12 +166,12 @@
     text-overflow: ellipsis;
 }
 
-.shelfChildBook:hover {
+.groupChildBook:hover {
     background: rgba(0, 0, 0, 0.06);
     color: var(--text-primary);
 }
 
-.shelfChildEmpty {
+.groupChildEmpty {
     color: var(--text-secondary);
     font-size: 12px;
     padding: 4px 8px;
@@ -200,9 +200,9 @@
 [data-theme='dark'] .navItem:hover,
 [data-theme='sepia'] .navItem:hover,
 [data-theme='green'] .navItem:hover,
-[data-theme='dark'] .shelfItem:hover,
-[data-theme='sepia'] .shelfItem:hover,
-[data-theme='green'] .shelfItem:hover,
+[data-theme='dark'] .groupItem:hover,
+[data-theme='sepia'] .groupItem:hover,
+[data-theme='green'] .groupItem:hover,
 [data-theme='dark'] .navItemBottom:hover,
 [data-theme='sepia'] .navItemBottom:hover,
 [data-theme='green'] .navItemBottom:hover {
@@ -625,12 +625,12 @@
     color: #f3f6ff;
 }
 
-[data-theme='dark'] .shelfExpandBtn:hover,
-[data-theme='sepia'] .shelfExpandBtn:hover,
-[data-theme='green'] .shelfExpandBtn:hover,
-[data-theme='dark'] .shelfChildBook:hover,
-[data-theme='sepia'] .shelfChildBook:hover,
-[data-theme='green'] .shelfChildBook:hover {
+[data-theme='dark'] .groupExpandBtn:hover,
+[data-theme='sepia'] .groupExpandBtn:hover,
+[data-theme='green'] .groupExpandBtn:hover,
+[data-theme='dark'] .groupChildBook:hover,
+[data-theme='sepia'] .groupChildBook:hover,
+[data-theme='green'] .groupChildBook:hover {
     background: rgba(255, 255, 255, 0.12);
 }
 
@@ -643,7 +643,7 @@
     margin-bottom: 8px;
 }
 
-.shelfDrawer {
+.groupDrawer {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
@@ -654,7 +654,7 @@
     background: var(--panel-bg);
 }
 
-.shelfDrawerItem {
+.groupDrawerItem {
     border: 1px solid var(--border-color);
     background: rgba(255, 255, 255, 0.7);
     border-radius: 999px;
@@ -664,20 +664,20 @@
     color: var(--text-primary);
 }
 
-.shelfDrawerItemActive {
+.groupDrawerItemActive {
     border-color: var(--accent-color);
     color: var(--accent-color);
     font-weight: 700;
 }
 
-.manageShelfList {
+.manageGroupList {
     display: flex;
     flex-direction: column;
     gap: 8px;
     margin-top: 8px;
 }
 
-.manageShelfRow {
+.manageGroupRow {
     display: grid;
     grid-template-columns: 1fr auto;
     gap: 8px;
@@ -703,14 +703,14 @@
     scrollbar-width: thin;
 }
 
-.shelfGroups {
+.groupItems {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 14px;
     margin-bottom: 14px;
 }
 
-.shelfGroupCard {
+.groupCard {
     border: 1px solid var(--border-color);
     background: var(--panel-bg);
     border-radius: 14px;
@@ -720,7 +720,7 @@
     color: var(--text-primary);
 }
 
-.shelfGroupCard:hover {
+.groupCard:hover {
     border-color: var(--accent-color);
     box-shadow: 0 6px 22px rgba(0, 0, 0, 0.12);
 }
@@ -730,13 +730,13 @@
     cursor: grabbing;
 }
 
-.shelfGroupCovers {
+.groupCovers {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
 }
 
-.shelfGroupCover {
+.groupCover {
     aspect-ratio: 3 / 4;
     border-radius: 8px;
     overflow: hidden;
@@ -748,13 +748,13 @@
     font-size: 11px;
 }
 
-.shelfGroupCover img {
+.groupCover img {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
-.shelfGroupMeta {
+.groupMeta {
     margin-top: 10px;
     display: flex;
     align-items: center;
@@ -763,7 +763,7 @@
     font-size: 13px;
 }
 
-.shelfGroupMeta strong {
+.groupMeta strong {
     font-size: 14px;
     font-weight: 700;
 }

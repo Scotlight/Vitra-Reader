@@ -1,0 +1,25 @@
+{
+  "stage": "deep_interview",
+  "run_id": "2026-04-19-todo-item5-group-home",
+  "goal": "完成 TO DO 第5项的剩余落地，统一书架到分组命名并保持交互可用",
+  "deliverable": "Library 组件命名收敛改动 + 构建与定向测试通过 + 可追溯执行收据",
+  "constraints": [
+    "不改变既有业务行为",
+    "保留历史数据兼容键",
+    "改动只覆盖 Library 相关文件"
+  ],
+  "acceptance_criteria": [
+    "组件与样式中 shelf 命名残留被替换为 group 语义",
+    "构建通过",
+    "libraryVirtualGrid 定向测试通过"
+  ],
+  "non_goals": [
+    "不实现第6-8项",
+    "不调整数据库结构"
+  ],
+  "autonomy_mode": "benchmark_autonomous",
+  "inferred_assumptions": [
+    "用户认可右键建分组、混排、长按排序的现有交互逻辑",
+    "本轮核心是把第5项从部分实现推进到完成状态"
+  ]
+}

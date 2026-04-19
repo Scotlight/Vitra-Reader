@@ -10,7 +10,7 @@ import { SettingsPanel } from './SettingsPanel'
 import { BookPropertiesModal } from './BookPropertiesModal'
 import { LibrarySidebar } from './LibrarySidebar'
 import { BookContextMenu } from './BookContextMenu'
-import { CreateShelfModal, ManageShelfModal } from './ShelfModals'
+import { CreateGroupModal, ManageGroupModal } from './GroupModals'
 import { AnnotationList } from './AnnotationList'
 import { BookGrid, type LibraryGridItem } from './BookGrid'
 import searchIcon from '../../assets/icons/search.svg'
@@ -580,21 +580,21 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                 })()}
 
                 {showCreateGroupModal && (
-                    <CreateShelfModal
-                        newShelfName={newGroupName}
-                        setNewShelfName={setNewGroupName}
+                    <CreateGroupModal
+                        newGroupName={newGroupName}
+                        setNewGroupName={setNewGroupName}
                         onClose={() => setShowCreateGroupModal(false)}
                         onCreate={() => void createGroup()}
                     />
                 )}
 
                 {showManageGroupModal && (
-                    <ManageShelfModal
-                        shelves={groups}
-                        manageSourceShelfId={manageSourceGroupId}
-                        setManageSourceShelfId={setManageSourceGroupId}
-                        manageTargetShelfId={manageTargetGroupId}
-                        setManageTargetShelfId={setManageTargetGroupId}
+                    <ManageGroupModal
+                        groups={groups}
+                        manageSourceGroupId={manageSourceGroupId}
+                        setManageSourceGroupId={setManageSourceGroupId}
+                        manageTargetGroupId={manageTargetGroupId}
+                        setManageTargetGroupId={setManageTargetGroupId}
                         onClose={() => setShowManageGroupModal(false)}
                         onRename={(id, name) => void renameGroup(id, name)}
                         onDissolve={(id) => void dissolveGroup(id)}

@@ -1,0 +1,15 @@
+{
+  "stage": "skeleton_check",
+  "run_id": "2026-04-19-todo-item5-group-home",
+  "timestamp": "2026-04-19",
+  "repo": "D:/0010/.A_project/epub reader",
+  "branch": "main",
+  "target_file": "docs/TO DO.md",
+  "target_item": 5,
+  "target_exists": true,
+  "autonomy_mode": "benchmark_autonomous",
+  "notes": [
+    "用户要求继续推进第5项",
+    "实现范围限定在 Library 分组语义收敛与既有交互保持"
+  ]
+}
