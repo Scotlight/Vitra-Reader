@@ -3,26 +3,23 @@ import {
     forwardRef, memo, useImperativeHandle, useMemo
 } from 'react';
 import type { ContentProvider, SpineItemInfo } from '../../engine/core/contentProvider';
-import { ShadowRenderer, ReaderStyleConfig, createWindowedVectorChapterShell, segmentPool } from './ShadowRenderer';
+import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
 import { useVirtualChapterRuntime } from './scrollReader/useVirtualChapterRuntime';
 import { useScrollReaderRefs } from './scrollReader/useScrollReaderRefs';
 import { useChapterUnloader } from './scrollReader/useChapterUnloader';
 import { useScrollHandler } from './scrollReader/useScrollHandler';
+import { useChapterLoader } from './scrollReader/useChapterLoader';
+import { useShadowRenderComplete } from './scrollReader/useShadowRenderComplete';
+import { useAtomicDomCommit } from './scrollReader/useAtomicDomCommit';
+import { useTocJump } from './scrollReader/useTocJump';
 import type { LoadedChapter } from './scrollReader/scrollReaderTypes';
-import {
-    markChapterAsMounted,
-    resolveHighlightSpineIndex,
-    resolveViewportDerivedMetrics,
-} from './scrollReader/scrollReaderHelpers';
+import { resolveHighlightSpineIndex } from './scrollReader/scrollReaderHelpers';
 import {
     PREFETCH_IDLE_TIMEOUT_MS,
     HIGHLIGHT_IDLE_TIMEOUT_MS,
-    SCROLL_HEDGE_EPSILON_PX,
-    INSTANT_SCROLL_BEHAVIOR,
     RANGE_HYDRATION_OVERSCAN_SEGMENTS,
     RANGE_HYDRATION_PRELOAD_MARGIN_PX,
     GLOBAL_VIRTUAL_SEGMENT_BUDGET,
-    PROGRESS_REPORT_EPSILON,
     PHYSICS_FRICTION_NUMERATOR,
     PHYSICS_FRICTION_NO_EASING_OFFSET,
     PHYSICS_FRICTION_MIN,
@@ -52,18 +49,10 @@ import { useScrollInertia } from '../../hooks/useScrollInertia';
 import { useScrollEvents } from '../../hooks/useScrollEvents';
 import { db, type Highlight } from '../../services/storageService';
 import { findTextInDOM, highlightRange } from '../../utils/textFinder';
-import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService';
-import { buildChapterMetaVector } from '../../engine';
 import { cancelIdleTask, scheduleIdleTask } from '../../utils/idleScheduler';
 import { clampNumber } from '../../utils/mathUtils';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
-import { releaseMediaResources } from '../../utils/mediaResourceCleanup';
-import {
-    canRestoreWindowedVectorPlaceholder,
-    computeGlobalVirtualSegmentMountPlan,
-    partitionStyleChangeTargets,
-    shouldBypassShadowQueueForSegmentMetas,
-} from './scrollVectorStrategy';
+import { computeGlobalVirtualSegmentMountPlan } from './scrollVectorStrategy';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──
@@ -125,16 +114,10 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
     const {
         viewportRef,
         chapterListRef,
-        lastScrollTopRef,
-        pipelineRef,
         loadingLockRef,
-        progressTimerRef,
         scrollIdleTimerRef,
         idlePrefetchHandleRef,
         isUserScrollingRef,
-        initialScrollDone,
-        pendingSearchTextRef,
-        jumpGenerationRef,
         chaptersRef,
         spineItemsRef,
         resizeObserverRef,
@@ -145,14 +128,8 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         highlightIdleHandlesRef,
         lastReportedProgressRef,
         pendingProgressSnapshotRef,
-        pendingReadyRef,
-        pendingReadyRafRef,
-        pendingDeltaRef,
-        flushRafRef,
-        unlockAdjustingRafRef,
         ignoreScrollEventRef,
         lastKnownAnchorIndexRef,
-        readerStylesKeyRef,
     } = refs;
 
     const [chapters, setChapters] = useState<LoadedChapter[]>([]);
@@ -230,42 +207,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         easing: smoothConfig.easing !== false,
         reverseWheelDirection: Boolean(smoothConfig.reverseWheelDirection),
     }), [smoothConfig]);
-
-    const requestFlush = useCallback(() => {
-        if (flushRafRef.current !== null) return;
-
-        flushRafRef.current = requestAnimationFrame(() => {
-            flushRafRef.current = null;
-
-            const viewport = viewportRef.current;
-            if (!viewport) {
-                pendingDeltaRef.current = 0;
-                return;
-            }
-
-            const totalDelta = pendingDeltaRef.current;
-            if (Math.abs(totalDelta) <= SCROLL_HEDGE_EPSILON_PX) {
-                pendingDeltaRef.current = 0;
-                return;
-            }
-
-            pendingDeltaRef.current = 0;
-            ignoreScrollEventRef.current = true;
-            const targetTop = viewport.scrollTop + totalDelta;
-            viewport.scrollTo({ top: targetTop, behavior: INSTANT_SCROLL_BEHAVIOR });
-
-            if (unlockAdjustingRafRef.current !== null) {
-                cancelAnimationFrame(unlockAdjustingRafRef.current);
-            }
-
-            unlockAdjustingRafRef.current = requestAnimationFrame(() => {
-                unlockAdjustingRafRef.current = requestAnimationFrame(() => {
-                    unlockAdjustingRafRef.current = null;
-                    ignoreScrollEventRef.current = false;
-                });
-            });
-        });
-    }, []);
 
     const physicsConfig = useMemo(() => {
         const friction = clampNumber(PHYSICS_FRICTION_NUMERATOR / normalizedSmoothConfig.animationTimeMs + (normalizedSmoothConfig.easing ? 0 : PHYSICS_FRICTION_NO_EASING_OFFSET), PHYSICS_FRICTION_MIN, PHYSICS_FRICTION_MAX);
@@ -497,507 +438,53 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
 
     // ── Chapter Loading ──
 
-    const loadChapter = useCallback(async (
-        spineIndex: number,
-        direction: 'prev' | 'next' | 'initial',
-        forceReload = false,
-    ) => {
-        if (loadingLockRef.current.has(spineIndex)) return;
-        const currentSpineItems = spineItemsRef.current;
-        if (spineIndex < 0 || spineIndex >= currentSpineItems.length) return;
-
-        const existingChapter = chaptersRef.current.find(ch => ch.spineIndex === spineIndex);
-        if (existingChapter && existingChapter.status !== 'placeholder' && !forceReload) return;
-        const currentReaderStyleKey = JSON.stringify(readerStyles);
-
-        loadingLockRef.current.add(spineIndex);
-        pipelineRef.current = 'pre-fetching';
-
-        const chapterId = `ch-${spineIndex}`;
-
-        const loadingChapter: LoadedChapter = {
-            spineIndex,
-            id: chapterId,
-            htmlContent: '',
-            htmlFragments: [],
-            externalStyles: existingChapter?.externalStyles || [],
-            segmentMetas: existingChapter?.segmentMetas,
-            vectorStyleKey: existingChapter?.vectorStyleKey ?? currentReaderStyleKey,
-            domNode: null,
-            height: existingChapter?.height || 0,
-            status: 'loading',
-        };
-
-        setChapters(prev => {
-            if (existingChapter) {
-                return prev.map(ch => ch.spineIndex === spineIndex ? loadingChapter : ch);
-            }
-            if (direction === 'prev') return [loadingChapter, ...prev];
-            return [...prev, loadingChapter];
-        });
-
-        try {
-            if (!forceReload && canRestoreWindowedVectorPlaceholder(existingChapter, currentReaderStyleKey)) {
-                const restoredMetas = existingChapter?.segmentMetas;
-                if (restoredMetas && restoredMetas.length > 0) {
-                    const { node, height } = createWindowedVectorChapterShell({
-                        chapterId,
-                        externalStyles: existingChapter.externalStyles,
-                        readerStyles,
-                        segmentMetas: restoredMetas,
-                    });
-                    chapterVectorsRef.current.set(chapterId, buildChapterMetaVector(chapterId, spineIndex, restoredMetas));
-                    setChapters(prev => prev.map(ch => ch.spineIndex === spineIndex ? {
-                        ...loadingChapter,
-                        domNode: node,
-                        height,
-                        status: 'ready',
-                    } : ch));
-                    pipelineRef.current = 'idle';
-                    return;
-                }
-            }
-
-            const html = await provider.extractChapterHtml(spineIndex);
-            let chapterStyles: string[] = [];
-            try {
-                chapterStyles = await provider.extractChapterStyles(spineIndex);
-            } catch {
-                // Styles are optional
-            }
-
-            const preprocessed = await preprocessChapterContent({
-                chapterId,
-                spineIndex,
-                chapterHref: currentSpineItems[spineIndex]?.href,
-                htmlContent: html,
-                externalStyles: chapterStyles,
-                vectorize: true,
-                vectorConfig: {
-                    targetChars: 16_000,
-                    fontSize: readerStyles.fontSize,
-                    pageWidth: readerStyles.pageWidth,
-                    lineHeight: readerStyles.lineHeight,
-                    paragraphSpacing: readerStyles.paragraphSpacing,
-                },
-            });
-
-            const loaded: LoadedChapter = {
-                ...loadingChapter,
-                htmlContent: preprocessed.htmlContent,
-                htmlFragments: preprocessed.htmlFragments,
-                externalStyles: preprocessed.externalStyles,
-                segmentMetas: preprocessed.segmentMetas,
-                vectorStyleKey: currentReaderStyleKey,
-                status: 'shadow-rendering',
-            };
-
-            if (shouldBypassShadowQueueForSegmentMetas(preprocessed.segmentMetas)) {
-                const vectorMetas = preprocessed.segmentMetas || [];
-                const { node, height } = createWindowedVectorChapterShell({
-                    chapterId,
-                    externalStyles: preprocessed.externalStyles,
-                    readerStyles,
-                    segmentMetas: vectorMetas,
-                });
-                chapterVectorsRef.current.set(chapterId, buildChapterMetaVector(chapterId, spineIndex, vectorMetas));
-                setChapters(prev =>
-                    prev.map(ch => ch.spineIndex === spineIndex ? {
-                        ...loaded,
-                        domNode: node,
-                        height,
-                        status: 'ready',
-                    } : ch)
-                );
-                setShadowQueue(prev => prev.filter(ch => ch.spineIndex !== spineIndex));
-                pipelineRef.current = 'idle';
-            } else {
-                // Update in list and add to shadow queue
-                setChapters(prev =>
-                    prev.map(ch => ch.spineIndex === spineIndex ? loaded : ch)
-                );
-                setShadowQueue(prev => [...prev.filter(ch => ch.spineIndex !== spineIndex), loaded]);
-
-                pipelineRef.current = 'rendering-offscreen';
-            }
-        } catch (error) {
-            console.error(`[ScrollReader] Failed to load chapter ${spineIndex}:`, error);
-            if (existingChapter?.status === 'placeholder') {
-                setChapters(prev =>
-                    prev.map(ch => ch.spineIndex === spineIndex ? existingChapter : ch)
-                );
-            } else {
-                setChapters(prev => prev.filter(ch => ch.spineIndex !== spineIndex));
-            }
-            pipelineRef.current = 'idle';
-        } finally {
-            loadingLockRef.current.delete(spineIndex);
-        }
-    }, [provider, readerStyles]);
-
-    useEffect(() => {
-        const nextKey = JSON.stringify(readerStyles);
-        if (readerStylesKeyRef.current === '' || readerStylesKeyRef.current === nextKey) {
-            readerStylesKeyRef.current = nextKey;
-            return;
-        }
-        readerStylesKeyRef.current = nextKey;
-
-        const rerenderTargets = chaptersRef.current.filter((chapter) =>
-            chapter.status === 'mounted' || chapter.status === 'ready'
-        );
-        if (rerenderTargets.length === 0) return;
-
-        const partition = partitionStyleChangeTargets(rerenderTargets);
-        const shadowTargets = partition.shadowRerenderTargets;
-        const vectorTargets = partition.vectorReloadTargets;
-
-        const rerenderIndexes = new Set(shadowTargets.map((chapter) => chapter.spineIndex));
-        const rerenderQueue = shadowTargets.map((chapter) => ({
-            ...chapter,
-            domNode: null,
-            vectorStyleKey: nextKey,
-            status: 'shadow-rendering' as const,
-        }));
-
-        renderedHighlightsRef.current.clear();
-        if (rerenderIndexes.size > 0) {
-            pendingReadyRef.current = pendingReadyRef.current.filter((item) => !rerenderIndexes.has(item.spineIndex));
-            setShadowQueue((prev) => [
-                ...prev.filter((chapter) => !rerenderIndexes.has(chapter.spineIndex)),
-                ...rerenderQueue,
-            ]);
-            setChapters((prev) => prev.map((chapter) =>
-                rerenderIndexes.has(chapter.spineIndex)
-                    ? { ...chapter, domNode: null, vectorStyleKey: nextKey, status: 'shadow-rendering' as const }
-                    : chapter
-            ));
-        }
-
-        vectorTargets.forEach((chapter) => {
-            const direction = chapter.spineIndex < currentSpineIndex
-                ? 'prev'
-                : (chapter.spineIndex > currentSpineIndex ? 'next' : 'initial');
-            void loadChapter(chapter.spineIndex, direction, true);
-        });
-    }, [currentSpineIndex, loadChapter, readerStyles, renderedHighlightsRef]);
-
-    const runPredictivePrefetch = useCallback(() => {
-        if (isUserScrollingRef.current) return;
-
-        const totalSpine = spineItemsRef.current.length;
-        if (totalSpine === 0) return;
-
-        const candidateIndexes = [
-            currentSpineIndex - 1,
-            currentSpineIndex,
-            currentSpineIndex + 1,
-        ].filter((index) => index >= 0 && index < totalSpine);
-
-        candidateIndexes.forEach((index) => {
-            if (loadingLockRef.current.has(index)) return;
-            const existing = chaptersRef.current.find((chapter) => chapter.spineIndex === index);
-            if (existing && existing.status !== 'placeholder') return;
-            void loadChapter(index, index < currentSpineIndex ? 'prev' : 'next');
-        });
-    }, [currentSpineIndex, loadChapter]);
-
-    useEffect(() => {
-        if (!isInitialized) return;
-        scheduleIdlePrefetch(() => {
-            runPredictivePrefetch();
-        });
-        return () => {
-            cancelIdlePrefetch();
-        };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isInitialized, currentSpineIndex, runPredictivePrefetch, scheduleIdlePrefetch, cancelIdlePrefetch]);
-
-    // ── Shadow Render Complete Handler ──
-
-    const handleShadowReady = useCallback((
-        spineIndex: number,
-        node: HTMLElement,
-        height: number,
-    ) => {
-        console.log(`[ScrollReader] Shadow ready: spine ${spineIndex}, height ${height}px`);
-
-        const chapterId = `ch-${spineIndex}`;
-        const ch = chaptersRef.current.find(c => c.spineIndex === spineIndex);
-        const previousHeight = ch?.height ?? 0;
-        const delta = height - previousHeight;
-
-        if (ch?.segmentMetas && ch.segmentMetas.length > 0) {
-            const vector = buildChapterMetaVector(chapterId, spineIndex, ch.segmentMetas);
-            chapterVectorsRef.current.set(chapterId, vector);
-        }
-
-        pendingReadyRef.current.push({ spineIndex, node, height });
-
-        if (pendingReadyRafRef.current === null) {
-            pendingReadyRafRef.current = requestAnimationFrame(() => {
-                pendingReadyRafRef.current = null;
-                const batch = pendingReadyRef.current.splice(0);
-                if (batch.length === 0) return;
-
-                console.log(`[ScrollReader] Flush batch: ${batch.map(b => `spine ${b.spineIndex}`).join(', ')}`);
-
-                const batchIndices = new Set(batch.map(b => b.spineIndex));
-                setShadowQueue(prev => prev.filter(c => !batchIndices.has(c.spineIndex)));
-
-                setChapters(prev => {
-                    let updated = prev;
-                    for (const item of batch) {
-                        const index = updated.findIndex(c => c.spineIndex === item.spineIndex);
-                        if (index < 0) continue;
-                        if (updated[index].status === 'mounted') continue;
-                        if (updated === prev) updated = [...prev];
-                        updated[index] = {
-                            ...updated[index],
-                            domNode: item.node,
-                            height: item.height,
-                            status: 'ready',
-                        };
-                    }
-                    return updated;
-                });
-            });
-        }
-
-        if (spineIndex < lastKnownAnchorIndexRef.current) {
-            pendingDeltaRef.current += delta;
-            requestFlush();
-        }
-    }, [requestFlush]);
-
-    // 组件卸载时取消悬空的 ready-batch rAF，避免在已卸载的组件上调用 setState
-    useEffect(() => {
-        return () => {
-            if (pendingReadyRafRef.current !== null) {
-                cancelAnimationFrame(pendingReadyRafRef.current);
-                pendingReadyRafRef.current = null;
-            }
-            if (flushRafRef.current !== null) {
-                cancelAnimationFrame(flushRafRef.current);
-                flushRafRef.current = null;
-            }
-            if (unlockAdjustingRafRef.current !== null) {
-                cancelAnimationFrame(unlockAdjustingRafRef.current);
-                unlockAdjustingRafRef.current = null;
-            }
-            pendingReadyRef.current = [];
-            pendingDeltaRef.current = 0;
-            ignoreScrollEventRef.current = false;
-        };
-    }, []);
-
-    /** 强制 hydrate 指定段元素（供 jumpToSpine/applyHighlights 使用） */
-    const forceHydrateSegment = useCallback((segmentEl: HTMLElement) => {
-        const state = segmentEl.getAttribute('data-shadow-segment-state');
-        if (state === 'hydrated') return;
-
-        const chapterEl = segmentEl.closest('[data-chapter-id]') as HTMLElement | null;
-        if (!chapterEl) return;
-        const chapterId = chapterEl.getAttribute('data-chapter-id');
-        if (!chapterId) return;
-
-        const vector = chapterVectorsRef.current.get(chapterId);
-        if (!vector) return;
-
-        const segIndex = parseInt(segmentEl.getAttribute('data-shadow-segment-index') || '-1', 10);
-        const meta = vector.segments[segIndex];
-        if (!meta) return;
-
-        // 直接使用段的 htmlContent
-        segmentEl.innerHTML = meta.htmlContent;
-        segmentEl.setAttribute('data-shadow-segment-state', 'hydrated');
-        segmentEl.style.minHeight = '0px';
-    }, []);
-
-    const materializeAllVirtualSegments = useCallback((chapterId: string) => {
-        const runtime = virtualChaptersRef.current.get(chapterId);
-        if (!runtime) return;
-        for (let index = 0; index < runtime.vector.segments.length; index += 1) {
-            mountVirtualSegment(runtime, index);
-        }
-        refreshVirtualChapterLayout(runtime);
-    }, [mountVirtualSegment, refreshVirtualChapterLayout]);
+    const { loadChapter, runPredictivePrefetch } = useChapterLoader(refs, {
+        provider,
+        readerStyles,
+        currentSpineIndex,
+        isInitialized,
+        chapterVectorsRef,
+        renderedHighlightsRef,
+        setChapters,
+        setShadowQueue,
+        scheduleIdlePrefetch,
+        cancelIdlePrefetch,
+    });
 
     // ── Atomic DOM Commit ──
 
-    useLayoutEffect(() => {
-        const viewport = viewportRef.current;
-        const listEl = chapterListRef.current;
-        if (!viewport || !listEl) return;
+    const { requestFlush, commitProgressSnapshot, syncViewportState } = useAtomicDomCommit(refs, {
+        chapters,
+        spineItems,
+        currentSpineIndex,
+        initialScrollOffset,
+        isInitialized,
+        bookId,
+        onProgressChange,
+        onChapterChange,
+        setChapters,
+        setIsInitialized,
+        setCurrentSpineIndex,
+        virtualChaptersRef,
+        cleanupVirtualChapterRuntime,
+        registerVirtualChapterRuntime,
+        mountVirtualSegment,
+        refreshVirtualChapterLayout,
+        observeChapterResizeNodes,
+        unobserveChapterResizeNodes,
+    });
 
-        const readyChapters = chapters.filter(ch => ch.status === 'ready');
-        if (readyChapters.length === 0) return;
+    // ── Shadow Render Complete Handler ──
 
-        readyChapters.forEach(ch => {
-            const existingChapterEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
-            const isInsertion = !existingChapterEl;
-
-            const chapterEl = existingChapterEl || document.createElement('div');
-            if (!existingChapterEl) {
-                chapterEl.setAttribute('data-chapter-id', ch.id);
-                chapterEl.className = styles.chapterBlock;
-            }
-            unobserveChapterResizeNodes(chapterEl);
-            markChapterAsMounted(chapterEl, ch.height);
-            chapterEl.replaceChildren();
-
-            if (ch.domNode) {
-                chapterEl.appendChild(ch.domNode);
-            }
-
-            if (isInsertion) {
-                const targetIndex = chapters.indexOf(ch);
-                const existingNodes = Array.from(listEl.children);
-
-                if (targetIndex === 0 && existingNodes.length > 0) {
-                    listEl.prepend(chapterEl);
-                } else if (targetIndex >= existingNodes.length) {
-                    listEl.appendChild(chapterEl);
-                } else {
-                    listEl.insertBefore(chapterEl, existingNodes[targetIndex] || null);
-                }
-            }
-            observeChapterResizeNodes(chapterEl);
-            if (ch.segmentMetas && shouldBypassShadowQueueForSegmentMetas(ch.segmentMetas)) {
-                registerVirtualChapterRuntime(ch.id, ch.spineIndex, chapterEl);
-            } else {
-                cleanupVirtualChapterRuntime(ch.id);
-            }
-        });
-
-        pipelineRef.current = 'idle';
-
-        setChapters(prev =>
-            prev.map(ch =>
-                ch.status === 'ready' ? { ...ch, status: 'mounted', mountedAt: Date.now() } : ch
-            )
-        );
-
-        if (!initialScrollDone.current && initialScrollOffset > 0) {
-            viewport.scrollTop = initialScrollOffset;
-            lastScrollTopRef.current = viewport.scrollTop;
-            initialScrollDone.current = true;
-        }
-
-        const searchText = pendingSearchTextRef.current;
-        if (searchText) {
-            pendingSearchTextRef.current = null;
-            const mountedChapters = chapters.filter(ch => ch.status === 'ready' || ch.status === 'mounted');
-            for (const ch of mountedChapters) {
-                const el = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
-                if (el) {
-                    const range = findTextInDOM(el, searchText);
-                    if (range) {
-                        const rect = range.getBoundingClientRect();
-                        const vpRect = viewport.getBoundingClientRect();
-                        viewport.scrollTop += rect.top - vpRect.top;
-                        lastScrollTopRef.current = viewport.scrollTop;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (!isInitialized && chapters.some(ch => ch.status === 'ready' || ch.status === 'mounted')) {
-            setIsInitialized(true);
-        }
-        if (virtualSyncRafRef.current === null) {
-            virtualSyncRafRef.current = requestAnimationFrame(() => {
-                virtualSyncRafRef.current = null;
-                const viewportEl = viewportRef.current;
-                if (!viewportEl) return;
-                const scrollTop = viewportEl.scrollTop;
-                const viewportHeight = viewportEl.clientHeight;
-                const runtimes = Array.from(virtualChaptersRef.current.values());
-                const mountPlan = computeGlobalVirtualSegmentMountPlan(
-                    runtimes.map((runtime) => ({
-                        chapterId: runtime.chapterId,
-                        chapterTop: runtime.chapterEl.offsetTop,
-                        vector: runtime.vector,
-                    })),
-                    scrollTop,
-                    viewportHeight,
-                    {
-                        overscanSegments: RANGE_HYDRATION_OVERSCAN_SEGMENTS,
-                        preloadMarginPx: RANGE_HYDRATION_PRELOAD_MARGIN_PX,
-                        globalSegmentBudget: GLOBAL_VIRTUAL_SEGMENT_BUDGET,
-                    },
-                );
-                runtimes.forEach((runtime) => {
-                    const nextIndices = new Set(mountPlan.get(runtime.chapterId) ?? []);
-                    Array.from(nextIndices).sort((a, b) => a - b).forEach((segmentIndex) => {
-                        mountVirtualSegment(runtime, segmentIndex);
-                    });
-                    refreshVirtualChapterLayout(runtime);
-                });
-            });
-        }
-    }, [chapters, cleanupVirtualChapterRuntime, initialScrollOffset, isInitialized, mountVirtualSegment, observeChapterResizeNodes, refreshVirtualChapterLayout, registerVirtualChapterRuntime, unobserveChapterResizeNodes]);
-
-    const commitProgressSnapshot = useCallback((
-        snapshot: { spineIndex: number; progress: number; scrollTop: number } | null,
-    ) => {
-        if (!snapshot || spineItems.length === 0) return;
-
-        const previous = lastReportedProgressRef.current;
-        const progressChanged = !previous
-            || previous.spineIndex !== snapshot.spineIndex
-            || Math.abs(previous.progress - snapshot.progress) >= PROGRESS_REPORT_EPSILON;
-
-        if (!progressChanged) return;
-
-        lastReportedProgressRef.current = {
-            spineIndex: snapshot.spineIndex,
-            progress: snapshot.progress,
-        };
-        onProgressChange?.(snapshot.progress);
-        db.progress.put({
-            bookId,
-            location: `vitra:${snapshot.spineIndex}:${snapshot.scrollTop}`,
-            percentage: snapshot.progress,
-            currentChapter: spineItems[snapshot.spineIndex]?.href || '',
-            updatedAt: Date.now(),
-        }).catch(err => console.warn('[ScrollReader] Progress save failed:', err));
-    }, [spineItems, bookId, onProgressChange]);
-
-    const syncViewportState = useCallback((
-        scrollTop: number,
-        viewportHeight: number,
-        options: { commitProgress?: boolean } = {},
-    ) => {
-        if (spineItems.length === 0) return;
-
-        const listEl = chapterListRef.current;
-        if (!listEl) return;
-
-        const metrics = resolveViewportDerivedMetrics(listEl, scrollTop, viewportHeight, spineItems.length);
-        if (metrics.activeSpineIndex !== null) {
-            lastKnownAnchorIndexRef.current = metrics.activeSpineIndex;
-            if (metrics.activeSpineIndex !== currentSpineIndex) {
-                setCurrentSpineIndex(metrics.activeSpineIndex);
-                if (onChapterChange && spineItems[metrics.activeSpineIndex]) {
-                    onChapterChange(spineItems[metrics.activeSpineIndex].id, spineItems[metrics.activeSpineIndex].href);
-                }
-            }
-        }
-
-        if (metrics.progress !== null && metrics.progressSpineIndex !== null) {
-            const snapshot = {
-                spineIndex: metrics.progressSpineIndex,
-                progress: metrics.progress,
-                scrollTop,
-            };
-            pendingProgressSnapshotRef.current = snapshot;
-            if (options.commitProgress) {
-                commitProgressSnapshot(snapshot);
-            }
-        }
-    }, [spineItems, currentSpineIndex, onChapterChange, commitProgressSnapshot]);
+    const { handleShadowReady, forceHydrateSegment, materializeAllVirtualSegments } = useShadowRenderComplete(refs, {
+        chapterVectorsRef,
+        virtualChaptersRef,
+        mountVirtualSegment,
+        refreshVirtualChapterLayout,
+        setChapters,
+        setShadowQueue,
+        requestFlush,
+    });
 
     // ── Scroll Event Handler ──
 
@@ -1024,148 +511,21 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
 
     // ── TOC Jump ──
 
-    const jumpToSpine = useCallback(async (targetSpineIndex: number, searchText?: string) => {
-        if (targetSpineIndex < 0 || targetSpineIndex >= spineItemsRef.current.length) return;
-
-        // 递增跳转代数，使上一次未完成的跳转自动失效
-        const generation = ++jumpGenerationRef.current;
-
-        cancelIdlePrefetch();
-        isUserScrollingRef.current = false;
-        if (scrollIdleTimerRef.current !== null) {
-            window.clearTimeout(scrollIdleTimerRef.current);
-            scrollIdleTimerRef.current = null;
-        }
-        pendingSearchTextRef.current = searchText || null;
-        initialScrollDone.current = true;
-        stop();
-        if (progressTimerRef.current) {
-            window.clearTimeout(progressTimerRef.current);
-            progressTimerRef.current = null;
-        }
-
-        setCurrentSpineIndex(targetSpineIndex);
-        lastKnownAnchorIndexRef.current = targetSpineIndex;
-        if (onChapterChange && spineItemsRef.current[targetSpineIndex]) {
-            onChapterChange(
-                spineItemsRef.current[targetSpineIndex].id,
-                spineItemsRef.current[targetSpineIndex].href,
-            );
-        }
-
-        // Check if already mounted
-        const existing = chaptersRef.current.find(ch =>
-            ch.spineIndex === targetSpineIndex && ch.status === 'mounted'
-        );
-
-        if (existing) {
-            // Scroll to it
-            const listEl = chapterListRef.current;
-            const viewport = viewportRef.current;
-            if (listEl && viewport) {
-                const domEl = listEl.querySelector(`[data-chapter-id="ch-${targetSpineIndex}"]`) as HTMLElement | null;
-                if (domEl) {
-                    viewport.scrollTop = domEl.offsetTop;
-                    lastScrollTopRef.current = viewport.scrollTop;
-                    syncViewportState(viewport.scrollTop, viewport.clientHeight, { commitProgress: true });
-
-                    requestAnimationFrame(() => {
-                        if (jumpGenerationRef.current !== generation) return;
-                        viewport.scrollTop = domEl.offsetTop;
-                        lastScrollTopRef.current = viewport.scrollTop;
-                        syncViewportState(viewport.scrollTop, viewport.clientHeight, { commitProgress: true });
-                    });
-
-                    // If searchText, find and scroll to it
-                    if (searchText) {
-                        pendingSearchTextRef.current = null;
-                        materializeAllVirtualSegments(existing.id);
-                        // 强制 hydrate 所有 placeholder 段以确保搜索可达
-                        domEl.querySelectorAll('[data-shadow-segment-state="placeholder"]').forEach(seg => {
-                            forceHydrateSegment(seg as HTMLElement);
-                        });
-                        const range = findTextInDOM(domEl, searchText);
-                        if (range) {
-                            const rect = range.getBoundingClientRect();
-                            const vpRect = viewport.getBoundingClientRect();
-                            viewport.scrollTop += rect.top - vpRect.top;
-                            lastScrollTopRef.current = viewport.scrollTop;
-                        }
-                    }
-                }
-            }
-            return;
-        }
-
-        // Clear all chapters and load from the target
-        const viewport = viewportRef.current;
-        if (viewport) {
-            viewport.scrollTop = 0;
-            lastScrollTopRef.current = 0;
-        }
-        const listEl = chapterListRef.current;
-        if (listEl) {
-            resetResizeObservers();
-            // 仅移除手动插入的章节 DOM 节点，不动 React 管理的子节点（如 loading indicator）
-            // innerHTML = '' 会导致 React commitDeletionEffects 时 removeChild 失败
-            const chapterNodes = listEl.querySelectorAll('[data-chapter-id]');
-            chapterNodes.forEach(node => {
-                const el = node as HTMLElement;
-                const chapterId = el.getAttribute('data-chapter-id');
-                if (chapterId) {
-                    cleanupVirtualChapterRuntime(chapterId);
-                }
-                // 释放段池中的段元素
-                el.querySelectorAll('[data-shadow-segment-index]').forEach(seg => {
-                    segmentPool.release(seg as HTMLElement);
-                });
-                releaseMediaResources(el);
-                el.remove();
-            });
-        }
-
-        chaptersRef.current = [];
-        setChapters([]);
-        setShadowQueue([]);
-        loadingLockRef.current.clear();
-        pipelineRef.current = 'idle';
-        setCurrentSpineIndex(targetSpineIndex);
-        lastKnownAnchorIndexRef.current = targetSpineIndex;
-
-        // 跳转代数检查：如果在清理过程中又触发了新的跳转，放弃本次加载
-        if (jumpGenerationRef.current !== generation) return;
-
-        // loadChapter uses chaptersRef (always current), so no stale closure issue
-        loadChapter(targetSpineIndex, 'initial');
-    }, [cancelIdlePrefetch, cleanupVirtualChapterRuntime, forceHydrateSegment, loadChapter, materializeAllVirtualSegments, onChapterChange, resetResizeObservers, stop, syncViewportState]);
-
-    useEffect(() => {
-        const listEl = chapterListRef.current;
-        if (!listEl) return;
-
-        const handlePdfInternalLink = (event: MouseEvent) => {
-            const target = event.target;
-            if (!(target instanceof Element)) return;
-
-            const anchor = target.closest('a[data-pdf-page]');
-            if (!(anchor instanceof HTMLAnchorElement)) return;
-
-            const rawPage = anchor.getAttribute('data-pdf-page');
-            if (!rawPage) return;
-            const targetSpine = Number.parseInt(rawPage, 10);
-            if (!Number.isFinite(targetSpine)) return;
-            if (targetSpine < 0 || targetSpine >= spineItemsRef.current.length) return;
-
-            event.preventDefault();
-            event.stopPropagation();
-            void jumpToSpine(targetSpine);
-        };
-
-        listEl.addEventListener('click', handlePdfInternalLink);
-        return () => {
-            listEl.removeEventListener('click', handlePdfInternalLink);
-        };
-    }, [jumpToSpine]);
+    const { jumpToSpine } = useTocJump(refs, {
+        onChapterChange,
+        setCurrentSpineIndex,
+        setChapters: (next: LoadedChapter[]) => setChapters(next),
+        setShadowQueue: (next: LoadedChapter[]) => setShadowQueue(next),
+        chapterVectorsRef,
+        loadChapter,
+        cleanupVirtualChapterRuntime,
+        forceHydrateSegment,
+        materializeAllVirtualSegments,
+        resetResizeObservers,
+        syncViewportState,
+        cancelIdlePrefetch,
+        stop,
+    });
 
     // Expose jumpToSpine via ref for parent component
     useImperativeHandle(ref, () => ({
