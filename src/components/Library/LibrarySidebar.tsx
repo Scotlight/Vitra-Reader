@@ -5,6 +5,7 @@ import heartIcon from '../../assets/icons/heart.svg'
 import noteIcon from '../../assets/icons/note.svg'
 import highlightIcon from '../../assets/icons/highlight.svg'
 import trashIcon from '../../assets/icons/trash.svg'
+import gridIcon from '../../assets/icons/grid.svg'
 import groupAddIcon from '../../assets/icons/shelf-add.svg'
 import groupManageIcon from '../../assets/icons/shelf-manage.svg'
 import settingsIcon from '../../assets/icons/settings.svg'
@@ -12,7 +13,7 @@ import libraryIcon from '../../assets/icons/library.svg'
 import vitraLogo from '../../assets/icons/vitra-logo.svg'
 import styles from './LibraryView.module.css'
 
-type NavType = 'all' | 'fav' | 'notes' | 'highlight' | 'trash'
+type NavType = 'all' | 'fav' | 'notes' | 'highlight' | 'trash' | 'stats'
 
 interface LibrarySidebarProps {
     activeNav: NavType
@@ -66,6 +67,15 @@ export const LibrarySidebar = ({
             <button className={`${styles.navItem} ${activeNav === 'notes' ? styles.active : ''}`} onClick={() => setActiveNav('notes')}><Icon className={styles.navIcon} src={noteIcon} />我的笔记</button>
             <button className={`${styles.navItem} ${activeNav === 'highlight' ? styles.active : ''}`} onClick={() => setActiveNav('highlight')}><Icon className={styles.navIcon} src={highlightIcon} />我的高亮</button>
             <button className={`${styles.navItem} ${activeNav === 'trash' ? styles.active : ''}`} onClick={() => setActiveNav('trash')}><Icon className={styles.navIcon} src={trashIcon} />我的回收</button>
+            <button
+                className={`${styles.navItem} ${activeNav === 'stats' ? styles.active : ''}`}
+                onClick={() => {
+                    setActiveNav('stats')
+                    setActiveGroupId(null)
+                }}
+            >
+                <Icon className={styles.navIcon} src={gridIcon} />阅读统计
+            </button>
             <div className={styles.groupTitle}>我的分组</div>
             <button className={styles.navItem} onClick={openCreateGroupModal}><Icon className={styles.navIcon} src={groupAddIcon} />新建分组</button>
             <button className={styles.navItem} onClick={openManageGroupModal}><Icon className={styles.navIcon} src={groupManageIcon} />管理分组</button>

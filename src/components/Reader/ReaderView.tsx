@@ -16,6 +16,7 @@ import { contrastRatio } from './readerTheme'
 import { useReaderBookSession } from './useReaderBookSession'
 import { useReaderClock } from './useReaderClock'
 import { useReaderNavigation } from './useReaderNavigation'
+import { useReadingActivityTracker } from './useReadingActivityTracker'
 import styles from './ReaderView.module.css'
 
 interface ReaderViewProps {
@@ -54,6 +55,10 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         pageTurnMode: settings.pageTurnMode,
     })
     const clockText = useReaderClock()
+    const { markActivity } = useReadingActivityTracker({
+        bookId,
+        isReady,
+    })
     const {
         bookmarks,
         deleteBookmark,
@@ -177,6 +182,27 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         tocLength: toc.length,
         tocListRef,
     })
+    useEffect(() => {
+        const recordActiveReading = () => {
+            markActivity()
+        }
+        window.addEventListener('keydown', recordActiveReading, { passive: true })
+        window.addEventListener('wheel', recordActiveReading, { passive: true })
+        window.addEventListener('pointerdown', recordActiveReading, { passive: true })
+        window.addEventListener('touchstart', recordActiveReading, { passive: true })
+        return () => {
+            window.removeEventListener('keydown', recordActiveReading)
+            window.removeEventListener('wheel', recordActiveReading)
+            window.removeEventListener('pointerdown', recordActiveReading)
+            window.removeEventListener('touchstart', recordActiveReading)
+        }
+    }, [markActivity])
+
+    const handleProgressChange = useCallback((progress: number) => {
+        setCurrentProgress(progress)
+        markActivity()
+    }, [markActivity, setCurrentProgress])
+
     const handleChapterChange = useCallback((_label: string, href: string) => {
         setCurrentSectionHref(normalizeTocHref(href))
     }, [])
@@ -258,7 +284,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                             initialScrollOffset={vitraScrollParams.initialScrollOffset}
                             smoothConfig={scrollSmoothConfig}
                             readerStyles={readerStyleConfig}
-                            onProgressChange={setCurrentProgress}
+                            onProgressChange={handleProgressChange}
                             onChapterChange={handleChapterChange}
                             onSelectionSearch={handleSelectionSearch}
                         />
@@ -273,7 +299,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                             initialPage={paginatedParams.initialPage}
                             pageTurnMode={effectivePageTurnMode === 'paginated-double' ? 'paginated-double' : 'paginated-single'}
                             readerStyles={readerStyleConfig}
-                            onProgressChange={setCurrentProgress}
+                            onProgressChange={handleProgressChange}
                             onChapterChange={handleChapterChange}
                             onSelectionSearch={handleSelectionSearch}
                         />

@@ -1,18 +1,20 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useMemo, type MouseEvent as ReactMouseEvent } from 'react'
 import { useReaderSystemFonts } from '../Reader/useReaderSystemFonts'
 import { motion } from 'framer-motion'
 import { useLibraryStore } from '../../stores/useLibraryStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
-import { db, type Highlight, type Bookmark } from '../../services/storageService'
 import { useGroupManager } from '../../hooks/useGroupManager'
-import { applyHomeOrder, buildHomeOrderKey, parseHomeOrderKey } from '../../hooks/groupManagerState'
 import { SettingsPanel } from './SettingsPanel'
 import { BookPropertiesModal } from './BookPropertiesModal'
 import { LibrarySidebar } from './LibrarySidebar'
 import { BookContextMenu } from './BookContextMenu'
 import { CreateGroupModal, ManageGroupModal } from './GroupModals'
 import { AnnotationList } from './AnnotationList'
-import { BookGrid, type LibraryGridItem } from './BookGrid'
+import { BookGrid } from './BookGrid'
+import { ReadingStatsPanel } from './ReadingStatsPanel'
+import { useLibraryDerivedData } from './libraryView/useLibraryDerivedData'
+import { useLibraryMetaState } from './libraryView/useLibraryMetaState'
+import { useLibraryViewState } from './libraryView/useLibraryViewState'
 import searchIcon from '../../assets/icons/search.svg'
 import sortIcon from '../../assets/icons/sort.svg'
 import refreshIcon from '../../assets/icons/refresh.svg'
@@ -20,106 +22,48 @@ import themeIcon from '../../assets/icons/theme.svg'
 import chevronDownIcon from '../../assets/icons/chevron-down.svg'
 import styles from './LibraryView.module.css'
 
-function areStringListsEqual(left: readonly string[], right: readonly string[]): boolean {
-    if (left === right) return true
-    if (left.length !== right.length) return false
-    for (let index = 0; index < left.length; index += 1) {
-        if (left[index] !== right[index]) return false
-    }
-    return true
-}
-
-function areProgressMapsEqual(left: Record<string, number>, right: Record<string, number>): boolean {
-    const leftKeys = Object.keys(left)
-    const rightKeys = Object.keys(right)
-    if (leftKeys.length !== rightKeys.length) return false
-    for (const key of leftKeys) {
-        if (left[key] !== right[key]) return false
-    }
-    return true
-}
-
 export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { location: string; searchText?: string }) => void }) => {
     const { books, importBook, isLoading, loadBooks, removeBook } = useLibraryStore()
     const settings = useSettingsStore()
-    const [keyword, setKeyword] = useState('')
-    const [showSettings, setShowSettings] = useState(false)
-    const [progressMap, setProgressMap] = useState<Record<string, number>>({})
-    const [activeNav, setActiveNav] = useState<'all' | 'fav' | 'notes' | 'highlight' | 'trash'>('all')
-    const [sortMode, setSortMode] = useState<'lastRead' | 'addedAt' | 'title' | 'author'>('lastRead')
     const { systemFonts, loadingFonts } = useReaderSystemFonts()
-    const [favoriteBookIds, setFavoriteBookIds] = useState<string[]>([])
-    const [trashBookIds, setTrashBookIds] = useState<string[]>([])
-    const [noteBookIds, setNoteBookIds] = useState<string[]>([])
-    const [highlightBookIds, setHighlightBookIds] = useState<string[]>([])
-    const [allHighlights, setAllHighlights] = useState<Highlight[]>([])
-    const [allBookmarks, setAllBookmarks] = useState<Bookmark[]>([])
-    const [dialogState, setDialogState] = useState<{
-        open: boolean
-        title: string
-        message: string
-        type: 'info' | 'confirm'
-        confirmText: string
-        cancelText: string
-        onConfirm: (() => Promise<void> | void) | null
-    }>({
-        open: false,
-        title: '提示',
-        message: '',
-        type: 'info',
-        confirmText: '确定',
-        cancelText: '取消',
-        onConfirm: null,
-    })
-    const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; bookId: string | null }>({
-        visible: false,
-        x: 0,
-        y: 0,
-        bookId: null,
-    })
-    const [blankContextMenu, setBlankContextMenu] = useState<{ visible: boolean; x: number; y: number }>({
-        visible: false,
-        x: 0,
-        y: 0,
-    })
-    const [showBookPropertiesModal, setShowBookPropertiesModal] = useState<string | null>(null)
-    const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null)
-    const metaRefreshTaskRef = useRef<Promise<void> | null>(null)
+    const {
+        keyword,
+        setKeyword,
+        showSettings,
+        setShowSettings,
+        activeNav,
+        setActiveNav,
+        sortMode,
+        dialogState,
+        contextMenu,
+        setContextMenu,
+        blankContextMenu,
+        setBlankContextMenu,
+        showBookPropertiesModal,
+        setShowBookPropertiesModal,
+        scrollContainer,
+        setScrollContainer,
+        showInfoDialog,
+        showConfirmDialog,
+        closeDialog,
+        handleDialogConfirm,
+        nextSortMode,
+    } = useLibraryViewState()
 
-    const showInfoDialog = (message: string, title = '提示') => {
-        setDialogState({
-            open: true,
-            title,
-            message,
-            type: 'info',
-            confirmText: '确定',
-            cancelText: '取消',
-            onConfirm: null,
-        })
-    }
-
-    const showConfirmDialog = (message: string, onConfirm: () => Promise<void> | void, title = '请确认') => {
-        setDialogState({
-            open: true,
-            title,
-            message,
-            type: 'confirm',
-            confirmText: '确定',
-            cancelText: '取消',
-            onConfirm,
-        })
-    }
-
-    const closeDialog = () => {
-        setDialogState((prev) => ({ ...prev, open: false, onConfirm: null }))
-    }
-
-    const handleDialogConfirm = async () => {
-        const callback = dialogState.onConfirm
-        closeDialog()
-        if (!callback) return
-        await callback()
-    }
+    const {
+        progressMap,
+        favoriteBookIds,
+        trashBookIds,
+        noteBookIds,
+        highlightBookIds,
+        allHighlights,
+        allBookmarks,
+        persistFavorites,
+        persistTrash,
+        toggleFavorite,
+        moveToTrash,
+        restoreFromTrash,
+    } = useLibraryMetaState()
 
     const trashBookIdSet = useMemo(() => new Set(trashBookIds), [trashBookIds])
 
@@ -165,226 +109,32 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         void loadBooks()
     }, [loadBooks])
 
-    useEffect(() => {
-        const loadAllMeta = async () => {
-            if (metaRefreshTaskRef.current) return metaRefreshTaskRef.current
-
-            const task = (async () => {
-                const [allProgress, favEntry, trashEntry, bookmarks, highlights] = await Promise.all([
-                    db.progress.toArray(),
-                    db.settings.get('favoriteBookIds'),
-                    db.settings.get('trashBookIds'),
-                    db.bookmarks.toArray(),
-                    db.highlights.toArray(),
-                ])
-                const map = allProgress.reduce<Record<string, number>>((acc, item) => {
-                    acc[item.bookId] = Math.round((item.percentage || 0) * 100)
-                    return acc
-                }, {})
-                const favValue = favEntry?.value
-                const nextFavoriteBookIds = Array.isArray(favValue) ? favValue.map((item) => String(item)) : []
-                const trashValue = trashEntry?.value
-                const nextTrashBookIds = Array.isArray(trashValue) ? trashValue.map((item) => String(item)) : []
-                const nextNoteBookIds = Array.from(new Set(bookmarks.map((item) => item.bookId)))
-                const nextHighlightBookIds = Array.from(new Set(highlights.map((item) => item.bookId)))
-
-                setProgressMap((previous) => (areProgressMapsEqual(previous, map) ? previous : map))
-                setFavoriteBookIds((previous) => (areStringListsEqual(previous, nextFavoriteBookIds) ? previous : nextFavoriteBookIds))
-                setTrashBookIds((previous) => (areStringListsEqual(previous, nextTrashBookIds) ? previous : nextTrashBookIds))
-                setNoteBookIds((previous) => (areStringListsEqual(previous, nextNoteBookIds) ? previous : nextNoteBookIds))
-                setHighlightBookIds((previous) => (areStringListsEqual(previous, nextHighlightBookIds) ? previous : nextHighlightBookIds))
-                setAllHighlights(highlights)
-                setAllBookmarks(bookmarks)
-            })().finally(() => {
-                if (metaRefreshTaskRef.current === task) {
-                    metaRefreshTaskRef.current = null
-                }
-            })
-
-            metaRefreshTaskRef.current = task
-            return task
-        }
-
-        void loadAllMeta()
-        const handleFocus = () => {
-            if (document.visibilityState === 'hidden') return
-            void loadAllMeta()
-        }
-        document.addEventListener('visibilitychange', handleFocus)
-        window.addEventListener('focus', handleFocus)
-        return () => {
-            document.removeEventListener('visibilitychange', handleFocus)
-            window.removeEventListener('focus', handleFocus)
-        }
-    }, [])
-
-    useEffect(() => {
-        const closeMenu = () => {
-            setContextMenu({ visible: false, x: 0, y: 0, bookId: null })
-            setBlankContextMenu({ visible: false, x: 0, y: 0 })
-        }
-        document.addEventListener('click', closeMenu)
-        return () => {
-            document.removeEventListener('click', closeMenu)
-        }
-    }, [])
-
-
-    const favoriteBookIdSet = useMemo(() => new Set(favoriteBookIds), [favoriteBookIds])
-    const noteBookIdSet = useMemo(() => new Set(noteBookIds), [noteBookIds])
-    const highlightBookIdSet = useMemo(() => new Set(highlightBookIds), [highlightBookIds])
-
-    const filteredBooks = useMemo(() => {
-        const q = keyword.trim().toLowerCase()
-        const matchesKeyword = (title: string, author: string) => title.toLowerCase().includes(q) || author.toLowerCase().includes(q)
-        const sourceBase = !q
-            ? books
-            : books.filter((book) => {
-            return matchesKeyword(book.title, book.author)
-        })
-        const source = activeNav === 'trash'
-            ? sourceBase.filter((book) => trashBookIdSet.has(book.id))
-            : sourceBase.filter((book) => !trashBookIdSet.has(book.id))
-
-        const navFiltered =
-            activeNav === 'fav'
-                ? source.filter((book) => favoriteBookIdSet.has(book.id))
-                : activeNav === 'notes'
-                    ? source.filter((book) => noteBookIdSet.has(book.id))
-                    : activeNav === 'highlight'
-                        ? source.filter((book) => highlightBookIdSet.has(book.id))
-                        : source
-
-        if (activeNav === 'all' && activeGroupId) {
-            const activeGroupCollection = groupCollections.find((item) => item.id === activeGroupId)
-            const orderedBooks = activeGroupCollection?.books ?? []
-            return !q ? orderedBooks : orderedBooks.filter((book) => matchesKeyword(book.title, book.author))
-        }
-
-        const sorted = [...navFiltered].sort((a, b) => {
-            if (sortMode === 'title') return a.title.localeCompare(b.title, 'zh-CN')
-            if (sortMode === 'author') return a.author.localeCompare(b.author, 'zh-CN')
-            if (sortMode === 'addedAt') return (b.addedAt || 0) - (a.addedAt || 0)
-            return (b.lastReadAt || 0) - (a.lastReadAt || 0)
-        })
-        return sorted
-    }, [books, keyword, sortMode, activeNav, activeGroupId, favoriteBookIdSet, trashBookIdSet, noteBookIdSet, highlightBookIdSet, groupCollections])
-
-    const showMixedHome = activeNav === 'all' && !activeGroupId && keyword.trim() === ''
-
-    const visibleBooks = useMemo(() => {
-        if (!showMixedHome) return filteredBooks
-        return filteredBooks.filter((book) => !groupedBookIdSet.has(book.id))
-    }, [showMixedHome, filteredBooks, groupedBookIdSet])
-
-    const homeItems = useMemo<LibraryGridItem[]>(() => {
-        if (!showMixedHome) return []
-
-        const availableKeys = [
-            ...groupCollections.map((collection) => buildHomeOrderKey('group', collection.id)),
-            ...visibleBooks.map((book) => buildHomeOrderKey('book', book.id)),
-        ]
-        const groupsById = new Map(groupCollections.map((collection) => [collection.id, collection]))
-        const visibleBooksById = new Map(visibleBooks.map((book) => [book.id, book]))
-        const orderedItems: LibraryGridItem[] = []
-
-        applyHomeOrder(availableKeys, homeOrder).forEach((key) => {
-            const parsed = parseHomeOrderKey(key)
-            if (!parsed) return
-
-            if (parsed.type === 'group') {
-                const collection = groupsById.get(parsed.id)
-                if (collection) {
-                    orderedItems.push({ key, type: 'group', group: collection })
-                }
-                return
-            }
-
-            const book = visibleBooksById.get(parsed.id)
-            if (book) {
-                orderedItems.push({ key, type: 'book', book })
-            }
-        })
-
-        return orderedItems
-    }, [showMixedHome, groupCollections, visibleBooks, homeOrder])
-
-    const gridItems = useMemo<LibraryGridItem[]>(() => {
-        if (showMixedHome) return homeItems
-        return visibleBooks.map((book) => ({ key: book.id, type: 'book', book }))
-    }, [showMixedHome, homeItems, visibleBooks])
-
-    const groupedHighlights = useMemo(() => {
-        const map = new Map<string, Highlight[]>()
-        allHighlights.forEach((h) => {
-            if (!map.has(h.bookId)) map.set(h.bookId, [])
-            map.get(h.bookId)!.push(h)
-        })
-        return Array.from(map.entries())
-            .map(([bookId, items]) => ({
-                bookId,
-                bookTitle: bookById.get(bookId)?.title ?? '未知书籍',
-                items: items.sort((a, b) => b.createdAt - a.createdAt),
-            }))
-            .sort((a, b) => b.items[0].createdAt - a.items[0].createdAt)
-    }, [allHighlights, bookById])
-
-    const groupedBookmarks = useMemo(() => {
-        const map = new Map<string, Bookmark[]>()
-        allBookmarks.forEach((b) => {
-            if (!map.has(b.bookId)) map.set(b.bookId, [])
-            map.get(b.bookId)!.push(b)
-        })
-        return Array.from(map.entries())
-            .map(([bookId, items]) => ({
-                bookId,
-                bookTitle: bookById.get(bookId)?.title ?? '未知书籍',
-                items: items.sort((a, b) => b.createdAt - a.createdAt),
-            }))
-            .sort((a, b) => b.items[0].createdAt - a.items[0].createdAt)
-    }, [allBookmarks, bookById])
-
-    const nextSortMode = () => {
-        const order: Array<typeof sortMode> = ['lastRead', 'addedAt', 'title', 'author']
-        const idx = order.indexOf(sortMode)
-        setSortMode(order[(idx + 1) % order.length])
-    }
-
-    const sortModeLabel = sortMode === 'lastRead'
-        ? '最近阅读'
-        : sortMode === 'addedAt'
-            ? '最近导入'
-            : sortMode === 'title'
-                ? '书名'
-                : '作者'
-
-    const persistFavorites = async (next: string[]) => {
-        setFavoriteBookIds(next)
-        await db.settings.put({ key: 'favoriteBookIds', value: next })
-    }
-
-    const persistTrash = async (next: string[]) => {
-        setTrashBookIds(next)
-        await db.settings.put({ key: 'trashBookIds', value: next })
-    }
-
-    const toggleFavorite = async (bookId: string) => {
-        const exists = favoriteBookIds.includes(bookId)
-        const next = exists ? favoriteBookIds.filter((id) => id !== bookId) : [...favoriteBookIds, bookId]
-        await persistFavorites(next)
-    }
-
-    const moveToTrash = async (bookId: string) => {
-        if (trashBookIds.includes(bookId)) return
-        await persistTrash([...trashBookIds, bookId])
-        if (favoriteBookIds.includes(bookId)) {
-            await persistFavorites(favoriteBookIds.filter((id) => id !== bookId))
-        }
-    }
-
-    const restoreFromTrash = async (bookId: string) => {
-        await persistTrash(trashBookIds.filter((id) => id !== bookId))
-    }
+    const {
+        showMixedHome,
+        homeItems,
+        gridItems,
+        groupedHighlights,
+        groupedBookmarks,
+        emptyMessage,
+        statusText,
+        sortModeLabel,
+    } = useLibraryDerivedData({
+        books,
+        keyword,
+        sortMode,
+        activeNav,
+        activeGroupId,
+        favoriteBookIds,
+        trashBookIds,
+        noteBookIds,
+        highlightBookIds,
+        groupCollections,
+        groupedBookIdSet,
+        homeOrder,
+        allHighlights,
+        allBookmarks,
+        bookById,
+    })
 
     const handleBookContextMenu = (event: ReactMouseEvent<HTMLElement>, bookId: string) => {
         event.preventDefault()
@@ -423,28 +173,6 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
             void reorderActiveGroupBooks(sourceKey, targetKey)
         }
     }
-
-    const currentGroupName = activeGroupId
-        ? groups.find((item) => item.id === activeGroupId)?.name ?? '当前分组'
-        : ''
-    const emptyMessage = activeNav === 'fav'
-        ? '还没有加入喜爱的图书。'
-        : activeNav === 'trash'
-            ? '回收站还是空的。'
-            : activeNav === 'all' && activeGroupId
-                ? (keyword.trim() ? `${currentGroupName} 中没有匹配的图书。` : `${currentGroupName} 里还没有图书。`)
-                : activeNav === 'all' && showMixedHome
-                    ? '还没有分组和图书，导入一本书开始阅读吧。'
-                    : keyword.trim()
-                        ? '没有找到匹配的图书。'
-                        : '还没有图书，导入一本书开始阅读吧。'
-    const statusText = activeNav === 'highlight'
-        ? `${allHighlights.length} 条高亮`
-        : activeNav === 'notes'
-            ? `${allBookmarks.length} 条笔记`
-            : showMixedHome
-                ? `${gridItems.length} 项`
-                : `${gridItems.length} 本书`
 
     const handlePermanentDeleteBook = (bookId: string) => {
         showConfirmDialog('确认删除这本书吗？这会删除本地文件和阅读进度。', async () => {
@@ -625,7 +353,9 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                 </div>
 
                 <div ref={setScrollContainer} className={styles.scrollArea} onContextMenu={handleBlankAreaContextMenu}>
-                    {(activeNav === 'highlight' || activeNav === 'notes') ? (
+                    {activeNav === 'stats' ? (
+                        <ReadingStatsPanel />
+                    ) : (activeNav === 'highlight' || activeNav === 'notes') ? (
                         <AnnotationList
                             activeNav={activeNav}
                             groupedHighlights={groupedHighlights}

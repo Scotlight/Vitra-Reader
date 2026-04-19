@@ -1107,3 +1107,236 @@
     color: #e6edf3;
     border-color: rgba(140, 162, 194, 0.45);
 }
+
+.statsPanel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-top: 8px;
+}
+
+.statsHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.statsPeriodTabs,
+.statsChartTabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.statsTabBtn {
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 7px 12px;
+    background: var(--panel-bg);
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.statsTabBtnActive {
+    border-color: var(--accent-color);
+    color: #ffffff;
+    background: var(--accent-color);
+    font-weight: 700;
+}
+
+.statsSummaryCards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+}
+
+.statsCard {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--panel-bg);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.statsCard span {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.statsCard strong {
+    font-size: 18px;
+    color: var(--text-primary);
+}
+
+.statsEmpty {
+    border: 1px dashed var(--border-color);
+    border-radius: 12px;
+    background: var(--panel-bg);
+    color: var(--text-secondary);
+    padding: 20px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.statsHint {
+    border: 1px dashed var(--border-color);
+    border-radius: 10px;
+    background: var(--panel-bg);
+    color: var(--text-secondary);
+    padding: 10px 12px;
+    font-size: 12px;
+}
+
+.statsBarList {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.statsBarRow {
+    display: grid;
+    grid-template-columns: minmax(120px, 2fr) minmax(140px, 5fr) minmax(90px, 1fr);
+    align-items: center;
+    gap: 10px;
+}
+
+.statsBarLabel {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.statsBarTrack {
+    height: 12px;
+    border-radius: 99px;
+    background: rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+}
+
+.statsBarFill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #0b9ba1 0%, #34d399 100%);
+}
+
+.statsBarValue {
+    text-align: right;
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+.statsPieWrap {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.statsPieChart {
+    width: 170px;
+    height: 170px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.statsPieInner {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+}
+
+.statsPieLegend {
+    min-width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+}
+
+.statsLegendItem {
+    display: grid;
+    grid-template-columns: 10px minmax(90px, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.statsLegendDot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.statsLegendText {
+    font-size: 13px;
+    color: var(--text-primary);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.statsLegendValue {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.statsTable {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--panel-bg);
+}
+
+.statsTableHead,
+.statsTableRow {
+    display: grid;
+    grid-template-columns: minmax(180px, 2fr) minmax(90px, 1fr) minmax(80px, 1fr) minmax(100px, 1fr);
+    gap: 8px;
+    padding: 9px 12px;
+    font-size: 13px;
+}
+
+.statsTableHead {
+    font-weight: 700;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.statsTableRow {
+    color: var(--text-secondary);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.statsTableRow:last-child {
+    border-bottom: none;
+}
+
+.statsTableRow span:first-child {
+    color: var(--text-primary);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+[data-theme='dark'] .statsBarTrack,
+[data-theme='sepia'] .statsBarTrack,
+[data-theme='green'] .statsBarTrack {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme='dark'] .statsTableRow,
+[data-theme='sepia'] .statsTableRow,
+[data-theme='green'] .statsTableRow {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}

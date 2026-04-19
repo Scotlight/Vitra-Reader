@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import type { BookFormat } from '../engine/core/contentProvider'
 
-// Dexie schema 版本约定：当前最高版本 5；下次修改 schema 必须从 6 开始，并同步更新本注释中的最高版本号。
+// Dexie schema 版本约定：当前最高版本 6；下次修改 schema 必须从 7 开始，并同步更新本注释中的最高版本号。
 
 // ─── Data Models ────────────────────────────────────────────
 
@@ -66,6 +66,14 @@ export interface TranslationCacheEntry {
     expiresAt: number
 }
 
+export interface ReadingStatsDaily {
+    id: string               // `${dateKey}::${bookId}`
+    dateKey: string          // YYYY-MM-DD（本地日期）
+    bookId: string
+    activeMs: number
+    updatedAt: number
+}
+
 // ─── Database ───────────────────────────────────────────────
 
 class ReaderDatabase extends Dexie {
@@ -75,6 +83,7 @@ class ReaderDatabase extends Dexie {
     bookmarks!: Table<Bookmark>
     highlights!: Table<Highlight>
     translationCache!: Table<TranslationCacheEntry>
+    readingStatsDaily!: Table<ReadingStatsDaily>
     settings!: Table<{ key: string; value: unknown }>
 
     constructor() {
@@ -123,6 +132,16 @@ class ReaderDatabase extends Dexie {
                 if (book.originalDescription === undefined) book.originalDescription = book.description || ''
                 if (book.originalCover === undefined) book.originalCover = book.cover || ''
             })
+        })
+        this.version(6).stores({
+            books: 'id, title, author, addedAt, lastReadAt',
+            bookFiles: 'id',
+            progress: 'bookId',
+            bookmarks: 'id, bookId, createdAt',
+            highlights: 'id, bookId, cfiRange, createdAt',
+            translationCache: 'key, provider, createdAt, lastAccessAt, expiresAt',
+            readingStatsDaily: 'id, dateKey, bookId, updatedAt',
+            settings: 'key',
         })
     }
 }

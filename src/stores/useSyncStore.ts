@@ -1,5 +1,14 @@
 import { create } from 'zustand'
-import { db, type BookMeta, type BookFile, type ReadingProgress, type Bookmark, type Highlight } from '../services/storageService'
+import {
+    db,
+    type BookMeta,
+    type BookFile,
+    type ReadingProgress,
+    type Bookmark,
+    type Highlight,
+    type ReadingStatsDaily,
+} from '../services/storageService'
+import { loadReadingStatsRowsForSync } from '../services/readingStatsService'
 
 export type SyncMode = 'full' | 'data' | 'files'
 export type RestoreMode = 'auto' | SyncMode
@@ -120,6 +129,7 @@ interface SyncPayloadShape {
     timestamp?: number
     books?: unknown
     progress?: unknown
+    readingStatsDaily?: unknown
     bookmarks?: unknown
     highlights?: unknown
     settings?: unknown
@@ -134,15 +144,17 @@ async function buildUploadPayload(syncMode: SyncMode, timestamp: number): Promis
     }
 
     if (syncMode === 'data' || syncMode === 'full') {
-        const [books, progress, bookmarks, highlights, settings] = await Promise.all([
+        const [books, progress, readingStatsDaily, bookmarks, highlights, settings] = await Promise.all([
             db.books.toArray(),
             db.progress.toArray(),
+            loadReadingStatsRowsForSync(timestamp),
             db.bookmarks.toArray(),
             db.highlights.toArray(),
             db.settings.toArray(),
         ])
         payload.books = books
         payload.progress = progress
+        payload.readingStatsDaily = readingStatsDaily
         payload.bookmarks = bookmarks
         payload.highlights = highlights
         payload.settings = settings.filter((s: { key: string }) => !SENSITIVE_SETTINGS_KEYS.has(s.key))
@@ -225,6 +237,7 @@ async function applyDownloadedPayload(
             await Promise.all([
                 db.books.clear(),
                 db.progress.clear(),
+                db.readingStatsDaily.clear(),
                 db.bookmarks.clear(),
                 db.highlights.clear(),
             ])
@@ -236,6 +249,7 @@ async function applyDownloadedPayload(
 
     const books = validateSyncArray<{ id: string }>(payload.books, 'id')
     const progress = validateSyncArray<{ bookId: string }>(payload.progress, 'bookId')
+    const readingStatsDaily = validateSyncArray<{ id: string }>(payload.readingStatsDaily, 'id')
     const bookmarks = validateSyncArray<{ id: string }>(payload.bookmarks, 'id')
     const highlights = validateSyncArray<{ id: string }>(payload.highlights, 'id')
     const settings = validateSyncArray<{ key: string; value: unknown }>(payload.settings, 'key')
@@ -243,6 +257,7 @@ async function applyDownloadedPayload(
 
     if (applyData && books) await db.books.bulkPut(books as BookMeta[])
     if (applyData && progress) await db.progress.bulkPut(progress as ReadingProgress[])
+    if (applyData && readingStatsDaily) await db.readingStatsDaily.bulkPut(readingStatsDaily as ReadingStatsDaily[])
     if (applyData && bookmarks) await db.bookmarks.bulkPut(bookmarks as Bookmark[])
     if (applyData && highlights) await db.highlights.bulkPut(highlights as Highlight[])
     if (applyData && settings) await db.settings.bulkPut(settings as { key: string; value: unknown }[])
