@@ -1,25 +1,18 @@
 import { useEffect, useMemo, type MouseEvent as ReactMouseEvent } from 'react'
 import { useReaderSystemFonts } from '../Reader/useReaderSystemFonts'
-import { motion } from 'framer-motion'
 import { useLibraryStore } from '../../stores/useLibraryStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { useGroupManager } from '../../hooks/useGroupManager'
-import { SettingsPanel } from './SettingsPanel'
-import { BookPropertiesModal } from './BookPropertiesModal'
 import { LibrarySidebar } from './LibrarySidebar'
 import { BookContextMenu } from './BookContextMenu'
-import { CreateGroupModal, ManageGroupModal } from './GroupModals'
 import { AnnotationList } from './AnnotationList'
 import { BookGrid } from './BookGrid'
 import { ReadingStatsPanel } from './ReadingStatsPanel'
 import { useLibraryDerivedData } from './libraryView/useLibraryDerivedData'
 import { useLibraryMetaState } from './libraryView/useLibraryMetaState'
 import { useLibraryViewState } from './libraryView/useLibraryViewState'
-import searchIcon from '../../assets/icons/search.svg'
-import sortIcon from '../../assets/icons/sort.svg'
-import refreshIcon from '../../assets/icons/refresh.svg'
-import themeIcon from '../../assets/icons/theme.svg'
-import chevronDownIcon from '../../assets/icons/chevron-down.svg'
+import { LibraryTopbar } from './libraryView/LibraryTopbar'
+import { LibraryDialogs } from './libraryView/LibraryDialogs'
 import styles from './LibraryView.module.css'
 
 export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { location: string; searchText?: string }) => void }) => {
@@ -231,10 +224,6 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         }
     }
 
-    const Icon = ({ src, className }: { src: string; className?: string }) => (
-        <img className={className} src={src} alt="" />
-    )
-
     return (
         <div className={styles.libraryContainer}>
             <LibrarySidebar
@@ -247,106 +236,45 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
             />
 
             <section className={styles.content}>
-                <header className={styles.topbar}>
-                    <div className={styles.searchWrap}>
-                        <input
-                            className={styles.searchInput}
-                            type="search"
-                            name="library-search"
-                            aria-label="搜索我的书库"
-                            placeholder="搜索我的书库"
-                            value={keyword}
-                            onChange={(event) => setKeyword(event.target.value)}
-                        />
-                        <Icon className={styles.searchIcon} src={searchIcon} />
-                    </div>
+                <LibraryTopbar
+                    keyword={keyword}
+                    sortModeLabel={sortModeLabel}
+                    isLoading={isLoading}
+                    onKeywordChange={setKeyword}
+                    onNextSortMode={nextSortMode}
+                    onRefresh={() => void loadBooks()}
+                    onToggleTheme={() => settings.updateSetting('themeId', settings.themeId === 'dark' ? 'light' : 'dark')}
+                    onImport={() => void handleImport()}
+                />
 
-                    <div className={styles.actions}>
-                        <button className={styles.iconBtn} title={`排序：${sortModeLabel}`} onClick={nextSortMode}>
-                            <Icon className={styles.actionIcon} src={sortIcon} />
-                            <span>{sortModeLabel}</span>
-                        </button>
-                        <button className={styles.iconBtn} title="刷新" onClick={() => void loadBooks()}><Icon className={styles.actionIcon} src={refreshIcon} /></button>
-                        <button
-                            className={styles.iconBtn}
-                            title="主题切换"
-                            onClick={() => settings.updateSetting('themeId', settings.themeId === 'dark' ? 'light' : 'dark')}
-                        >
-                            <Icon className={styles.actionIcon} src={themeIcon} />
-                        </button>
-                        <motion.button
-                            className={styles.importBtn}
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.97 }}
-                            onClick={handleImport}
-                            disabled={isLoading}
-                        >
-                            {isLoading ? '导入中...' : '导入图书'}
-                            <Icon className={styles.importArrow} src={chevronDownIcon} />
-                        </motion.button>
-                    </div>
-                </header>
-
-                {showSettings && (
-                    <SettingsPanel
-                        systemFonts={systemFonts}
-                        loadingFonts={loadingFonts}
-                        onClose={() => setShowSettings(false)}
-                    />
-                )}
-
-                {showBookPropertiesModal && (() => {
-                    const book = books.find((item) => item.id === showBookPropertiesModal)
-                    return book ? (
-                        <BookPropertiesModal
-                            book={book}
-                            books={books}
-                            onClose={() => setShowBookPropertiesModal(null)}
-                            onSaved={loadBooks}
-                        />
-                    ) : null
-                })()}
-
-                {showCreateGroupModal && (
-                    <CreateGroupModal
-                        newGroupName={newGroupName}
-                        setNewGroupName={setNewGroupName}
-                        onClose={() => setShowCreateGroupModal(false)}
-                        onCreate={() => void createGroup()}
-                    />
-                )}
-
-                {showManageGroupModal && (
-                    <ManageGroupModal
-                        groups={groups}
-                        manageSourceGroupId={manageSourceGroupId}
-                        setManageSourceGroupId={setManageSourceGroupId}
-                        manageTargetGroupId={manageTargetGroupId}
-                        setManageTargetGroupId={setManageTargetGroupId}
-                        onClose={() => setShowManageGroupModal(false)}
-                        onRename={(id, name) => void renameGroup(id, name)}
-                        onDissolve={(id) => void dissolveGroup(id)}
-                        onMoveBooks={(from, to) => void moveGroupBooks(from, to)}
-                    />
-                )}
-
-                {dialogState.open && (
-                    <div className={styles.settingsModalOverlay} onClick={closeDialog}>
-                        <div className={styles.dialogPanel} onClick={(event) => event.stopPropagation()}>
-                            <div className={styles.settingsHeader}>
-                                <h3>{dialogState.title}</h3>
-                                <button className={styles.closeBtn} onClick={closeDialog}>×</button>
-                            </div>
-                            <p className={styles.dialogMessage}>{dialogState.message}</p>
-                            <div className={styles.rowActions}>
-                                {dialogState.type === 'confirm' && (
-                                    <button className={styles.smallBtn} onClick={closeDialog}>{dialogState.cancelText}</button>
-                                )}
-                                <button className={styles.syncPrimaryBtn} onClick={() => void handleDialogConfirm()}>{dialogState.confirmText}</button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                <LibraryDialogs
+                    systemFonts={systemFonts}
+                    loadingFonts={loadingFonts}
+                    showSettings={showSettings}
+                    onCloseSettings={() => setShowSettings(false)}
+                    books={books}
+                    showBookPropertiesModal={showBookPropertiesModal}
+                    onCloseBookProperties={() => setShowBookPropertiesModal(null)}
+                    onSavedBookProperties={loadBooks}
+                    showCreateGroupModal={showCreateGroupModal}
+                    newGroupName={newGroupName}
+                    setNewGroupName={setNewGroupName}
+                    onCloseCreateGroupModal={() => setShowCreateGroupModal(false)}
+                    onCreateGroup={() => void createGroup()}
+                    showManageGroupModal={showManageGroupModal}
+                    groups={groups}
+                    manageSourceGroupId={manageSourceGroupId}
+                    setManageSourceGroupId={setManageSourceGroupId}
+                    manageTargetGroupId={manageTargetGroupId}
+                    setManageTargetGroupId={setManageTargetGroupId}
+                    onCloseManageGroupModal={() => setShowManageGroupModal(false)}
+                    onRenameGroup={(id, name) => void renameGroup(id, name)}
+                    onDissolveGroup={(id) => void dissolveGroup(id)}
+                    onMoveGroupBooks={(from, to) => void moveGroupBooks(from, to)}
+                    dialogState={dialogState}
+                    onCloseDialog={closeDialog}
+                    onConfirmDialog={() => void handleDialogConfirm()}
+                />
 
                 <div className={styles.statusLine}>
                     <span>{statusText}</span>
