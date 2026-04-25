@@ -16,6 +16,7 @@ import { useHighlightAndSelection } from './scrollReader/useHighlightAndSelectio
 import { useVirtualSegmentSync } from './scrollReader/useVirtualSegmentSync';
 import { useChapterResizeObserver } from './scrollReader/useChapterResizeObserver';
 import { useIdlePrefetch } from './scrollReader/useIdlePrefetch';
+import { useBookHighlights } from './scrollReader/useBookHighlights';
 import type { LoadedChapter } from './scrollReader/scrollReaderTypes';
 import { resolveHighlightSpineIndex } from './scrollReader/scrollReaderHelpers';
 import {
@@ -46,7 +47,7 @@ import {
 } from './scrollReader/scrollReaderConstants';
 import { useScrollInertia } from '../../hooks/useScrollInertia';
 import { useScrollEvents } from '../../hooks/useScrollEvents';
-import { db, type Highlight } from '../../services/storageService';
+import { type Highlight } from '../../services/storageService';
 import { cancelIdleTask } from '../../utils/idleScheduler';
 import { clampNumber } from '../../utils/mathUtils';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
@@ -126,9 +127,34 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
     const [chapters, setChapters] = useState<LoadedChapter[]>([]);
     const [spineItems, setSpineItems] = useState<SpineItemInfo[]>([]);
     const [currentSpineIndex, setCurrentSpineIndex] = useState(initialSpineIndex);
-
     const [isInitialized, setIsInitialized] = useState(false);
-    const [highlights, setHighlights] = useState<Highlight[]>([]);
+
+    // ── Highlights ──
+
+    const { highlights, handleHighlightCreated } = useBookHighlights({
+        bookId,
+        highlightDirtyChaptersRef,
+        lastReportedProgressRef,
+        pendingProgressSnapshotRef,
+    });
+
+    // ── Selection Menu (shared hook) ──
+    const getHighlightContainer = useCallback((spineIndex: number): HTMLElement | null => {
+        const listEl = chapterListRef.current;
+        if (!listEl) return null;
+        return listEl.querySelector(`[data-chapter-id="ch-${spineIndex}"]`) as HTMLElement | null;
+    }, []);
+
+    const {
+        selectionMenu, setSelectionMenu,
+        renderedHighlightsRef,
+        renderSelectionUI,
+    } = useSelectionMenu({ bookId, onSelectionSearch, getHighlightContainer, onHighlightCreated: handleHighlightCreated });
+
+    // Clear rendered highlights cache when book changes
+    useEffect(() => {
+        renderedHighlightsRef.current.clear();
+    }, [bookId, renderedHighlightsRef]);
 
     const highlightsBySpineIndex = useMemo(() => {
         const grouped = new Map<number, Highlight[]>();
@@ -142,51 +168,12 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         return grouped;
     }, [highlights]);
 
-    const handleHighlightCreated = useCallback((highlight: Highlight) => {
-        setHighlights((prev) => prev.some((item) => item.id === highlight.id) ? prev : [...prev, highlight]);
-    }, []);
-
-    // ── Selection Menu (shared hook) ──
-    const getHighlightContainer = useCallback((spineIndex: number): HTMLElement | null => {
-        const listEl = chapterListRef.current;
-        if (!listEl) return null;
-        return listEl.querySelector(`[data-chapter-id="ch-${spineIndex}"]`) as HTMLElement | null;
-    }, []);
-    const {
-        selectionMenu, setSelectionMenu,
-        renderedHighlightsRef,
-        renderSelectionUI,
-    } = useSelectionMenu({ bookId, onSelectionSearch, getHighlightContainer, onHighlightCreated: handleHighlightCreated });
     const shadowResourceExists = useCallback((url: string) => {
         return provider.isAssetUrlAvailable?.(url) ?? true;
     }, [provider]);
 
     // Keep refs in sync with state
     chaptersRef.current = chapters;
-
-    useEffect(() => {
-        let disposed = false;
-        renderedHighlightsRef.current.clear();
-        highlightDirtyChaptersRef.current.clear();
-        lastReportedProgressRef.current = null;
-        pendingProgressSnapshotRef.current = null;
-        setHighlights([]);
-
-        db.highlights.where('bookId').equals(bookId).toArray()
-            .then((loaded) => {
-                if (disposed) return;
-                setHighlights(loaded);
-            })
-            .catch((error) => {
-                if (!disposed) {
-                    console.warn('[ScrollReader] Highlight preload failed:', error);
-                }
-            });
-
-        return () => {
-            disposed = true;
-        };
-    }, [bookId, renderedHighlightsRef]);
 
     const normalizedSmoothConfig = useMemo(() => ({
         enabled: smoothConfig.enabled !== false,
