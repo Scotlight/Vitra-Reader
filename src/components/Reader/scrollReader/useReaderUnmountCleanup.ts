@@ -2,13 +2,13 @@ import { useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import { cancelIdleTask } from '../../../utils/idleScheduler';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
+import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 
 export function useReaderUnmountCleanup(
     refs: ScrollReaderRefs,
     deps: {
         cancelIdlePrefetch: () => void;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        virtualChaptersRef: MutableRefObject<Map<string, any>>;
+        virtualChaptersRef: MutableRefObject<Map<string, VirtualChapterRuntime>>;
     },
 ) {
     const { scrollIdleTimerRef, highlightIdleHandlesRef, virtualSyncRafRef } = refs;
