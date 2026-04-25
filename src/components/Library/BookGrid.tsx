@@ -10,9 +10,8 @@ import {
 } from 'react'
 import { motion } from 'framer-motion'
 import type { BookMeta } from '../../services/storageService'
-import { getBookCover } from '../../services/storageService'
 import type { GroupCollection } from '../../hooks/useGroupManager'
-import { BookFormatPlaceholder } from './BookFormatPlaceholder'
+import { BookGridCard, type DragHandlers } from './bookGrid/BookGridCard'
 import { buildVirtualGridMetrics, chunkItemsIntoRows, resolveVisibleVirtualRows } from './libraryVirtualGrid'
 import styles from './LibraryView.module.css'
 
@@ -95,155 +94,6 @@ function resolveSortTargetKey(clientX: number, clientY: number, sortContextKey: 
 
     if (!target || target.dataset.sortContext !== sortContextKey) return null
     return target.dataset.sortKey || null
-}
-
-const bookCoverCache = new Map<string, string | null>()
-
-function LazyCoverImage({ bookId, format, alt, compact }: { bookId: string; format?: string; alt: string; compact?: boolean }) {
-    const [cover, setCover] = useState<string | null>(() => bookCoverCache.get(bookId) ?? null)
-    const [loaded, setLoaded] = useState(() => Boolean(bookCoverCache.get(bookId)))
-
-    useEffect(() => {
-        let cancelled = false
-        const cachedCover = bookCoverCache.has(bookId) ? (bookCoverCache.get(bookId) ?? null) : null
-        if (cachedCover) {
-            setCover(cachedCover)
-            setLoaded(true)
-        } else if (bookCoverCache.has(bookId)) {
-            setCover(null)
-            setLoaded(false)
-        }
-
-        getBookCover(bookId).then((url) => {
-            if (cancelled) return
-            const nextCover = url ?? null
-            const previousCachedCover = bookCoverCache.has(bookId) ? (bookCoverCache.get(bookId) ?? null) : null
-            bookCoverCache.set(bookId, nextCover)
-            setCover((previous) => (previous === nextCover ? previous : nextCover))
-            setLoaded(Boolean(nextCover) && previousCachedCover === nextCover)
-        })
-        return () => { cancelled = true }
-    }, [bookId])
-
-    if (!cover) return <BookFormatPlaceholder format={format} compact={compact} />
-    return (
-        <img
-            src={cover}
-            alt={alt}
-            loading="lazy"
-            decoding="async"
-            className={compact ? undefined : styles.coverImage}
-            style={{ opacity: loaded ? 1 : 0, transition: 'opacity 0.15s', width: '100%', height: '100%', objectFit: 'cover' }}
-            onLoad={() => setLoaded(true)}
-            onError={() => {
-                bookCoverCache.set(bookId, null)
-                setCover(null)
-                setLoaded(false)
-            }}
-        />
-    )
-}
-
-interface DragHandlers {
-    draggingKey: string | null
-    onClickCapture: (event: ReactMouseEvent<HTMLElement>) => void
-    onPointerDown: (event: ReactPointerEvent<HTMLElement>, key: string) => void
-    onPointerMove: (event: ReactPointerEvent<HTMLElement>) => void
-    onPointerUp: (event: ReactPointerEvent<HTMLElement>) => void
-    onPointerCancel: (event: ReactPointerEvent<HTMLElement>) => void
-}
-
-interface GridCardProps {
-    item: LibraryGridItem
-    progressMap: Record<string, number>
-    onOpenBook: (id: string) => void
-    onOpenGroup: (id: string) => void
-    onContextMenu: (event: ReactMouseEvent<HTMLElement>, bookId: string) => void
-    sortable: boolean
-    sortContextKey: string | null
-    dragHandlers: DragHandlers
-}
-
-function GridCard({
-    item,
-    progressMap,
-    onOpenBook,
-    onOpenGroup,
-    onContextMenu,
-    sortable,
-    sortContextKey,
-    dragHandlers,
-}: GridCardProps) {
-    const commonProps = {
-        'data-virtual-card': 'true',
-        'data-library-item': 'true',
-        'data-sort-key': sortable ? item.key : undefined,
-        'data-sort-context': sortable && sortContextKey ? sortContextKey : undefined,
-        className: `${item.type === 'book' ? styles.card : styles.groupCard} ${dragHandlers.draggingKey === item.key ? styles.dragSortingCard : ''}`,
-        initial: false,
-        whileHover: dragHandlers.draggingKey === item.key ? undefined : { y: -5, boxShadow: '0 8px 30px rgba(0,0,0,0.12)' },
-        onClickCapture: dragHandlers.onClickCapture,
-        onPointerDown: sortable ? (event: ReactPointerEvent<HTMLElement>) => dragHandlers.onPointerDown(event, item.key) : undefined,
-        onPointerMove: sortable ? dragHandlers.onPointerMove : undefined,
-        onPointerUp: sortable ? dragHandlers.onPointerUp : undefined,
-        onPointerCancel: sortable ? dragHandlers.onPointerCancel : undefined,
-    } satisfies Record<string, unknown>
-
-    if (item.type === 'group') {
-        return (
-            <motion.div
-                {...commonProps}
-                title={`${item.group.name}（${item.group.books.length} 本）`}
-                onClick={() => onOpenGroup(item.group.id)}
-                onContextMenu={(event: ReactMouseEvent<HTMLElement>) => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                }}
-            >
-                <div className={styles.groupCovers}>
-                    {Array.from({ length: 4 }, (_, index) => item.group.books[index] ?? null).map((book, index) => (
-                        <div key={book?.id ?? `${item.group.id}-placeholder-${index}`} className={styles.groupCover}>
-                            {book ? (
-                                <LazyCoverImage bookId={book.id} format={book.format} alt={book.title} compact />
-                            ) : (
-                                <BookFormatPlaceholder compact />
-                            )}
-                        </div>
-                    ))}
-                </div>
-                <div className={styles.groupMeta}>
-                    <strong>{item.group.name}</strong>
-                    <span>{item.group.books.length} 本</span>
-                </div>
-            </motion.div>
-        )
-    }
-
-    const { book } = item
-    const progress = progressMap[book.id] ?? 0
-
-    return (
-        <motion.div
-            {...commonProps}
-            onClick={() => onOpenBook(book.id)}
-            onContextMenu={(event: ReactMouseEvent<HTMLElement>) => onContextMenu(event, book.id)}
-        >
-            <div className={styles.coverWrapper}>
-                <LazyCoverImage bookId={book.id} format={book.format} alt={book.title} />
-                <div className={styles.cardOverlay} />
-            </div>
-            <div className={styles.meta}>
-                <h3 className={styles.title} title={book.title}>{book.title}</h3>
-                <p className={styles.author}>{book.author || 'Unknown'}</p>
-                <div className={styles.progressRow}>
-                    <span>{progress}%</span>
-                </div>
-                <div className={styles.progressTrack}>
-                    <div className={styles.progressFill} style={{ width: `${progress}%` }} />
-                </div>
-            </div>
-        </motion.div>
-    )
 }
 
 interface VirtualItemGridProps {
@@ -552,7 +402,7 @@ function VirtualItemGrid({
         return (
             <div ref={probeGridRef} className={styles.grid} data-testid="book-grid-probe">
                 {probeItems.map((item) => (
-                    <GridCard
+                    <BookGridCard
                         key={item.key}
                         item={item}
                         progressMap={progressMap}
@@ -591,7 +441,7 @@ function VirtualItemGrid({
                 }}
             >
                 {rowItems.map((item) => (
-                    <GridCard
+                    <BookGridCard
                         key={item.key}
                         item={item}
                         progressMap={progressMap}
