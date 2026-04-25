@@ -42,6 +42,16 @@ scroll.md
 dev_error_log.txt
 npm_install_log.txt
 *.tsbuildinfo
+outputs/runtime/
+
+# Local generated docs / chat exports
+docs/chat_export/
+docs/virtual-render/
+docs/promo/
+docs/plans/2026-04-04-vector-render-restore-plan.md
+docs/plans/2026-04-19-*.md
+docs/requirements/2026-04-19-*.md
+docs/*副本.json
 
 # Local icon files (root-level temporary)
 1w2ze-5r6yb-001.ico
