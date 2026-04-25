@@ -14,6 +14,7 @@ import { useAtomicDomCommit } from './scrollReader/useAtomicDomCommit';
 import { useTocJump } from './scrollReader/useTocJump';
 import { useHighlightAndSelection } from './scrollReader/useHighlightAndSelection';
 import { useVirtualSegmentSync } from './scrollReader/useVirtualSegmentSync';
+import { useChapterResizeObserver } from './scrollReader/useChapterResizeObserver';
 import type { LoadedChapter } from './scrollReader/scrollReaderTypes';
 import { resolveHighlightSpineIndex } from './scrollReader/scrollReaderHelpers';
 import {
@@ -116,9 +117,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         isUserScrollingRef,
         chaptersRef,
         spineItemsRef,
-        resizeObserverRef,
-        observedResizeNodesRef,
-        observedResizeHeightsRef,
         virtualSyncRafRef,
         highlightDirtyChaptersRef,
         highlightIdleHandlesRef,
@@ -311,51 +309,13 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
 
     // ── Chapter Resize Observer ──
 
-    const observeResizeNode = useCallback((node: HTMLElement | null) => {
-        if (!node) return;
-        if (observedResizeNodesRef.current.has(node)) return;
-        observedResizeNodesRef.current.add(node);
-        observedResizeHeightsRef.current.set(node, Math.max(1, node.getBoundingClientRect().height));
-        resizeObserverRef.current?.observe(node);
-    }, []);
-
-    const unobserveResizeNode = useCallback((node: HTMLElement | null) => {
-        if (!node) return;
-        if (!observedResizeNodesRef.current.has(node)) return;
-        observedResizeNodesRef.current.delete(node);
-        resizeObserverRef.current?.unobserve(node);
-    }, []);
-
-    const observeChapterResizeNodes = useCallback((chapterEl: HTMLElement | null) => {
-        if (!chapterEl) return;
-        const segments = Array.from(
-            chapterEl.querySelectorAll('[data-shadow-segment-index]')
-        ) as HTMLElement[];
-        if (segments.length > 0) {
-            segments.forEach((segmentEl) => observeResizeNode(segmentEl));
-            return;
-        }
-        observeResizeNode(chapterEl);
-    }, [observeResizeNode]);
-
-    const unobserveChapterResizeNodes = useCallback((chapterEl: HTMLElement | null) => {
-        if (!chapterEl) return;
-        const segments = Array.from(
-            chapterEl.querySelectorAll('[data-shadow-segment-index]')
-        ) as HTMLElement[];
-        if (segments.length > 0) {
-            segments.forEach((segmentEl) => unobserveResizeNode(segmentEl));
-        }
-        unobserveResizeNode(chapterEl);
-    }, [unobserveResizeNode]);
-
-    const resetResizeObservers = useCallback(() => {
-        observedResizeNodesRef.current.forEach((node) => {
-            resizeObserverRef.current?.unobserve(node);
-        });
-        observedResizeNodesRef.current.clear();
-        observedResizeHeightsRef.current = new WeakMap<HTMLElement, number>();
-    }, []);
+    const {
+        observeResizeNode,
+        unobserveResizeNode,
+        observeChapterResizeNodes,
+        unobserveChapterResizeNodes,
+        resetResizeObservers,
+    } = useChapterResizeObserver(refs);
 
     // ── Virtual Chapter Runtime ──
 
@@ -389,25 +349,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
             }
         };
     }, [cancelIdlePrefetch, virtualChaptersRef]);
-
-    useEffect(() => {
-        const observer = new ResizeObserver((entries) => {
-            entries.forEach((entry) => {
-                const target = entry.target as HTMLElement;
-                const nextHeight = Math.max(1, entry.contentRect.height);
-                observedResizeHeightsRef.current.set(target, nextHeight);
-            });
-        });
-
-        resizeObserverRef.current = observer;
-        return () => {
-            resetResizeObservers();
-            observer.disconnect();
-            if (resizeObserverRef.current === observer) {
-                resizeObserverRef.current = null;
-            }
-        };
-    }, [resetResizeObservers]);
 
     // Pending shadow renders queue
     const [shadowQueue, setShadowQueue] = useState<LoadedChapter[]>([]);
