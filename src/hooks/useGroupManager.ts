@@ -1,22 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { db, type BookMeta } from '../services/storageService'
+import type { BookMeta } from '../services/storageService'
 import {
-    GROUPS_SETTINGS_KEY,
-    GROUP_BOOK_MAP_SETTINGS_KEY,
-    GROUP_BOOK_ORDER_SETTINGS_KEY,
-    HOME_ORDER_SETTINGS_KEY,
-    LEGACY_SHELVES_SETTINGS_KEY,
-    LEGACY_SHELF_BOOK_MAP_SETTINGS_KEY,
     buildHomeOrderKey,
-    buildMigratedGroupState,
-    normalizeGroupItems,
-    normalizeIdMap,
-    normalizeStringArray,
     reorderKeys,
     resolveOrderedIds,
     sanitizeGroupState,
     type GroupItem,
 } from './groupManagerState'
+import {
+    loadGroupState,
+    saveGroupOrderingState,
+    saveGroupState,
+} from './groupManagerRepository'
 
 export type GroupCollection = {
     id: string
@@ -37,7 +32,43 @@ function areStatesEqual(
     left: ReturnType<typeof sanitizeGroupState>,
     right: ReturnType<typeof sanitizeGroupState>,
 ): boolean {
-    return JSON.stringify(left) === JSON.stringify(right)
+    const areStringArraysEqual = (leftValues: readonly string[], rightValues: readonly string[]) => {
+        if (leftValues.length !== rightValues.length) return false
+        for (let index = 0; index < leftValues.length; index += 1) {
+            if (leftValues[index] !== rightValues[index]) return false
+        }
+        return true
+    }
+
+    const areGroupArraysEqual = (leftGroups: readonly GroupItem[], rightGroups: readonly GroupItem[]) => {
+        if (leftGroups.length !== rightGroups.length) return false
+        for (let index = 0; index < leftGroups.length; index += 1) {
+            if (leftGroups[index].id !== rightGroups[index].id) return false
+            if (leftGroups[index].name !== rightGroups[index].name) return false
+        }
+        return true
+    }
+
+    const areIdMapsEqual = (
+        leftMap: Record<string, string[]>,
+        rightMap: Record<string, string[]>,
+    ) => {
+        const leftKeys = Object.keys(leftMap)
+        const rightKeys = Object.keys(rightMap)
+        if (leftKeys.length !== rightKeys.length) return false
+        for (const key of leftKeys) {
+            if (!(key in rightMap)) return false
+            if (!areStringArraysEqual(leftMap[key] || [], rightMap[key] || [])) return false
+        }
+        return true
+    }
+
+    return (
+        areGroupArraysEqual(left.groups, right.groups) &&
+        areIdMapsEqual(left.groupBookMap, right.groupBookMap) &&
+        areIdMapsEqual(left.groupBookOrder, right.groupBookOrder) &&
+        areStringArraysEqual(left.homeOrder, right.homeOrder)
+    )
 }
 
 export function useGroupManager(options: UseGroupManagerOptions) {
@@ -60,48 +91,14 @@ export function useGroupManager(options: UseGroupManagerOptions) {
         setGroupBookMap(next.groupBookMap)
         setGroupBookOrder(next.groupBookOrder)
         setHomeOrder(next.homeOrder)
-        await Promise.all([
-            db.settings.put({ key: GROUPS_SETTINGS_KEY, value: next.groups }),
-            db.settings.put({ key: GROUP_BOOK_MAP_SETTINGS_KEY, value: next.groupBookMap }),
-            db.settings.put({ key: GROUP_BOOK_ORDER_SETTINGS_KEY, value: next.groupBookOrder }),
-            db.settings.put({ key: HOME_ORDER_SETTINGS_KEY, value: next.homeOrder }),
-        ])
+        await saveGroupState(next)
     }
 
     useEffect(() => {
         let cancelled = false
 
         const loadGroups = async () => {
-            const [
-                groupsEntry,
-                groupBookMapEntry,
-                groupBookOrderEntry,
-                homeOrderEntry,
-                legacyGroupsEntry,
-                legacyGroupBookMapEntry,
-            ] = await Promise.all([
-                db.settings.get(GROUPS_SETTINGS_KEY),
-                db.settings.get(GROUP_BOOK_MAP_SETTINGS_KEY),
-                db.settings.get(GROUP_BOOK_ORDER_SETTINGS_KEY),
-                db.settings.get(HOME_ORDER_SETTINGS_KEY),
-                db.settings.get(LEGACY_SHELVES_SETTINGS_KEY),
-                db.settings.get(LEGACY_SHELF_BOOK_MAP_SETTINGS_KEY),
-            ])
-
-            const hasNewState = Boolean(groupsEntry || groupBookMapEntry || groupBookOrderEntry || homeOrderEntry)
-            const loadedState = hasNewState
-                ? {
-                    groups: normalizeGroupItems(groupsEntry?.value),
-                    groupBookMap: normalizeIdMap(groupBookMapEntry?.value),
-                    groupBookOrder: normalizeIdMap(groupBookOrderEntry?.value),
-                    homeOrder: normalizeStringArray(homeOrderEntry?.value),
-                }
-                : buildMigratedGroupState(
-                    normalizeGroupItems(legacyGroupsEntry?.value),
-                    normalizeIdMap(legacyGroupBookMapEntry?.value),
-                    books,
-                )
-
+            const loadedState = await loadGroupState(books)
             const sanitized = sanitizeGroupState(
                 loadedState.groups,
                 loadedState.groupBookMap,
@@ -117,13 +114,8 @@ export function useGroupManager(options: UseGroupManagerOptions) {
             setGroupBookOrder(sanitized.groupBookOrder)
             setHomeOrder(sanitized.homeOrder)
 
-            if (!hasNewState || !areStatesEqual(sanitized, loadedState as ReturnType<typeof sanitizeGroupState>)) {
-                await Promise.all([
-                    db.settings.put({ key: GROUPS_SETTINGS_KEY, value: sanitized.groups }),
-                    db.settings.put({ key: GROUP_BOOK_MAP_SETTINGS_KEY, value: sanitized.groupBookMap }),
-                    db.settings.put({ key: GROUP_BOOK_ORDER_SETTINGS_KEY, value: sanitized.groupBookOrder }),
-                    db.settings.put({ key: HOME_ORDER_SETTINGS_KEY, value: sanitized.homeOrder }),
-                ])
+            if (!loadedState.hasNewState || !areStatesEqual(sanitized, loadedState)) {
+                await saveGroupState(sanitized)
             }
         }
 
@@ -172,11 +164,11 @@ export function useGroupManager(options: UseGroupManagerOptions) {
         setGroupBookMap(sanitized.groupBookMap)
         setGroupBookOrder(sanitized.groupBookOrder)
         setHomeOrder(sanitized.homeOrder)
-        void Promise.all([
-            db.settings.put({ key: GROUP_BOOK_MAP_SETTINGS_KEY, value: sanitized.groupBookMap }),
-            db.settings.put({ key: GROUP_BOOK_ORDER_SETTINGS_KEY, value: sanitized.groupBookOrder }),
-            db.settings.put({ key: HOME_ORDER_SETTINGS_KEY, value: sanitized.homeOrder }),
-        ])
+        void saveGroupOrderingState({
+            groupBookMap: sanitized.groupBookMap,
+            groupBookOrder: sanitized.groupBookOrder,
+            homeOrder: sanitized.homeOrder,
+        })
     }, [books, groups, groupBookMap, groupBookOrder, homeOrder])
 
     const bookById = useMemo(() => {
