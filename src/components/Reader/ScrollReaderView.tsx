@@ -2,7 +2,7 @@ import {
     useEffect, useState, useCallback,
     forwardRef, memo, useImperativeHandle, useMemo
 } from 'react';
-import type { ContentProvider, SpineItemInfo } from '../../engine/core/contentProvider';
+import type { ContentProvider } from '../../engine/core/contentProvider';
 import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
 import { useVirtualChapterRuntime } from './scrollReader/useVirtualChapterRuntime';
 import { useScrollReaderRefs } from './scrollReader/useScrollReaderRefs';
@@ -18,6 +18,7 @@ import { useChapterResizeObserver } from './scrollReader/useChapterResizeObserve
 import { useIdlePrefetch } from './scrollReader/useIdlePrefetch';
 import { useBookHighlights } from './scrollReader/useBookHighlights';
 import { useScrollPhysics, DEFAULT_SMOOTH_CONFIG, type SmoothScrollConfig } from './scrollReader/useScrollPhysics';
+import { useSpineItems } from './scrollReader/useSpineItems';
 import type { LoadedChapter } from './scrollReader/scrollReaderTypes';
 import { type Highlight } from '../../services/storageService';
 import { cancelIdleTask } from '../../utils/idleScheduler';
@@ -62,7 +63,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         loadingLockRef,
         scrollIdleTimerRef,
         chaptersRef,
-        spineItemsRef,
         virtualSyncRafRef,
         highlightDirtyChaptersRef,
         highlightIdleHandlesRef,
@@ -72,8 +72,10 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
     } = refs;
 
     const [chapters, setChapters] = useState<LoadedChapter[]>([]);
-    const [spineItems, setSpineItems] = useState<SpineItemInfo[]>([]);
     const [currentSpineIndex, setCurrentSpineIndex] = useState(initialSpineIndex);
+    const [isInitialized, setIsInitialized] = useState(false);
+
+    const spineItems = useSpineItems(refs, provider);
     const [isInitialized, setIsInitialized] = useState(false);
 
     // ── Highlights ──
@@ -177,12 +179,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
     const [shadowQueue, setShadowQueue] = useState<LoadedChapter[]>([]);
 
     // ── Spine Initialization ──
-
-    useEffect(() => {
-        const items = provider.getSpineItems();
-        spineItemsRef.current = items;
-        setSpineItems(items);
-    }, [provider]);
 
     // Load initial chapter once spineItems are available
     useEffect(() => {
