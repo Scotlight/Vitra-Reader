@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { MutableRefObject } from 'react';
 import { db, type Highlight } from '../../../services/storageService';
+import { resolveHighlightSpineIndex } from './scrollReaderHelpers';
 
 interface UseBookHighlightsOptions {
     bookId: string;
@@ -46,5 +47,17 @@ export function useBookHighlights({
         };
     }, [bookId]);
 
-    return { highlights, handleHighlightCreated };
+    const highlightsBySpineIndex = useMemo(() => {
+        const grouped = new Map<number, Highlight[]>();
+        highlights.forEach((highlight) => {
+            const spineIndex = resolveHighlightSpineIndex(highlight.cfiRange);
+            if (spineIndex === null) return;
+            const existing = grouped.get(spineIndex) ?? [];
+            existing.push(highlight);
+            grouped.set(spineIndex, existing);
+        });
+        return grouped;
+    }, [highlights]);
+
+    return { highlights, handleHighlightCreated, highlightsBySpineIndex };
 }

@@ -1,6 +1,6 @@
 import {
     useEffect, useState, useCallback,
-    forwardRef, memo, useImperativeHandle, useMemo
+    forwardRef, memo, useImperativeHandle
 } from 'react';
 import type { ContentProvider } from '../../engine/core/contentProvider';
 import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
@@ -21,7 +21,6 @@ import { useScrollPhysics, DEFAULT_SMOOTH_CONFIG, type SmoothScrollConfig } from
 import { useSpineItems } from './scrollReader/useSpineItems';
 import { useReaderUnmountCleanup } from './scrollReader/useReaderUnmountCleanup';
 import type { LoadedChapter } from './scrollReader/scrollReaderTypes';
-import { type Highlight } from '../../services/storageService';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
 import styles from './ScrollReaderView.module.css';
 
@@ -76,7 +75,7 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
 
     // ── Highlights ──
 
-    const { highlights, handleHighlightCreated } = useBookHighlights({
+    const { handleHighlightCreated, highlightsBySpineIndex } = useBookHighlights({
         bookId,
         highlightDirtyChaptersRef,
         lastReportedProgressRef,
@@ -100,18 +99,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
     useEffect(() => {
         renderedHighlightsRef.current.clear();
     }, [bookId, renderedHighlightsRef]);
-
-    const highlightsBySpineIndex = useMemo(() => {
-        const grouped = new Map<number, Highlight[]>();
-        highlights.forEach((highlight) => {
-            const spineIndex = resolveHighlightSpineIndex(highlight.cfiRange);
-            if (spineIndex === null) return;
-            const existing = grouped.get(spineIndex) ?? [];
-            existing.push(highlight);
-            grouped.set(spineIndex, existing);
-        });
-        return grouped;
-    }, [highlights]);
 
     const shadowResourceExists = useCallback((url: string) => {
         return provider.isAssetUrlAvailable?.(url) ?? true;
