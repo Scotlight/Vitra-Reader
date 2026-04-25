@@ -1,15 +1,15 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import type { MutableRefObject } from 'react';
 import type { ContentProvider } from '../../../engine/core/contentProvider';
 import type { ChapterMetaVector } from '../../../engine';
 import { buildChapterMetaVector } from '../../../engine';
-import { preprocessChapterContent } from '../../../engine/render/chapterPreprocessService';
 import { createWindowedVectorChapterShell, type ReaderStyleConfig } from '../ShadowRenderer';
 import {
     canRestoreWindowedVectorPlaceholder,
     partitionStyleChangeTargets,
     shouldBypassShadowQueueForSegmentMetas,
 } from '../scrollVectorStrategy';
+import { loadPreprocessedChapterContent } from './chapterContentLoader';
 import type { LoadedChapter } from './scrollReaderTypes';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 
@@ -24,6 +24,22 @@ interface UseChapterLoaderOptions {
     setShadowQueue: (updater: (prev: LoadedChapter[]) => LoadedChapter[]) => void;
     scheduleIdlePrefetch: (task: () => void) => void;
     cancelIdlePrefetch: () => void;
+}
+
+function buildReaderStyleKey(readerStyles: ReaderStyleConfig): string {
+    return [
+        `fontSize=${readerStyles.fontSize}`,
+        `pageWidth=${readerStyles.pageWidth}`,
+        `lineHeight=${readerStyles.lineHeight}`,
+        `paragraphSpacing=${readerStyles.paragraphSpacing}`,
+        `textIndentEm=${readerStyles.textIndentEm}`,
+        `letterSpacing=${readerStyles.letterSpacing}`,
+        `textAlign=${readerStyles.textAlign}`,
+        `fontFamily=${encodeURIComponent(readerStyles.fontFamily)}`,
+        `textColor=${readerStyles.textColor}`,
+        `bgColor=${readerStyles.bgColor}`,
+        `isPdfDarkMode=${readerStyles.isPdfDarkMode ? '1' : '0'}`,
+    ].join('|');
 }
 
 /**
@@ -61,6 +77,7 @@ export function useChapterLoader(
         pendingReadyRef,
         isUserScrollingRef,
     } = refs;
+    const readerStyleKey = useMemo(() => buildReaderStyleKey(readerStyles), [readerStyles]);
 
     const loadChapter = useCallback(async (
         spineIndex: number,
@@ -73,7 +90,7 @@ export function useChapterLoader(
 
         const existingChapter = chaptersRef.current.find(ch => ch.spineIndex === spineIndex);
         if (existingChapter && existingChapter.status !== 'placeholder' && !forceReload) return;
-        const currentReaderStyleKey = JSON.stringify(readerStyles);
+        const currentReaderStyleKey = readerStyleKey;
 
         loadingLockRef.current.add(spineIndex);
         pipelineRef.current = 'pre-fetching';
@@ -123,28 +140,12 @@ export function useChapterLoader(
                 }
             }
 
-            const html = await provider.extractChapterHtml(spineIndex);
-            let chapterStyles: string[] = [];
-            try {
-                chapterStyles = await provider.extractChapterStyles(spineIndex);
-            } catch {
-                // Styles are optional
-            }
-
-            const preprocessed = await preprocessChapterContent({
+            const preprocessed = await loadPreprocessedChapterContent({
+                provider,
                 chapterId,
                 spineIndex,
                 chapterHref: currentSpineItems[spineIndex]?.href,
-                htmlContent: html,
-                externalStyles: chapterStyles,
-                vectorize: true,
-                vectorConfig: {
-                    targetChars: 16_000,
-                    fontSize: readerStyles.fontSize,
-                    pageWidth: readerStyles.pageWidth,
-                    lineHeight: readerStyles.lineHeight,
-                    paragraphSpacing: readerStyles.paragraphSpacing,
-                },
+                readerStyles,
             });
 
             const loaded: LoadedChapter = {
@@ -198,10 +199,10 @@ export function useChapterLoader(
             loadingLockRef.current.delete(spineIndex);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [provider, readerStyles]);
+    }, [provider, readerStyles, readerStyleKey]);
 
     useEffect(() => {
-        const nextKey = JSON.stringify(readerStyles);
+        const nextKey = readerStyleKey;
         if (readerStylesKeyRef.current === '' || readerStylesKeyRef.current === nextKey) {
             readerStylesKeyRef.current = nextKey;
             return;
@@ -246,7 +247,7 @@ export function useChapterLoader(
             void loadChapter(chapter.spineIndex, direction, true);
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentSpineIndex, loadChapter, readerStyles, renderedHighlightsRef]);
+    }, [currentSpineIndex, loadChapter, readerStyleKey, renderedHighlightsRef]);
 
     const runPredictivePrefetch = useCallback(() => {
         if (isUserScrollingRef.current) return;
