@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSettingsStore } from '../../stores/useSettingsStore'
+import { useSettingsStore } from '@/stores/useSettingsStore'
 import { SyncSettingsTab } from './settingsPanel/SyncSettingsTab'
 import { TranslateSettingsTab } from './settingsPanel/TranslateSettingsTab'
 import styles from './LibraryView.module.css'

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { MutableRefObject } from 'react';
-import { db, type Highlight } from '../../../services/storageService';
+import { db, type Highlight } from '@/services/storageService';
 import { resolveHighlightSpineIndex } from './scrollReaderHelpers';
 
 interface UseBookHighlightsOptions {

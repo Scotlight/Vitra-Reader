@@ -8,7 +8,7 @@ import {
     translateText,
     type TranslateConfig,
     type TranslateProvider,
-} from '../../../services/translateService'
+} from '@/services/translateService'
 import styles from '../LibraryView.module.css'
 
 export function TranslateSettingsTab() {

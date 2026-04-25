@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import type { SpineItemInfo } from '../../../engine/core/contentProvider'
-import { db } from '../../../services/storageService'
+import type { SpineItemInfo } from '@/engine/core/contentProvider'
+import { db } from '@/services/storageService'
 
 interface UsePaginatedProgressOptions {
     bookId: string

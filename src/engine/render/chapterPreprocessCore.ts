@@ -12,7 +12,7 @@ import {
   extractStyles,
   removeStyleTags,
   scopeStyles,
-} from '../../utils/styleProcessor';
+} from '@/utils/styleProcessor';
 import {
   consumeMediaOffsetInRange,
   scanHtmlBySaxStream,

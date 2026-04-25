@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Bookmark, Highlight } from '../../../services/storageService'
+import type { Bookmark, Highlight } from '@/services/storageService'
 import { areProgressMapsEqual, areStringListsEqual } from './useLibraryDerivedData'
 import {
     loadLibraryAnnotationMeta,

@@ -1,5 +1,5 @@
-import type { ChapterPreprocessResult } from '../../engine/types/chapterPreprocess'
-import type { SegmentMeta } from '../../engine/types/vectorRender'
+import type { ChapterPreprocessResult } from '@/engine/types/chapterPreprocess'
+import type { SegmentMeta } from '@/engine/types/vectorRender'
 
 export type LoadedChapterStatus = 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder'
 export type ChapterInsertDirection = 'prev' | 'next' | 'initial'

@@ -1,11 +1,11 @@
-import type { TocItem } from '../../../core/contentProvider'
+import type { TocItem } from '@/engine/core/contentProvider'
 import type {
     PdfAnnotation,
     PdfDocumentProxy,
     PdfOutlineItem,
     PdfPageProxy,
     PdfPageViewport,
-} from '../../../../types/pdfjs'
+} from '@/types/pdfjs'
 import type { PdfPageLink } from './pdfTypes'
 
 const FALLBACK_TOC_STEP = 10

@@ -1,4 +1,4 @@
-import type { PageBoundary } from '../../engine/types/vitraPagination'
+import type { PageBoundary } from '@/engine/types/vitraPagination'
 import type { ReaderStyleConfig } from './ShadowRenderer'
 
 const DEFAULT_PAGINATED_MEASURE_CACHE_LIMIT = 24

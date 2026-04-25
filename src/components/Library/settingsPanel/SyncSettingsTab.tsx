@@ -1,4 +1,4 @@
-import { useSyncStore } from '../../../stores/useSyncStore'
+import { useSyncStore } from '@/stores/useSyncStore'
 import styles from '../LibraryView.module.css'
 
 export function SyncSettingsTab() {

@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect } from 'react';
 import type { MutableRefObject } from 'react';
-import type { SpineItemInfo } from '../../../engine/core/contentProvider';
-import { findTextInDOM } from '../../../utils/textFinder';
+import type { SpineItemInfo } from '@/engine/core/contentProvider';
+import { findTextInDOM } from '@/utils/textFinder';
 import { shouldBypassShadowQueueForSegmentMetas } from '../scrollVectorStrategy';
 import styles from '../ScrollReaderView.module.css';
 import { markChapterAsMounted, resolveViewportDerivedMetrics } from './scrollReaderHelpers';

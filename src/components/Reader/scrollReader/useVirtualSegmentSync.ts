@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
-import type { Highlight } from '../../../services/storageService';
+import type { Highlight } from '@/services/storageService';
 import { computeGlobalVirtualSegmentMountPlan } from '../scrollVectorStrategy';
 import {
     RANGE_HYDRATION_OVERSCAN_SEGMENTS,

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { useSettingsStore } from '../../stores/useSettingsStore'
+import { useSettingsStore } from '@/stores/useSettingsStore'
 import { ReaderAppearanceSettings } from './ReaderAppearanceSettings'
 import { ReaderModeSettings } from './ReaderModeSettings'
 import styles from './ReaderView.module.css'

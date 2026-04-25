@@ -1,8 +1,8 @@
 import { SettingsPanel } from '../SettingsPanel'
 import { BookPropertiesModal } from '../BookPropertiesModal'
 import { CreateGroupModal, ManageGroupModal } from '../GroupModals'
-import type { BookMeta } from '../../../services/storageService'
-import type { GroupItem } from '../../../hooks/groupManagerState'
+import type { BookMeta } from '@/services/storageService'
+import type { GroupItem } from '@/hooks/groupManagerState'
 import type { LibraryDialogState } from './useLibraryViewState'
 import styles from '../LibraryView.module.css'
 

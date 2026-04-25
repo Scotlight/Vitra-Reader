@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { ContentProvider, SpineItemInfo } from '../../../engine/core/contentProvider';
+import type { ContentProvider, SpineItemInfo } from '@/engine/core/contentProvider';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 
 export function useSpineItems(

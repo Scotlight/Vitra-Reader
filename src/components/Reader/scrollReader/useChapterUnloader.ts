@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
-import type { ContentProvider } from '../../../engine/core/contentProvider';
+import type { ContentProvider } from '@/engine/core/contentProvider';
 import type { LoadedChapter } from './scrollReaderTypes';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { markChapterAsPlaceholder, resolveChapterPlaceholderHeight } from './scrollReaderHelpers';
 import { UNLOAD_ABOVE_RADIUS, UNLOAD_BELOW_RADIUS, UNLOAD_COOLDOWN_MS } from './scrollReaderConstants';
 import { segmentPool } from '../ShadowRenderer';
-import { releaseMediaResources } from '../../../utils/mediaResourceCleanup';
-import { cancelIdleTask } from '../../../utils/idleScheduler';
+import { releaseMediaResources } from '@/utils/mediaResourceCleanup';
+import { cancelIdleTask } from '@/utils/idleScheduler';
 
 interface UseChapterUnloaderOptions {
     provider: ContentProvider;

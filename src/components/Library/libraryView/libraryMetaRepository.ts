@@ -1,4 +1,4 @@
-import { db, type Bookmark, type Highlight } from '../../../services/storageService'
+import { db, type Bookmark, type Highlight } from '@/services/storageService'
 
 const K_FAVORITES = 'library:favoriteBookIds'
 const K_TRASH = 'library:trashBookIds'

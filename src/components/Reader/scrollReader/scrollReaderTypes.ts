@@ -1,4 +1,4 @@
-import type { SegmentMeta } from '../../../engine';
+import type { SegmentMeta } from '@/engine';
 
 export interface LoadedChapter {
     spineIndex: number;

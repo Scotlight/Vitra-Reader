@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
-import type { ChapterMetaVector } from '../../../engine';
-import { buildChapterMetaVector } from '../../../engine';
+import type { ChapterMetaVector } from '@/engine';
+import { buildChapterMetaVector } from '@/engine';
 import type { LoadedChapter } from './scrollReaderTypes';
 import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';

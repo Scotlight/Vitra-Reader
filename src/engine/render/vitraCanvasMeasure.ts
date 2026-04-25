@@ -1,5 +1,5 @@
 import type { BlockMetrics } from '../types/vitraPagination'
-import { clampNumber } from '../../utils/mathUtils'
+import { clampNumber } from '@/utils/mathUtils'
 import { estimateLineWidth, invalidateCharWidthTable } from './charWidthTable'
 
 const COMPLEX_LAYOUT_SELECTOR = 'img,svg,video,audio,canvas,table,math,pre,code,figure,iframe,object,embed,input,textarea,select,button'

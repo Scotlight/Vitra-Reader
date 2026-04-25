@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react';
 import styles from './ShadowRenderer.module.css';
-import { waitForAssetLoad, getContainerHeight } from '../../utils/assetLoader';
-import { generateCSSOverride, generatePaginatedCSSOverride } from '../../utils/styleProcessor';
+import { waitForAssetLoad, getContainerHeight } from '@/utils/assetLoader';
+import { generateCSSOverride, generatePaginatedCSSOverride } from '@/utils/styleProcessor';
 import {
   buildVitraVectorRenderPlan,
   createVitraRenderTrace,
@@ -10,7 +10,7 @@ import {
   runVitraRenderStage,
   SegmentDomPool,
   type SegmentMeta,
-} from '../../engine';
+} from '@/engine';
 
 // ── Re-export 公共 API（保持调用方 import 不变） ──
 export type { ReaderStyleConfig, CreateWindowedVectorChapterShellOptions } from './shadowRenderer/contentCss';

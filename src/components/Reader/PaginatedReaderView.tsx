@@ -2,8 +2,8 @@ import {
     useRef, useEffect, useState, useCallback,
     forwardRef, useImperativeHandle,
 } from 'react';
-import type { ContentProvider } from '../../engine/core/contentProvider';
-import { useSelectionMenu } from '../../hooks/useSelectionMenu';
+import type { ContentProvider } from '@/engine/core/contentProvider';
+import { useSelectionMenu } from '@/hooks/useSelectionMenu';
 import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
 import { usePaginatedHighlights } from './paginatedReader/usePaginatedHighlights';
 import { usePaginatedNavigation } from './paginatedReader/usePaginatedNavigation';

@@ -1,6 +1,6 @@
 import { useRef } from 'react';
-import type { IdleTaskHandle } from '../../../utils/idleScheduler';
-import type { SpineItemInfo } from '../../../engine/core/contentProvider';
+import type { IdleTaskHandle } from '@/utils/idleScheduler';
+import type { SpineItemInfo } from '@/engine/core/contentProvider';
 import type { LoadedChapter, PipelineState } from './scrollReaderTypes';
 
 interface ScrollReaderRefsInit {

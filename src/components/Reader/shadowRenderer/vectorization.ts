@@ -16,8 +16,8 @@
  * 不含 React 状态，不读 refs，不写 DOM 以外的副作用。
  */
 
-import type { SegmentMeta } from '../../../engine';
-import { getContainerHeight } from '../../../utils/assetLoader';
+import type { SegmentMeta } from '@/engine';
+import { getContainerHeight } from '@/utils/assetLoader';
 import { estimateNodeCharWeight, estimateSegmentHeight } from './heightEstimation';
 import type { HeightEstimationStyleInputs } from './heightEstimation';
 import {

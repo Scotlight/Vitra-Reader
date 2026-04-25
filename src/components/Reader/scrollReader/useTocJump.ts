@@ -1,9 +1,9 @@
 import { useCallback, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
-import { findTextInDOM } from '../../../utils/textFinder';
-import { releaseMediaResources } from '../../../utils/mediaResourceCleanup';
+import { findTextInDOM } from '@/utils/textFinder';
+import { releaseMediaResources } from '@/utils/mediaResourceCleanup';
 import { segmentPool } from '../ShadowRenderer';
-import type { ChapterMetaVector } from '../../../engine';
+import type { ChapterMetaVector } from '@/engine';
 import type { LoadedChapter } from './scrollReaderTypes';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 

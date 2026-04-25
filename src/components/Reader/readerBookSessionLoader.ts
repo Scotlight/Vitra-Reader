@@ -1,7 +1,7 @@
-import { db } from '../../services/storageService'
-import { resolveReaderRenderMode } from '../../engine'
-import type { BookFormat, ContentProvider, TocItem } from '../../engine/core/contentProvider'
-import type { PageTurnMode } from '../../stores/useSettingsStore'
+import { db } from '@/services/storageService'
+import { resolveReaderRenderMode } from '@/engine'
+import type { BookFormat, ContentProvider, TocItem } from '@/engine/core/contentProvider'
+import type { PageTurnMode } from '@/stores/useSettingsStore'
 import { buildFallbackTocFromSpine } from './readerToc'
 
 export interface ReaderScrollParams {

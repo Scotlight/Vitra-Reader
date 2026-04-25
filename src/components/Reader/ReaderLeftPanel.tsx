@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import type { RefObject } from 'react'
-import type { Bookmark, Highlight } from '../../services/storageService'
-import type { SearchResult, TocItem } from '../../engine/core/contentProvider'
+import type { Bookmark, Highlight } from '@/services/storageService'
+import type { SearchResult, TocItem } from '@/engine/core/contentProvider'
 import { isTocHrefActive } from './readerToc'
 import styles from './ReaderView.module.css'
 

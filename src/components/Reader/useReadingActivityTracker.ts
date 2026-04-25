@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { addActiveReadingMs } from '../../services/readingStatsService'
+import { addActiveReadingMs } from '@/services/readingStatsService'
 
 /** 阅读活动心跳间隔（ms） */
 const ACTIVITY_TICK_INTERVAL_MS = 1_000

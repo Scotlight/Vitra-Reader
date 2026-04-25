@@ -1,6 +1,6 @@
-import { clampDecimal, clampInt } from '../../utils/mathUtils'
-import { resolveReaderRenderMode } from '../../engine'
-import { useSettingsStore, type PageTurnMode } from '../../stores/useSettingsStore'
+import { clampDecimal, clampInt } from '@/utils/mathUtils'
+import { resolveReaderRenderMode } from '@/engine'
+import { useSettingsStore, type PageTurnMode } from '@/stores/useSettingsStore'
 import styles from './ReaderView.module.css'
 
 const SMOOTH_DEFAULTS = Object.freeze({

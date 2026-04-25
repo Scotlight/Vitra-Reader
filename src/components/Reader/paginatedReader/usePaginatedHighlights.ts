@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { MutableRefObject, RefObject } from 'react';
-import { db, type Highlight } from '../../../services/storageService';
-import { findTextInDOM, highlightRange } from '../../../utils/textFinder';
-import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '../../../utils/idleScheduler';
+import { db, type Highlight } from '@/services/storageService';
+import { findTextInDOM, highlightRange } from '@/utils/textFinder';
+import { cancelIdleTask, scheduleIdleTask, type IdleTaskHandle } from '@/utils/idleScheduler';
 
 const HIGHLIGHT_IDLE_TIMEOUT_MS = 600;
 

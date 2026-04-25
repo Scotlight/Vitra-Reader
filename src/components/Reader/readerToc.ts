@@ -1,4 +1,4 @@
-import type { SpineItemInfo, TocItem } from '../../engine/core/contentProvider'
+import type { SpineItemInfo, TocItem } from '@/engine/core/contentProvider'
 
 export function buildFallbackTocFromSpine(spineItems: readonly SpineItemInfo[]): TocItem[] {
     return spineItems.map((item, index) => ({

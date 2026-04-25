@@ -4,19 +4,13 @@
  * BDISE 引擎通过此模块获取章节原始 HTML
  */
 import { Book } from 'epubjs';
-import type { EpubBookInternal, EpubSpineItem } from '../../../types/epubjs';
+import type { EpubBookInternal, EpubSpineItem } from '@/types/epubjs';
 import {
     resolveChapterDocumentResources,
     rewriteExternalStyleSheetUrls,
 } from './epubResourceLoader';
 import { decodeTextBuffer } from './textDecoding';
-
-export interface SpineItemInfo {
-    index: number;
-    href: string;
-    id: string;
-    linear: boolean;
-}
+import type { SpineItemInfo } from '@/engine/core/contentProvider';
 
 interface SpineLookupResult {
     bookInternal: EpubBookInternal;

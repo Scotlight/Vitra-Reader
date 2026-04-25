@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getBookCover } from '../../../services/storageService'
+import { getBookCover } from '@/services/storageService'
 import { BookFormatPlaceholder } from '../BookFormatPlaceholder'
 import styles from '../LibraryView.module.css'
 
