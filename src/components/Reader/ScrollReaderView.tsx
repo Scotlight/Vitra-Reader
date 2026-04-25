@@ -15,10 +15,10 @@ import { useTocJump } from './scrollReader/useTocJump';
 import { useHighlightAndSelection } from './scrollReader/useHighlightAndSelection';
 import { useVirtualSegmentSync } from './scrollReader/useVirtualSegmentSync';
 import { useChapterResizeObserver } from './scrollReader/useChapterResizeObserver';
+import { useIdlePrefetch } from './scrollReader/useIdlePrefetch';
 import type { LoadedChapter } from './scrollReader/scrollReaderTypes';
 import { resolveHighlightSpineIndex } from './scrollReader/scrollReaderHelpers';
 import {
-    PREFETCH_IDLE_TIMEOUT_MS,
     PHYSICS_FRICTION_NUMERATOR,
     PHYSICS_FRICTION_NO_EASING_OFFSET,
     PHYSICS_FRICTION_MIN,
@@ -113,8 +113,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         chapterListRef,
         loadingLockRef,
         scrollIdleTimerRef,
-        idlePrefetchHandleRef,
-        isUserScrollingRef,
         chaptersRef,
         spineItemsRef,
         virtualSyncRafRef,
@@ -279,33 +277,7 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
 
     // ── Idle Prefetch Scheduling ──
 
-    const cancelIdlePrefetch = useCallback(() => {
-        if (idlePrefetchHandleRef.current === null) return;
-        if (typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
-            window.cancelIdleCallback(idlePrefetchHandleRef.current);
-        } else {
-            window.clearTimeout(idlePrefetchHandleRef.current);
-        }
-        idlePrefetchHandleRef.current = null;
-    }, []);
-
-    const scheduleIdlePrefetch = useCallback((task: () => void) => {
-        cancelIdlePrefetch();
-        if (isUserScrollingRef.current) return;
-
-        if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-            idlePrefetchHandleRef.current = window.requestIdleCallback(() => {
-                idlePrefetchHandleRef.current = null;
-                task();
-            }, { timeout: PREFETCH_IDLE_TIMEOUT_MS });
-            return;
-        }
-
-        idlePrefetchHandleRef.current = window.setTimeout(() => {
-            idlePrefetchHandleRef.current = null;
-            task();
-        }, 16);
-    }, [cancelIdlePrefetch]);
+    const { scheduleIdlePrefetch, cancelIdlePrefetch } = useIdlePrefetch(refs);
 
     // ── Chapter Resize Observer ──
 
