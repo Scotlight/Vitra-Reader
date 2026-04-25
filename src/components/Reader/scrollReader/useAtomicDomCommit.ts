@@ -1,7 +1,6 @@
 import { useCallback, useLayoutEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import type { SpineItemInfo } from '../../../engine/core/contentProvider';
-import { db } from '../../../services/storageService';
 import { findTextInDOM } from '../../../utils/textFinder';
 import { computeGlobalVirtualSegmentMountPlan, shouldBypassShadowQueueForSegmentMetas } from '../scrollVectorStrategy';
 import styles from '../ScrollReaderView.module.css';
@@ -12,11 +11,11 @@ import {
     RANGE_HYDRATION_OVERSCAN_SEGMENTS,
     RANGE_HYDRATION_PRELOAD_MARGIN_PX,
     GLOBAL_VIRTUAL_SEGMENT_BUDGET,
-    PROGRESS_REPORT_EPSILON,
 } from './scrollReaderConstants';
 import type { LoadedChapter } from './scrollReaderTypes';
 import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
+import { useScrollProgressCommit } from './useScrollProgressCommit';
 
 interface UseAtomicDomCommitOptions {
     chapters: LoadedChapter[];
@@ -47,7 +46,6 @@ interface UseAtomicDomCommitOptions {
  * - requestFlush: 累计上方章节高度差分后批量补偿 scrollTop，让视口锚点
  *   保持在原章节
  * - syncViewportState: 从当前 scrollTop 派生 activeSpine + progress 快照
- * - commitProgressSnapshot: 防抖后写回 db.progress（spine/scrollTop/百分比）
  */
 export function useAtomicDomCommit(
     refs: ScrollReaderRefs,
@@ -89,6 +87,13 @@ export function useAtomicDomCommit(
         lastReportedProgressRef,
         pendingProgressSnapshotRef,
     } = refs;
+
+    const commitProgressSnapshot = useScrollProgressCommit({
+        bookId,
+        spineItems,
+        lastReportedProgressRef,
+        onProgressChange,
+    });
 
     const requestFlush = useCallback(() => {
         if (flushRafRef.current !== null) return;
@@ -241,33 +246,6 @@ export function useAtomicDomCommit(
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [chapters, cleanupVirtualChapterRuntime, initialScrollOffset, isInitialized, mountVirtualSegment, observeChapterResizeNodes, refreshVirtualChapterLayout, registerVirtualChapterRuntime, unobserveChapterResizeNodes]);
-
-    const commitProgressSnapshot = useCallback((
-        snapshot: { spineIndex: number; progress: number; scrollTop: number } | null,
-    ) => {
-        if (!snapshot || spineItems.length === 0) return;
-
-        const previous = lastReportedProgressRef.current;
-        const progressChanged = !previous
-            || previous.spineIndex !== snapshot.spineIndex
-            || Math.abs(previous.progress - snapshot.progress) >= PROGRESS_REPORT_EPSILON;
-
-        if (!progressChanged) return;
-
-        lastReportedProgressRef.current = {
-            spineIndex: snapshot.spineIndex,
-            progress: snapshot.progress,
-        };
-        onProgressChange?.(snapshot.progress);
-        db.progress.put({
-            bookId,
-            location: `vitra:${snapshot.spineIndex}:${snapshot.scrollTop}`,
-            percentage: snapshot.progress,
-            currentChapter: spineItems[snapshot.spineIndex]?.href || '',
-            updatedAt: Date.now(),
-        }).catch(err => console.warn('[ScrollReader] Progress save failed:', err));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [spineItems, bookId, onProgressChange]);
 
     const syncViewportState = useCallback((
         scrollTop: number,
