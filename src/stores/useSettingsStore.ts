@@ -64,10 +64,12 @@ const SETTINGS_DB_KEY = 'settings:readerSettings'
 const SAVED_COLORS_DB_KEY = 'settings:savedColors'
 
 function persistSettings(settings: ReaderSettings): void {
+    // fire-and-forget：持久化失败不影响当前会话，下次启动会重新使用默认值
     db.settings.put({ key: SETTINGS_DB_KEY, value: settings }).catch(() => {})
 }
 
 function persistSavedColors(textColors: string[], bgColors: string[]): void {
+    // fire-and-forget：持久化失败不影响当前会话
     db.settings.put({ key: SAVED_COLORS_DB_KEY, value: { textColors, bgColors } }).catch(() => {})
 }
 

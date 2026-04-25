@@ -102,7 +102,7 @@ export class VitraContentAdapter implements ContentProvider {
     this.book.releaseAssetSession?.()
     this.book.destroy()
 
-    // 异步写入磁盘缓存（fire-and-forget）
+    // 异步写入磁盘缓存（fire-and-forget，写入失败不影响当前会话）
     if (payload) {
       this.bookCache.put(this.buffer, payload).catch(() => {})
     }
