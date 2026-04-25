@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { addActiveReadingMs } from '../../services/readingStatsService'
 
+/** 阅读活动心跳间隔（ms） */
+const ACTIVITY_TICK_INTERVAL_MS = 1_000
+
 interface UseReadingActivityTrackerOptions {
     bookId: string
     isReady: boolean
@@ -60,7 +63,7 @@ export function useReadingActivityTracker({
             }
         }
 
-        const timer = window.setInterval(tick, 1_000)
+        const timer = window.setInterval(tick, ACTIVITY_TICK_INTERVAL_MS)
         return () => {
             window.clearInterval(timer)
         }

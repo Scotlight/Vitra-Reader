@@ -1,5 +1,8 @@
 import { db } from '../services/storageService'
 
+/** WebDAV 重试退避基础延迟（ms），实际延迟 = base * (attempt + 1） */
+const WEBDAV_RETRY_BACKOFF_BASE_MS = 500
+
 export const K_URL = 'sync:webdavUrl'
 export const K_PATH = 'sync:webdavPath'
 export const K_USER = 'sync:webdavUser'
@@ -87,7 +90,7 @@ export async function webdavSyncWithRetry(
         if (result.success) return result
         lastError = result.error || `WebDAV ${action} failed`
         if (attempt < retries) {
-            await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)))
+            await new Promise((resolve) => setTimeout(resolve, WEBDAV_RETRY_BACKOFF_BASE_MS * (attempt + 1)))
         }
     }
     return { success: false, error: lastError || `WebDAV ${action} failed` }

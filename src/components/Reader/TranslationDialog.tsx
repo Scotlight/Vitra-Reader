@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import styles from './TranslationDialog.module.css'
 
+/** 复制成功反馈的显示时长（ms） */
+const COPY_FEEDBACK_DURATION_MS = 1200
+
 interface TranslationDialogProps {
     visible: boolean
     sourceText: string
@@ -29,7 +32,7 @@ export const TranslationDialog = ({
 
     useEffect(() => {
         if (!copied) return
-        const timer = window.setTimeout(() => setCopied(false), 1200)
+        const timer = window.setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS)
         return () => window.clearTimeout(timer)
     }, [copied])
 

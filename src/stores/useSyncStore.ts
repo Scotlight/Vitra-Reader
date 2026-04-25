@@ -13,6 +13,9 @@ import {
     webdavSyncWithRetry, checkEtagAndUpload,
 } from './syncStoreWebdav'
 
+/** 同步状态提示自动清除的延迟（ms） */
+const SYNC_STATUS_CLEAR_DELAY_MS = 3000
+
 export type SyncMode = 'full' | 'data' | 'files'
 export type RestoreMode = 'auto' | SyncMode
 
@@ -177,7 +180,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
             set({ syncStatus: `Error: ${e instanceof Error ? e.message : String(e)}` })
         } finally {
             set({ isSyncing: false })
-            setTimeout(() => set({ syncStatus: '' }), 3000)
+            setTimeout(() => set({ syncStatus: '' }), SYNC_STATUS_CLEAR_DELAY_MS)
         }
     },
 

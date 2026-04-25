@@ -2,6 +2,9 @@ import { useRef, useEffect, useCallback, useState, type MutableRefObject } from 
 import type { ContentProvider, SpineItemInfo } from '../../../engine/core/contentProvider'
 import { preprocessChapterContent } from '../../../engine/render/chapterPreprocessService'
 
+/** 章节切换淡出动画时长（ms），与 CSS transition 保持一致 */
+const CHAPTER_FADE_DURATION_MS = 160
+
 interface UsePaginatedChapterLoaderOptions {
     provider: ContentProvider
     renderedHighlightsRef: MutableRefObject<Set<string>>
@@ -55,7 +58,7 @@ export function usePaginatedChapterLoader({
 
         if (!isInitialLoadRef.current) {
             setChapterFading(true)
-            await new Promise(resolve => setTimeout(resolve, 160))
+            await new Promise(resolve => setTimeout(resolve, CHAPTER_FADE_DURATION_MS))
         }
 
         setIsLoading(true)
