@@ -2,19 +2,17 @@ import { useCallback, useLayoutEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import type { SpineItemInfo } from '../../../engine/core/contentProvider';
 import { findTextInDOM } from '../../../utils/textFinder';
-import { computeGlobalVirtualSegmentMountPlan, shouldBypassShadowQueueForSegmentMetas } from '../scrollVectorStrategy';
+import { shouldBypassShadowQueueForSegmentMetas } from '../scrollVectorStrategy';
 import styles from '../ScrollReaderView.module.css';
 import { markChapterAsMounted, resolveViewportDerivedMetrics } from './scrollReaderHelpers';
 import {
     SCROLL_HEDGE_EPSILON_PX,
     INSTANT_SCROLL_BEHAVIOR,
-    RANGE_HYDRATION_OVERSCAN_SEGMENTS,
-    RANGE_HYDRATION_PRELOAD_MARGIN_PX,
-    GLOBAL_VIRTUAL_SEGMENT_BUDGET,
 } from './scrollReaderConstants';
 import type { LoadedChapter } from './scrollReaderTypes';
 import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
+import { useInitialVirtualSegmentSync } from './useInitialVirtualSegmentSync';
 import { useScrollProgressCommit } from './useScrollProgressCommit';
 
 interface UseAtomicDomCommitOptions {
@@ -42,7 +40,7 @@ interface UseAtomicDomCommitOptions {
  * 原子 DOM 挂载协议：
  * - useLayoutEffect: 把 ready 状态的章节 DOM 一次性挂入 listEl，按顺序
  *   prepend/append/insertBefore，挂完统一设置 mounted；触发首次初始滚动、
- *   pending 搜索定位；计算整体虚拟段挂载计划（全局预算 + overscan）
+ *   pending 搜索定位和虚拟段同步
  * - requestFlush: 累计上方章节高度差分后批量补偿 scrollTop，让视口锚点
  *   保持在原章节
  * - syncViewportState: 从当前 scrollTop 派生 activeSpine + progress 快照
@@ -81,7 +79,6 @@ export function useAtomicDomCommit(
         initialScrollDone,
         lastScrollTopRef,
         pendingSearchTextRef,
-        virtualSyncRafRef,
         pipelineRef,
         lastKnownAnchorIndexRef,
         lastReportedProgressRef,
@@ -93,6 +90,11 @@ export function useAtomicDomCommit(
         spineItems,
         lastReportedProgressRef,
         onProgressChange,
+    });
+    const scheduleInitialVirtualSegmentSync = useInitialVirtualSegmentSync(refs, {
+        virtualChaptersRef,
+        mountVirtualSegment,
+        refreshVirtualChapterLayout,
     });
 
     const requestFlush = useCallback(() => {
@@ -213,39 +215,9 @@ export function useAtomicDomCommit(
         if (!isInitialized && chapters.some(ch => ch.status === 'ready' || ch.status === 'mounted')) {
             setIsInitialized(true);
         }
-        if (virtualSyncRafRef.current === null) {
-            virtualSyncRafRef.current = requestAnimationFrame(() => {
-                virtualSyncRafRef.current = null;
-                const viewportEl = viewportRef.current;
-                if (!viewportEl) return;
-                const scrollTop = viewportEl.scrollTop;
-                const viewportHeight = viewportEl.clientHeight;
-                const runtimes = Array.from(virtualChaptersRef.current.values());
-                const mountPlan = computeGlobalVirtualSegmentMountPlan(
-                    runtimes.map((runtime) => ({
-                        chapterId: runtime.chapterId,
-                        chapterTop: runtime.chapterEl.offsetTop,
-                        vector: runtime.vector,
-                    })),
-                    scrollTop,
-                    viewportHeight,
-                    {
-                        overscanSegments: RANGE_HYDRATION_OVERSCAN_SEGMENTS,
-                        preloadMarginPx: RANGE_HYDRATION_PRELOAD_MARGIN_PX,
-                        globalSegmentBudget: GLOBAL_VIRTUAL_SEGMENT_BUDGET,
-                    },
-                );
-                runtimes.forEach((runtime) => {
-                    const nextIndices = new Set(mountPlan.get(runtime.chapterId) ?? []);
-                    Array.from(nextIndices).sort((a, b) => a - b).forEach((segmentIndex) => {
-                        mountVirtualSegment(runtime, segmentIndex);
-                    });
-                    refreshVirtualChapterLayout(runtime);
-                });
-            });
-        }
+        scheduleInitialVirtualSegmentSync();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [chapters, cleanupVirtualChapterRuntime, initialScrollOffset, isInitialized, mountVirtualSegment, observeChapterResizeNodes, refreshVirtualChapterLayout, registerVirtualChapterRuntime, unobserveChapterResizeNodes]);
+    }, [chapters, cleanupVirtualChapterRuntime, initialScrollOffset, isInitialized, observeChapterResizeNodes, registerVirtualChapterRuntime, scheduleInitialVirtualSegmentSync, unobserveChapterResizeNodes]);
 
     const syncViewportState = useCallback((
         scrollTop: number,
