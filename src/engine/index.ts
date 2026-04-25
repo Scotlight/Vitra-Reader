@@ -16,10 +16,6 @@ export type { SectionChunk } from './core/vitraSectionSplitter';
 export { createBlobSectionsFromChunks } from './core/vitraSectionFactory';
 export type { SectionChunkInput, SectionFactoryResult } from './core/vitraSectionFactory';
 
-// 管线：统一 open 入口
-export { VitraPipeline, VITRA_SUPPORTED_FORMATS } from './pipeline/vitraPipeline';
-export type { VitraOpenRequest, VitraOpenHandle, VitraPreviewSection } from './pipeline/vitraPipeline';
-
 // 核心：分页引擎 (4.3)
 export {
   paginateBlocks,
@@ -101,9 +97,6 @@ export type { VitraCachedBook, VitraCacheStats } from './cache/vitraBookCache';
 // Section LRU 内存管理 (5.2)
 export { VitraSectionManager } from './cache/vitraSectionManager';
 export type { VitraSectionManagerOptions, VitraSectionManagerStats } from './cache/vitraSectionManager';
-
-// 适配器：VitraBook → ContentProvider
-export { VitraContentAdapter } from './pipeline/vitraContentAdapter';
 
 // 搜索索引缓存 (5.3 辅助)
 export {
