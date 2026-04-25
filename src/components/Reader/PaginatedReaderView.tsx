@@ -183,16 +183,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
 
             const html = preprocessed.htmlContent;
 
-            const plainText = html
-                .replace(/<script[\s\S]*?<\/script>/gi, '')
-                .replace(/<style[\s\S]*?<\/style>/gi, '')
-                .replace(/<[^>]+>/g, ' ')
-                .replace(/&nbsp;/gi, ' ')
-                .trim();
-            const hasMedia = /<(img|svg|video|audio|canvas|table|math|object|embed)\b/i.test(html);
-            const hasRenderableContent = plainText.length > 0 || hasMedia;
-
-            if (!hasRenderableContent) {
+            if (!preprocessed.hasRenderableContent) {
                 const fallbackIndex = goToLastPage ? spineIndex - 1 : spineIndex + 1;
                 if (fallbackIndex >= 0 && fallbackIndex < spineItemsRef.current.length) {
                     setCurrentSpineIndex(fallbackIndex);

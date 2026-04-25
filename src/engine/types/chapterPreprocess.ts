@@ -18,6 +18,7 @@ export interface ChapterPreprocessResult {
     removedAttributeCount: number
     usedFallback: boolean
     stylesScoped: boolean
+    hasRenderableContent: boolean
     segmentMetas?: SegmentMeta[]
 }
 

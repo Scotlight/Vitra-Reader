@@ -23,6 +23,10 @@ const FRAGMENT_HARD_MAX_CHARS = 180_000;
 const VECTOR_MIN_SEGMENT_EST_HEIGHT = 96;
 const VECTORIZE_HTML_LENGTH_THRESHOLD = 450_000;
 
+// 用于 hasRenderableContent 判断，避免在调用方重复 regex 扫描
+const MEDIA_TAG_RE = /<(img|svg|video|audio|canvas|table|math|object|embed)\b/i;
+const VISIBLE_TEXT_RE = /[^\s<>&]/;
+
 interface AppendSegmentOptions {
   segments: SegmentMeta[];
   html: string;
@@ -68,6 +72,7 @@ export function preprocessChapterCore(input: ChapterPreprocessInput): ChapterPre
   }
 
   const shouldDropHtmlPayload = shouldDropFullHtmlPayload(cleanedHtml, segmentMetas);
+  const hasRenderableContent = MEDIA_TAG_RE.test(cleanedHtml) || VISIBLE_TEXT_RE.test(cleanedHtml);
 
   return {
     htmlContent: shouldDropHtmlPayload ? '' : cleanedHtml,
@@ -77,6 +82,7 @@ export function preprocessChapterCore(input: ChapterPreprocessInput): ChapterPre
     removedAttributeCount: sanitized.removedAttributeCount,
     usedFallback: sanitized.usedFallback,
     stylesScoped: true,
+    hasRenderableContent,
     segmentMetas,
   };
 }
