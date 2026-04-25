@@ -19,9 +19,9 @@ import { useIdlePrefetch } from './scrollReader/useIdlePrefetch';
 import { useBookHighlights } from './scrollReader/useBookHighlights';
 import { useScrollPhysics, DEFAULT_SMOOTH_CONFIG, type SmoothScrollConfig } from './scrollReader/useScrollPhysics';
 import { useSpineItems } from './scrollReader/useSpineItems';
+import { useReaderUnmountCleanup } from './scrollReader/useReaderUnmountCleanup';
 import type { LoadedChapter } from './scrollReader/scrollReaderTypes';
 import { type Highlight } from '../../services/storageService';
-import { cancelIdleTask } from '../../utils/idleScheduler';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
 import styles from './ScrollReaderView.module.css';
 
@@ -61,11 +61,8 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         viewportRef,
         chapterListRef,
         loadingLockRef,
-        scrollIdleTimerRef,
         chaptersRef,
-        virtualSyncRafRef,
         highlightDirtyChaptersRef,
-        highlightIdleHandlesRef,
         lastReportedProgressRef,
         pendingProgressSnapshotRef,
         lastKnownAnchorIndexRef,
@@ -76,7 +73,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
     const [isInitialized, setIsInitialized] = useState(false);
 
     const spineItems = useSpineItems(refs, provider);
-    const [isInitialized, setIsInitialized] = useState(false);
 
     // ── Highlights ──
 
@@ -156,24 +152,7 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
 
     // ── Aggregate Unmount Cleanup ──
 
-    useEffect(() => {
-        return () => {
-            cancelIdlePrefetch();
-            if (scrollIdleTimerRef.current !== null) {
-                window.clearTimeout(scrollIdleTimerRef.current);
-                scrollIdleTimerRef.current = null;
-            }
-            highlightIdleHandlesRef.current.forEach((handle) => {
-                cancelIdleTask(handle);
-            });
-            highlightIdleHandlesRef.current.clear();
-            virtualChaptersRef.current.clear();
-            if (virtualSyncRafRef.current !== null) {
-                cancelAnimationFrame(virtualSyncRafRef.current);
-                virtualSyncRafRef.current = null;
-            }
-        };
-    }, [cancelIdlePrefetch, virtualChaptersRef]);
+    useReaderUnmountCleanup(refs, { cancelIdlePrefetch, virtualChaptersRef });
 
     // Pending shadow renders queue
     const [shadowQueue, setShadowQueue] = useState<LoadedChapter[]>([]);
