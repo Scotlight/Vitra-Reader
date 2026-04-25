@@ -56,7 +56,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         toggleFavorite,
         moveToTrash,
         restoreFromTrash,
-    } = useLibraryMetaState()
+    } = useLibraryMetaState({ activeNav })
 
     const trashBookIdSet = useMemo(() => new Set(trashBookIds), [trashBookIds])
 

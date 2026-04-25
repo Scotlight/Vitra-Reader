@@ -1,8 +1,25 @@
-import { useEffect, useRef, useState } from 'react'
-import { db, type Bookmark, type Highlight } from '../../../services/storageService'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Bookmark, Highlight } from '../../../services/storageService'
 import { areProgressMapsEqual, areStringListsEqual } from './useLibraryDerivedData'
+import {
+    loadLibraryAnnotationMeta,
+    loadLibraryCoreMeta,
+    saveFavoriteBookIds,
+    saveTrashBookIds,
+} from './libraryMetaRepository'
 
-export function useLibraryMetaState() {
+type LibraryMetaNav = 'all' | 'fav' | 'notes' | 'highlight' | 'trash' | 'stats'
+
+interface UseLibraryMetaStateOptions {
+    activeNav: LibraryMetaNav
+}
+
+function isAnnotationNav(nav: LibraryMetaNav): boolean {
+    return nav === 'notes' || nav === 'highlight'
+}
+
+export function useLibraryMetaState(options: UseLibraryMetaStateOptions) {
+    const { activeNav } = options
     const [progressMap, setProgressMap] = useState<Record<string, number>>({})
     const [favoriteBookIds, setFavoriteBookIds] = useState<string[]>([])
     const [trashBookIds, setTrashBookIds] = useState<string[]>([])
@@ -11,51 +28,65 @@ export function useLibraryMetaState() {
     const [allHighlights, setAllHighlights] = useState<Highlight[]>([])
     const [allBookmarks, setAllBookmarks] = useState<Bookmark[]>([])
     const metaRefreshTaskRef = useRef<Promise<void> | null>(null)
+    const annotationRefreshTaskRef = useRef<Promise<void> | null>(null)
+    const activeNavRef = useRef<LibraryMetaNav>(activeNav)
+
+    const loadCoreMeta = useCallback(async () => {
+        if (metaRefreshTaskRef.current) return metaRefreshTaskRef.current
+
+        const task = (async () => {
+            const snapshot = await loadLibraryCoreMeta()
+
+            setProgressMap((previous) => (areProgressMapsEqual(previous, snapshot.progressMap) ? previous : snapshot.progressMap))
+            setFavoriteBookIds((previous) => (areStringListsEqual(previous, snapshot.favoriteBookIds) ? previous : snapshot.favoriteBookIds))
+            setTrashBookIds((previous) => (areStringListsEqual(previous, snapshot.trashBookIds) ? previous : snapshot.trashBookIds))
+            setNoteBookIds((previous) => (areStringListsEqual(previous, snapshot.noteBookIds) ? previous : snapshot.noteBookIds))
+            setHighlightBookIds((previous) => (areStringListsEqual(previous, snapshot.highlightBookIds) ? previous : snapshot.highlightBookIds))
+        })().finally(() => {
+            if (metaRefreshTaskRef.current === task) {
+                metaRefreshTaskRef.current = null
+            }
+        })
+
+        metaRefreshTaskRef.current = task
+        return task
+    }, [])
+
+    const loadAnnotationMeta = useCallback(async () => {
+        if (annotationRefreshTaskRef.current) return annotationRefreshTaskRef.current
+
+        const task = (async () => {
+            const snapshot = await loadLibraryAnnotationMeta()
+
+            setNoteBookIds((previous) => (areStringListsEqual(previous, snapshot.noteBookIds) ? previous : snapshot.noteBookIds))
+            setHighlightBookIds((previous) => (areStringListsEqual(previous, snapshot.highlightBookIds) ? previous : snapshot.highlightBookIds))
+            setAllHighlights(snapshot.allHighlights)
+            setAllBookmarks(snapshot.allBookmarks)
+        })().finally(() => {
+            if (annotationRefreshTaskRef.current === task) {
+                annotationRefreshTaskRef.current = null
+            }
+        })
+
+        annotationRefreshTaskRef.current = task
+        return task
+    }, [])
 
     useEffect(() => {
-        const loadAllMeta = async () => {
-            if (metaRefreshTaskRef.current) return metaRefreshTaskRef.current
-
-            const task = (async () => {
-                const [allProgress, favoriteEntry, trashEntry, bookmarks, highlights] = await Promise.all([
-                    db.progress.toArray(),
-                    db.settings.get('favoriteBookIds'),
-                    db.settings.get('trashBookIds'),
-                    db.bookmarks.toArray(),
-                    db.highlights.toArray(),
-                ])
-                const nextProgressMap = allProgress.reduce<Record<string, number>>((acc, item) => {
-                    acc[item.bookId] = Math.round((item.percentage || 0) * 100)
-                    return acc
-                }, {})
-                const favoriteValue = favoriteEntry?.value
-                const nextFavoriteBookIds = Array.isArray(favoriteValue) ? favoriteValue.map((item) => String(item)) : []
-                const trashValue = trashEntry?.value
-                const nextTrashBookIds = Array.isArray(trashValue) ? trashValue.map((item) => String(item)) : []
-                const nextNoteBookIds = Array.from(new Set(bookmarks.map((item) => item.bookId)))
-                const nextHighlightBookIds = Array.from(new Set(highlights.map((item) => item.bookId)))
-
-                setProgressMap((previous) => (areProgressMapsEqual(previous, nextProgressMap) ? previous : nextProgressMap))
-                setFavoriteBookIds((previous) => (areStringListsEqual(previous, nextFavoriteBookIds) ? previous : nextFavoriteBookIds))
-                setTrashBookIds((previous) => (areStringListsEqual(previous, nextTrashBookIds) ? previous : nextTrashBookIds))
-                setNoteBookIds((previous) => (areStringListsEqual(previous, nextNoteBookIds) ? previous : nextNoteBookIds))
-                setHighlightBookIds((previous) => (areStringListsEqual(previous, nextHighlightBookIds) ? previous : nextHighlightBookIds))
-                setAllHighlights(highlights)
-                setAllBookmarks(bookmarks)
-            })().finally(() => {
-                if (metaRefreshTaskRef.current === task) {
-                    metaRefreshTaskRef.current = null
-                }
-            })
-
-            metaRefreshTaskRef.current = task
-            return task
+        activeNavRef.current = activeNav
+        if (isAnnotationNav(activeNav)) {
+            void loadAnnotationMeta()
         }
+    }, [activeNav, loadAnnotationMeta])
 
-        void loadAllMeta()
+    useEffect(() => {
+        void loadCoreMeta()
         const handleFocus = () => {
             if (document.visibilityState === 'hidden') return
-            void loadAllMeta()
+            void loadCoreMeta()
+            if (isAnnotationNav(activeNavRef.current)) {
+                void loadAnnotationMeta()
+            }
         }
         document.addEventListener('visibilitychange', handleFocus)
         window.addEventListener('focus', handleFocus)
@@ -63,16 +94,16 @@ export function useLibraryMetaState() {
             document.removeEventListener('visibilitychange', handleFocus)
             window.removeEventListener('focus', handleFocus)
         }
-    }, [])
+    }, [loadCoreMeta, loadAnnotationMeta])
 
     const persistFavorites = async (next: string[]) => {
         setFavoriteBookIds(next)
-        await db.settings.put({ key: 'favoriteBookIds', value: next })
+        await saveFavoriteBookIds(next)
     }
 
     const persistTrash = async (next: string[]) => {
         setTrashBookIds(next)
-        await db.settings.put({ key: 'trashBookIds', value: next })
+        await saveTrashBookIds(next)
     }
 
     const toggleFavorite = async (bookId: string) => {
