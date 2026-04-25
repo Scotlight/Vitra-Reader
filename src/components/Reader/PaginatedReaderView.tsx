@@ -6,12 +6,12 @@ import type { ContentProvider, SpineItemInfo } from '../../engine/core/contentPr
 import { releaseMediaResources } from '../../utils/mediaResourceCleanup';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
 import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
-import { db } from '../../services/storageService';
 import { findTextInDOM } from '../../utils/textFinder';
 import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService';
 import { startMeasure, type VitraMeasureHandle, type PageBoundary } from '../../engine';
 import { usePaginatedHighlights } from './paginatedReader/usePaginatedHighlights';
 import { usePaginatedNavigation } from './paginatedReader/usePaginatedNavigation';
+import { usePaginatedProgress } from './paginatedReader/usePaginatedProgress';
 import styles from './PaginatedReaderView.module.css';
 
 interface PaginatedReaderViewProps {
@@ -427,38 +427,16 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         return viewport.clientWidth;
     }, []);
 
-    // ── Report chapter change ──
-    useEffect(() => {
-        if (spineItems.length === 0) return;
-        const item = spineItems[currentSpineIndex];
-        if (item) onChapterChange?.(item.id, item.href);
-    }, [currentSpineIndex, spineItems, onChapterChange]);
-
-    // ── Report progress + persist ──
-    const progressTimerRef = useRef<number | null>(null);
-    useEffect(() => {
-        if (spineItems.length === 0 || isLoading) return;
-        const chapterProgress = totalPages > 1 ? currentPage / (totalPages - 1) : 0;
-        const progress = (currentSpineIndex + Math.min(1, chapterProgress)) / spineItems.length;
-        const clamped = Math.max(0, Math.min(1, progress));
-        onProgressChange?.(clamped);
-
-        // 500ms debounce，避免翻页时频繁写 IndexedDB
-        if (progressTimerRef.current) window.clearTimeout(progressTimerRef.current);
-        progressTimerRef.current = window.setTimeout(() => {
-            db.progress.put({
-                bookId,
-                location: `vitra:${currentSpineIndex}:${currentPage}`,
-                percentage: clamped,
-                currentChapter: spineItems[currentSpineIndex]?.href || '',
-                updatedAt: Date.now(),
-            }).catch(err => console.warn('[PaginatedReader] Progress save failed:', err));
-        }, 500);
-
-        return () => {
-            if (progressTimerRef.current) window.clearTimeout(progressTimerRef.current);
-        };
-    }, [currentSpineIndex, currentPage, totalPages, spineItems, isLoading, bookId, onProgressChange]);
+    usePaginatedProgress({
+        bookId,
+        currentPage,
+        currentSpineIndex,
+        isLoading,
+        onChapterChange,
+        onProgressChange,
+        spineItems,
+        totalPages,
+    });
 
     // ── jumpToSpine (exposed via ref) ──
     const jumpToSpine = useCallback(async (targetSpineIndex: number, searchText?: string) => {
