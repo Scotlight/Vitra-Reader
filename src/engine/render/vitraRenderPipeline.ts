@@ -31,7 +31,7 @@ export interface VitraRenderTraceSnapshot {
     stages: readonly VitraRenderStageTiming[]
 }
 
-interface VitraRenderTraceState {
+export interface VitraRenderTraceState {
     chapterId: string
     startedAt: number
     finishedAt: number | null

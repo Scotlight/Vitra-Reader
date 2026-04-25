@@ -4,6 +4,7 @@ import {
     runVitraRenderStage,
     finalizeVitraRenderTrace,
     formatVitraRenderTrace,
+    type VitraRenderTraceState,
 } from '../engine/render/vitraRenderPipeline'
 
 describe('vitraRenderPipeline', () => {
@@ -42,7 +43,7 @@ describe('vitraRenderPipeline', () => {
             runVitraRenderStage(trace, 'parse', () => { throw new Error('parse fail') })
         ).rejects.toThrow('parse fail')
         // stageTimings 应记录了 parse（即使失败）
-        expect((trace as any).stageTimings['parse']).toBeDefined()
+        expect((trace as VitraRenderTraceState).stageTimings['parse']).toBeDefined()
     })
 
     it('缺少阶段时 finalize 抛错', async () => {
