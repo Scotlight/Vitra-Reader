@@ -87,6 +87,50 @@ export function preprocessChapterCore(input: ChapterPreprocessInput): ChapterPre
   };
 }
 
+const yieldToMain = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
+/** Worker 不可用时的 async fallback，各阶段之间 yield 避免阻塞主线程 */
+export async function preprocessChapterCoreAsync(input: ChapterPreprocessInput): Promise<ChapterPreprocessResult> {
+  // stage 1: sanitize（含 DOMParser，不可分片，作为单一块）
+  const sanitized = sanitizeChapterHtml(input.htmlContent);
+  await yieldToMain();
+
+  // stage 2: style extract + remove
+  const inlineStyles = sanitizeStyleSheets(extractStyles(sanitized.htmlContent));
+  const sanitizedExternalStyles = sanitizeStyleSheets(input.externalStyles);
+  const cleanedHtml = removeStyleTags(sanitized.htmlContent);
+  await yieldToMain();
+
+  // stage 3: scope styles
+  const scopedStyles = [...sanitizedExternalStyles, ...inlineStyles]
+    .map((css) => scopeStyles(css, input.chapterId))
+    .filter((css) => css.trim().length > 0);
+  await yieldToMain();
+
+  // stage 4: vectorize（可选，仅大章节触发）
+  let segmentMetas: SegmentMeta[] | undefined;
+  if (input.vectorize && cleanedHtml.length >= VECTORIZE_HTML_LENGTH_THRESHOLD && input.vectorConfig) {
+    segmentMetas = vectorizeHtmlToSegmentMetas(cleanedHtml, input.vectorConfig);
+    await yieldToMain();
+  }
+
+  // stage 5: split fragments
+  const shouldDropHtmlPayload = shouldDropFullHtmlPayload(cleanedHtml, segmentMetas);
+  const hasRenderableContent = MEDIA_TAG_RE.test(cleanedHtml) || VISIBLE_TEXT_RE.test(cleanedHtml);
+
+  return {
+    htmlContent: shouldDropHtmlPayload ? '' : cleanedHtml,
+    htmlFragments: shouldDropHtmlPayload ? [] : splitHtmlIntoFragments(cleanedHtml),
+    externalStyles: scopedStyles,
+    removedTagCount: sanitized.removedTagCount,
+    removedAttributeCount: sanitized.removedAttributeCount,
+    usedFallback: sanitized.usedFallback,
+    stylesScoped: true,
+    hasRenderableContent,
+    segmentMetas,
+  };
+}
+
 function buildTailFragments(html: string, start: number): string[] | null {
   if (start >= html.length) return [];
   if (html.length - start <= FRAGMENT_HARD_MAX_CHARS) {

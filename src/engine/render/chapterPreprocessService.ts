@@ -2,7 +2,7 @@ import type {
     ChapterPreprocessInput,
     ChapterPreprocessResult,
 } from '../types/chapterPreprocess'
-import { preprocessChapterCore } from './chapterPreprocessCore'
+import { preprocessChapterCoreAsync } from './chapterPreprocessCore'
 import {
     preprocessChapterByWorker,
     resetChapterPreprocessWorker,
@@ -19,10 +19,6 @@ export function resolveChapterPreprocessTimeout(htmlLength: number, baseTimeout:
     if (htmlLength < 2_500_000) return Math.max(20_000, baseTimeout)
     if (htmlLength < 5_000_000) return Math.max(40_000, baseTimeout)
     return Math.max(60_000, baseTimeout)
-}
-
-function preprocessSynchronously(payload: ChapterPreprocessInput): ChapterPreprocessResult {
-    return preprocessChapterCore(payload)
 }
 
 export async function preprocessChapterContent(
@@ -44,9 +40,9 @@ export async function preprocessChapterContent(
     } catch (error) {
         resetChapterPreprocessWorker()
         console.warn(
-            '[ChapterPreprocess] Worker unavailable, fallback to sync core:',
+            '[ChapterPreprocess] Worker unavailable, fallback to async core:',
             error instanceof Error ? error.message : String(error),
         )
-        return preprocessSynchronously(normalizedPayload)
+        return preprocessChapterCoreAsync(normalizedPayload)
     }
 }
