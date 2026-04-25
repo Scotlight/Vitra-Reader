@@ -1,6 +1,6 @@
-import type { ContentProvider } from '../../engine/core/contentProvider'
-import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService'
-import type { ChapterPreprocessResult } from '../../engine/types/chapterPreprocess'
+import type { ContentProvider } from '@/engine/core/contentProvider'
+import { preprocessChapterContent } from '@/engine/render/chapterPreprocessService'
+import type { ChapterPreprocessResult } from '@/engine/types/chapterPreprocess'
 
 export interface ScrollChapterVectorStyleInput {
     fontSize: number

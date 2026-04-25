@@ -1,5 +1,5 @@
-import type { EpubArchive, EpubBookInternal, EpubSpineItem } from '../../../types/epubjs';
-import { resolveSessionAssetUrl } from '../../../utils/assetLoader';
+import type { EpubArchive, EpubBookInternal, EpubSpineItem } from '@/types/epubjs';
+import { resolveSessionAssetUrl } from '@/utils/assetLoader';
 
 const RESOURCE_WARNING_CACHE_LIMIT = 240;
 const STYLE_URL_PATTERN = /url\(([^)]+)\)/gi;

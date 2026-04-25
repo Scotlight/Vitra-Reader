@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import type { Highlight, Bookmark } from '../../services/storageService'
+import type { Highlight, Bookmark } from '@/services/storageService'
 import styles from './LibraryView.module.css'
 
 type AnnotationGroup<T> = {

@@ -1,5 +1,5 @@
 import type { BookFormat } from './contentProvider'
-import type { PageTurnMode } from '../../stores/useSettingsStore'
+import type { PageTurnMode } from '@/stores/useSettingsStore'
 
 type ReaderRenderProfile = 'reflowable' | 'fixed-layout' | 'scroll-only'
 

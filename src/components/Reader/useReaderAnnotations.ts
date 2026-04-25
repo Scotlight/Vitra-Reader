@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { db, type Bookmark, type Highlight } from '../../services/storageService'
+import { db, type Bookmark, type Highlight } from '@/services/storageService'
 import type { ReaderPanelTab } from './ReaderLeftPanel'
 
 interface UseReaderAnnotationsArgs {

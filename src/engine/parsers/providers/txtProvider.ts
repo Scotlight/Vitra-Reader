@@ -1,11 +1,11 @@
-import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '../../core/contentProvider'
+import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '@/engine/core/contentProvider'
 import { decodeTextBuffer } from './textDecoding'
 import {
     isChapterTitle as detectTitle,
     EMPTY_SECTION_HTML,
     DEFAULT_DOCUMENT_LABEL,
-} from '../../render/chapterTitleDetector'
-import { escapeHtml } from '../../core/contentSanitizer'
+} from '@/engine/render/chapterTitleDetector'
+import { escapeHtml } from '@/engine/core/contentSanitizer'
 
 const PARAGRAPHS_PER_CHAPTER = 500
 const MAX_LABEL_LENGTH = 24

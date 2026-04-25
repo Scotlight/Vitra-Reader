@@ -1,4 +1,4 @@
-import { buildFontFamilyWithFallback } from '../../utils/fontFallback'
+import { buildFontFamilyWithFallback } from '@/utils/fontFallback'
 
 export interface ReaderCssConfig {
     textColor: string

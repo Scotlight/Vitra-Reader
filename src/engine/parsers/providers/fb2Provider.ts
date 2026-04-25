@@ -1,8 +1,8 @@
-import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '../../core/contentProvider'
-import { VitraSectionSplitter } from '../../core/vitraSectionSplitter'
+import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '@/engine/core/contentProvider'
+import { VitraSectionSplitter } from '@/engine/core/vitraSectionSplitter'
 import { decodeTextBuffer } from './textDecoding'
-import { EMPTY_SECTION_HTML, DEFAULT_DOCUMENT_LABEL } from '../../render/chapterTitleDetector'
-import { escapeHtml } from '../../core/contentSanitizer'
+import { EMPTY_SECTION_HTML, DEFAULT_DOCUMENT_LABEL } from '@/engine/render/chapterTitleDetector'
+import { escapeHtml } from '@/engine/core/contentSanitizer'
 
 interface Chapter {
     title: string

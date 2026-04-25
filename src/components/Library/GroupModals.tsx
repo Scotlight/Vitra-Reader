@@ -1,4 +1,4 @@
-import type { GroupItem } from '../../hooks/groupManagerState'
+import type { GroupItem } from '@/hooks/groupManagerState'
 import styles from './LibraryView.module.css'
 
 // ─── 新建分组弹窗 ───────────────────────────────────

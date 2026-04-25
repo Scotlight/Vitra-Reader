@@ -1,5 +1,5 @@
-﻿import type { SearchResult, SpineItemInfo, TocItem, ContentProvider } from '../../../core/contentProvider'
-import type { PdfDocumentProxy } from '../../../../types/pdfjs'
+﻿import type { SearchResult, SpineItemInfo, TocItem, ContentProvider } from '@/engine/core/contentProvider'
+import type { PdfDocumentProxy } from '@/types/pdfjs'
 import type { PdfRenderedPage, PdfRuntimeKind } from './pdfTypes'
 import { buildFallbackPdfToc, buildPdfHref, loadPdfOutline } from './pdfNavigation'
 import { renderPdfPageHtml } from './pdfPageHtml'

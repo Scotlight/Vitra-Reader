@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { db } from '../../services/storageService'
+import { db } from '@/services/storageService'
 import {
     estimateRemainingMsFromProgress,
     formatDurationLabel,
     loadReadingStatsSummary,
     type ReadingStatsPeriod,
-} from '../../services/readingStatsService'
+} from '@/services/readingStatsService'
 import styles from './LibraryView.module.css'
 
 type ChartType = 'bar' | 'pie'

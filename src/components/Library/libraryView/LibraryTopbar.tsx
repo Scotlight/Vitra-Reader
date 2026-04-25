@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion'
-import searchIcon from '../../../assets/icons/search.svg'
-import sortIcon from '../../../assets/icons/sort.svg'
-import refreshIcon from '../../../assets/icons/refresh.svg'
-import themeIcon from '../../../assets/icons/theme.svg'
-import chevronDownIcon from '../../../assets/icons/chevron-down.svg'
+import searchIcon from '@/assets/icons/search.svg'
+import sortIcon from '@/assets/icons/sort.svg'
+import refreshIcon from '@/assets/icons/refresh.svg'
+import themeIcon from '@/assets/icons/theme.svg'
+import chevronDownIcon from '@/assets/icons/chevron-down.svg'
 import styles from '../LibraryView.module.css'
 
 interface LibraryTopbarProps {

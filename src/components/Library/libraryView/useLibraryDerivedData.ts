@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
-import type { Bookmark, BookMeta, Highlight } from '../../../services/storageService'
-import type { GroupCollection } from '../../../hooks/useGroupManager'
-import { applyHomeOrder, buildHomeOrderKey, parseHomeOrderKey } from '../../../hooks/groupManagerState'
+import type { Bookmark, BookMeta, Highlight } from '@/services/storageService'
+import type { GroupCollection } from '@/hooks/useGroupManager'
+import { applyHomeOrder, buildHomeOrderKey, parseHomeOrderKey } from '@/hooks/groupManagerState'
 import type { LibraryGridItem } from '../BookGrid'
 
 export function areStringListsEqual(left: readonly string[], right: readonly string[]): boolean {

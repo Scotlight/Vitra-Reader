@@ -1,7 +1,7 @@
 import ePub, { Book } from 'epubjs'
-import type { EpubBookInternal, EpubSpineItem } from '../../../types/epubjs'
-import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '../../core/contentProvider'
-import { hasSessionAssetUrl, releaseAssetSession } from '../../../utils/assetLoader'
+import type { EpubBookInternal, EpubSpineItem } from '@/types/epubjs'
+import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '@/engine/core/contentProvider'
+import { hasSessionAssetUrl, releaseAssetSession } from '@/utils/assetLoader'
 import {
     getSpineItems as epubGetSpineItems,
     extractChapterHeading as epubExtractHeading,

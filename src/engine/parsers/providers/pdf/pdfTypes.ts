@@ -1,4 +1,4 @@
-import type { PdfDocumentProxy } from '../../../../types/pdfjs'
+import type { PdfDocumentProxy } from '@/types/pdfjs'
 
 export type PdfRuntimeKind = 'modern' | 'legacy'
 

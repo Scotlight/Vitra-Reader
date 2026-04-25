@@ -1,4 +1,4 @@
-import type { PdfDocumentProxy, PdfPageProxy } from '../../../../types/pdfjs'
+import type { PdfDocumentProxy, PdfPageProxy } from '@/types/pdfjs'
 import { extractPdfPageLinks } from './pdfNavigation'
 import type { PdfRenderedPage } from './pdfTypes'
 

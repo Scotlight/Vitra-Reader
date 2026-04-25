@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { MutableRefObject } from 'react';
-import type { SpineItemInfo } from '../../../engine/core/contentProvider';
-import { db } from '../../../services/storageService';
+import type { SpineItemInfo } from '@/engine/core/contentProvider';
+import { db } from '@/services/storageService';
 import { PROGRESS_REPORT_EPSILON } from './scrollReaderConstants';
 
 export interface ScrollProgressSnapshot {

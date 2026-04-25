@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import type { MutableRefObject } from 'react';
-import { useScrollInertia } from '../../../hooks/useScrollInertia';
-import { useScrollEvents } from '../../../hooks/useScrollEvents';
-import { clampNumber } from '../../../utils/mathUtils';
+import { useScrollInertia } from '@/hooks/useScrollInertia';
+import { useScrollEvents } from '@/hooks/useScrollEvents';
+import { clampNumber } from '@/utils/mathUtils';
 import {
     PHYSICS_FRICTION_NUMERATOR,
     PHYSICS_FRICTION_NO_EASING_OFFSET,

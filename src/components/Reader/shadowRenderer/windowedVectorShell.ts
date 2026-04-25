@@ -15,7 +15,7 @@
  * 2. Worker 返回 segmentMetas 且可 bypass shadow 渲染队列时
  */
 
-import { generateCSSOverride } from '../../../utils/styleProcessor';
+import { generateCSSOverride } from '@/utils/styleProcessor';
 import { buildScopedContentCss, type CreateWindowedVectorChapterShellOptions } from './contentCss';
 
 export function createWindowedVectorChapterShell(

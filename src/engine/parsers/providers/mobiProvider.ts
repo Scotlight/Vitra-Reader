@@ -1,6 +1,6 @@
-import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '../../core/contentProvider'
+import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '@/engine/core/contentProvider'
 import { parseMobiBuffer } from './mobiParser'
-import { EMPTY_SECTION_HTML } from '../../render/chapterTitleDetector'
+import { EMPTY_SECTION_HTML } from '@/engine/render/chapterTitleDetector'
 
 interface Chapter {
     label: string

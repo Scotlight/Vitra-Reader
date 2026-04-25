@@ -1,4 +1,4 @@
-import type { PdfDocumentProxy } from '../../../../types/pdfjs'
+import type { PdfDocumentProxy } from '@/types/pdfjs'
 import type { PdfJsRuntime, PdfRuntimeKind } from './pdfTypes'
 
 const RECOVERABLE_LEGACY_ERROR_MARKERS = [

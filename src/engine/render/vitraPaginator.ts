@@ -3,7 +3,7 @@ import {
     collectCanvasBlockMetricsIdle,
     isCanvasMeasureEligible,
 } from './vitraCanvasMeasure'
-import { clampNumber } from '../../utils/mathUtils'
+import { clampNumber } from '@/utils/mathUtils'
 
 const DEFAULT_GAP = 0
 const DEFAULT_MIN_BREAKABLE_SPACE_RATIO = 0.2

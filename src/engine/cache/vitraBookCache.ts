@@ -12,7 +12,7 @@
  */
 
 import { gzipSync, gunzipSync, strToU8, strFromU8 } from 'fflate'
-import { db } from '../../services/storageService'
+import { db } from '@/services/storageService'
 import type { VitraBookFormat } from '../types/vitraBook'
 
 // ─── 常量 ────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { useEffect, useCallback, type MutableRefObject, type RefObject } from 'react'
-import { releaseMediaResources } from '../../../utils/mediaResourceCleanup'
-import { findTextInDOM } from '../../../utils/textFinder'
-import type { PageBoundary } from '../../../engine'
+import { releaseMediaResources } from '@/utils/mediaResourceCleanup'
+import { findTextInDOM } from '@/utils/textFinder'
+import type { PageBoundary } from '@/engine'
 
 interface UsePaginatedPageLayoutOptions {
     viewportRef: RefObject<HTMLDivElement | null>

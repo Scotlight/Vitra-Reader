@@ -1,5 +1,5 @@
-import type { ContentProvider } from '../../../engine/core/contentProvider'
-import { preprocessChapterContent } from '../../../engine/render/chapterPreprocessService'
+import type { ContentProvider } from '@/engine/core/contentProvider'
+import { preprocessChapterContent } from '@/engine/render/chapterPreprocessService'
 import type { ReaderStyleConfig } from '../ShadowRenderer'
 
 interface LoadPreprocessedChapterContentOptions {

@@ -10,8 +10,8 @@
  * 向量化由 ShadowRenderer 的 measure 阶段按需做。
  */
 
-import { extractStyles, removeStyleTags, scopeStyles } from '../../../utils/styleProcessor';
-import { sanitizeChapterHtml, sanitizeStyleSheets } from '../../../engine/core/contentSanitizer';
+import { extractStyles, removeStyleTags, scopeStyles } from '@/utils/styleProcessor';
+import { sanitizeChapterHtml, sanitizeStyleSheets } from '@/engine/core/contentSanitizer';
 
 export interface LocalProcessedPayload {
     cleanedHtml: string;

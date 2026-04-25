@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { MutableRefObject } from 'react';
-import { cancelIdleTask } from '../../../utils/idleScheduler';
+import { cancelIdleTask } from '@/utils/idleScheduler';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 

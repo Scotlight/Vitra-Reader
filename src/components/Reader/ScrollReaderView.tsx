@@ -2,7 +2,7 @@ import {
     useEffect, useState, useCallback,
     forwardRef, memo, useImperativeHandle
 } from 'react';
-import type { ContentProvider } from '../../engine/core/contentProvider';
+import type { ContentProvider } from '@/engine/core/contentProvider';
 import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
 import { useVirtualChapterRuntime } from './scrollReader/useVirtualChapterRuntime';
 import { useScrollReaderRefs } from './scrollReader/useScrollReaderRefs';
@@ -21,7 +21,7 @@ import { useScrollPhysics, DEFAULT_SMOOTH_CONFIG, type SmoothScrollConfig } from
 import { useSpineItems } from './scrollReader/useSpineItems';
 import { useReaderUnmountCleanup } from './scrollReader/useReaderUnmountCleanup';
 import type { LoadedChapter } from './scrollReader/scrollReaderTypes';
-import { useSelectionMenu } from '../../hooks/useSelectionMenu';
+import { useSelectionMenu } from '@/hooks/useSelectionMenu';
 import styles from './ScrollReaderView.module.css';
 
 // ── Types ──

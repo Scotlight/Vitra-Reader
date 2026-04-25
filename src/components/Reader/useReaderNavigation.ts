@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import type { ContentProvider, SearchResult } from '../../engine/core/contentProvider'
+import type { ContentProvider, SearchResult } from '@/engine/core/contentProvider'
 import type { PaginatedReaderHandle } from './PaginatedReaderView'
 import type { ScrollReaderHandle } from './ScrollReaderView'
 import { normalizeTocHref } from './readerToc'

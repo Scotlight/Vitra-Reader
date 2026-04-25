@@ -1,4 +1,4 @@
-import { escapeHtml, escapeHtmlAttribute } from '../../../core/contentSanitizer'
+import { escapeHtml, escapeHtmlAttribute } from '@/engine/core/contentSanitizer'
 import type { PdfPageLink, PdfRenderedPage } from './pdfTypes'
 
 function renderPdfLinkLayer(links: readonly PdfPageLink[]): string {

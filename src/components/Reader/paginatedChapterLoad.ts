@@ -1,4 +1,4 @@
-import type { ChapterPreprocessResult } from '../../engine/types/chapterPreprocess'
+import type { ChapterPreprocessResult } from '@/engine/types/chapterPreprocess'
 
 export interface PaginatedShadowData {
     chapterId: string

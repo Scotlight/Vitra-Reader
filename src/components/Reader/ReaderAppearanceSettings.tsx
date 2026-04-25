@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSettingsStore } from '../../stores/useSettingsStore'
+import { useSettingsStore } from '@/stores/useSettingsStore'
 import { toReaderFontDisplayName, toReaderFontFamily } from './readerFonts'
 import { useReaderSystemFonts } from './useReaderSystemFonts'
 import styles from './ReaderView.module.css'

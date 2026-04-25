@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ContentProvider } from '../../engine/core/contentProvider'
-import type { PageTurnMode } from '../../stores/useSettingsStore'
+import type { ContentProvider } from '@/engine/core/contentProvider'
+import type { PageTurnMode } from '@/stores/useSettingsStore'
 import {
     INITIAL_READER_BOOK_SESSION_STATE,
     loadReaderBookSession,

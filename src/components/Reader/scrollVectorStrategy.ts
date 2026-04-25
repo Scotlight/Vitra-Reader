@@ -3,7 +3,7 @@ import {
     computeVisibleRange,
     type ChapterMetaVector,
     type SegmentMeta,
-} from '../../engine';
+} from '@/engine';
 
 export interface WindowedVectorCacheCandidate {
     status: 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder' | 'error';

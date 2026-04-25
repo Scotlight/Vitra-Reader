@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
-import type { SpineItemInfo } from '../../../engine/core/contentProvider';
+import type { SpineItemInfo } from '@/engine/core/contentProvider';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { PRELOAD_THRESHOLD_PX, SCROLL_IDLE_RESUME_MS } from './scrollReaderConstants';
-import { detectScrollDirection, shouldPreloadChapter, ScrollDirection } from '../../../utils/scrollDetection';
+import { detectScrollDirection, shouldPreloadChapter, ScrollDirection } from '@/utils/scrollDetection';
 
 interface UseScrollHandlerOptions {
     spineItems: SpineItemInfo[];
