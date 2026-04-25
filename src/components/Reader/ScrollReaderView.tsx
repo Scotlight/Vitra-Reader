@@ -317,6 +317,12 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
                             <span className={styles.loadingDot} />
                         </div>
                     )}
+                {/* Error state placeholders — shown when a chapter fails to load */}
+                {chapters.filter(ch => ch.status === 'error').map(ch => (
+                    <div key={ch.id} className={styles.chapterErrorPlaceholder}>
+                        章节加载失败
+                    </div>
+                ))}
             </div>
 
             {/* Loading indicator at bottom */}

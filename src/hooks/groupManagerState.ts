@@ -5,12 +5,18 @@ export type GroupItem = {
     name: string
 }
 
-export const GROUPS_SETTINGS_KEY = 'groups'
-export const GROUP_BOOK_MAP_SETTINGS_KEY = 'groupBookMap'
-export const GROUP_BOOK_ORDER_SETTINGS_KEY = 'groupBookOrder'
-export const HOME_ORDER_SETTINGS_KEY = 'homeOrder'
+export const GROUPS_SETTINGS_KEY = 'groups:groups'
+export const GROUP_BOOK_MAP_SETTINGS_KEY = 'groups:bookMap'
+export const GROUP_BOOK_ORDER_SETTINGS_KEY = 'groups:bookOrder'
+export const HOME_ORDER_SETTINGS_KEY = 'groups:homeOrder'
 export const LEGACY_SHELVES_SETTINGS_KEY = 'shelves'
 export const LEGACY_SHELF_BOOK_MAP_SETTINGS_KEY = 'shelfBookMap'
+
+// 存量旧键（迁移用）
+export const LEGACY_GROUPS_KEY = 'groups'
+export const LEGACY_GROUP_BOOK_MAP_KEY = 'groupBookMap'
+export const LEGACY_GROUP_BOOK_ORDER_KEY = 'groupBookOrder'
+export const LEGACY_HOME_ORDER_KEY = 'homeOrder'
 
 const GROUP_KEY_PREFIX = 'group:'
 const BOOK_KEY_PREFIX = 'book:'
@@ -201,4 +207,34 @@ export function sanitizeGroupState(
         groupBookOrder: sanitizedGroupBookOrder,
         homeOrder: applyHomeOrder(availableHomeKeys, homeOrder),
     }
+}
+
+export function areGroupStatesEqual(
+    left: ReturnType<typeof sanitizeGroupState>,
+    right: ReturnType<typeof sanitizeGroupState>,
+): boolean {
+    const arrEq = (a: readonly string[], b: readonly string[]) => {
+        if (a.length !== b.length) return false
+        for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+        return true
+    }
+    const groupsEq = (a: readonly GroupItem[], b: readonly GroupItem[]) => {
+        if (a.length !== b.length) return false
+        for (let i = 0; i < a.length; i++) {
+            if (a[i].id !== b[i].id || a[i].name !== b[i].name) return false
+        }
+        return true
+    }
+    const mapEq = (a: Record<string, string[]>, b: Record<string, string[]>) => {
+        const ak = Object.keys(a), bk = Object.keys(b)
+        if (ak.length !== bk.length) return false
+        for (const k of ak) {
+            if (!(k in b) || !arrEq(a[k] || [], b[k] || [])) return false
+        }
+        return true
+    }
+    return groupsEq(left.groups, right.groups) &&
+        mapEq(left.groupBookMap, right.groupBookMap) &&
+        mapEq(left.groupBookOrder, right.groupBookOrder) &&
+        arrEq(left.homeOrder, right.homeOrder)
 }

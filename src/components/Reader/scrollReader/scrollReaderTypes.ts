@@ -10,7 +10,7 @@ export interface LoadedChapter {
     vectorStyleKey?: string;
     domNode: HTMLElement | null;
     height: number;
-    status: 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder';
+    status: 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder' | 'error';
     mountedAt?: number;
 }
 

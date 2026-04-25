@@ -6,7 +6,7 @@ import {
 } from '../../engine';
 
 export interface WindowedVectorCacheCandidate {
-    status: 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder';
+    status: 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder' | 'error';
     segmentMetas?: readonly SegmentMeta[];
     vectorStyleKey?: string;
 }

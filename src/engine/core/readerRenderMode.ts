@@ -3,17 +3,11 @@ import type { PageTurnMode } from '../../stores/useSettingsStore'
 
 type ReaderRenderProfile = 'reflowable' | 'fixed-layout' | 'scroll-only'
 
-/** 兼容旧 BookFormat 和 VitraBookFormat 的格式字符串 */
-type AnyFormatString = BookFormat | string
-
 const REFLOWABLE_MODES: readonly PageTurnMode[] = ['paginated-single', 'paginated-double', 'scrolled-continuous']
 const FIXED_LAYOUT_MODES: readonly PageTurnMode[] = ['paginated-single']
 const SCROLL_ONLY_MODES: readonly PageTurnMode[] = ['scrolled-continuous']
-const SCROLL_ONLY_FORMATS = new Set<string>(['pdf', 'PDF'])
-const FIXED_LAYOUT_FORMATS = new Set<string>([
-    'djvu', 'DJVU',
-    'cbz', 'CBZ', 'cbt', 'CBT', 'cbr', 'CBR', 'cb7', 'CB7',
-])
+const SCROLL_ONLY_FORMATS = new Set<string>(['pdf'])
+const FIXED_LAYOUT_FORMATS = new Set<string>(['djvu', 'cbz', 'cbt', 'cbr', 'cb7'])
 
 export interface ReaderRenderModeDecision {
     requestedMode: PageTurnMode
@@ -24,9 +18,10 @@ export interface ReaderRenderModeDecision {
     reason: string
 }
 
-function resolveRenderProfile(format: AnyFormatString): ReaderRenderProfile {
-    if (SCROLL_ONLY_FORMATS.has(format)) return 'scroll-only'
-    if (FIXED_LAYOUT_FORMATS.has(format)) return 'fixed-layout'
+function resolveRenderProfile(format: BookFormat | string): ReaderRenderProfile {
+    const f = format.toLowerCase()
+    if (SCROLL_ONLY_FORMATS.has(f)) return 'scroll-only'
+    if (FIXED_LAYOUT_FORMATS.has(f)) return 'fixed-layout'
     return 'reflowable'
 }
 
@@ -48,7 +43,7 @@ function buildReason(profile: ReaderRenderProfile, forced: boolean): string {
     return '当前格式模式受限，已切换为兼容渲染模式'
 }
 
-export function resolveReaderRenderMode(format: AnyFormatString, requestedMode: PageTurnMode): ReaderRenderModeDecision {
+export function resolveReaderRenderMode(format: BookFormat | string, requestedMode: PageTurnMode): ReaderRenderModeDecision {
     const profile = resolveRenderProfile(format)
     const availableModes = resolveAvailableModes(profile)
     const effectiveMode = pickEffectiveMode(availableModes, requestedMode)

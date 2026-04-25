@@ -16,11 +16,15 @@
 
 ## 2. 阅读器层级结构
 
-根据现有 Vitra 指南可确认：
+根据当前源码，阅读器层级已经拆成“壳层调度 + 会话装配 + 模式子视图”三段：
 
-- `ReaderView` 是阅读器总入口
-- 其下区分 `ScrollReaderView` 与 `PaginatedReaderView`
-- `ShadowRenderer` 承担章节内容注入、样式注入、向量化渲染与延迟水合的重要职责
+- `App` 负责 `library / reader` 视图切换、持久化阅读设置加载与 WebDAV 自动同步调度
+- `ReaderView` 是阅读器总入口，但主要负责 UI 组合、模式决策、阅读统计采集与子视图挂载
+- `useReaderBookSession` 负责读取 `db.books / db.bookFiles / db.progress`，并装配 `VitraPipeline` 与 `VitraContentAdapter`
+- `useReaderNavigation` 负责 TOC、搜索、`jumpTarget` 与对子阅读器 ref 的命令式派发
+- `ScrollReaderView` 与 `PaginatedReaderView` 分别承接滚动和分页模式；分页高亮已外移到 `paginatedReader/usePaginatedHighlights.ts`
+- `ScrollReaderView` 内部又拆到 `scrollReader/` 目录下的 refs、滚动处理、章节卸载和虚拟运行时 hook
+- `ShadowRenderer` 继续承担章节内容注入、样式注入、向量化渲染与延迟水合的重要职责
 
 约束：
 
@@ -45,15 +49,16 @@
 源码真值：
 
 - `ContentProvider` 接口：`src/engine/core/contentProvider.ts:25-37`
-- 当前 Reader 实际链路不是“UI 直接持有具体 provider”，而是：
-  - `ReaderView -> VitraPipeline.open()`：`src/components/Reader/ReaderView.tsx:290-295`
-  - `VitraPipeline.open()` 先 `detectVitraFormat()`，再 `createParser()`，并返回包含 `ready/metadata/preview/cancel` 的 handle：`src/engine/pipeline/vitraPipeline.ts:61-75`
-  - `VitraPipeline.parseBook()` 调用具体 parser 的 `parse()`：`src/engine/pipeline/vitraPipeline.ts:106-113`
-  - 对 provider 兼容格式，`VitraProviderBackedParser.parse()` 会并行执行 `createContentProvider()` 与 `parseBookMetadata()`，随后 `provider.init()`：`src/engine/parsers/vitraProviderParsers.ts:74-84`
-  - `VitraProviderBackedParser.parse()` 再基于 `provider.getSpineItems()` / `provider.getToc()` 构造 `sections` 与回退 TOC：`src/engine/parsers/vitraProviderParsers.ts:86-100,185-275`
-  - `createBookObject()` 最终把 provider 包装成 `VitraBook`，并注入 `resolveHref()` / `releaseAssetSession()` / `search()` / `destroy()`：`src/engine/parsers/vitraProviderParsers.ts:289-327`
-  - `ReaderView` 再把 `VitraBook` 包成 `VitraContentAdapter`：`src/components/Reader/ReaderView.tsx:295-299`
-  - 视图层最终面向 `VitraContentAdapter` 这一 `ContentProvider` 形态消费
+- 当前 Reader 实际链路已经变为：
+  - `App.handleOpenBook()` 写入 `currentBookId` 与可选 `jumpTarget`
+  - `ReaderView` 调用 `useReaderBookSession({ bookId, pageTurnMode })`
+  - `loadReaderBookSession()` 并行读取 `db.books`、`db.bookFiles`、`db.progress`
+  - `openReaderProvider()` 内部创建 `VitraPipeline`，调用 `open({ buffer, filename })`
+  - `VitraPipeline.open()` 先 `detectVitraFormat()`，再选择 parser，并返回带 `ready / metadata / preview / cancel` 的 handle
+  - 对 provider 兼容格式，`VitraProviderBackedParser.parse()` 会并行装配 provider 与 metadata，随后执行 `provider.init()`
+  - `createSections()` 把 `extractChapterHtml()`、`extractChapterStyles()`、`unloadChapter()` 桥接成 `VitraBookSection`
+  - `ReaderView` 获得 `VitraBook` 后，再由 `VitraContentAdapter` 适配成 `ContentProvider`
+  - 视图层最终只消费 `ContentProvider` 形态，不直接接触底层 parser
 
 约束：
 
@@ -113,12 +118,15 @@ Vitra 当前采用五阶段管线：
 - CSS 作用域隔离
 - 章节分片
 - 大章节向量化元数据生成
+- 按 HTML 体量动态放宽 worker 超时
+- worker 不可用、初始化失败或超时时同步回退到 `preprocessChapterCore`
 
 约束：
 
 - CPU 密集和纯文本结构处理优先放在 Worker
 - 主线程应尽量承担最终 DOM 构建与交互绑定
 - Worker 回传的结构必须足以让主线程避免重复重计算
+- 服务层要负责复用 worker 与兜底降级，避免把线程错误直接泄漏到阅读 UI
 
 ## 7. 缓存层边界
 
@@ -133,6 +141,9 @@ Vitra 当前采用五阶段管线：
 - 搜索索引内存缓存：`src/engine/cache/searchIndexCache.ts`
 - 资源 Blob URL 会话缓存：`src/utils/assetLoader.ts:72-137`
 - 翻译结果缓存与 TTL：`src/services/translateService.ts`
+- 阅读设置持久化：`src/stores/useSettingsStore.ts`
+- 阅读统计日聚合：`src/services/readingStatsService.ts`
+- WebDAV payload 边界：`src/stores/syncStorePayload.ts`
 
 约束：
 
@@ -168,8 +179,8 @@ Vitra 当前采用五阶段管线：
 - PDF runtime 加载与 fallback 策略变更
 - Vitra 五阶段顺序或阶段职责变更
 - Shadow 渲染中的向量化/延迟水合逻辑变更
-- IndexedDB key 设计、缓存排除格式策略变更
+- IndexedDB schema、settings key 设计、缓存排除格式策略变更
 - CSS scope 逻辑变更
 - `BookFormat`（小写）与 `VitraBookFormat`（大写）之间的映射层变更：`src/engine/core/contentProvider.ts`, `src/engine/core/vitraFormatDetector.ts`, `src/engine/parsers/vitraProviderParsers.ts:39-53`
 
-这些改动必须同步更新模块文档和 ADR。
+这些改动必须同步更新模块文档；涉及持久化、同步协议或公共约束时还要更新 ADR。

@@ -187,13 +187,13 @@ export function useChapterLoader(
             }
         } catch (error) {
             console.error(`[ScrollReader] Failed to load chapter ${spineIndex}:`, error);
-            if (existingChapter?.status === 'placeholder') {
-                setChapters(prev =>
-                    prev.map(ch => ch.spineIndex === spineIndex ? existingChapter : ch)
-                );
-            } else {
-                setChapters(prev => prev.filter(ch => ch.spineIndex !== spineIndex));
-            }
+            // 将章节标记为 error 状态，渲染层显示错误占位，避免用户看到空白页
+            setChapters(prev =>
+                prev.map(ch => ch.spineIndex === spineIndex
+                    ? { ...ch, status: 'error' as const }
+                    : ch
+                )
+            );
             pipelineRef.current = 'idle';
         } finally {
             loadingLockRef.current.delete(spineIndex);

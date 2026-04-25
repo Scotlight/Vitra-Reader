@@ -1,5 +1,18 @@
 import { db, type Bookmark, type Highlight } from '../../../services/storageService'
 
+const K_FAVORITES = 'library:favoriteBookIds'
+const K_TRASH = 'library:trashBookIds'
+
+async function dbGetWithMigration(newKey: string, legacyKey: string) {
+    const row = await db.settings.get(newKey)
+    if (row !== undefined) return row
+    const legacy = await db.settings.get(legacyKey)
+    if (!legacy) return undefined
+    await db.settings.put({ key: newKey, value: legacy.value })
+    await db.settings.delete(legacyKey)
+    return { key: newKey, value: legacy.value }
+}
+
 export interface LibraryCoreMetaSnapshot {
     progressMap: Record<string, number>
     favoriteBookIds: string[]
@@ -18,8 +31,8 @@ export interface LibraryAnnotationMetaSnapshot {
 export async function loadLibraryCoreMeta(): Promise<LibraryCoreMetaSnapshot> {
     const [allProgress, favoriteEntry, trashEntry, bookmarkBookIds, highlightBookIdsRaw] = await Promise.all([
         db.progress.toArray(),
-        db.settings.get('favoriteBookIds'),
-        db.settings.get('trashBookIds'),
+        dbGetWithMigration(K_FAVORITES, 'favoriteBookIds'),
+        dbGetWithMigration(K_TRASH, 'trashBookIds'),
         db.bookmarks.orderBy('bookId').uniqueKeys(),
         db.highlights.orderBy('bookId').uniqueKeys(),
     ])
@@ -55,9 +68,9 @@ export async function loadLibraryAnnotationMeta(): Promise<LibraryAnnotationMeta
 }
 
 export async function saveFavoriteBookIds(next: string[]): Promise<void> {
-    await db.settings.put({ key: 'favoriteBookIds', value: next })
+    await db.settings.put({ key: K_FAVORITES, value: next })
 }
 
 export async function saveTrashBookIds(next: string[]): Promise<void> {
-    await db.settings.put({ key: 'trashBookIds', value: next })
+    await db.settings.put({ key: K_TRASH, value: next })
 }

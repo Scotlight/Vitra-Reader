@@ -12,6 +12,7 @@ function App() {
     const [currentBookId, setCurrentBookId] = useState<string | null>(null)
     const [jumpTarget, setJumpTarget] = useState<{ location: string; searchText?: string } | null>(null)
     const settings = useSettingsStore()
+    const loadPersistedSettings = useSettingsStore(s => s.loadPersistedSettings)
     const syncStore = useSyncStore()
 
     const handleOpenBook = (bookId: string, jump?: { location: string; searchText?: string }) => {
@@ -36,6 +37,7 @@ function App() {
         let mounted = true
 
         const bootAutoSync = async () => {
+            await loadPersistedSettings()
             await syncStore.loadConfig()
             if (!mounted) return
 

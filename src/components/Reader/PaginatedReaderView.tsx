@@ -2,16 +2,15 @@ import {
     useRef, useEffect, useState, useCallback,
     forwardRef, useImperativeHandle,
 } from 'react';
-import type { ContentProvider, SpineItemInfo } from '../../engine/core/contentProvider';
-import { releaseMediaResources } from '../../utils/mediaResourceCleanup';
+import type { ContentProvider } from '../../engine/core/contentProvider';
 import { useSelectionMenu } from '../../hooks/useSelectionMenu';
 import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
-import { findTextInDOM } from '../../utils/textFinder';
-import { preprocessChapterContent } from '../../engine/render/chapterPreprocessService';
-import { startMeasure, type VitraMeasureHandle, type PageBoundary } from '../../engine';
 import { usePaginatedHighlights } from './paginatedReader/usePaginatedHighlights';
 import { usePaginatedNavigation } from './paginatedReader/usePaginatedNavigation';
 import { usePaginatedProgress } from './paginatedReader/usePaginatedProgress';
+import { usePaginationMeasure } from './paginatedReader/usePaginationMeasure';
+import { usePaginatedChapterLoader } from './paginatedReader/usePaginatedChapterLoader';
+import { usePaginatedPageLayout } from './paginatedReader/usePaginatedPageLayout';
 import styles from './PaginatedReaderView.module.css';
 
 interface PaginatedReaderViewProps {
@@ -43,43 +42,23 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
 }, ref) => {
     const viewportRef = useRef<HTMLDivElement>(null);
     const columnRef = useRef<HTMLDivElement>(null);
+    const paginationMeasureHostRef = useRef<HTMLDivElement>(null);
     const pendingLastPageRef = useRef(false);
     const pendingSearchTextRef = useRef<string | null>(null);
-    const isInitialLoadRef = useRef(true); // 初始加载标记
-    const pageBoundariesRef = useRef<readonly PageBoundary[]>([]);
-    const pageMapReadyRef = useRef(false);
-    const paginationMeasureSeqRef = useRef(0);
-    const paginationMeasureHandleRef = useRef<VitraMeasureHandle | null>(null);
-    const paginationMeasureHostRef = useRef<HTMLDivElement>(null);
+    const isInitialLoadRef = useRef(true);
 
-    const [spineItems, setSpineItems] = useState<SpineItemInfo[]>([]);
     const [currentSpineIndex, setCurrentSpineIndex] = useState(initialSpineIndex);
     const [currentPage, setCurrentPage] = useState(initialPage);
     const [totalPages, setTotalPages] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
     const [chapterFading, setChapterFading] = useState(false);
-    const [displayPage, setDisplayPage] = useState(0); // 用于显示的页码（过渡时保持旧值）
-
-    // Shadow render state
+    const [chapterLoadError, setChapterLoadError] = useState(false);
+    const [displayPage, setDisplayPage] = useState(0);
     const [shadowData, setShadowData] = useState<{
         htmlContent: string; htmlFragments: string[]; externalStyles: string[]; chapterId: string;
     } | null>(null);
     const [chapterNode, setChapterNode] = useState<HTMLElement | null>(null);
 
-    // Selection menu
-    const getHighlightContainer = useCallback((_spineIndex: number): HTMLElement | null => {
-        return columnRef.current;
-    }, []);
-    const {
-        setSelectionMenu,
-        renderedHighlightsRef,
-        renderSelectionUI,
-    } = useSelectionMenu({ bookId, onSelectionSearch, getHighlightContainer });
-    const shadowResourceExists = useCallback((url: string) => {
-        return provider.isAssetUrlAvailable?.(url) ?? true;
-    }, [provider]);
-
-    const spineItemsRef = useRef<SpineItemInfo[]>([]);
     const currentSpineIndexRef = useRef(currentSpineIndex);
     const currentPageRef = useRef(currentPage);
     const totalPagesRef = useRef(totalPages);
@@ -87,126 +66,38 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     currentPageRef.current = currentPage;
     totalPagesRef.current = totalPages;
 
-    const { scheduleHighlightInjection } = usePaginatedHighlights({
-        bookId,
-        viewportRef,
-        currentSpineIndexRef,
-        renderedHighlightsRef,
-        setSelectionMenu,
+    const getHighlightContainer = useCallback((_spineIndex: number): HTMLElement | null => {
+        return columnRef.current;
+    }, []);
+    const { setSelectionMenu, renderedHighlightsRef, renderSelectionUI } = useSelectionMenu({
+        bookId, onSelectionSearch, getHighlightContainer,
     });
-
-    const abortPaginationMeasure = useCallback(() => {
-        if (paginationMeasureHandleRef.current) {
-            paginationMeasureHandleRef.current.abort()
-            paginationMeasureHandleRef.current = null
-        }
-    }, [])
-
-    const measureBoundariesInShadow = useCallback(async (
-        sourceNode: HTMLElement,
-        viewportHeight: number,
-    ): Promise<readonly PageBoundary[]> => {
-        const host = paginationMeasureHostRef.current
-        if (!host || viewportHeight <= 0) return []
-
-        abortPaginationMeasure()
-        const measureSeq = ++paginationMeasureSeqRef.current
-
-        const handle = startMeasure({
-            sourceNode,
-            viewportHeight,
-            host,
-            onProgress: (progress) => {
-                if (measureSeq !== paginationMeasureSeqRef.current) return
-                pageBoundariesRef.current = progress.boundaries
-                pageMapReadyRef.current = progress.done
-            },
-        })
-        paginationMeasureHandleRef.current = handle
-
-        const boundaries = await handle.result
-        if (measureSeq !== paginationMeasureSeqRef.current) return []
-        paginationMeasureHandleRef.current = null
-        pageMapReadyRef.current = true
-        return boundaries
-    }, [abortPaginationMeasure])
-
-    useEffect(() => {
-        return () => {
-            abortPaginationMeasure()
-        }
-    }, [abortPaginationMeasure])
-
-    // ── Init spine ──
-    useEffect(() => {
-        const items = provider.getSpineItems();
-        spineItemsRef.current = items;
-        setSpineItems(items);
+    const shadowResourceExists = useCallback((url: string) => {
+        return provider.isAssetUrlAvailable?.(url) ?? true;
     }, [provider]);
 
-    // ── Load chapter into shadow queue ──
-    const loadChapter = useCallback(async (
-        spineIndex: number,
-        goToLastPage = false,
-        visited = new Set<number>(),
-    ) => {
-        if (spineIndex < 0 || spineIndex >= spineItemsRef.current.length) return;
-        if (visited.has(spineIndex)) return;
-        visited.add(spineIndex);
-        abortPaginationMeasure();
-        pendingLastPageRef.current = goToLastPage;
+    const { scheduleHighlightInjection } = usePaginatedHighlights({
+        bookId, viewportRef, currentSpineIndexRef, renderedHighlightsRef, setSelectionMenu,
+    });
 
-        // 非初始加载：先淡出，等淡出完成后再加载
-        if (!isInitialLoadRef.current) {
-            setChapterFading(true);
-            // 等待淡出动画完成（150ms）
-            await new Promise(resolve => setTimeout(resolve, 160));
-        }
+    const { abortPaginationMeasure, measureBoundariesInShadow, pageBoundariesRef, pageMapReadyRef } =
+        usePaginationMeasure(paginationMeasureHostRef);
 
-        setIsLoading(true);
-        pageBoundariesRef.current = [];
-        pageMapReadyRef.current = false;
-        renderedHighlightsRef.current.clear();
-        try {
-            const rawHtml = await provider.extractChapterHtml(spineIndex);
-
-            let chapterStyles: string[] = [];
-            try { chapterStyles = await provider.extractChapterStyles(spineIndex); } catch { /* optional */ }
-
-            const preprocessed = await preprocessChapterContent({
-                chapterId: `pch-${spineIndex}`,
-                spineIndex,
-                chapterHref: spineItemsRef.current[spineIndex]?.href,
-                htmlContent: rawHtml,
-                externalStyles: chapterStyles,
-            });
-
-            const html = preprocessed.htmlContent;
-
-            if (!preprocessed.hasRenderableContent) {
-                const fallbackIndex = goToLastPage ? spineIndex - 1 : spineIndex + 1;
-                if (fallbackIndex >= 0 && fallbackIndex < spineItemsRef.current.length) {
-                    setCurrentSpineIndex(fallbackIndex);
-                    currentSpineIndexRef.current = fallbackIndex;
-                    await loadChapter(fallbackIndex, goToLastPage, visited);
-                    return;
-                }
-            }
-
-            setShadowData({
-                htmlContent: html,
-                htmlFragments: preprocessed.htmlFragments,
-                externalStyles: preprocessed.externalStyles,
-                chapterId: `pch-${spineIndex}`,
-            });
-        } catch (err) {
-            console.error(`[PaginatedReader] Failed to load chapter ${spineIndex}:`, err);
-            pageBoundariesRef.current = [];
-            pageMapReadyRef.current = false;
-            setIsLoading(false);
-            setChapterFading(false);
-        }
-    }, [provider, abortPaginationMeasure]);
+    const { loadChapter, spineItems, spineItemsRef } = usePaginatedChapterLoader({
+        provider,
+        renderedHighlightsRef,
+        abortPaginationMeasure,
+        pendingLastPageRef,
+        isInitialLoadRef,
+        pageBoundariesRef,
+        pageMapReadyRef,
+        currentSpineIndexRef,
+        setCurrentSpineIndex,
+        setIsLoading,
+        setChapterFading,
+        setShadowData,
+        onLoadError: () => setChapterLoadError(true),
+    });
 
     const { isPageLikelyBlank } = usePaginatedNavigation({
         viewportRef,
@@ -224,7 +115,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         loadChapter,
     });
 
-    // ── Load initial chapter ──
+    // Load initial chapter when spine is ready
     useEffect(() => {
         if (spineItems.length === 0) return;
         const safeIndex = Math.min(initialSpineIndex, spineItems.length - 1);
@@ -232,7 +123,6 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         loadChapter(safeIndex);
     }, [spineItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // ── Shadow ready → mount + paginate ──
     const handleShadowReady = useCallback((node: HTMLElement, _height: number) => {
         const viewport = viewportRef.current;
         const viewportHeight = Math.max(1, Math.floor(viewport?.clientHeight || 0));
@@ -241,163 +131,39 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         setChapterNode(node);
         setShadowData(null);
         setIsLoading(false);
-
         if (viewportHeight <= 0) return;
         void measureBoundariesInShadow(node, viewportHeight).catch((error) => {
             console.warn('[PaginatedReader] Background block measurement failed:', error);
         });
-    }, [measureBoundariesInShadow]);
+    }, [measureBoundariesInShadow, pageBoundariesRef, pageMapReadyRef]);
 
-    // ── Mount chapter node + calculate pagination ──
-    useEffect(() => {
-        const container = columnRef.current;
-        const viewport = viewportRef.current;
-        if (!container || !viewport || !chapterNode) return;
+    const { getColumnWidth } = usePaginatedPageLayout({
+        viewportRef,
+        columnRef,
+        chapterNode,
+        pageBoundariesRef,
+        pendingLastPageRef,
+        pendingSearchTextRef,
+        currentPageRef,
+        totalPagesRef,
+        isInitialLoadRef,
+        currentSpineIndexRef,
+        abortPaginationMeasure,
+        measureBoundariesInShadow,
+        scheduleHighlightInjection,
+        setCurrentPage,
+        setTotalPages,
+        setDisplayPage,
+        setChapterFading,
+        isPageLikelyBlank,
+    });
 
-        const h = viewport.clientHeight;
-        const w = viewport.clientWidth;
-        container.style.height = `${h}px`;
+    usePaginatedProgress({
+        bookId, currentPage, currentSpineIndex, isLoading,
+        onChapterChange, onProgressChange, spineItems, totalPages,
+    });
 
-        // 替换内容前：禁用过渡，重置位置到 0
-        container.style.transition = 'none';
-        container.style.transform = 'translateX(0)';
-
-        // 替换内容
-        releaseMediaResources(container);
-        container.appendChild(chapterNode);
-
-        // Calculate pagination after DOM settles
-        requestAnimationFrame(() => {
-            if (w <= 0) return;
-            const boundaries = pageBoundariesRef.current;
-            const rawPages = container.scrollWidth / w;
-            const pages = Math.max(1, Math.ceil(rawPages - 0.001));
-            const logicalPages = Math.max(1, boundaries.length || pages);
-            if (Math.abs(logicalPages - pages) >= 3) {
-                console.warn(
-                    `[PaginatedReader] Visual pages (${pages}) diverge from logical map (${logicalPages})`,
-                );
-            }
-            setTotalPages(pages);
-            totalPagesRef.current = pages;
-
-            // 如果需要跳转到最后一页
-            let targetPage = 0;
-            let shouldJumpToLastPage = false;
-            if (pendingLastPageRef.current) {
-                targetPage = pages - 1;
-                shouldJumpToLastPage = true;
-                pendingLastPageRef.current = false;
-            }
-
-            // 如果有 searchText，定位到对应页
-            const searchText = pendingSearchTextRef.current;
-            if (searchText && container) {
-                pendingSearchTextRef.current = null;
-                const range = findTextInDOM(container, searchText);
-                if (range) {
-                    const rect = range.getBoundingClientRect();
-                    const containerRect = container.getBoundingClientRect();
-                    targetPage = Math.floor((rect.left - containerRect.left + container.scrollLeft) / w);
-                    targetPage = Math.max(0, Math.min(targetPage, pages - 1));
-                }
-            }
-
-            if (shouldJumpToLastPage) {
-                while (targetPage > 0 && isPageLikelyBlank(targetPage)) {
-                    targetPage -= 1;
-                }
-            }
-
-            setCurrentPage(targetPage);
-            currentPageRef.current = targetPage;
-            setDisplayPage(targetPage);
-
-            // 设置正确的位置（仍然无过渡）
-            container.style.transform = `translateX(${-targetPage * w}px)`;
-
-            // 下一帧：恢复过渡，触发淡入
-            requestAnimationFrame(() => {
-                container.style.transition = '';
-                setChapterFading(false);
-                isInitialLoadRef.current = false;
-            });
-
-            scheduleHighlightInjection(chapterNode, currentSpineIndexRef.current);
-        });
-    }, [chapterNode, scheduleHighlightInjection]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    // ── Recalculate on resize ──
-    useEffect(() => {
-        const viewport = viewportRef.current;
-        const container = columnRef.current;
-        if (!viewport || !container || !chapterNode) return;
-
-        let resizeTimer: number | null = null;
-        let disposed = false;
-
-        const recalc = () => {
-            const oldWidth = Math.max(1, viewport.clientWidth);
-            const fallbackAnchorX = currentPageRef.current * oldWidth + oldWidth * 0.35;
-
-            const viewportRect = viewport.getBoundingClientRect();
-            const probeX = viewportRect.left + viewportRect.width * 0.5;
-            const probeY = viewportRect.top + Math.min(viewportRect.height * 0.32, 220);
-            const probeElement = document.elementFromPoint(probeX, probeY) as HTMLElement | null;
-            const containerRect = container.getBoundingClientRect();
-
-            let anchorX = fallbackAnchorX;
-            if (probeElement && container.contains(probeElement)) {
-                const probeRect = probeElement.getBoundingClientRect();
-                const probeOffsetX = probeRect.left - containerRect.left + container.scrollLeft;
-                if (Number.isFinite(probeOffsetX) && probeOffsetX >= 0) {
-                    anchorX = probeOffsetX;
-                }
-            }
-
-            // 防抖
-            if (resizeTimer) window.clearTimeout(resizeTimer);
-            resizeTimer = window.setTimeout(() => {
-                const w = viewport.clientWidth;
-                const h = viewport.clientHeight;
-                if (disposed || w <= 0 || h <= 0) return;
-
-                container.style.height = `${h}px`;
-                const pages = Math.max(1, Math.ceil(container.scrollWidth / w));
-                const anchorBasedPage = Math.floor(anchorX / w);
-                const nextPage = Math.max(0, Math.min(anchorBasedPage, pages - 1));
-
-                setTotalPages(pages);
-                totalPagesRef.current = pages;
-
-                setCurrentPage(nextPage);
-                currentPageRef.current = nextPage;
-                setDisplayPage(nextPage);
-
-                container.style.transition = 'none';
-                container.style.transform = `translateX(${-nextPage * w}px)`;
-                requestAnimationFrame(() => {
-                    container.style.transition = '';
-                });
-
-                void measureBoundariesInShadow(chapterNode, h).catch((error) => {
-                    if (disposed) return;
-                    console.warn('[PaginatedReader] Resize pagination measure failed:', error);
-                });
-            }, 100);
-        };
-
-        const ro = new ResizeObserver(recalc);
-        ro.observe(viewport);
-        return () => {
-            disposed = true;
-            ro.disconnect();
-            if (resizeTimer) window.clearTimeout(resizeTimer);
-            abortPaginationMeasure();
-        };
-    }, [chapterNode, abortPaginationMeasure, measureBoundariesInShadow]);
-
-    // ── Reload chapter when readerStyles change (ShadowRenderer re-render) ──
+    // Reload chapter when readerStyles change
     const stylesKeyRef = useRef('');
     useEffect(() => {
         const key = JSON.stringify(readerStyles);
@@ -406,30 +172,10 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
             return;
         }
         stylesKeyRef.current = key;
-        // Reload current chapter with new styles
         renderedHighlightsRef.current.clear();
         loadChapter(currentSpineIndexRef.current);
-    }, [readerStyles, loadChapter]);
+    }, [readerStyles, loadChapter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // ── Column width based on mode ──
-    const getColumnWidth = useCallback(() => {
-        const viewport = viewportRef.current;
-        if (!viewport) return 600;
-        return viewport.clientWidth;
-    }, []);
-
-    usePaginatedProgress({
-        bookId,
-        currentPage,
-        currentSpineIndex,
-        isLoading,
-        onChapterChange,
-        onProgressChange,
-        spineItems,
-        totalPages,
-    });
-
-    // ── jumpToSpine (exposed via ref) ──
     const jumpToSpine = useCallback(async (targetSpineIndex: number, searchText?: string) => {
         if (targetSpineIndex < 0 || targetSpineIndex >= spineItemsRef.current.length) return;
         pendingSearchTextRef.current = searchText || null;
@@ -437,47 +183,38 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         setCurrentPage(0);
         currentPageRef.current = 0;
         await loadChapter(targetSpineIndex);
-    }, [loadChapter]);
+    }, [loadChapter, spineItemsRef]);
 
+    // PDF internal link handler
     useEffect(() => {
         const container = columnRef.current;
         if (!container) return;
-
         const handlePdfInternalLink = (event: MouseEvent) => {
             const target = event.target;
             if (!(target instanceof Element)) return;
-
             const anchor = target.closest('a[data-pdf-page]');
             if (!(anchor instanceof HTMLAnchorElement)) return;
-
             const rawPage = anchor.getAttribute('data-pdf-page');
             if (!rawPage) return;
             const targetSpine = Number.parseInt(rawPage, 10);
             if (!Number.isFinite(targetSpine)) return;
             if (targetSpine < 0 || targetSpine >= spineItemsRef.current.length) return;
-
             event.preventDefault();
             event.stopPropagation();
             void jumpToSpine(targetSpine);
         };
-
         container.addEventListener('click', handlePdfInternalLink);
-        return () => {
-            container.removeEventListener('click', handlePdfInternalLink);
-        };
-    }, [jumpToSpine]);
+        return () => { container.removeEventListener('click', handlePdfInternalLink); };
+    }, [jumpToSpine, spineItemsRef]);
 
     useImperativeHandle(ref, () => ({ jumpToSpine }));
 
-    // ── Compute translateX ──
     const columnWidth = getColumnWidth();
     const colW = pageTurnMode === 'paginated-double' ? columnWidth / 2 : columnWidth;
-    // 使用 displayPage 而不是 currentPage，章节切换时保持在 page 0 位置
     const translateX = -(displayPage * columnWidth);
 
     return (
         <div className={styles.viewport} ref={viewportRef}>
-            {/* Shadow rendering area */}
             <div className={styles.shadowArea}>
                 {shadowData && (
                     <ShadowRenderer
@@ -507,8 +244,6 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                     aria-hidden="true"
                 />
             </div>
-
-            {/* Paginated content */}
             <div
                 className={`${styles.columnContainer} ${chapterFading ? styles.fading : ''}`}
                 ref={columnRef}
@@ -517,15 +252,13 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                     transform: `translateX(${translateX}px)`,
                 }}
             />
-
-            {/* Loading */}
-            {isLoading && (
-                <div className={styles.emptyState}>Loading...</div>
+            {isLoading && <div className={styles.emptyState}>Loading...</div>}
+            {chapterLoadError && !isLoading && (
+                <div className={styles.chapterErrorPlaceholder} onClick={() => setChapterLoadError(false)}>
+                    章节加载失败
+                </div>
             )}
-
             {renderSelectionUI()}
         </div>
     );
 });
-
-PaginatedReaderView.displayName = 'PaginatedReaderView';

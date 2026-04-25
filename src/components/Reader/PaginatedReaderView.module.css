@@ -46,3 +46,14 @@
     opacity: 0.5;
     font-size: 16px;
 }
+
+.chapterErrorPlaceholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.45;
+    font-size: 14px;
+    cursor: pointer;
+}

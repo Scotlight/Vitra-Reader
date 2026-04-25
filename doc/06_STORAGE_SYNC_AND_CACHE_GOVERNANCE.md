@@ -2,134 +2,150 @@
 
 ## 1. 目标
 
-本文档用于明确本项目“哪些数据落在哪里、哪些键可以同步、哪些缓存只是优化层、哪些资源必须显式释放”。源码是真值；本文档负责约束边界、所有权与修改风险。
+本文档约束项目里的持久化数据、同步边界与缓存生命周期。源码是真值；本文档只记录已经在当前代码中确认的结构、责任和修改风险。
 
-## 2. 核心存储真值
+## 2. Dexie / IndexedDB 主库
 
-### 2.1 Dexie / IndexedDB 主库
+主库由 `src/services/storageService.ts` 中的 `ReaderDatabase` 提供，数据库名是 `EPubReaderDB`。当前最高 schema 版本为 6；下次修改 schema 必须从 v7 开始，并同步更新源码顶部的版本注释与本文档。
 
-当前持久化主库由 `ReaderDatabase` 提供：`src/services/storageService.ts:69-128`
+当前表：
 
-数据库名：
-
-- `EPubReaderDB`：`src/services/storageService.ts:78-80`
-
-当前已确认表：
-
-- `books`：书籍元数据：`src/services/storageService.ts:70,80-82,88-90,100-102,109-111`
-- `bookFiles`：书籍二进制文件：`src/services/storageService.ts:71,82,90,102,111`
-- `progress`：阅读进度：`src/services/storageService.ts:72,83,91,103,112`
-- `bookmarks`：书签/笔记：`src/services/storageService.ts:73,84,92,104,113`
-- `highlights`：高亮：`src/services/storageService.ts:74,85,93,105,114`
-- `translationCache`：翻译结果缓存：`src/services/storageService.ts:75,106,115`
-- `settings`：通用键值存储：`src/services/storageService.ts:76,86,94,107,116`
-
-### 2.2 版本迁移真值
-
-当前数据库版本已经到 5：`src/services/storageService.ts:80-124`
+- `books`：书籍元数据。
+- `bookFiles`：书籍二进制文件。
+- `progress`：阅读进度。
+- `bookmarks`：书签与笔记。
+- `highlights`：高亮。
+- `translationCache`：翻译结果缓存。
+- `readingStatsDaily`：按本地日期聚合的活跃阅读时长。
+- `settings`：通用键值存储。
 
 已确认迁移：
 
-- v2：基础表结构：`src/services/storageService.ts:80-87`
-- v3：为历史书籍补 `format` 字段：`src/services/storageService.ts:88-99`
-- v4：引入 `translationCache` 表：`src/services/storageService.ts:100-108`
-- v5：为历史书籍补 `originalTitle` / `originalAuthor` / `originalDescription` / `originalCover`：`src/services/storageService.ts:109-124`
+- v2：基础表结构。
+- v3：为历史书籍补 `format`，默认 `epub`。
+- v4：引入 `translationCache`。
+- v5：为历史书籍补 `originalTitle` / `originalAuthor` / `originalDescription` / `originalCover`。
+- v6：引入 `readingStatsDaily`，索引为 `id, dateKey, bookId, updatedAt`。
 
 约束：
 
-- Dexie 版本迁移属于架构级变更，不应只改表定义不补迁移说明。
-- 新增持久化数据时，必须先判断应放独立表，还是放进 `settings`。
-- 如果数据具备独立查询维度、批量清理需求或生命周期独立，优先建表，不要继续把 `settings` 当杂项桶。
+- Dexie schema 变更属于架构级变更，不应只改表定义，不更新迁移说明和同步边界。
+- 新增持久化数据时，先判断是否具备独立查询维度、批量清理需求或独立生命周期；满足任一条件时优先建表。
+- `settings` 只能承载单键配置、同步元数据、UI 组织状态或前缀型缓存键，不作为任意结构化数据的默认容器。
 
-## 3. `db.settings` 键空间治理
+## 3. `db.settings` 键空间
 
-### 3.1 当前事实
+`settings` 当前是复合键空间。新增键时必须归类，并判断是否可同步。
 
-`settings` 目前是项目中的复合键空间，既承载用户配置，也承载缓存键，还承载书库辅助状态：`src/services/storageService.ts:76,86,94,107,116`
+### 3.1 当前已确认键
 
-当前已确认写入来源包括：
+配置类：
 
-- Vitra 持久缓存键 `vcache-*`：`src/engine/cache/vitraBookCache.ts:20,136-174,188-195`
-- 翻译配置 `translateConfig`：`src/services/translateService.ts:78,161-174`
-- WebDAV 配置与同步元数据：`src/stores/useSyncStore.ts:64-69,326,335,352,360,369-375,379-389,454,458,487,497`
-- 书架与书架映射：`src/hooks/useShelfManager.ts:45-48,125,159-166`
-- 收藏/回收站书籍集合：`src/components/Library/LibraryView.tsx:139-154,290-297`
+- `settings:readerSettings`：阅读器主题、排版、翻页模式、滚动惯性和 UI 外观，由 `useSettingsStore` 持久化。
+- `settings:savedColors`：自定义文字色和背景色历史。
+- `translateConfig`：翻译配置。API key 字段经过 `safeStorage` 加解密。
 
-### 3.2 当前已确认键空间
+WebDAV / 同步元数据：
 
-#### A. 缓存类
+- `sync:webdavUrl`
+- `sync:webdavPath`
+- `sync:webdavUser`
+- `sync:syncMode`
+- `sync:restoreMode`
+- `sync:replaceBeforeRestore`
+- `sync:remoteEtag`
+- `sync:lastSyncTime`
 
-- `vcache-{hash}`：Vitra 章节 HTML gzip 持久缓存：`src/engine/cache/vitraBookCache.ts:20,56-58,132-174,188-195`
+`webdavPass` 是历史兼容删除位。当前 `useSyncStore.loadConfig()` 会删除持久化的 `webdavPass`，密码只保留在 session 状态中。
 
-#### B. 翻译配置类
+书库组织类：
 
-- `translateConfig`：翻译配置对象：`src/services/translateService.ts:78,161-174`
+- `groups:groups`
+- `groups:bookMap`
+- `groups:bookOrder`
+- `groups:homeOrder`
+- `library:favoriteBookIds`
+- `library:trashBookIds`
 
-#### C. WebDAV / 同步配置类
+兼容遗留键：
 
-- `webdavUrl`：`src/stores/useSyncStore.ts:369,379`
-- `webdavPath`：`src/stores/useSyncStore.ts:370,380`
-- `webdavUser`：`src/stores/useSyncStore.ts:371,381`
-- `webdavPass`：历史兼容删除位，不再持久化：`src/stores/useSyncStore.ts:372,389`
-- `webdavSyncMode`：`src/stores/useSyncStore.ts:373,382,497`
-- `webdavRestoreMode`：`src/stores/useSyncStore.ts:374,383`
-- `webdavReplaceBeforeRestore`：`src/stores/useSyncStore.ts:375,384`
-- `webdavRemoteEtag`：`src/stores/useSyncStore.ts:326,352,386,454,487`
-- `lastSyncTime`：`src/stores/useSyncStore.ts:335,360,385,458`
+- `webdavUrl`
+- `webdavPath`
+- `webdavUser`
+- `webdavSyncMode`
+- `webdavRestoreMode`
+- `webdavReplaceBeforeRestore`
+- `webdavRemoteEtag`
+- `lastSyncTime`
+- `groups`
+- `groupBookMap`
+- `groupBookOrder`
+- `homeOrder`
+- `favoriteBookIds`
+- `trashBookIds`
+- `shelves`
+- `shelfBookMap`
 
-#### D. 书库组织类
+缓存类：
 
-- `shelves`：`src/hooks/useShelfManager.ts:45-63,159-161`
-- `shelfBookMap`：`src/hooks/useShelfManager.ts:45-74,125,164-166`
-- `favoriteBookIds`：`src/components/Library/LibraryView.tsx:141-152,290-292`
-- `trashBookIds`：`src/components/Library/LibraryView.tsx:142-154,295-297`
+- `vcache-{hash}`：Vitra 章节 HTML 持久缓存。
+- `tcache:` 前缀当前只作为不可同步前缀保留；翻译结果缓存主路径已经是独立表 `translationCache`。
 
-### 3.3 键空间约束
+### 3.2 键空间约束
 
-- `settings` 中的键必须按“配置 / 同步元数据 / UI 组织 / 缓存”分类理解，不能再把不同生命周期的数据混成一个概念。
-- 所有前缀型缓存键都应采用可识别命名；当前已确认前缀只有 `vcache-`：`src/engine/cache/vitraBookCache.ts:20,191-194`
-- 需要跨会话恢复的用户配置，才能进入 `settings`。
-- 会话级临时密钥、运行时句柄、Blob URL、搜索索引不得写入 `settings`。
+- 用户设置可以写入 `settings`，但敏感配置必须明确过滤同步。
+- Blob URL、搜索索引、运行时句柄、worker 状态和 provider 实例不得写入 `settings`。
+- 前缀型缓存键必须有明确前缀，并且同步过滤逻辑必须能识别。
+- 新增键时要同步检查 `src/stores/syncStorePayload.ts` 的过滤策略。
 
 ## 4. WebDAV 同步边界
 
-### 4.1 Store 状态与触发入口
+WebDAV 运行时状态由 `src/stores/useSyncStore.ts` 编排；payload 构建、下载应用和统计日志已经下沉到 `src/stores/syncStorePayload.ts`。
 
-WebDAV 同步状态由 `useSyncStore` 承担：`src/stores/useSyncStore.ts:260-280,282-295`
+### 4.1 调度入口
 
-已确认三类自动触发原因：
+自动同步由 `App` 顶层 effect 启动：
 
-- `startup`
-- `interval`
-- `exit`
+- 启动阶段：先执行 `loadPersistedSettings()`，再执行 `syncStore.loadConfig()`，随后 `autoSync('startup')`。
+- 定时阶段：每 15 分钟执行 `autoSync('interval')`。
+- 退出阶段：`beforeunload` 执行 `autoSync('exit')`。
 
-来源：`src/stores/useSyncStore.ts:279,297-360`
+同步 store 自身不自发启动定时器，调度边界在应用壳层。
 
-### 4.2 上传 payload 边界
+### 4.2 上传 payload
 
-上传 payload 由 `buildUploadPayload()` 生成：`src/stores/useSyncStore.ts:129-164`
+`buildUploadPayload(syncMode, timestamp)` 是上传 payload 的真值入口。
 
-当模式为 `data` / `full` 时会带上：
+`data` / `full` 模式包含：
 
 - `books`
 - `progress`
+- `readingStatsDaily`
 - `bookmarks`
 - `highlights`
 - `settings`
 
-来源：`src/stores/useSyncStore.ts:136-149`
+`files` / `full` 模式包含：
 
-当模式为 `files` / `full` 时会带上：
+- `bookFiles`，以 base64 编码写入 payload。
 
-- `bookFiles`
+同步上传不是整库裸传。`settings` 会先取 primary keys，再过滤可同步键，最后 `bulkGet()` 取实际行。
 
-来源：`src/stores/useSyncStore.ts:151-160`
+### 4.3 敏感键与不可同步前缀
 
-### 4.3 敏感键过滤
+`syncStorePayload.ts` 当前过滤两类 settings：
 
-以下 settings 键不会进入 WebDAV payload：`src/stores/useSyncStore.ts:63-69,148`
+敏感键：
 
 - `translateConfig`
+- `sync:webdavUrl`
+- `sync:webdavUser`
+- `sync:webdavPath`
+- `sync:remoteEtag`
+- `sync:syncMode`
+- `sync:restoreMode`
+- `sync:replaceBeforeRestore`
+- `sync:lastSyncTime`
 - `webdavUrl`
 - `webdavUser`
 - `webdavPass`
@@ -140,197 +156,171 @@ WebDAV 同步状态由 `useSyncStore` 承担：`src/stores/useSyncStore.ts:260-2
 - `webdavReplaceBeforeRestore`
 - `lastSyncTime`
 
+不可同步前缀：
+
+- `vcache-`
+- `tcache:`
+
 约束：
 
-- 同步不是“把整个 `settings` 原封不动上传”。
-- 凡是包含凭据、远端协商状态、设备本地同步状态的键，都不应进入远端备份。
-- 后续若新增敏感配置，必须同时更新 `SENSITIVE_SETTINGS_KEYS`：`src/stores/useSyncStore.ts:64-69`
+- 凭据、远端协商状态、设备本地同步状态和本地缓存都不能进入远端备份。
+- 新增敏感配置时必须更新 `SENSITIVE_SETTINGS_KEYS`。
+- 新增缓存前缀时必须更新 `UNSYNCABLE_SETTINGS_KEY_PREFIXES`。
 
 ### 4.4 ETag 冲突控制
 
-ETag 冲突控制逻辑在 `checkEtagAndUpload()`：`src/stores/useSyncStore.ts:166-212`
+上传前先执行 `head`：
 
-已确认行为：
-
-- 先做 `head`：`src/stores/useSyncStore.ts:178-180`
-- 远端不存在时使用 `If-None-Match: *`：`src/stores/useSyncStore.ts:182-185`
-- 远端存在时使用 `If-Match`：`src/stores/useSyncStore.ts:186-189`
-- 若本地记录的 `remoteEtag` 与远端 `headEtag` 不一致，则拒绝覆盖并视为冲突：`src/stores/useSyncStore.ts:189-190`
-- 上传后回写新的 `etag`：`src/stores/useSyncStore.ts:210-211,351-353,453-455`
+- 远端不存在时使用 `If-None-Match: *`。
+- 远端存在时使用 `If-Match`。
+- 本地记录的 `remoteEtag` 与远端 ETag 不一致时，拒绝覆盖并视为冲突。
+- 上传成功后写回 `sync:remoteEtag` 和 `sync:lastSyncTime`。
 
 约束：
 
-- `webdavRemoteEtag` 是同步协商元数据，不是业务数据。
-- 修改同步协议时，不得绕过 `head -> compare -> conditional upload` 这条链路，否则会放大覆盖风险。
+- `sync:remoteEtag` 是同步协商元数据，不是业务数据。
+- 修改同步协议时不得绕过 `head -> compare -> conditional upload`。
 
-### 4.5 下载与恢复边界
+### 4.5 下载与恢复
 
-下载应用逻辑在 `applyDownloadedPayload()`：`src/stores/useSyncStore.ts:214-258`
+`applyDownloadedPayload(payload, resolvedMode, clearFirst)` 是下载应用入口。
 
-已确认行为：
+当前行为：
 
-- `clearFirst` 为真时会先清空本地目标表：`src/stores/useSyncStore.ts:223-235`
-- `books/progress/bookmarks/highlights/settings` 通过 `bulkPut` 恢复：`src/stores/useSyncStore.ts:244-248`
-- `bookFiles` 先 base64 解码，再 `bulkPut`：`src/stores/useSyncStore.ts:249-256`
-
-恢复入口 `restoreData()`：`src/stores/useSyncStore.ts:469-505`
-
-已确认行为：
-
-- `restoreMode === 'auto'` 时跟随备份包内 `payload.mode`：`src/stores/useSyncStore.ts:494-495`
-- 是否先清空本地由 `replaceBeforeRestore` 控制：`src/stores/useSyncStore.ts:470,495`
-- 恢复完成后回写 `webdavSyncMode`：`src/stores/useSyncStore.ts:497-498`
+- `clearFirst` 为真且恢复数据时，会清空 `books`、`progress`、`readingStatsDaily`、`bookmarks`、`highlights`。
+- `clearFirst` 为真且恢复文件时，会清空 `bookFiles`。
+- `books`、`progress`、`readingStatsDaily`、`bookmarks`、`highlights`、可同步 `settings` 使用 `bulkPut()` 写回。
+- `bookFiles` 先从 base64 解码，再 `bulkPut()`。
+- 下载 payload 中的 settings 仍会再次执行可同步过滤，不接受远端写入敏感键。
 
 约束：
 
-- 恢复流程默认会触碰 `settings`，因此 `settings` 键空间治理会直接影响同步正确性。
-- 新增 `settings` 键时，必须同步判断它应被恢复、应被过滤，还是根本不应进备份。
+- 恢复流程会改写 `settings` 中的可同步键，因此 settings 键空间治理直接影响恢复正确性。
+- `replaceBeforeRestore` 是高风险开关，涉及本地数据清空。
 
-## 5. 翻译配置与凭据持久化边界
+### 4.6 Payload 观测
 
-### 5.1 配置存储
+`logSyncPayloadStats()` 会输出 payload 大小和各数组条目数，覆盖 `books/progress/readingStatsDaily/bookmarks/highlights/settings/bookFiles`。这是大数据量排查入口，不是业务逻辑。
 
-翻译配置主键是 `translateConfig`：`src/services/translateService.ts:78`
+## 5. 阅读统计持久化
 
-读写入口：
+阅读统计由以下链路组成：
 
-- `loadTranslateConfig()`：`src/services/translateService.ts:161-167`
-- `saveTranslateConfig()`：`src/services/translateService.ts:169-174`
+- `ReaderView` 接入 `useReadingActivityTracker()`。
+- 用户键盘、滚轮、指针、触摸、进度变化会调用 `markActivity()`。
+- tracker 只在页面可见且窗口聚焦、未超过 idle timeout 时累计活跃毫秒数。
+- 累计达到阈值后调用 `addActiveReadingMs(bookId, pendingMs)`。
+- `readingStatsService` 按本地日期写入 `readingStatsDaily`，主键为 `${dateKey}::${bookId}`。
+- `loadReadingStatsRowsForSync()` 只同步保留期内的统计行，当前保留期常量是 `READING_STATS_RETENTION_DAYS = 400`。
+- `ReadingStatsPanel` 读取 day / week / month 汇总，使用 `bulkGet()` 获取书籍与进度，并把表格渲染限制在前 500 行。
 
-### 5.2 API Key 安全边界
+约束：
 
-当前会加密处理的 key 字段：`src/services/translateService.ts:5,11-16,24-29`
+- 阅读统计是业务数据，应参与 `data/full` 同步。
+- 阅读统计不是逐事件日志，只保存日级聚合。
+- 大数据量页面只渲染有限行数，避免书库统计页面一次创建过多 DOM。
+
+## 6. 翻译配置与翻译缓存
+
+翻译配置主键是 `translateConfig`，存于 `db.settings`。
+
+API key 加密字段：
 
 - `deeplApiKey`
 - `openaiApiKey`
 - `geminiApiKey`
 - `claudeApiKey`
 
-加解密依赖渲染层暴露的安全存储 API：
+加解密边界：
 
-- `safeStorageEncrypt` / `safeStorageDecrypt` / `safeStorageIsAvailable`：`electron/preload.ts:16-18`
-- 主进程 IPC：`electron/main.ts:626-662`
-- BrowserWindow 安全边界：`electron/main.ts:146-147`
+- renderer 调用 `safeStorageEncrypt` / `safeStorageDecrypt` / `safeStorageIsAvailable`。
+- preload 通过 `contextBridge` 暴露能力。
+- main 进程提供对应 IPC。
 
-约束：
+翻译结果缓存：
 
-- 翻译配置可以持久化，但其中 API key 不应以明文持久化。
-- `translateConfig` 当前已被列为 WebDAV 敏感键，不参与远端同步：`src/stores/useSyncStore.ts:64-66`
-- 修改翻译配置结构时，必须同步检查加密字段列表与同步过滤列表。
-
-## 6. 缓存分层与生命周期
-
-### 6.1 Vitra 持久缓存（L3）
-
-`VitraBookCache` 负责把 sections HTML 压缩后写入 IndexedDB：`src/engine/cache/vitraBookCache.ts:107-204`
-
-已确认：
-
-- 前缀：`vcache-`：`src/engine/cache/vitraBookCache.ts:20,56-58`
-- 排除格式：`PDF/DJVU/CBZ/CBT/CBR/CB7`：`src/engine/cache/vitraBookCache.ts:23-25,123-124`
-- 读路径：`src/engine/cache/vitraBookCache.ts:132-156`
-- 写路径：`src/engine/cache/vitraBookCache.ts:162-175`
-- 全量清理：`src/engine/cache/vitraBookCache.ts:188-195`
-
-当前风险：
-
-- `getHash()` 未命中时递归调用了自己，而不是 `computeBufferHash()`：`src/engine/cache/vitraBookCache.ts:112-117`
-- 该问题已被文档识别为高风险点，当前不在本章内直接修源码。
-
-### 6.2 Section LRU（L2）
-
-`VitraSectionManager` 负责 section 级内存与 Blob URL 淘汰：`src/engine/cache/vitraSectionManager.ts:38-144`
-
-已确认行为：
-
-- 默认最大加载数 `DEFAULT_MAX_LOADED = 5`：`src/engine/cache/vitraSectionManager.ts:13,43-45`
-- `load()` 命中时刷新访问时间：`src/engine/cache/vitraSectionManager.ts:53-76`
-- 淘汰时 `revokeObjectURL + section.unload()`：`src/engine/cache/vitraSectionManager.ts:116-143`
-- `destroy()` 会释放全部已加载条目：`src/engine/cache/vitraSectionManager.ts:98-99`
-
-### 6.3 Adapter 内 HTML 缓存与索引缓存（L1）
-
-`VitraContentAdapter` 是缓存汇合点：`src/engine/pipeline/vitraContentAdapter.ts:39-180`
-
-已确认行为：
-
-- `htmlCache` 存章节 HTML：`src/engine/pipeline/vitraContentAdapter.ts:43,70,134-151`
-- `sectionManager` 容量被提升到 10：`src/engine/pipeline/vitraContentAdapter.ts:31-32,52-54`
-- 初始化时若命中持久缓存，会预热 `htmlCache`：`src/engine/pipeline/vitraContentAdapter.ts:60-78`
-- 命中持久缓存后会空闲构建搜索索引：`src/engine/pipeline/vitraContentAdapter.ts:76-77,176-187`
-- `extractChapterHtml()` 成功后会写入搜索索引：`src/engine/pipeline/vitraContentAdapter.ts:149-152`
-- `destroy()` 会先构建缓存 payload，再释放 `sectionManager`、`htmlCache`、asset session，并异步写回持久缓存：`src/engine/pipeline/vitraContentAdapter.ts:84-95`
-
-### 6.4 搜索索引缓存
-
-搜索索引是独立内存缓存，不走 `settings`：`src/engine/cache/searchIndexCache.ts:35-73`
-
-已确认接口：
-
-- `upsertChapterIndex()`：`src/engine/cache/searchIndexCache.ts:35-40`
-- `hasChapterIndex()`：`src/engine/cache/searchIndexCache.ts:42-44`
-- `getIndexedChapterCount()`：`src/engine/cache/searchIndexCache.ts:46-48`
-- `clearBookIndex()`：`src/engine/cache/searchIndexCache.ts:50-52`
-- `searchBookIndex()`：`src/engine/cache/searchIndexCache.ts:54-72`
+- 主表是 `translationCache`。
+- cache key 由 provider、语言、模型、endpoint 和文本内容共同决定。
+- 过期缓存会删除。
+- 超上限时按 `lastAccessAt` 删除最旧项。
 
 约束：
 
-- 搜索索引属于会话级加速结构，不应写入 `db.settings`。
-- 若书籍生命周期结束，应确保存在索引清理路径，避免长期驻留。
+- `translateConfig` 不参与 WebDAV 同步。
+- API key 不应明文持久化。
+- 翻译结果缓存不写入 `settings`。
 
-### 6.5 资源会话缓存
+## 7. 缓存分层与生命周期
 
-资源 Blob URL 会话缓存由 `assetLoader` 管理：`src/utils/assetLoader.ts:72-137`
+### 7.1 Vitra 持久缓存（L3）
 
-已确认行为：
+`VitraBookCache` 把可缓存格式的 sections HTML 压缩后写入 `db.settings`，键前缀为 `vcache-`。
 
-- `resolveSessionAssetUrl()` 负责同 session 复用 URL，并处理并发 in-flight：`src/utils/assetLoader.ts:72-113`
-- `hasSessionAssetUrl()` 用于判断 Blob URL 是否仍有效：`src/utils/assetLoader.ts:115-120`
-- `releaseAssetSession()` 会批量回收 URL 并清空索引：`src/utils/assetLoader.ts:122-137`
+当前排除格式包括 PDF、DJVU、CBZ、CBT、CBR、CB7。
 
 约束：
 
-- Blob URL 生命周期必须跟 sessionKey 绑定，不能只依赖浏览器自然回收。
-- 若 provider/adapter 已销毁，后续不应继续信任旧的资源 URL。
+- 持久缓存只是性能优化层，命中缓存不能改变业务语义。
+- `vcache-` 不参与 WebDAV 同步。
+- 读取失败时必须能回退到重新解析。
 
-### 6.6 翻译结果缓存
+### 7.2 Section LRU（L2）
 
-翻译结果缓存走独立表 `translationCache`，不走 `settings`：`src/services/storageService.ts:75,106,115`
+`VitraSectionManager` 限制同时保留的 section 数量。淘汰时需要执行 `revokeObjectURL` 与 `section.unload()`；`destroy()` 必须释放全部已加载条目。
 
-已确认行为：
+### 7.3 Adapter 内缓存（L1）
 
-- cache key 前缀 `tcache:`：`src/services/translateService.ts:79,177-195`
-- 过期即删：`src/services/translateService.ts:197-205`
-- 超上限时按 `lastAccessAt` 清理最旧项：`src/services/translateService.ts:208-219`
-- 写入路径：`src/services/translateService.ts:221-235`
-- 全量清理：`src/services/translateService.ts:238-240`
+`VitraContentAdapter` 是章节 HTML 缓存、section manager 和资源会话的汇合点：
 
-## 7. 修改约束
+- `init()` 尝试从持久缓存预热 `htmlCache`。
+- `extractChapterHtml()` 成功后可写入搜索索引。
+- `destroy()` 释放 section manager、`htmlCache`、asset session，并异步写回持久缓存。
 
-- 不要把新的大块结构化数据继续塞进 `settings`，除非它明确是单键配置。
-- 不要让会话级缓存混入可同步数据。
-- 不要让同步逻辑绕过敏感键过滤与 ETag 协商。
-- 不要把 API key 明文持久化到 IndexedDB。
-- 不要让 Blob URL 的创建点与释放点分离到不可追踪。
-- 修改 `storageService.ts`、`useSyncStore.ts`、`translateService.ts`、`vitraBookCache.ts`、`assetLoader.ts` 任一文件时，都应同时回看本文档。
+### 7.4 搜索索引缓存
 
-## 8. 高风险点
+`searchIndexCache` 是会话内内存缓存，不走 `settings`，也不走同步。书籍生命周期结束时需要保留清理路径。
 
-- Dexie 版本升级与历史数据迁移：`src/services/storageService.ts:80-124`
-- `settings` 键空间继续膨胀但缺少注册表治理
-- `VitraBookCache` 当前 `getHash()` 递归风险：`src/engine/cache/vitraBookCache.ts:112-117`
-- 同步恢复会直接覆盖 `settings`：`src/stores/useSyncStore.ts:241-249`
-- WebDAV 元数据键与真实业务键混存于同一表
-- 翻译配置、同步配置、安全存储能力跨越 renderer / preload / main 三层
+### 7.5 资源会话缓存
 
-## 9. 当前测试与治理缺口
+`assetLoader` 使用 sessionKey 管理 Blob URL。`releaseAssetSession()` 是批量回收入口，provider/adapter 销毁后不应继续信任旧 URL。
 
-结合现有测试基线，当前仍缺：
+## 8. 书库组织状态
 
-- `storageService.ts` 的表结构与升级回归
-- `useSyncStore.ts` 的敏感键过滤、ETag 冲突、恢复覆盖策略回归
-- `translateService.ts` 的 `safeStorage` 加解密与 `translationCache` TTL 回归
-- `settings` 键空间注册表与所有权说明
-- 缓存清理链路回归：持久缓存 / section LRU / asset session / 搜索索引
+当前分组主路径已经迁移到：
 
-这些缺口也已在测试基线文档中体现：`doc/05_TEST_ORACLES.md:142-149`
+- `groups:groups`
+- `groups:bookMap`
+- `groups:bookOrder`
+- `groups:homeOrder`
+
+`groupManagerRepository.ts` 负责从 `settings` 读取和保存；`groupManagerState.ts` 负责清洗、排序、旧结构迁移。`groups` / `groupBookMap` / `groupBookOrder` / `homeOrder` 和 `shelves` / `shelfBookMap` 只是遗留兼容来源，不应继续作为新功能主路径。
+
+书库元数据状态已经抽到 `libraryMetaRepository.ts`：
+
+- `loadLibraryCoreMeta()` 读取进度、收藏、回收站，并通过 `uniqueKeys()` 获取有书签/高亮的书籍 ID。
+- `loadLibraryAnnotationMeta()` 只在注释/高亮视图需要详情时读取全量书签和高亮。
+
+约束：
+
+- 不要把新分组能力写回旧 `shelves` 主路径。
+- 注释详情读取应延迟到对应视图需要时执行。
+
+## 9. 修改约束
+
+- 不要把新的大块结构化数据继续写入 `settings`，除非它明确是单键配置。
+- 不要让会话级缓存进入可同步数据。
+- 不要绕过敏感键过滤与 ETag 协商。
+- 不要明文持久化 API key。
+- 不要把 Blob URL 创建点与释放点分离到不可追踪。
+- 修改 `storageService.ts`、`syncStorePayload.ts`、`useSyncStore.ts`、`useSettingsStore.ts`、`translateService.ts`、`vitraBookCache.ts`、`assetLoader.ts` 任一文件时，都应回看本文档。
+
+## 10. 当前测试与治理缺口
+
+当前仍缺：
+
+- `storageService.ts` 的表结构与升级回归。
+- `syncStorePayload.ts` / `useSyncStore.ts` 的敏感键过滤、ETag 冲突、恢复覆盖策略回归。
+- `useSettingsStore.ts` 的设置持久化回归。
+- `translateService.ts` 的 `safeStorage` 加解密与 `translationCache` TTL 回归。
+- `VitraBookCache` / `VitraSectionManager` / `assetLoader` / `searchIndexCache` 的清理链路回归。
+- `settings` 键空间注册表与新增键评审规则。

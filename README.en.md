@@ -5,6 +5,18 @@
 Vitra Reader is a desktop EPUB reader focused on **local-first data ownership, reading experience, and controllable sync**.  
 Built with Electron + React + TypeScript, it aims to be a practical long-term reading app for daily use.
 
+## License Notice
+
+- This project is licensed under `PolyForm Noncommercial 1.0.0`.
+- Non-commercial use, modification, and redistribution are allowed.
+- Any commercial use requires prior written permission from the author.
+- This project is `source-available`, not an OSI open source license.
+
+See:
+- [LICENSE](./LICENSE)
+- [COMMERCIAL_USE.md](./COMMERCIAL_USE.md)
+- [LICENSE-FAQ.md](./LICENSE-FAQ.md)
+
 ---
 
 ## Screenshot

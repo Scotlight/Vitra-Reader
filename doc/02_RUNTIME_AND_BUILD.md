@@ -2,99 +2,129 @@
 
 ## 1. 目标
 
-本文档记录项目运行、构建与调试所依赖的关键入口与边界。源码与脚本文件是真值，本文档负责解释其职责与风险。
+本文档记录项目运行、构建、测试与调试的关键入口。源码与脚本是真值；本文档负责解释职责、边界和当前已验证结果。
 
-## 2. 当前已确认的顶层运行文件
+## 2. 顶层运行入口
 
-仓库根目录可见：
+当前仓库是 Vite + React + TypeScript + Electron 架构。
 
-- `package.json`
-- `vite.config.ts`
-- `tsconfig.json`
-- `index.html`
-- `electron/`
-- `dist/`
-- `dist-electron/`
+核心文件：
 
-根据源码可确认：
+- `package.json`：脚本、依赖、Electron 主入口声明。
+- `vite.config.ts`：renderer、main、preload 的 Vite / Electron 构建配置。
+- `src/main.tsx`：renderer 入口，挂载 `App`。
+- `src/App.tsx`：书库视图、阅读视图、WebDAV 自动同步调度和设置加载入口。
+- `electron/main.ts`：Electron 主进程。
+- `electron/preload.ts`：renderer 暴露的安全桥接能力。
 
-- `package.json:7-16` 定义了 `dev`、`build`、`preview`、`lint`、`test`、`test:ui`、`test:run`、`monitor`
-- `package.json:6` 指定 Electron 主入口产物为 `dist-electron/main.js`
-- `vite.config.ts:15-41` 使用 `@vitejs/plugin-react`、`vite-plugin-electron`、`vite-plugin-electron-renderer`
-- `vite.config.ts:20,29` 指定 Electron 源入口为 `electron/main.ts` 与 `electron/preload.ts`
+当前脚本：
 
-说明：
+- `npm run dev`：启动 Vite 开发服务。
+- `npm run dev:monitor`：同时启动开发服务与性能采样脚本。
+- `npm run build`：先执行 `tsc -b`，再执行 `vite build`。
+- `npm run lint`：执行 `tsc -b --pretty false`。
+- `npm test` / `npm run test:ui` / `npm run test:run`：Vitest 入口。
+- `npm run monitor`：执行 `scripts/monitor.js`，定期记录 CPU / 内存 / Node 进程占用到 `logs/perf-*.csv`。
 
-- 项目当前明确是 Vite + React + TypeScript + Electron 架构
-- 前端渲染与桌面壳层存在明确分层
-- 实际脚本命令、打包流程与 dev/prod 差异以 `package.json` 和 `vite.config.ts` 为准
-
-## 3. 构建链路边界
+## 3. 构建链路
 
 当前已确认链路：
 
-1. `npm run dev` 直接启动 Vite dev server：`package.json:8`
-2. Electron 开发集成由 `vite-plugin-electron` 驱动，主进程入口是 `electron/main.ts`，preload 入口是 `electron/preload.ts`：`vite.config.ts:15-40`
-3. renderer 端入口是 `src/main.tsx -> App`：`src/main.tsx:1-11`
-4. Electron 窗口通过 `BrowserWindow` 加载 preload 产物 `dist-electron/preload.js`：`electron/main.ts:132-148`
-5. `npm run build` 先执行 `tsc -b`，再执行 `vite build`：`package.json:10`
-6. Vite 构建会把 renderer 产物输出到 `dist/`，并把 main / preload 输出到 `dist-electron/`：`vite.config.ts:21-37,52-92`
-7. `package.json.main` 指向最终桌面入口 `dist-electron/main.js`：`package.json:6`
+1. renderer 入口是 `src/main.tsx -> App`。
+2. Electron 开发集成由 `vite-plugin-electron` 驱动，源入口是 `electron/main.ts` 与 `electron/preload.ts`。
+3. `BrowserWindow` 加载 preload 产物 `dist-electron/preload.js`。
+4. `npm run build` 输出 renderer 产物到 `dist/`，输出 main / preload 到 `dist-electron/`。
+5. `package.json.main` 指向 `dist-electron/main.js`。
 
-补充说明：
+当前仓库没有独立安装包生成脚本。桌面壳层产物边界以 `vite-plugin-electron` 输出为准。
 
-- 当前仓库没有独立 `package`/`dist` 打包脚本，桌面壳层构建以 `vite-plugin-electron` 的 main/preload 输出为准：`package.json:7-16`
-- preload 注入范围以 `contextBridge.exposeInMainWorld('electronAPI', ...)` 为准：`electron/preload.ts:1-11`
-- 监控脚本 `npm run monitor` 会调用 `scripts/monitor.js`，每 2 秒记录 CPU / 内存 / Node 进程占用到 `logs/perf-*.csv`：`package.json:16`, `scripts/monitor.js:7-29,113-176`
+## 4. 当前构建验证结果
 
-## 4. 阅读相关运行时重点
+最近一次验证命令：
 
-### 4.1 PDF.js runtime
+- `npm run build --silent`
+
+结果：通过。
+
+当前仍存在的构建告警：
+
+- Vite 仍提示部分 chunk 在压缩后超过 500 kB。
+- `pdf-vendor-BXAeeLSZ.js` 约 `946.90 kB`。
+- `index-ZDQLdoPX.js` 约 `500.45 kB`。
+
+当前已消失的告警：
+
+- 未再出现 `VitraPipeline` / `VitraContentAdapter` 同时静态导入与动态导入导致分包不生效的告警。
+
+结论：构建可用，但大 chunk 告警仍是性能治理项，不应写成已经解决。
+
+## 5. 测试运行注意事项
+
+Vitest 使用 Vite 配置加载测试环境。当前在受限沙箱内启动 `vitest` 时，可能触发 `esbuild` `spawn EPERM`。该现象与进程创建权限有关，不等同于测试失败。
+
+已确认的可行方式：
+
+- 单条测试串行执行。
+- 必要时在获得授权后于沙箱外执行同一条测试命令。
+
+已验证通过的单测记录见 `doc/05_TEST_ORACLES.md`。
+
+## 6. 阅读相关运行时重点
+
+### 6.1 PDF.js runtime
 
 PDF provider 使用动态 import 加载 `pdfjs-dist` modern runtime，并在失败时降级到 `pdfjs-dist/legacy/build/pdf.mjs`。
 
 运行约束：
 
-- `GlobalWorkerOptions.workerSrc` 必须与打包产物兼容
-- modern/legacy runtime 切换后要确保缓存语义一致
-- runtime fallback 问题优先从 provider 内部排查
+- `GlobalWorkerOptions.workerSrc` 必须与打包产物兼容。
+- modern / legacy runtime 切换后要保持缓存语义一致。
+- PDF runtime fallback 问题优先从 provider 内部排查。
 
-### 4.2 Worker 预处理
+### 6.2 Worker 预处理
 
-章节预处理使用独立 worker 完成消毒、样式处理与分片/向量化。
+章节预处理使用 worker 执行消毒、样式处理、分片和向量化，并在 worker 不可用、初始化失败或超时时同步回退到主线程 core 实现。
 
 运行约束：
 
-- worker 打包路径必须稳定
-- worker 返回数据结构需可序列化
-- 大章节预处理不应阻塞主线程首屏
+- worker 打包路径必须稳定。
+- worker 返回结构必须可序列化。
+- 大章节预处理不应阻塞主线程首屏。
 
-## 5. 调试建议
+### 6.3 设置与同步启动顺序
 
-当前建议按以下维度调试：
+`App` 启动时先执行 `loadPersistedSettings()`，再执行 `syncStore.loadConfig()` 和 `autoSync('startup')`。阅读器主题、排版和翻页模式已经由 `useSettingsStore` 持久化到 `db.settings`。
 
-- 阅读器 UI：查看 `src/components/Reader/`
-- 内容适配：查看 `src/engine/pipeline/` 与 `src/engine/parsers/providers/`
-- PDF 问题：优先查看 `src/engine/parsers/providers/pdfProvider.ts`
-- 样式污染：查看 `src/utils/styleProcessor.ts` 与 preprocess 相关逻辑
-- 缓存问题：查看 `src/engine/cache/`
+## 7. 调试入口
 
-## 6. 发布前最少核查项
+- 阅读器 UI：`src/components/Reader/`
+- 滚动阅读内部调度：`src/components/Reader/scrollReader/`
+- 内容适配：`src/engine/pipeline/` 与 `src/engine/parsers/providers/`
+- PDF：`src/engine/parsers/providers/pdfProvider.ts`
+- 样式隔离：`src/utils/styleProcessor.ts` 与 `src/engine/render/chapterPreprocess*`
+- 存储与同步：`src/services/storageService.ts`、`src/stores/useSyncStore.ts`、`src/stores/syncStorePayload.ts`
+- 阅读统计：`src/services/readingStatsService.ts`、`src/components/Reader/useReadingActivityTracker.ts`、`src/components/Library/ReadingStatsPanel.tsx`
+- 性能采样：`scripts/monitor.js`
 
-在进行与阅读引擎相关的发布前，至少核查：
+## 8. 发布前最少核查项
 
-- 能否打开 EPUB
-- 能否打开 PDF
-- 滚动与分页模式是否都能正常进入
-- 样式是否出现宿主页面污染
-- 大章节是否触发异常卡顿或空白
-- PDF 页面缓存释放后是否有残留 URL/内存问题
+阅读引擎相关发布前至少核查：
 
-## 7. 当前缺口
+- EPUB 可以打开。
+- PDF 可以打开。
+- 滚动与分页模式都可以进入。
+- 阅读设置重启后仍能恢复。
+- 样式没有污染宿主页面。
+- 大章节没有长时间空白。
+- PDF 页面缓存释放后没有持续增长的 URL 或内存占用。
+- WebDAV 自动同步不会覆盖远端新版本。
 
-若要把本文档提升为完全可执行的运行手册，当前剩余重点是：
+## 9. 当前缺口
 
-- Electron 主进程 IPC 能力全表与调用方映射
-- 运行日志分类与故障排查顺序
-- worker / PDF runtime 在最终产物中的路径验证清单
-- 崩溃与性能分析工具清单
+后续需要补齐：
+
+- Electron 主进程 IPC 能力全表与调用方映射。
+- 运行日志分类与故障排查顺序。
+- worker / PDF runtime 在最终产物中的路径验证清单。
+- 崩溃与性能分析工具清单。
+- 固定样本集与可重复性能基线。
