@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { db } from '../services/storageService'
+import { db } from '@/services/storageService'
 import {
     applyDownloadedPayload,
     buildUploadPayload,

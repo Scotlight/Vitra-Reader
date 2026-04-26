@@ -1,10 +1,10 @@
 import { useState, useCallback, useRef } from 'react';
-import { db, type Highlight } from '../services/storageService';
-import { findTextInDOM, highlightRange } from '../utils/textFinder';
-import { getProviderLabel, translateText } from '../services/translateService';
-import { SelectionMenu } from '../components/Reader/SelectionMenu';
-import { NoteDialog } from '../components/Reader/NoteDialog';
-import { TranslationDialog } from '../components/Reader/TranslationDialog';
+import { db, type Highlight } from '@/services/storageService';
+import { findTextInDOM, highlightRange } from '@/utils/textFinder';
+import { getProviderLabel, translateText } from '@/services/translateService';
+import { SelectionMenu } from '@/components/Reader/SelectionMenu';
+import { NoteDialog } from '@/components/Reader/NoteDialog';
+import { TranslationDialog } from '@/components/Reader/TranslationDialog';
 
 // ── 类型定义 ──
 

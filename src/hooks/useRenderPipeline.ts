@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import {
   RenderPipelineState,
   isValidTransition
-} from '../engine/types/renderPipeline';
+} from '@/engine/types/renderPipeline';
 
 /**
  * useRenderPipeline Hook

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { BookMeta } from '../services/storageService'
+import type { BookMeta } from '@/services/storageService'
 import {
     buildHomeOrderKey,
     reorderKeys,

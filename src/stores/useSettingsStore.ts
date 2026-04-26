@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { db } from '../services/storageService'
+import { db } from '@/services/storageService'
 
 export type PageTurnMode = 'paginated-single' | 'paginated-double' | 'scrolled-continuous'
 export type UIMaterial = 'default' | 'mica' | 'acrylic'

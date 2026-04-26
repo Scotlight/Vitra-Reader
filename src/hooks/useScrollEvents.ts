@@ -1,5 +1,5 @@
 import { RefObject, useCallback, useRef, useEffect } from 'react';
-import { clampNumber } from '../utils/mathUtils';
+import { clampNumber } from '@/utils/mathUtils';
 
 /**
  * 速度追踪器 — 仅用于触摸事件的速度估算

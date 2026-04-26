@@ -1,4 +1,4 @@
-import { db } from '../storageService'
+import { db } from '@/services/storageService'
 import type { TranslateConfig } from './translateTypes'
 
 const CACHE_KEY_PREFIX = 'tcache:'

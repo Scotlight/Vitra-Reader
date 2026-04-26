@@ -6,8 +6,8 @@ import {
     type Bookmark,
     type Highlight,
     type ReadingStatsDaily,
-} from '../services/storageService'
-import { loadReadingStatsRowsForSync } from '../services/readingStatsService'
+} from '@/services/storageService'
+import { loadReadingStatsRowsForSync } from '@/services/readingStatsService'
 import type { SyncMode } from './useSyncStore'
 
 const SENSITIVE_SETTINGS_KEYS = new Set([

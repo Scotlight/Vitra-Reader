@@ -1,5 +1,5 @@
 import ePub from 'epubjs'
-import type { EpubBookInternal } from '../types/epubjs'
+import type { EpubBookInternal } from '@/types/epubjs'
 
 export interface ParsedBook {
     title: string

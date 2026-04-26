@@ -1,4 +1,4 @@
-import { db, type BookMeta } from '../services/storageService'
+import { db, type BookMeta } from '@/services/storageService'
 import {
     GROUPS_SETTINGS_KEY,
     GROUP_BOOK_MAP_SETTINGS_KEY,

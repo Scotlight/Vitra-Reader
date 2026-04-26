@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { BookFormat } from '../engine/core/contentProvider'
+import type { BookFormat } from '@/engine/core/contentProvider'
 
 // Dexie schema 版本约定：当前最高版本 6；下次修改 schema 必须从 7 开始，并同步更新本注释中的最高版本号。
 
