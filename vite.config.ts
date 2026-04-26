@@ -4,6 +4,28 @@ import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
 import path from 'node:path'
 
+const DOCX_ARCHIVE_VENDOR_PACKAGES = [
+    '/jszip/',
+    '/pako/',
+    '/lie/',
+    '/immediate/',
+] as const
+
+const DOCX_SUPPORT_VENDOR_PACKAGES = [
+    '/@xmldom/xmldom/',
+    '/base64-js/',
+    '/bluebird/',
+    '/dingbat-to-unicode/',
+    '/lop/',
+    '/path-is-absolute/',
+    '/underscore/',
+    '/xmlbuilder/',
+] as const
+
+function includesAnyPackage(id: string, packages: readonly string[]): boolean {
+    return packages.some((packagePath) => id.includes(`/node_modules${packagePath}`))
+}
+
 export default defineConfig({
     test: {
         environment: 'jsdom',
@@ -56,14 +78,30 @@ export default defineConfig({
                     const normalizedId = id.replace(/\\/g, '/').toLowerCase()
                     if (!normalizedId.includes('/node_modules/')) return
 
+                    if (normalizedId.includes('/pdfjs-dist/legacy/')) {
+                        return 'pdf-legacy-vendor'
+                    }
+
+                    if (normalizedId.includes('/pdfjs-dist/')) {
+                        return 'pdf-modern-vendor'
+                    }
+
+                    if (normalizedId.includes('/mammoth/')) {
+                        return 'docx-vendor'
+                    }
+
+                    if (includesAnyPackage(normalizedId, DOCX_ARCHIVE_VENDOR_PACKAGES)) {
+                        return 'archive-vendor'
+                    }
+
+                    if (includesAnyPackage(normalizedId, DOCX_SUPPORT_VENDOR_PACKAGES)) {
+                        return 'docx-support-vendor'
+                    }
+
                     if (
                         normalizedId.includes('/epubjs/')
                     ) {
                         return 'epub-vendor'
-                    }
-
-                    if (normalizedId.includes('/pdfjs-dist/')) {
-                        return 'pdf-vendor'
                     }
 
                     if (normalizedId.includes('/mobi/')) {

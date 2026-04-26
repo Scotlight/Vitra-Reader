@@ -27,7 +27,7 @@ function formatRuntimeError(error: unknown): string {
 
 function buildWorkerSrc(kind: PdfRuntimeKind): string {
     const workerPath = kind === 'legacy'
-        ? 'pdfjs-dist/legacy/build/pdf.worker.mjs'
+        ? 'pdfjs-dist/legacy/build/pdf.worker.min.mjs'
         : 'pdfjs-dist/build/pdf.worker.min.mjs'
 
     if (import.meta.env.DEV && typeof window !== 'undefined') {
@@ -45,7 +45,7 @@ async function loadModernRuntime(): Promise<PdfJsRuntime> {
 }
 
 async function loadLegacyRuntime(): Promise<PdfJsRuntime> {
-    const runtime = await import('pdfjs-dist/legacy/build/pdf.mjs') as unknown as PdfJsRuntime
+    const runtime = await import('pdfjs-dist/legacy/build/pdf.min.mjs') as unknown as PdfJsRuntime
     runtime.GlobalWorkerOptions.workerSrc = buildWorkerSrc('legacy')
     runtimeCache.legacy = runtime
     return runtime
