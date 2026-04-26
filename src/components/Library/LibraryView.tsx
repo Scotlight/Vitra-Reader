@@ -1,5 +1,5 @@
 import { useEffect, useMemo, type MouseEvent as ReactMouseEvent } from 'react'
-import { useReaderSystemFonts } from '../Reader/useReaderSystemFonts'
+import { useReaderSystemFonts } from '@/components/Reader/useReaderSystemFonts'
 import { useLibraryStore } from '@/stores/useLibraryStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useGroupManager } from '@/hooks/useGroupManager'

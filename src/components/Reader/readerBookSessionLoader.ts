@@ -86,8 +86,8 @@ async function openReaderProvider(
     format: BookFormat,
 ): Promise<ContentProvider> {
     const [{ VitraPipeline }, { VitraContentAdapter }] = await Promise.all([
-        import('../../engine/pipeline/vitraPipeline'),
-        import('../../engine/pipeline/vitraContentAdapter'),
+        import('@/engine/pipeline/vitraPipeline'),
+        import('@/engine/pipeline/vitraContentAdapter'),
     ])
     const pipeline = new VitraPipeline()
     const handle = await pipeline.open({
