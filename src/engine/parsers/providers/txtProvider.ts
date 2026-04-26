@@ -7,6 +7,7 @@ import {
     DEFAULT_DOCUMENT_LABEL,
 } from '@/engine/render/chapterTitleDetector'
 import { escapeHtml } from '@/engine/core/contentSanitizer'
+import { searchPlainChapterTexts } from './chapterSearch'
 
 const PARAGRAPHS_PER_CHAPTER = 500
 const MAX_LABEL_LENGTH = 24
@@ -65,22 +66,7 @@ export class TxtContentProvider implements ContentProvider {
     unloadChapter() { }
 
     async search(keyword: string): Promise<SearchResult[]> {
-        const results: SearchResult[] = []
-        const lk = keyword.trim().toLowerCase()
-        if (!lk) return results
-
-        for (let i = 0; i < this.chapters.length; i++) {
-            const plain = this.getChapterPlain(i)
-            const lower = plain.toLowerCase()
-            let pos = lower.indexOf(lk)
-            while (pos !== -1) {
-                const start = Math.max(0, pos - 20)
-                const end = Math.min(lower.length, pos + lk.length + 20)
-                results.push({ cfi: `vitra:${i}:0`, excerpt: plain.slice(start, end) })
-                pos = lower.indexOf(lk, pos + 1)
-            }
-        }
-        return results
+        return searchPlainChapterTexts(keyword, this.chapters.length, (index) => this.getChapterPlain(index))
     }
 
     private getChapterPlain(index: number): string {

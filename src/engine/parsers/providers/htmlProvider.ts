@@ -3,10 +3,12 @@ import { stripBookExtension } from '@/engine/core/contentProvider'
 import { VitraSectionSplitter } from '@/engine/core/vitraSectionSplitter'
 import { decodeTextBuffer } from './textDecoding'
 import { EMPTY_SECTION_HTML, DEFAULT_DOCUMENT_LABEL } from '@/engine/render/chapterTitleDetector'
+import { searchPlainChapterTexts, stripHtmlTags } from './chapterSearch'
 
 interface Chapter {
     title: string
     html: string
+    plain: string
 }
 
 export class HtmlContentProvider implements ContentProvider {
@@ -25,10 +27,11 @@ export class HtmlContentProvider implements ContentProvider {
         this.chapters = chunks.map((chunk, index) => ({
             title: chunk.label || `第 ${index + 1} 章`,
             html: chunk.html || EMPTY_SECTION_HTML,
+            plain: stripHtmlTags(chunk.html || ''),
         }))
 
         if (this.chapters.length === 0) {
-            this.chapters = [{ title: DEFAULT_DOCUMENT_LABEL, html: EMPTY_SECTION_HTML }]
+            this.chapters = [{ title: DEFAULT_DOCUMENT_LABEL, html: EMPTY_SECTION_HTML, plain: '' }]
         }
     }
 
@@ -59,29 +62,13 @@ export class HtmlContentProvider implements ContentProvider {
     unloadChapter() {}
 
     async search(keyword: string): Promise<SearchResult[]> {
-        const results: SearchResult[] = []
-        const lk = keyword.toLowerCase()
-        for (let i = 0; i < this.chapters.length; i++) {
-            const plain = stripTags(this.chapters[i].html).toLowerCase()
-            let pos = plain.indexOf(lk)
-            while (pos !== -1) {
-                const start = Math.max(0, pos - 20)
-                const end = Math.min(plain.length, pos + keyword.length + 20)
-                results.push({ cfi: `vitra:${i}:0`, excerpt: stripTags(this.chapters[i].html).slice(start, end) })
-                pos = plain.indexOf(lk, pos + 1)
-            }
-        }
-        return results
+        return searchPlainChapterTexts(keyword, this.chapters.length, (index) => this.chapters[index].plain)
     }
-}
-
-function stripTags(html: string): string {
-    return html.replace(/<[^>]+>/g, '')
 }
 
 export async function parseHtmlMetadata(data: ArrayBuffer, filename: string) {
     const text = decodeTextBuffer(data, 'html').text
     const titleMatch = text.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
-    const title = titleMatch ? stripTags(titleMatch[1]).trim() : stripBookExtension(filename)
+    const title = titleMatch ? stripHtmlTags(titleMatch[1]).trim() : stripBookExtension(filename)
     return { title: title || filename, author: '未知作者' }
 }
