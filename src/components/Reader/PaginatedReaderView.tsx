@@ -11,6 +11,7 @@ import { usePaginatedProgress } from './paginatedReader/usePaginatedProgress';
 import { usePaginationMeasure } from './paginatedReader/usePaginationMeasure';
 import { usePaginatedChapterLoader } from './paginatedReader/usePaginatedChapterLoader';
 import { usePaginatedPageLayout } from './paginatedReader/usePaginatedPageLayout';
+import { resolveReaderInternalLinkTarget } from './readerInternalLink';
 import styles from './PaginatedReaderView.module.css';
 
 interface PaginatedReaderViewProps {
@@ -185,27 +186,25 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         await loadChapter(targetSpineIndex);
     }, [loadChapter, spineItemsRef]);
 
-    // PDF internal link handler
+    // 正文内部链接跳转（PDF 页码 / 普通 href）
     useEffect(() => {
         const container = columnRef.current;
         if (!container) return;
-        const handlePdfInternalLink = (event: MouseEvent) => {
+        const handleInternalLink = (event: MouseEvent) => {
             const target = event.target;
             if (!(target instanceof Element)) return;
-            const anchor = target.closest('a[data-pdf-page]');
+            const anchor = target.closest('a');
             if (!(anchor instanceof HTMLAnchorElement)) return;
-            const rawPage = anchor.getAttribute('data-pdf-page');
-            if (!rawPage) return;
-            const targetSpine = Number.parseInt(rawPage, 10);
-            if (!Number.isFinite(targetSpine)) return;
+            const targetSpine = resolveReaderInternalLinkTarget(anchor, provider);
+            if (targetSpine === null) return;
             if (targetSpine < 0 || targetSpine >= spineItemsRef.current.length) return;
             event.preventDefault();
             event.stopPropagation();
             void jumpToSpine(targetSpine);
         };
-        container.addEventListener('click', handlePdfInternalLink);
-        return () => { container.removeEventListener('click', handlePdfInternalLink); };
-    }, [jumpToSpine, spineItemsRef]);
+        container.addEventListener('click', handleInternalLink);
+        return () => { container.removeEventListener('click', handleInternalLink); };
+    }, [jumpToSpine, provider, spineItemsRef]);
 
     useImperativeHandle(ref, () => ({ jumpToSpine }));
 

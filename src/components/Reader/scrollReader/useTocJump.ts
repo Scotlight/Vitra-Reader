@@ -4,10 +4,13 @@ import { findTextInDOM } from '@/utils/textFinder';
 import { releaseMediaResources } from '@/utils/mediaResourceCleanup';
 import { segmentPool } from '../ShadowRenderer';
 import type { ChapterMetaVector } from '@/engine/types/vectorRender';
+import type { ContentProvider } from '@/engine/core/contentProvider';
 import type { LoadedChapter } from './scrollReaderTypes';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
+import { resolveReaderInternalLinkTarget } from '../readerInternalLink';
 
 interface UseTocJumpOptions {
+    provider: ContentProvider;
     onChapterChange?: (label: string, href: string) => void;
     setCurrentSpineIndex: (value: number) => void;
     setChapters: (next: LoadedChapter[]) => void;
@@ -29,13 +32,14 @@ interface UseTocJumpOptions {
  *   则强制 hydrate 所有段后查找文本并精确滚动
  * - 目标章节未挂载：清空所有 DOM / state / 段池，重置 scrollTop，loadChapter 新章节
  * - 通过 jumpGenerationRef 维护代数，中途新跳转让旧清理中断
- * - 附带监听 PDF 内部链接（a[data-pdf-page]）的点击事件，转发到 jumpToSpine
+ * - 附带监听正文内部链接（PDF 页码链接 / 普通 href），转发到 jumpToSpine
  */
 export function useTocJump(
     refs: ScrollReaderRefs,
     options: UseTocJumpOptions,
 ) {
     const {
+        provider,
         onChapterChange,
         setCurrentSpineIndex,
         setChapters,
@@ -175,17 +179,14 @@ export function useTocJump(
         const listEl = chapterListRef.current;
         if (!listEl) return;
 
-        const handlePdfInternalLink = (event: MouseEvent) => {
+        const handleInternalLink = (event: MouseEvent) => {
             const target = event.target;
             if (!(target instanceof Element)) return;
 
-            const anchor = target.closest('a[data-pdf-page]');
+            const anchor = target.closest('a');
             if (!(anchor instanceof HTMLAnchorElement)) return;
-
-            const rawPage = anchor.getAttribute('data-pdf-page');
-            if (!rawPage) return;
-            const targetSpine = Number.parseInt(rawPage, 10);
-            if (!Number.isFinite(targetSpine)) return;
+            const targetSpine = resolveReaderInternalLinkTarget(anchor, provider);
+            if (targetSpine === null) return;
             if (targetSpine < 0 || targetSpine >= spineItemsRef.current.length) return;
 
             event.preventDefault();
@@ -193,12 +194,12 @@ export function useTocJump(
             void jumpToSpine(targetSpine);
         };
 
-        listEl.addEventListener('click', handlePdfInternalLink);
+        listEl.addEventListener('click', handleInternalLink);
         return () => {
-            listEl.removeEventListener('click', handlePdfInternalLink);
+            listEl.removeEventListener('click', handleInternalLink);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [jumpToSpine]);
+    }, [jumpToSpine, provider]);
 
     return { jumpToSpine };
 }

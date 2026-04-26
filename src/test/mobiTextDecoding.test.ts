@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeMobiText } from '@/engine/parsers/providers/mobiTextDecoding'
+import { decodeMobiText, isLikelyMobiMojibake } from '@/engine/parsers/providers/mobiTextDecoding'
 
 describe('decodeMobiText', () => {
     it('CP1252 声明但正文实际为 UTF-8 中文时优先还原可读文本', () => {
@@ -7,6 +7,20 @@ describe('decodeMobiText', () => {
         const encoded = new TextEncoder().encode(original)
 
         expect(decodeMobiText(encoded, 1252)).toBe(original)
+    })
+
+    it('CP1252 声明且 UTF-8 正文带少量记录尾部噪声时，仍优先保留中文正文', () => {
+        const original = '<p>这是一本不会再乱码的中文 MOBI。</p>'
+        const encoded = new TextEncoder().encode(original)
+        const bytes = new Uint8Array(encoded.length + 1)
+        bytes.set(encoded)
+        bytes[bytes.length - 1] = 0xff
+
+        const decoded = decodeMobiText(bytes, 1252)
+
+        expect(decoded).toContain('这是一本不会再乱码的中文 MOBI。')
+        expect(decoded).not.toContain('è¿™')
+        expect(decoded).not.toContain('çš„')
     })
 
     it('CP1252 声明但正文实际为 GBK 中文时，优先回退到中文可读结果', () => {
@@ -31,5 +45,12 @@ describe('decodeMobiText', () => {
         expect(decoded).toContain('<p>')
         expect(decoded).toContain('罗中夏')
         expect(decoded).not.toContain('�')
+    })
+
+    it('能识别 UTF-8 被按 Latin-1 解码后的中文乱码片段', () => {
+        const mojibake = 'è¿™æ˜¯ä¸€æ®µä¸­æ–‡ä¹±ç æ­£æ–‡ã€‚'.repeat(4)
+
+        expect(isLikelyMobiMojibake(mojibake)).toBe(true)
+        expect(isLikelyMobiMojibake('这是正常中文正文。'.repeat(4))).toBe(false)
     })
 })

@@ -50,7 +50,7 @@ export async function createProviderForBackedFormat(
         case 'azw':
         case 'azw3': {
             const { MobiContentProvider } = await import('../parsers/providers/mobiProvider')
-            return new MobiContentProvider(data)
+            return new MobiContentProvider(data, format)
         }
         case 'html':
         case 'xml': {
@@ -92,7 +92,7 @@ export async function parseMetadataForBackedFormat(
         case 'azw':
         case 'azw3': {
             const { parseMobiMetadata } = await import('../parsers/providers/mobiProvider')
-            return parseMobiMetadata(data)
+            return parseMobiMetadata(data, format)
         }
         case 'html':
         case 'xml': {
@@ -111,4 +111,3 @@ export async function parseMetadataForBackedFormat(
             throw new Error(`[providerRegistry] 不支持的 metadata 格式: ${format}`)
     }
 }
-

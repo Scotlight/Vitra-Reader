@@ -97,15 +97,18 @@ class ResizeObserverMock {
 
 function createProvider(spineItems: SpineItemInfo[] = [
     { index: 0, href: 'chapter-1.xhtml', id: 'chapter-1', linear: true },
-]) {
+], options?: {
+    getSpineIndexByHref?: (href: string) => number
+    extractChapterHtml?: (spineIndex: number) => Promise<string>
+}) {
 
     const provider: ContentProvider = {
         init: async () => undefined,
         destroy: () => undefined,
         getToc: (): TocItem[] => [],
         getSpineItems: () => spineItems,
-        getSpineIndexByHref: () => 0,
-        extractChapterHtml: vi.fn(async () => '<p>body</p>'),
+        getSpineIndexByHref: options?.getSpineIndexByHref ?? (() => 0),
+        extractChapterHtml: vi.fn(options?.extractChapterHtml ?? (async () => '<p>body</p>')),
         extractChapterStyles: vi.fn(async () => ['p{}']),
         unloadChapter: vi.fn(),
         search: async (): Promise<SearchResult[]> => [],
@@ -359,6 +362,53 @@ describe('PaginatedReaderView flow', () => {
             y: 10,
             text: 'hello',
             spineIndex: 0,
+        })
+    })
+
+    it('正文内目录链接点击后跳转到目标章节', async () => {
+        mocks.preprocessChapterContentMock.mockImplementation(async (input: { htmlContent: string }) => ({
+            htmlContent: input.htmlContent,
+            htmlFragments: [input.htmlContent],
+            externalStyles: ['p{}'],
+            removedTagCount: 0,
+            removedAttributeCount: 0,
+            usedFallback: false,
+            stylesScoped: true,
+            hasRenderableContent: true,
+        }))
+        const provider = createProvider([
+            { index: 0, href: 'chapter-1.xhtml', id: 'chapter-1', linear: true },
+            { index: 1, href: 'chapter-2.xhtml', id: 'chapter-2', linear: true },
+        ], {
+            getSpineIndexByHref: (href) => href === 'filepos:200' ? 1 : -1,
+            extractChapterHtml: async (spineIndex) => (
+                spineIndex === 0
+                    ? '<p><a href="filepos:200">目录跳转</a></p>'
+                    : '<p>第二章</p>'
+            ),
+        })
+
+        const view = render(
+            <PaginatedReaderView
+                provider={provider}
+                bookId="book-1"
+                pageTurnMode="paginated-single"
+                readerStyles={DEFAULT_READER_STYLES}
+            />
+        )
+
+        await flushUi()
+
+        const anchor = view.container.querySelector('a[href="filepos:200"]') as HTMLAnchorElement | null
+        expect(anchor).not.toBeNull()
+
+        await act(async () => {
+            anchor?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+            await new Promise((resolve) => window.setTimeout(resolve, 200))
+        })
+
+        await waitFor(() => {
+            expect(provider.extractChapterHtml).toHaveBeenNthCalledWith(2, 1)
         })
     })
 })

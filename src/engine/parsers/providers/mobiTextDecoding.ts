@@ -1,7 +1,9 @@
 const MOBI_ENCODING_CP1252 = 1252
 const MOBI_ENCODING_UTF8 = 65001
 const CJK_PATTERN = /[\u3000-\u303F\u3400-\u4DBF\u4e00-\u9fff\uF900-\uFAFF]/g
-const MOJIBAKE_PATTERN = /[ÃÂæçï¼]/g
+const MOJIBAKE_PATTERN = /[ÃÂÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿ¼½¾šœžŸ€™]/g
+const UTF8_LATIN1_TRIPLE_RE = /[\u00C0-\u00F7][\u0080-\u00BF][\u0080-\u00BF]/g
+const UTF8_LATIN1_DOUBLE_RE = /[\u00C2-\u00DF][\u0080-\u00BF]/g
 const MOBI_ENCODING_MAP: Readonly<Record<number, string>> = {
     [MOBI_ENCODING_UTF8]: 'utf-8',
     [MOBI_ENCODING_CP1252]: 'windows-1252',
@@ -43,12 +45,47 @@ interface DecodeQuality {
     cjk: number
 }
 
+type MobiMojibakeScope = 'short' | 'long'
+
 function evaluateDecodeQuality(text: string): DecodeQuality {
     return {
         replacements: (text.match(/\uFFFD/g) || []).length,
         mojibake: (text.match(MOJIBAKE_PATTERN) || []).length,
         cjk: (text.match(CJK_PATTERN) || []).length,
     }
+}
+
+function normalizeMojibakeSample(text: string, scope: MobiMojibakeScope): string {
+    const compact = text.replace(/\s+/g, ' ').trim()
+    const maxLength = scope === 'short' ? 512 : 12_000
+    return compact.slice(0, maxLength)
+}
+
+export function isLikelyMobiMojibake(
+    text: string,
+    scope: MobiMojibakeScope = 'long',
+): boolean {
+    const sample = normalizeMojibakeSample(text, scope)
+    if (!sample) return false
+
+    const replacements = (sample.match(/\uFFFD/g) || []).length
+    const cjk = (sample.match(CJK_PATTERN) || []).length
+    const utf8Triples = (sample.match(UTF8_LATIN1_TRIPLE_RE) || []).length
+    const utf8Doubles = (sample.match(UTF8_LATIN1_DOUBLE_RE) || []).length
+
+    if (scope === 'short') {
+        return (
+            utf8Triples >= 2
+            || (utf8Triples >= 1 && utf8Doubles >= 3)
+            || (replacements >= 2 && cjk === 0)
+        )
+    }
+
+    return (
+        utf8Triples >= 6
+        || (utf8Triples >= 3 && utf8Doubles >= 8)
+        || (replacements >= 8 && cjk === 0)
+    )
 }
 
 function chooseBetterQuality(
@@ -61,6 +98,25 @@ function chooseBetterQuality(
     if (left.mojibake !== right.mojibake) return left.mojibake < right.mojibake ? leftText : rightText
     if (left.cjk !== right.cjk) return left.cjk > right.cjk ? leftText : rightText
     return leftText
+}
+
+function hasLimitedUtf8Damage(dataLength: number, replacementCount: number): boolean {
+    const allowed = Math.max(2, Math.floor(dataLength / 4096))
+    return replacementCount <= allowed
+}
+
+function shouldRescueUtf8Loose(
+    dataLength: number,
+    primaryQuality: DecodeQuality,
+    utf8Quality: DecodeQuality,
+): boolean {
+    const hasUsefulCjk = utf8Quality.cjk >= 2 && utf8Quality.cjk > primaryQuality.cjk * 2
+    const primaryLooksLikeUtf8AsCp1252 = primaryQuality.mojibake >= Math.max(8, utf8Quality.cjk)
+    return (
+        hasUsefulCjk
+        && primaryLooksLikeUtf8AsCp1252
+        && hasLimitedUtf8Damage(dataLength, utf8Quality.replacements)
+    )
 }
 
 function tryRecoverDeclaredNonCp1252(
@@ -120,6 +176,10 @@ export function decodeMobiText(data: Uint8Array, encodingCode: number): string {
 
     // 如果 CP1252 解码产生了 replacement character，直接倾向 UTF-8
     if (primaryQuality.replacements > 0 && utf8 !== primary) return utf8
+
+    if (shouldRescueUtf8Loose(data.length, primaryQuality, utf8Quality)) {
+        return utf8
+    }
 
     // CJK 检测范围：基本汉字 + 扩展A + 全角标点 + 兼容汉字
     if (utf8Quality.cjk > primaryQuality.cjk * 2
