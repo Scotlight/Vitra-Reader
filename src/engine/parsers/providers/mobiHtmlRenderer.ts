@@ -4,6 +4,7 @@ import {
     EMPTY_SECTION_HTML,
     isChapterTitle,
 } from '@/engine/render/chapterTitleDetector'
+import { trimChapterEdgeWhitespace } from '@/engine/render/chapterHtmlCleanup'
 import type { MobiResource } from './mobiParser'
 
 const ESCAPED_MOBI_TAG_RE = /&lt;(\/?mbp:[^&<>]*?)&gt;/gi
@@ -16,28 +17,6 @@ const TITLE_CANDIDATE_SELECTOR = 'h1,h2,h3,h4,h5,h6,p,div,span,strong,b'
 const TEXT_BLOCK_SELECTOR = 'h1,h2,h3,h4,h5,h6,p,li,dt,dd,blockquote'
 const MEDIA_CONTENT_RE = /<(img|svg|video|audio|canvas|iframe|object|embed)\b/i
 const EMPTY_CHAPTER_TEXT = '(空章节)'
-const TRIMMABLE_EMPTY_TAGS = new Set([
-    'br',
-    'p',
-    'div',
-    'span',
-    'section',
-    'article',
-    'blockquote',
-])
-const CONTENTFUL_TAGS = new Set([
-    'img',
-    'svg',
-    'video',
-    'audio',
-    'canvas',
-    'iframe',
-    'object',
-    'embed',
-    'table',
-    'hr',
-])
-
 export interface MobiRenderedChapter {
     readonly label: string
     readonly href: string
@@ -122,49 +101,6 @@ function splitMarkedBody(bodyHtml: string): string[] {
 
 function normalizePlainText(text: string): string {
     return text.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim()
-}
-
-function hasContentfulChild(element: Element): boolean {
-    return Array.from(element.children).some((child) => CONTENTFUL_TAGS.has(child.tagName.toLowerCase()))
-}
-
-function isEmptyEdgeNode(node: ChildNode): boolean {
-    if (node.nodeType === Node.TEXT_NODE) return normalizePlainText(node.textContent || '') === ''
-    if (!(node instanceof Element)) return false
-
-    const tagName = node.tagName.toLowerCase()
-    if (!TRIMMABLE_EMPTY_TAGS.has(tagName)) return false
-    if (hasContentfulChild(node)) return false
-    return normalizePlainText(node.textContent || '') === ''
-}
-
-function trimEmptyEdgeNodes(parent: ParentNode): void {
-    let first = parent.firstChild
-    while (first && isEmptyEdgeNode(first)) {
-        const next = first.nextSibling
-        first.remove()
-        first = next
-    }
-
-    let last = parent.lastChild
-    while (last && isEmptyEdgeNode(last)) {
-        const previous = last.previousSibling
-        last.remove()
-        last = previous
-    }
-}
-
-function trimEmptyEdgesDeep(root: ParentNode): void {
-    Array.from(root.childNodes).forEach((node) => {
-        if (node instanceof Element) trimEmptyEdgesDeep(node)
-    })
-    trimEmptyEdgeNodes(root)
-}
-
-function trimChapterEdgeWhitespace(html: string): string {
-    const doc = parseHtmlDocument(html)
-    trimEmptyEdgesDeep(doc.body)
-    return doc.body.innerHTML.trim()
 }
 
 function extractLabel(html: string, index: number): string {
