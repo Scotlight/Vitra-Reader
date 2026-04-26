@@ -136,5 +136,5 @@ export function detectFormat(filename: string, data?: BinarySource): BookFormat 
 }
 
 export function stripBookExtension(filename: string): string {
-    return filename.replace(/\.(epub|pdf|txt|mobi|azw3?|htm|html|xhtml|xml|md|fb2|docx|cbz|cbt|cbr|cb7)$/i, '')
+    return filename.replace(/\.(epub|pdf|txt|mobi|azw3?|htm|html|xhtml|mhtml|xml|md|fb2|docx|djvu?|cbz|cbt|cbr|cb7)$/i, '')
 }

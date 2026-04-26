@@ -3,6 +3,7 @@
 // ═══════════════════════════════════════════════════════
 
 import { VitraBaseParser } from '../core/vitraBaseParser';
+import { stripBookExtension } from '../core/contentProvider';
 import type {
   VitraBook,
   VitraBookFormat,
@@ -36,10 +37,6 @@ function mimeFromFilename(filename: string): string {
     svg: 'image/svg+xml',
   };
   return map[ext] ?? 'application/octet-stream';
-}
-
-function stripComicExtension(filename: string): string {
-  return filename.replace(/\.(cbz|cbt|cbr|cb7)$/i, '');
 }
 
 // ───────────────────────── 基类 ─────────────────────────
@@ -105,7 +102,7 @@ abstract class VitraComicParserBase extends VitraBaseParser {
   }
 
   private buildMetadata(comicInfo: ComicMetadata | null): VitraBookMetadata {
-    const fallbackTitle = stripComicExtension(this.filename);
+    const fallbackTitle = stripBookExtension(this.filename);
     const title = comicInfo?.title || comicInfo?.series || fallbackTitle || 'Untitled';
     const author: string[] = [];
     if (comicInfo?.writer) author.push(comicInfo.writer);

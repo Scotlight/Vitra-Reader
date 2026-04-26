@@ -3,15 +3,12 @@
 // ═══════════════════════════════════════════════════════
 
 import { VitraBaseParser } from '../core/vitraBaseParser';
+import { stripBookExtension } from '../core/contentProvider';
 import type {
   VitraBook,
   VitraBookMetadata,
   VitraBookSection,
 } from '../types/vitraBook';
-
-function stripDjvuExtension(filename: string): string {
-  return filename.replace(/\.djvu?$/i, '');
-}
 
 export class VitraDjvuParser extends VitraBaseParser {
   async parse(): Promise<VitraBook> {
@@ -72,7 +69,7 @@ export class VitraDjvuParser extends VitraBaseParser {
 
   private buildMetadata(pageCount: number): VitraBookMetadata {
     return {
-      title: stripDjvuExtension(this.filename),
+      title: stripBookExtension(this.filename),
       author: ['未知作者'],
       description: `DJVU 文档，共 ${pageCount} 页`,
       cover: null,
