@@ -16,13 +16,13 @@
     "monitor": "node scripts/monitor.js"
   },
   "dependencies": {
+    "@lingo-reader/mobi-parser": "^0.4.6",
     "dexie": "^4.0.10",
     "epubjs": "^0.3.93",
     "fflate": "^0.8.2",
     "framer-motion": "^11.15.0",
     "mammoth": "^1.11.0",
     "marked": "^17.0.3",
-    "mobi": "^0.0.1",
     "pdfjs-dist": "^5.4.624",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -40,6 +40,7 @@
     "electron": "^33.3.1",
     "esbuild": "^0.27.3",
     "jsdom": "^28.1.0",
+    "stream-browserify": "^3.0.0",
     "typescript": "~5.6.2",
     "vite": "^6.0.7",
     "vite-plugin-electron": "^0.28.8",

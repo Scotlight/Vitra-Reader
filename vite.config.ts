@@ -4,6 +4,9 @@ import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
 import path from 'node:path'
 
+const EVENTS_BROWSER_ENTRY = path.resolve(__dirname, 'node_modules/events/events.js')
+const STREAM_BROWSER_ENTRY = path.resolve(__dirname, 'node_modules/stream-browserify/index.js')
+
 const DOCX_ARCHIVE_VENDOR_PACKAGES = [
     '/jszip/',
     '/pako/',
@@ -64,6 +67,8 @@ export default defineConfig({
     resolve: {
         alias: {
             '@': path.resolve(__dirname, './src'),
+            events: EVENTS_BROWSER_ENTRY,
+            stream: STREAM_BROWSER_ENTRY,
         },
     },
     server: {

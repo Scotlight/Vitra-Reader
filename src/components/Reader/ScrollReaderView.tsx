@@ -233,6 +233,7 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
     // ── TOC Jump ──
 
     const { jumpToSpine } = useTocJump(refs, {
+        provider,
         onChapterChange,
         setCurrentSpineIndex,
         setChapters: (next: LoadedChapter[]) => setChapters(next),

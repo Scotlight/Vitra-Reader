@@ -58,7 +58,7 @@ See:
 - Context menu actions (favorite, add to shelf, trash, restore, permanent delete)
 
 ### 2) Reader
-- EPUB rendering via epub.js
+- EPUB chapter, TOC, and resource extraction via epub.js; body rendering is handled by ShadowRenderer
 - TOC navigation
 - Full-text search and result jump
 - Keyboard navigation (Arrow keys / PageUp / PageDown)
@@ -131,7 +131,8 @@ npm run build
 - Vite
 - Zustand
 - Dexie.js (IndexedDB)
-- epub.js
+- epub.js (EPUB parsing and resource extraction)
+- @lingo-reader/mobi-parser
 - Framer Motion
 
 ---
@@ -153,3 +154,21 @@ Next:
 
 Issues and PRs are welcome.  
 Suggestions on reading stability, sync compatibility, and UI interaction are especially appreciated.
+
+### Third-party open source acknowledgements
+
+Vitra Reader uses and thanks these major GitHub open source projects. The complete dependency list is tracked in `package.json` and `package-lock.json`, and each dependency keeps its own license terms:
+
+- [Electron](https://github.com/electron/electron) (MIT): desktop app runtime.
+- [React](https://github.com/facebook/react) (MIT): UI components and rendering foundation.
+- [Vite](https://github.com/vitejs/vite) (MIT): development server and frontend build tooling.
+- [TypeScript](https://github.com/microsoft/TypeScript) (Apache-2.0): static typing and compilation toolchain.
+- [Zustand](https://github.com/pmndrs/zustand) (MIT): frontend state management.
+- [Dexie.js](https://github.com/dexie/Dexie.js) (Apache-2.0): IndexedDB data access.
+- [epub.js](https://github.com/futurepress/epub.js) (BSD-2-Clause): EPUB package, TOC, chapter, and resource extraction.
+- [@lingo-reader/mobi-parser](https://github.com/hhk-png/lingo-reader) (MIT): primary parser path for MOBI / AZW / AZW3 / KF8.
+- [PDF.js](https://github.com/mozilla/pdf.js) (Apache-2.0): PDF rendering foundation.
+- [fflate](https://github.com/101arrowz/fflate) (MIT): ZIP, Deflate, and Zlib decompression.
+- [Framer Motion](https://github.com/motiondivision/motion) (MIT): UI motion effects.
+- [Mammoth](https://github.com/mwilliamson/mammoth.js) (BSD-2-Clause): DOCX to HTML conversion.
+- [Marked](https://github.com/markedjs/marked) (MIT): Markdown to HTML conversion.
