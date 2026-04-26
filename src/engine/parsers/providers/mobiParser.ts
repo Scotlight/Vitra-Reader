@@ -31,11 +31,28 @@ interface ExthMetadata {
     thumbnailOffset?: number
 }
 
+export type MobiCoverMode = 'blob-url' | 'data-url' | 'none'
+
+export interface MobiParseOptions {
+    readonly coverMode?: MobiCoverMode
+    readonly includeContent?: boolean
+    readonly includeCoverInContent?: boolean
+    readonly includeResources?: boolean
+}
+
+export interface MobiResource {
+    readonly recordIndex: number
+    readonly relativeIndex: number
+    readonly mime: string
+    readonly url: string
+}
+
 export interface MobiParsed {
     title: string
     author: string
     content: string
     cover: string | null
+    resources: readonly MobiResource[]
 }
 
 function readString(view: DataView, offset: number, length: number): string {
@@ -225,10 +242,59 @@ function detectImageMime(data: Uint8Array): string | null {
     return null
 }
 
-function extractCoverDataUrl(
+function bytesToBase64(data: Uint8Array): string {
+    let binary = ''
+    const chunkSize = 0x8000
+    for (let offset = 0; offset < data.length; offset += chunkSize) {
+        const chunk = data.subarray(offset, Math.min(offset + chunkSize, data.length))
+        binary += String.fromCharCode(...chunk)
+    }
+    return btoa(binary)
+}
+
+function createImageUrl(data: Uint8Array, mime: string, mode: MobiCoverMode): string | null {
+    if (mode === 'none') return null
+    if (mode === 'data-url') return `data:${mime};base64,${bytesToBase64(data)}`
+    return URL.createObjectURL(new Blob([data], { type: mime }))
+}
+
+function extractImageResources(
+    buffer: Uint8Array,
+    recordOffsets: readonly number[],
+    firstImageIndex: number,
+    mode: MobiCoverMode,
+): MobiResource[] {
+    if (mode === 'none') return []
+    const resources: MobiResource[] = []
+    const startIndex = Math.max(0, Math.min(firstImageIndex, recordOffsets.length))
+    for (let index = startIndex; index < recordOffsets.length; index += 1) {
+        const bytes = getRecordBytes(buffer, recordOffsets, index)
+        const mime = detectImageMime(bytes)
+        if (!mime) continue
+        const url = createImageUrl(bytes, mime, mode)
+        if (!url) continue
+        resources.push({ recordIndex: index, relativeIndex: index - startIndex, mime, url })
+    }
+    return resources
+}
+
+function findCoverUrl(
+    resources: readonly MobiResource[],
+    header: MobiHeader,
+    coverOffset?: number,
+    thumbnailOffset?: number,
+): string | null {
+    const offset = typeof coverOffset === 'number' ? coverOffset : thumbnailOffset
+    if (offset === undefined || !Number.isFinite(offset)) return null
+    const candidates = new Set([header.firstImageIndex + offset, offset])
+    return resources.find((resource) => candidates.has(resource.recordIndex))?.url ?? null
+}
+
+function extractCoverUrl(
     buffer: Uint8Array,
     recordOffsets: readonly number[],
     header: MobiHeader,
+    mode: MobiCoverMode,
     coverOffset?: number,
     thumbnailOffset?: number,
 ): string | null {
@@ -239,9 +305,7 @@ function extractCoverDataUrl(
         const bytes = getRecordBytes(buffer, recordOffsets, index)
         const mime = detectImageMime(bytes)
         if (!mime) continue
-        // 使用 Blob URL 替代 data URL，避免 base64 编码的栈溢出和内存膨胀
-        const blob = new Blob([bytes], { type: mime })
-        return URL.createObjectURL(blob)
+        return createImageUrl(bytes, mime, mode)
     }
     return null
 }
@@ -265,7 +329,11 @@ function concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
     return result
 }
 
-export function parseMobiBuffer(buf: ArrayBuffer): MobiParsed {
+export function parseMobiBuffer(buf: ArrayBuffer, options: MobiParseOptions = {}): MobiParsed {
+    const coverMode = options.coverMode ?? 'blob-url'
+    const includeContent = options.includeContent ?? true
+    const includeResources = options.includeResources ?? coverMode === 'blob-url'
+    const includeCoverInContent = options.includeCoverInContent ?? includeContent
     const view = new DataView(buf)
     const bytes = new Uint8Array(buf)
     const name = readString(view, 0, 32).trim()
@@ -281,19 +349,25 @@ export function parseMobiBuffer(buf: ArrayBuffer): MobiParsed {
     const decodedTitle = titleBytes.length > 0 ? decodeMobiText(titleBytes, header.encodingCode).trim() : ''
     const title = exth.title || decodedTitle || name || 'Untitled'
     const author = exth.author || UNKNOWN_AUTHOR
-    const cover = extractCoverDataUrl(bytes, records, header, exth.coverOffset, exth.thumbnailOffset)
+    const resources = includeResources
+        ? extractImageResources(bytes, records, header.firstImageIndex, coverMode)
+        : []
+    const cover = findCoverUrl(resources, header, exth.coverOffset, exth.thumbnailOffset)
+        ?? extractCoverUrl(bytes, records, header, coverMode, exth.coverOffset, exth.thumbnailOffset)
 
     let content = ''
-    const textChunks: Uint8Array[] = []
-    for (let i = 1; i <= header.textRecordCount && i < records.length; i += 1) {
-        textChunks.push(decompressRecordPayload(getRecordBytes(bytes, records, i), header))
+    if (includeContent) {
+        const textChunks: Uint8Array[] = []
+        for (let i = 1; i <= header.textRecordCount && i < records.length; i += 1) {
+            textChunks.push(decompressRecordPayload(getRecordBytes(bytes, records, i), header))
+        }
+        if (textChunks.length > 0) {
+            content = decodeMobiText(concatUint8Arrays(textChunks), header.encodingCode)
+        }
     }
-    if (textChunks.length > 0) {
-        content = decodeMobiText(concatUint8Arrays(textChunks), header.encodingCode)
-    }
-    if (cover && !content.includes(cover)) {
+    if (includeCoverInContent && cover && !content.includes(cover)) {
         const safeCover = cover.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         content = `<div class="mobi-cover"><img src="${safeCover}" alt="cover" /></div><mbp:pagebreak/>${content}`
     }
-    return { title, author, content, cover }
+    return { title, author, content, cover, resources }
 }
