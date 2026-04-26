@@ -27,6 +27,10 @@ interface ProviderSectionFactoryInput {
     readonly format: VitraBookFormat
 }
 
+/**
+ * 将 legacy ContentProvider 的章节接口适配成 VitraBookSection。
+ * 这里是 provider-backed 格式进入 VitraBook 层的第一道内容规范化入口。
+ */
 export function createProviderSections(
     input: ProviderSectionFactoryInput,
 ): ProviderSectionFactoryResult {
@@ -91,19 +95,40 @@ async function loadProviderSection(
     input: ProviderSectionFactoryInput,
     caches: ProviderSectionCaches,
 ): Promise<string> {
-    const cached = caches.html.get(spine.index)
-    if (cached) return cached
-
-    const rawHtml = await input.provider.extractChapterHtml(spine.index)
-    const html = cleanChapterHtmlForFormat(rawHtml, input.format)
-    caches.html.set(spine.index, html)
-    caches.size.set(spine.index, new Blob([html]).size)
-
-    if (!caches.styles.has(spine.index)) {
-        const styles = await input.provider.extractChapterStyles(spine.index)
-        caches.styles.set(spine.index, styles)
+    if (caches.html.has(spine.index)) {
+        return caches.html.get(spine.index) ?? ''
     }
 
+    const html = await loadCleanChapterHtml(spine, input)
+    cacheChapterHtml(spine.index, html, caches)
+    await ensureChapterStyles(spine, input, caches)
     upsertChapterIndex(input.bookId, spine.index, html)
     return html
+}
+
+async function loadCleanChapterHtml(
+    spine: SpineItemInfo,
+    input: ProviderSectionFactoryInput,
+): Promise<string> {
+    const rawHtml = await input.provider.extractChapterHtml(spine.index)
+    return cleanChapterHtmlForFormat(rawHtml, input.format)
+}
+
+function cacheChapterHtml(
+    spineIndex: number,
+    html: string,
+    caches: ProviderSectionCaches,
+): void {
+    caches.html.set(spineIndex, html)
+    caches.size.set(spineIndex, new Blob([html]).size)
+}
+
+async function ensureChapterStyles(
+    spine: SpineItemInfo,
+    input: ProviderSectionFactoryInput,
+    caches: ProviderSectionCaches,
+): Promise<void> {
+    if (caches.styles.has(spine.index)) return
+    const styles = await input.provider.extractChapterStyles(spine.index)
+    caches.styles.set(spine.index, styles)
 }
