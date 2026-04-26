@@ -11,10 +11,10 @@ import {
 } from '../core/providerRegistry';
 import { VitraBaseParser } from '../core/vitraBaseParser';
 import {
-  upsertChapterIndex,
   searchBookIndex,
   clearBookIndex,
 } from '../cache/searchIndexCache';
+import { createProviderSections } from './providerSectionFactory';
 import type {
   VitraBook,
   VitraBookFormat,
@@ -23,7 +23,6 @@ import type {
   VitraSearchResult,
   VitraTocItem,
 } from '../types/vitraBook';
-import { cleanChapterHtmlForFormat } from '../render/chapterHtmlCleanup';
 
 type ProviderCompatibleFormat =
   | 'EPUB'
@@ -90,7 +89,12 @@ export class VitraProviderBackedParser extends VitraBaseParser {
     const spineItems = provider.getSpineItems();
     const toc = buildTocWithFallback(provider.getToc(), spineItems);
     const bookId = `vitra-${this.filename}`;
-    const { sections, releaseAll } = createSections(spineItems, provider, bookId, this.format);
+    const { sections, releaseAll } = createProviderSections({
+      spineItems,
+      provider,
+      bookId,
+      format: this.format,
+    });
 
     return createBookObject({
       format: this.format,
@@ -221,64 +225,6 @@ function decodeSafe(value: string): string {
   } catch {
     return value;
   }
-}
-
-function createSections(
-  spineItems: readonly SpineItemInfo[],
-  provider: ContentProvider,
-  bookId: string,
-  format: VitraBookFormat,
-): {
-  readonly sections: readonly VitraBookSection[];
-  readonly releaseAll: () => void;
-} {
-  const cache = new Map<number, string>();
-  const sizeCache = new Map<number, number>();
-  const stylesCache = new Map<number, readonly string[]>();
-
-  const releaseSection = (spineIndex: number): void => {
-    cache.delete(spineIndex);
-    sizeCache.delete(spineIndex);
-    stylesCache.delete(spineIndex);
-    provider.unloadChapter(spineIndex);
-  };
-
-  const sections = spineItems.map((spine) => ({
-    id: spine.id || spine.index,
-    href: spine.href,
-    linear: spine.linear,
-    get size() {
-      return sizeCache.get(spine.index) ?? 0;
-    },
-    load: async () => {
-      const cached = cache.get(spine.index);
-      if (cached) return cached;
-
-      const rawHtml = await provider.extractChapterHtml(spine.index);
-      const html = cleanChapterHtmlForFormat(rawHtml, format);
-      cache.set(spine.index, html);
-      sizeCache.set(spine.index, new Blob([html]).size);
-
-      if (!stylesCache.has(spine.index)) {
-        const styles = await provider.extractChapterStyles(spine.index);
-        stylesCache.set(spine.index, styles);
-      }
-
-      upsertChapterIndex(bookId, spine.index, html);
-
-      return html;
-    },
-    unload: () => releaseSection(spine.index),
-    get styles() {
-      return stylesCache.get(spine.index) ?? [];
-    },
-  }));
-
-  const releaseAll = (): void => {
-    Array.from(cache.keys()).forEach((spineIndex) => releaseSection(spineIndex));
-  };
-
-  return { sections, releaseAll };
 }
 
 interface CreateBookObjectInput {
