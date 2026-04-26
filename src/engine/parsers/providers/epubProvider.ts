@@ -1,6 +1,7 @@
 import ePub, { Book } from 'epubjs'
 import type { EpubBookInternal, EpubSpineItem } from '@/types/epubjs'
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '@/engine/core/contentProvider'
+import { buildSpineFallbackLabel } from '@/engine/core/spineLabel'
 import { hasSessionAssetUrl, releaseAssetSession } from '@/utils/assetLoader'
 import {
     getSpineItems as epubGetSpineItems,
@@ -98,7 +99,7 @@ async function buildFallbackTocFromSpine(
         tocItems.push({
             id: spine.id || `spine-${index}`,
             href: spine.href,
-            label: heading || labelFromHref(spine.href, index),
+            label: heading || buildSpineFallbackLabel(spine.href, index),
         })
     }
     return tocItems
@@ -110,29 +111,5 @@ async function safeExtractHeading(book: Book, spineIndex: number): Promise<strin
     } catch (error) {
         console.warn(`[EpubProvider] Extract heading failed for spine ${spineIndex}:`, error)
         return ''
-    }
-}
-
-function labelFromHref(href: string, index: number): string {
-    const fallback = `Chapter ${index + 1}`
-    if (!href) return fallback
-
-    const [pathPart] = href.split('#', 2)
-    const filePart = pathPart.split('/').pop() || ''
-    const decoded = decodeURIComponentSafe(filePart)
-    const withoutExt = decoded.replace(/\.[^.]+$/, '')
-    const cleaned = withoutExt
-        .replace(/[_-]+/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-
-    return cleaned || fallback
-}
-
-function decodeURIComponentSafe(value: string): string {
-    try {
-        return decodeURIComponent(value)
-    } catch {
-        return value
     }
 }

@@ -9,6 +9,7 @@ import {
   parseMetadataForBackedFormat,
   type ProviderBackedFormat,
 } from '../core/providerRegistry';
+import { buildSpineFallbackLabel } from '../core/spineLabel';
 import { VitraBaseParser } from '../core/vitraBaseParser';
 import {
   searchBookIndex,
@@ -199,32 +200,10 @@ function buildTocWithFallback(
     return normalized;
   }
   return spineItems.map((spine, index) => ({
-    label: labelFromSpineHref(spine.href, index),
+    label: buildSpineFallbackLabel(spine.href, index),
     href: spine.href,
     children: [],
   }));
-}
-
-function labelFromSpineHref(href: string, index: number): string {
-  const fallback = `Chapter ${index + 1}`;
-  if (!href) return fallback;
-  const [pathPart] = href.split('#', 2);
-  const filePart = pathPart.split('/').pop() || '';
-  const decoded = decodeSafe(filePart);
-  const withoutExt = decoded.replace(/\.[^.]+$/, '');
-  const cleaned = withoutExt
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return cleaned || fallback;
-}
-
-function decodeSafe(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
 }
 
 interface CreateBookObjectInput {

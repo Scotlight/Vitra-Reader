@@ -1,10 +1,11 @@
 import type { SpineItemInfo, TocItem } from '@/engine/core/contentProvider'
+import { buildSpineFallbackLabel } from '@/engine/core/spineLabel'
 
 export function buildFallbackTocFromSpine(spineItems: readonly SpineItemInfo[]): TocItem[] {
     return spineItems.map((item, index) => ({
         id: item.id || `spine-${index}`,
         href: item.href,
-        label: labelFromSpineHref(item.href, index),
+        label: buildSpineFallbackLabel(item.href, index),
     }))
 }
 
@@ -35,25 +36,6 @@ export function findCurrentChapterLabel(items: readonly TocItem[], currentHref?:
         if (nested) return nested
     }
     return ''
-}
-
-function labelFromSpineHref(href: string, index: number): string {
-    const fallback = `Chapter ${index + 1}`
-    if (!href) return fallback
-    const [pathPart] = href.split('#', 2)
-    const fileName = pathPart.split('/').pop() || ''
-    const decoded = decodeSafe(fileName)
-    const withoutExt = decoded.replace(/\.[^.]+$/, '')
-    const cleaned = withoutExt.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
-    return cleaned || fallback
-}
-
-function decodeSafe(value: string): string {
-    try {
-        return decodeURIComponent(value)
-    } catch {
-        return value
-    }
 }
 
 function getHrefTail(normalizedHref: string): string {
