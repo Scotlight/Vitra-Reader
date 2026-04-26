@@ -144,7 +144,7 @@ export class VitraContentAdapter implements ContentProvider {
     const section = this.book.sections[spineIndex]
     if (!section) throw new Error(`[VitraContentAdapter] 无效 spineIndex: ${spineIndex}`)
 
-    // 1. 内存缓存命中
+    // 1. 内存缓存命中：旧缓存可能还带章节边缘空白，按需规范化当前章节即可。
     const cached = this.htmlCache.get(spineIndex)
     if (cached) return this.normalizeCachedChapterHtml(spineIndex, cached)
 
@@ -195,6 +195,10 @@ export class VitraContentAdapter implements ContentProvider {
     return cleanChapterHtmlForFormat(html, this.book.format)
   }
 
+  /**
+   * 缓存预热阶段不全量解析 DOM，避免大书打开时一次性消耗主线程。
+   * 当前章节被读取时再清理，并把清理结果写回内存缓存。
+   */
   private normalizeCachedChapterHtml(spineIndex: number, html: string): string {
     const cleaned = this.cleanChapterHtml(html)
     if (cleaned !== html) {
