@@ -145,8 +145,9 @@ export class VitraContentAdapter implements ContentProvider {
     if (!section) throw new Error(`[VitraContentAdapter] 无效 spineIndex: ${spineIndex}`)
 
     // 1. 内存缓存命中：旧缓存可能还带章节边缘空白，按需规范化当前章节即可。
-    const cached = this.htmlCache.get(spineIndex)
-    if (cached) return this.normalizeCachedChapterHtml(spineIndex, cached)
+    if (this.htmlCache.has(spineIndex)) {
+      return this.normalizeCachedChapterHtml(spineIndex, this.htmlCache.get(spineIndex) ?? '')
+    }
 
     // 2. 通过 SectionManager 加载（带 LRU 淘汰）
     const result = await this.sectionManager.load(section)
