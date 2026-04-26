@@ -1,6 +1,13 @@
 import type { VitraBookFormat } from '@/engine/types/vitraBook'
 
-const TRIMMABLE_EMPTY_TAGS = new Set([
+/**
+ * 章节 HTML 边缘清理：
+ * - 只处理章节首尾空白节点，保留正文中间空行；
+ * - 保留锚点和媒体内容，避免破坏目录跳转与图片章节；
+ * - PDF 页面含定位层，必须跳过。
+ */
+
+const EDGE_TRIMMABLE_EMPTY_TAGS = new Set([
     'br',
     'p',
     'div',
@@ -10,7 +17,7 @@ const TRIMMABLE_EMPTY_TAGS = new Set([
     'blockquote',
 ])
 
-const CONTENTFUL_TAGS = new Set([
+const EDGE_PRESERVED_CONTENT_TAGS = new Set([
     'img',
     'svg',
     'video',
@@ -23,7 +30,7 @@ const CONTENTFUL_TAGS = new Set([
     'hr',
 ])
 
-const CONTENTFUL_SELECTOR = Array.from(CONTENTFUL_TAGS).join(',')
+const EDGE_PRESERVED_CONTENT_SELECTOR = Array.from(EDGE_PRESERVED_CONTENT_TAGS).join(',')
 const SKIP_CLEANUP_FORMATS = new Set<VitraBookFormat>(['PDF'])
 
 function parseHtmlDocument(html: string): Document {
@@ -38,8 +45,8 @@ function hasAnchorIdentity(element: Element): boolean {
     return element.hasAttribute('id') || element.hasAttribute('name')
 }
 
-function hasContentfulDescendant(element: Element): boolean {
-    return Boolean(element.querySelector(CONTENTFUL_SELECTOR))
+function hasPreservedContent(element: Element): boolean {
+    return Boolean(element.querySelector(EDGE_PRESERVED_CONTENT_SELECTOR))
 }
 
 function isEmptyEdgeNode(node: ChildNode): boolean {
@@ -49,9 +56,9 @@ function isEmptyEdgeNode(node: ChildNode): boolean {
     if (!(node instanceof Element)) return false
 
     const tagName = node.tagName.toLowerCase()
-    if (!TRIMMABLE_EMPTY_TAGS.has(tagName)) return false
+    if (!EDGE_TRIMMABLE_EMPTY_TAGS.has(tagName)) return false
     if (hasAnchorIdentity(node)) return false
-    if (hasContentfulDescendant(node)) return false
+    if (hasPreservedContent(node)) return false
     return normalizeText(node.textContent || '') === ''
 }
 
@@ -71,10 +78,11 @@ function trimEmptyEdgeNodes(parent: ParentNode): void {
     }
 }
 
-function trimEmptyEdgesDeep(root: ParentNode): void {
-    Array.from(root.childNodes).forEach((node) => {
-        if (node instanceof Element) trimEmptyEdgesDeep(node)
-    })
+function trimEmptyEdgesDeep(root: Element): void {
+    const descendants = Array.from(root.querySelectorAll('*'))
+    for (let index = descendants.length - 1; index >= 0; index -= 1) {
+        trimEmptyEdgeNodes(descendants[index])
+    }
     trimEmptyEdgeNodes(root)
 }
 
