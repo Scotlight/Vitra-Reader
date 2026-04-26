@@ -1,4 +1,5 @@
 import type { ContentProvider, BookFormat } from './contentProvider'
+import { stripBookExtension } from './contentProvider'
 import {
     createProviderForBackedFormat,
     isProviderBackedFormat,
@@ -43,7 +44,7 @@ export async function parseBookMetadata(format: BookFormat, data: ArrayBuffer, f
     const handle = await pipeline.open({ buffer: data, filename })
     const metadata = await handle.metadata
     return {
-        title: metadata.title || filename.replace(/\.[^.]+$/, ''),
+        title: metadata.title || stripBookExtension(filename),
         author: metadata.author.join(', ') || '',
         description: metadata.description || '',
         cover: null,

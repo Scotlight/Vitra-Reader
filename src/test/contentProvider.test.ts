@@ -49,6 +49,18 @@ describe('stripBookExtension', () => {
         expect(stripBookExtension('report.pdf')).toBe('report')
     })
 
+    it('移除文档与漫画扩展名', () => {
+        expect(stripBookExtension('manual.docx')).toBe('manual')
+        expect(stripBookExtension('archive.djvu')).toBe('archive')
+        expect(stripBookExtension('archive.djv')).toBe('archive')
+        expect(stripBookExtension('panel.cbz')).toBe('panel')
+    })
+
+    it('移除 html 相关扩展名', () => {
+        expect(stripBookExtension('chapter.xhtml')).toBe('chapter')
+        expect(stripBookExtension('saved.mhtml')).toBe('saved')
+    })
+
     it('无扩展名时原样返回', () => {
         expect(stripBookExtension('noext')).toBe('noext')
     })

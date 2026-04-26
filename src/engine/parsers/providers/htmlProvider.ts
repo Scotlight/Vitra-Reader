@@ -1,4 +1,5 @@
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '@/engine/core/contentProvider'
+import { stripBookExtension } from '@/engine/core/contentProvider'
 import { VitraSectionSplitter } from '@/engine/core/vitraSectionSplitter'
 import { decodeTextBuffer } from './textDecoding'
 import { EMPTY_SECTION_HTML, DEFAULT_DOCUMENT_LABEL } from '@/engine/render/chapterTitleDetector'
@@ -81,6 +82,6 @@ function stripTags(html: string): string {
 export async function parseHtmlMetadata(data: ArrayBuffer, filename: string) {
     const text = decodeTextBuffer(data, 'html').text
     const titleMatch = text.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
-    const title = titleMatch ? stripTags(titleMatch[1]).trim() : filename.replace(/\.(htm|html|xhtml)$/i, '')
+    const title = titleMatch ? stripTags(titleMatch[1]).trim() : stripBookExtension(filename)
     return { title: title || filename, author: '未知作者' }
 }

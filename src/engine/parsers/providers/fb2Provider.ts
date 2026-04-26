@@ -1,4 +1,5 @@
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '@/engine/core/contentProvider'
+import { stripBookExtension } from '@/engine/core/contentProvider'
 import { VitraSectionSplitter } from '@/engine/core/vitraSectionSplitter'
 import { decodeTextBuffer } from './textDecoding'
 import { EMPTY_SECTION_HTML, DEFAULT_DOCUMENT_LABEL } from '@/engine/render/chapterTitleDetector'
@@ -120,7 +121,7 @@ export async function parseFb2Metadata(data: ArrayBuffer, filename: string) {
     const titleMatch = text.match(/<book-title[^>]*>([\s\S]*?)<\/book-title>/i)
     const firstMatch = text.match(/<first-name[^>]*>([\s\S]*?)<\/first-name>/i)
     const lastMatch = text.match(/<last-name[^>]*>([\s\S]*?)<\/last-name>/i)
-    const title = titleMatch?.[1]?.trim() || filename.replace(/\.fb2$/i, '')
+    const title = titleMatch?.[1]?.trim() || stripBookExtension(filename)
     const author = [firstMatch?.[1]?.trim(), lastMatch?.[1]?.trim()].filter(Boolean).join(' ') || '未知作者'
     return { title, author }
 }

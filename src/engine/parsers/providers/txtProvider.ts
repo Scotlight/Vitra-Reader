@@ -1,4 +1,5 @@
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '@/engine/core/contentProvider'
+import { stripBookExtension } from '@/engine/core/contentProvider'
 import { decodeTextBuffer } from './textDecoding'
 import {
     isChapterTitle as detectTitle,
@@ -207,5 +208,5 @@ function renderChapterHtml(paragraphs: string[]): string {
 
 
 export async function parseTxtMetadata(_data: ArrayBuffer, filename: string) {
-    return { title: filename.replace(/\.txt$/i, ''), author: '未知作者' }
+    return { title: stripBookExtension(filename), author: '未知作者' }
 }

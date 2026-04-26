@@ -5,6 +5,7 @@
 import { VitraBaseParser } from '../core/vitraBaseParser';
 import { VitraSectionSplitter } from '../core/vitraSectionSplitter';
 import { createBlobSectionsFromChunks } from '../core/vitraSectionFactory';
+import { stripBookExtension } from '../core/contentProvider';
 import {
   upsertChapterIndex,
   searchBookIndex,
@@ -17,10 +18,6 @@ import type {
   VitraSearchResult,
   VitraTocItem,
 } from '../types/vitraBook';
-
-function stripDocxExtension(filename: string): string {
-  return filename.replace(/\.docx$/i, '');
-}
 
 export class VitraDocxParser extends VitraBaseParser {
   async parse(): Promise<VitraBook> {
@@ -63,7 +60,7 @@ export class VitraDocxParser extends VitraBaseParser {
   }
 
   private async extractMetadata(): Promise<VitraBookMetadata> {
-    const fallbackTitle = stripDocxExtension(this.filename);
+    const fallbackTitle = stripBookExtension(this.filename);
     try {
       const { unzipSync } = await import('fflate');
       const data = new Uint8Array(this.buffer);
