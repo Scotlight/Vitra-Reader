@@ -8,6 +8,11 @@ import {
 } from '@/engine/render/chapterTitleDetector'
 import { escapeHtml } from '@/engine/core/contentSanitizer'
 import { searchPlainChapterTexts } from './chapterSearch'
+import {
+    buildFlatChapterSpineItems,
+    buildFlatChapterToc,
+    parseFlatChapterHrefIndex,
+} from './flatChapterProvider'
 
 const PARAGRAPHS_PER_CHAPTER = 500
 const MAX_LABEL_LENGTH = 24
@@ -40,20 +45,15 @@ export class TxtContentProvider implements ContentProvider {
     }
 
     getToc(): TocItem[] {
-        return this.chapters.map((chapter, i) => ({
-            id: `ch-${i}`, href: `ch-${i}`, label: chapter.title,
-        }))
+        return buildFlatChapterToc(this.chapters)
     }
 
     getSpineItems(): SpineItemInfo[] {
-        return this.chapters.map((_, i) => ({
-            index: i, href: `ch-${i}`, id: `ch-${i}`, linear: true,
-        }))
+        return buildFlatChapterSpineItems(this.chapters.length)
     }
 
     getSpineIndexByHref(href: string): number {
-        const m = href.match(/ch-(\d+)/)
-        return m ? parseInt(m[1], 10) : -1
+        return parseFlatChapterHrefIndex(href)
     }
 
     async extractChapterHtml(i: number): Promise<string> {

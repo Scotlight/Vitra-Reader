@@ -5,6 +5,11 @@ import { VitraSectionSplitter } from '@/engine/core/vitraSectionSplitter'
 import { decodeTextBuffer } from './textDecoding'
 import { EMPTY_SECTION_HTML, DEFAULT_DOCUMENT_LABEL } from '@/engine/render/chapterTitleDetector'
 import { searchPlainChapterTexts, stripHtmlTags } from './chapterSearch'
+import {
+    buildFlatChapterSpineItems,
+    buildFlatChapterToc,
+    parseFlatChapterHrefIndex,
+} from './flatChapterProvider'
 
 interface Chapter {
     title: string
@@ -36,20 +41,15 @@ export class MdContentProvider implements ContentProvider {
     destroy() { this.chapters = [] }
 
     getToc(): TocItem[] {
-        return this.chapters.map((ch, i) => ({
-            id: `ch-${i}`, href: `ch-${i}`, label: ch.title,
-        }))
+        return buildFlatChapterToc(this.chapters)
     }
 
     getSpineItems(): SpineItemInfo[] {
-        return this.chapters.map((_, i) => ({
-            index: i, href: `ch-${i}`, id: `ch-${i}`, linear: true,
-        }))
+        return buildFlatChapterSpineItems(this.chapters.length)
     }
 
     getSpineIndexByHref(href: string): number {
-        const m = href.match(/ch-(\d+)/)
-        return m ? parseInt(m[1], 10) : -1
+        return parseFlatChapterHrefIndex(href)
     }
 
     async extractChapterHtml(i: number): Promise<string> {
