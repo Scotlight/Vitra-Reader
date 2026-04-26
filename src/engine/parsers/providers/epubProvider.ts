@@ -71,7 +71,7 @@ export class EpubContentProvider implements ContentProvider {
 }
 
 export async function parseEpubMetadata(data: ArrayBuffer) {
-    const { parseEpub } = await import('../../../services/epubService')
+    const { parseEpub } = await import('@/services/epubService')
     return parseEpub(data)
 }
 
