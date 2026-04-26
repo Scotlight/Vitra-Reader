@@ -15,8 +15,8 @@ vi.mock('@/engine/render/chapterPreprocessService', () => ({
     preprocessChapterContent: mocks.preprocessChapterContentMock,
 }))
 
-vi.mock('@/engine', async () => {
-    const actual = await vi.importActual<typeof import('@/engine')>('@/engine')
+vi.mock('@/engine/render/vitraMeasure', async () => {
+    const actual = await vi.importActual<typeof import('@/engine/render/vitraMeasure')>('@/engine/render/vitraMeasure')
     return {
         ...actual,
         startMeasure: mocks.startMeasureMock,
