@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback, type RefObject } from 'react'
-import { startMeasure, type VitraMeasureHandle, type PageBoundary } from '@/engine'
+import { startMeasure, type VitraMeasureHandle } from '@/engine/render/vitraMeasure'
+import type { PageBoundary } from '@/engine/types/vitraPagination'
 
 export function usePaginationMeasure(paginationMeasureHostRef: RefObject<HTMLDivElement | null>) {
     const pageBoundariesRef = useRef<readonly PageBoundary[]>([])

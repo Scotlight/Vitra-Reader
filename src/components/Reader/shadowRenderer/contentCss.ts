@@ -13,8 +13,8 @@
  *   维护一致性。
  */
 
-import type { SegmentMeta } from '@/engine';
-import { buildReaderCssTemplate } from '@/engine';
+import { buildReaderCssTemplate } from '@/engine/render/readerCss';
+import type { SegmentMeta } from '@/engine/types/vectorRender';
 
 export interface ReaderStyleConfig {
     textColor: string;

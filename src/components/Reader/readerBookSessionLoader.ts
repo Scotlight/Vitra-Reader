@@ -1,5 +1,5 @@
 import { db } from '@/services/storageService'
-import { resolveReaderRenderMode } from '@/engine'
+import { resolveReaderRenderMode } from '@/engine/core/readerRenderMode'
 import type { BookFormat, ContentProvider, TocItem } from '@/engine/core/contentProvider'
 import type { PageTurnMode } from '@/stores/useSettingsStore'
 import { buildFallbackTocFromSpine } from './readerToc'

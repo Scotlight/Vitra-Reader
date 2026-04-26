@@ -1,5 +1,5 @@
 import { clampDecimal, clampInt } from '@/utils/mathUtils'
-import { resolveReaderRenderMode } from '@/engine'
+import { resolveReaderRenderMode } from '@/engine/core/readerRenderMode'
 import { useSettingsStore, type PageTurnMode } from '@/stores/useSettingsStore'
 import styles from './ReaderView.module.css'
 

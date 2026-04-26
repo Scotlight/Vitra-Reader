@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import type { ContentProvider, SearchResult } from '@/engine/core/contentProvider'
-import { resolveReaderRenderMode } from '@/engine'
+import { resolveReaderRenderMode } from '@/engine/core/readerRenderMode'
 import { ScrollReaderView, ScrollReaderHandle } from './ScrollReaderView'
 import { PaginatedReaderView, PaginatedReaderHandle } from './PaginatedReaderView'
 import { useAutoScrollActiveToc } from './useAutoScrollActiveToc'

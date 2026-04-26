@@ -14,7 +14,7 @@
  *   归一为可追加的 readonly string[]
  */
 
-import type { SegmentMeta } from '@/engine';
+import type { SegmentMeta } from '@/engine/types/vectorRender';
 import {
     CHUNK_APPEND_BATCH_SIZE,
     CHUNK_APPEND_MIN_BATCH_SIZE,

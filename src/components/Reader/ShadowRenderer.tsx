@@ -2,15 +2,15 @@ import { useRef, useEffect, useCallback } from 'react';
 import styles from './ShadowRenderer.module.css';
 import { waitForAssetLoad, getContainerHeight } from '@/utils/assetLoader';
 import { generateCSSOverride, generatePaginatedCSSOverride } from '@/utils/styleProcessor';
+import { SegmentDomPool } from '@/engine/render/segmentDomPool';
 import {
-  buildVitraVectorRenderPlan,
   createVitraRenderTrace,
   finalizeVitraRenderTrace,
   formatVitraRenderTrace,
   runVitraRenderStage,
-  SegmentDomPool,
-  type SegmentMeta,
-} from '@/engine';
+} from '@/engine/render/vitraRenderPipeline';
+import { buildVitraVectorRenderPlan } from '@/engine/render/vitraVectorPlanner';
+import type { SegmentMeta } from '@/engine/types/vectorRender';
 
 // ── Re-export 公共 API（保持调用方 import 不变） ──
 export type { ReaderStyleConfig, CreateWindowedVectorChapterShellOptions } from './shadowRenderer/contentCss';

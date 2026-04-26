@@ -1,9 +1,8 @@
 import {
-    buildVitraVectorRenderPlan,
     computeVisibleRange,
-    type ChapterMetaVector,
-    type SegmentMeta,
-} from '@/engine';
+} from '@/engine/render/metaVectorManager';
+import { buildVitraVectorRenderPlan } from '@/engine/render/vitraVectorPlanner';
+import type { ChapterMetaVector, SegmentMeta } from '@/engine/types/vectorRender';
 
 export interface WindowedVectorCacheCandidate {
     status: 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder' | 'error';

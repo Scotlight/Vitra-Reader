@@ -12,7 +12,7 @@
  * 若需要运行时可调参数，应通过 DEFAULT_VITRA_VECTOR_CONFIG 或 ReaderStyleConfig。
  */
 
-import { DEFAULT_VITRA_VECTOR_CONFIG } from '@/engine';
+import { DEFAULT_VITRA_VECTOR_CONFIG } from '@/engine/render/vitraVectorPlanner';
 
 // ── 章节大小 / 向量化 ──
 export const LARGE_CHAPTER_HTML_THRESHOLD = DEFAULT_VITRA_VECTOR_CONFIG.largeChapterThreshold;

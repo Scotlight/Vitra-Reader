@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import type { MutableRefObject } from 'react';
 import type { ContentProvider } from '@/engine/core/contentProvider';
-import type { ChapterMetaVector } from '@/engine';
-import { buildChapterMetaVector } from '@/engine';
+import { buildChapterMetaVector } from '@/engine/render/metaVectorManager';
+import type { ChapterMetaVector } from '@/engine/types/vectorRender';
 import { createWindowedVectorChapterShell, type ReaderStyleConfig } from '../ShadowRenderer';
 import {
     canRestoreWindowedVectorPlaceholder,
