@@ -7,8 +7,9 @@
  * 压缩：fflate gzip   解压：fflate gunzip
  * Key：`vcache-{hex(md5(buffer))}`
  *
- * 排除格式：PDF / DJVU / CBZ / CBT / CBR / CB7
- * （PDF/DJVU 按页渲染自带缓存，漫画图片已压缩收益低）
+ * 排除格式：PDF / DJVU / MOBI / AZW / AZW3 / CBZ / CBT / CBR / CB7
+ * （PDF/DJVU 按页渲染自带缓存；MOBI/AZW 章节可能包含会话级 Blob URL；
+ * 漫画图片已压缩收益低）
  */
 
 import { gzipSync, gunzipSync, strToU8, strFromU8 } from 'fflate'
@@ -21,7 +22,7 @@ const CACHE_KEY_PREFIX = 'vcache-'
 
 /** 不缓存的格式集合 */
 const SKIP_CACHE_FORMATS = new Set<VitraBookFormat>([
-    'PDF', 'DJVU', 'CBZ', 'CBT', 'CBR', 'CB7',
+    'PDF', 'DJVU', 'MOBI', 'AZW', 'AZW3', 'CBZ', 'CBT', 'CBR', 'CB7',
 ])
 
 /** 是否支持浏览器原生 CompressionStream（非阻塞） */
