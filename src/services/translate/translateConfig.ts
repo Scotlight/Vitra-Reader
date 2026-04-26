@@ -1,4 +1,4 @@
-import { db } from '../storageService'
+import { db } from '@/services/storageService'
 import type { TranslateConfig } from './translateTypes'
 import { DEFAULT_TRANSLATE_CONFIG, normalizeConfig } from './translateTypes'
 

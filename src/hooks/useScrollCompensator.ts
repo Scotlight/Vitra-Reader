@@ -3,7 +3,7 @@ import {
   findBestAnchor,
   captureAnchorInfo,
   calculateAnchorDelta
-} from '../utils/anchorDetection';
+} from '@/utils/anchorDetection';
 
 /**
  * useScrollCompensator Hook

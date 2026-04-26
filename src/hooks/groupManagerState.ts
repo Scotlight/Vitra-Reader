@@ -1,4 +1,4 @@
-import type { BookMeta } from '../services/storageService'
+import type { BookMeta } from '@/services/storageService'
 
 export type GroupItem = {
     id: string

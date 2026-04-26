@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import type { Book } from 'epubjs';
-import { ChapterState, ChapterStatus } from '../types/chapter';
+import { ChapterState, ChapterStatus } from '@/types/chapter';
 
 /**
  * 章节管理器配置

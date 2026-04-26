@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { BookMeta } from '../services/storageService'
+import type { BookMeta } from '@/services/storageService'
 import { resolveOrderedIds, buildHomeOrderKey, type GroupItem } from './groupManagerState'
 import type { GroupCollection } from './useGroupManager'
 

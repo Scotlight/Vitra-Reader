@@ -1,6 +1,6 @@
 import { RefObject, useRef, useCallback, useEffect } from 'react';
-import { PhysicsConfig, DEFAULT_PHYSICS_CONFIG } from '../types/scroll';
-import { clampNumber } from '../utils/mathUtils';
+import { PhysicsConfig, DEFAULT_PHYSICS_CONFIG } from '@/types/scroll';
+import { clampNumber } from '@/utils/mathUtils';
 
 interface InertiaCallbacks {
   onStart?: () => void;
