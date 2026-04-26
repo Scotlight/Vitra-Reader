@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createPaginatedProgressRecord, resolvePaginatedProgress } from '../components/Reader/paginatedProgress'
+import { createPaginatedProgressRecord, resolvePaginatedProgress } from '@/components/Reader/paginatedProgress'
 
 describe('paginatedProgress', () => {
     it('计算分页进度', () => {

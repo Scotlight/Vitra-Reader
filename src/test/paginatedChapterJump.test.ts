@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveNextPaginatedTarget, resolvePrevPaginatedTarget } from '../components/Reader/paginatedChapterJump'
+import { resolveNextPaginatedTarget, resolvePrevPaginatedTarget } from '@/components/Reader/paginatedChapterJump'
 
 describe('paginatedChapterJump', () => {
     it('正常翻到下一页并跳过空白页', () => {

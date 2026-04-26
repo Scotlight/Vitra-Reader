@@ -8,7 +8,7 @@ import {
     queueChapterForShadowRender,
     replaceChapterState,
     rollbackFailedChapterState,
-} from '../components/Reader/scrollChapterLoad'
+} from '@/components/Reader/scrollChapterLoad'
 
 describe('scrollChapterLoad', () => {
     it('根据现有 placeholder 初始化 loading 章节状态', () => {

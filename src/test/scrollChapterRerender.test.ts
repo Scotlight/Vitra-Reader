@@ -4,8 +4,8 @@ import {
     createStyleChangeRerenderPlan,
     filterPendingReadyForStyleChange,
     mergeShadowQueueForStyleChange,
-} from '../components/Reader/scrollChapterRerender'
-import type { LoadedChapterState } from '../components/Reader/scrollChapterLoad'
+} from '@/components/Reader/scrollChapterRerender'
+import type { LoadedChapterState } from '@/components/Reader/scrollChapterLoad'
 
 function createChapter(
     spineIndex: number,

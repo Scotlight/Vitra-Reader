@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { PageBoundary } from '../engine/types/vitraPagination'
+import type { PageBoundary } from '@/engine/types/vitraPagination'
 import {
     buildPaginatedMeasureCacheKey,
     readPaginatedMeasureCache,
     writePaginatedMeasureCache,
-} from '../components/Reader/paginatedMeasureCache'
+} from '@/components/Reader/paginatedMeasureCache'
 
 const DEFAULT_INPUT = {
     bookId: 'book-1',

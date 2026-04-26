@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ChapterPreprocessInput } from '../engine/types/chapterPreprocess'
-import { preprocessChapterCore } from '../engine/render/chapterPreprocessCore'
+import type { ChapterPreprocessInput } from '@/engine/types/chapterPreprocess'
+import { preprocessChapterCore } from '@/engine/render/chapterPreprocessCore'
 
 const basePayload: ChapterPreprocessInput = {
     chapterId: 'chapter-1',
@@ -14,7 +14,7 @@ const originalWorker = globalThis.Worker
 
 async function importServiceModule() {
     vi.resetModules()
-    return import('../engine/render/chapterPreprocessService')
+    return import('@/engine/render/chapterPreprocessService')
 }
 
 describe('chapterPreprocessService', () => {
@@ -132,6 +132,7 @@ describe('chapterPreprocessService', () => {
 
         const promise = preprocessChapterContent(basePayload, 1)
         await vi.advanceTimersByTimeAsync(1500)
+        await vi.runAllTimersAsync()
 
         await expect(promise).resolves.toEqual(preprocessChapterCore(basePayload))
         expect(warnSpy).toHaveBeenCalled()

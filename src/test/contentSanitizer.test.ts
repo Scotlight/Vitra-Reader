@@ -4,7 +4,7 @@ import {
     escapeHtmlAttribute,
     sanitizeChapterHtml,
     sanitizeUrlValue,
-} from '../engine/core/contentSanitizer'
+} from '@/engine/core/contentSanitizer'
 
 describe('escapeHtml', () => {
     it('转义 & < >', () => {

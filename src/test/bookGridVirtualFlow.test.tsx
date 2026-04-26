@@ -1,8 +1,8 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, waitFor } from '@testing-library/react'
-import type { BookMeta } from '../services/storageService'
-import { BookGrid, type LibraryGridItem } from '../components/Library/BookGrid'
+import type { BookMeta } from '@/services/storageService'
+import { BookGrid, type LibraryGridItem } from '@/components/Library/BookGrid'
 
 vi.mock('framer-motion', () => ({
     motion: {
@@ -10,8 +10,8 @@ vi.mock('framer-motion', () => ({
     },
 }))
 
-vi.mock('../services/storageService', async () => {
-    const actual = await vi.importActual<typeof import('../services/storageService')>('../services/storageService')
+vi.mock('@/services/storageService', async () => {
+    const actual = await vi.importActual<typeof import('@/services/storageService')>('@/services/storageService')
     return {
         ...actual,
         getBookCover: vi.fn(async () => null),

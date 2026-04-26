@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detectFormat, stripBookExtension } from '../engine/core/contentProvider'
+import { detectFormat, stripBookExtension } from '@/engine/core/contentProvider'
 
 describe('detectFormat', () => {
     it('epub 扩展名识别', () => {

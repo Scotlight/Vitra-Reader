@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
     batchUpdateSegmentHeights,
     buildChapterMetaVector,
-} from '../engine/render/metaVectorManager';
-import type { SegmentMeta } from '../engine/types/vectorRender';
+} from '@/engine/render/metaVectorManager';
+import type { SegmentMeta } from '@/engine/types/vectorRender';
 
 function createSegment(
     index: number,

@@ -4,7 +4,7 @@ import {
     buildMigratedGroupState,
     reorderKeys,
     sanitizeGroupState,
-} from '../hooks/groupManagerState'
+} from '@/hooks/groupManagerState'
 
 describe('groupManagerState', () => {
     it('从旧书架状态迁移为分组状态与首页混排顺序', () => {

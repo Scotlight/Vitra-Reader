@@ -1,20 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { VitraBook, VitraBookSection } from '../engine/types/vitraBook'
+import type { VitraBook, VitraBookSection } from '@/engine/types/vitraBook'
 
 const mocks = vi.hoisted(() => ({
   detectFormatMock: vi.fn(),
   parseMock: vi.fn(),
 }))
 
-vi.mock('../engine/core/vitraFormatDetector', () => ({
+vi.mock('@/engine/core/vitraFormatDetector', () => ({
   detectVitraFormat: mocks.detectFormatMock,
 }))
 
-vi.mock('../engine/core/vitraBaseParser', () => ({
+vi.mock('@/engine/core/vitraBaseParser', () => ({
   VitraBaseParser: class {},
 }))
 
-vi.mock('../engine/parsers/vitraProviderParsers', () => {
+vi.mock('@/engine/parsers/vitraProviderParsers', () => {
   class MockParser {
     parse = mocks.parseMock
   }
@@ -32,14 +32,14 @@ vi.mock('../engine/parsers/vitraProviderParsers', () => {
   }
 })
 
-vi.mock('../engine/parsers/vitraDocxParser', () => {
+vi.mock('@/engine/parsers/vitraDocxParser', () => {
   class MockParser {
     parse = mocks.parseMock
   }
   return { VitraDocxParser: MockParser }
 })
 
-vi.mock('../engine/parsers/vitraComicParser', () => {
+vi.mock('@/engine/parsers/vitraComicParser', () => {
   class MockParser {
     parse = mocks.parseMock
   }
@@ -51,7 +51,7 @@ vi.mock('../engine/parsers/vitraComicParser', () => {
   }
 })
 
-import { VitraPipeline } from '../engine/pipeline/vitraPipeline'
+import { VitraPipeline } from '@/engine/pipeline/vitraPipeline'
 
 function createBook(sections: readonly VitraBookSection[]): VitraBook {
   return {

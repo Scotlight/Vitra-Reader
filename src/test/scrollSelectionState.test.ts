@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveScrollSelectionState } from '../components/Reader/scrollSelectionState'
+import { resolveScrollSelectionState } from '@/components/Reader/scrollSelectionState'
 
 function createRect(left: number, top: number, width: number, height: number): DOMRect {
     return {

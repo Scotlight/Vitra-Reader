@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { clampNumber as clampNum, clampInt as clampI, clampDecimal as clampD } from '../utils/mathUtils'
+import { clampNumber as clampNum, clampInt as clampI, clampDecimal as clampD } from '@/utils/mathUtils'
 
 // mathUtils 直接测
 describe('clampNumber', () => {

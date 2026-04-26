@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeMobiText } from '../engine/parsers/providers/mobiTextDecoding'
+import { decodeMobiText } from '@/engine/parsers/providers/mobiTextDecoding'
 
 describe('decodeMobiText', () => {
     it('CP1252 声明但正文实际为 UTF-8 中文时优先还原可读文本', () => {

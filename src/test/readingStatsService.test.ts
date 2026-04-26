@@ -5,7 +5,7 @@ import {
     resolveReadingStatsCutoffDateKey,
     resolvePeriodDateKeys,
     toLocalDateKey,
-} from '../services/readingStatsService'
+} from '@/services/readingStatsService'
 
 describe('readingStatsService', () => {
     it('按本地日期生成 day/week/month 的日期键', () => {

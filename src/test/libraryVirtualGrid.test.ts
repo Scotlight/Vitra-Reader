@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildVirtualGridMetrics, chunkItemsIntoRows, resolveVisibleVirtualRows } from '../components/Library/libraryVirtualGrid'
+import { buildVirtualGridMetrics, chunkItemsIntoRows, resolveVisibleVirtualRows } from '@/components/Library/libraryVirtualGrid'
 
 describe('libraryVirtualGrid', () => {
     it('按列数把项目切成行', () => {

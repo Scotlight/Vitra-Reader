@@ -5,7 +5,7 @@ import {
     removeStyleTags,
     generateCSSOverride,
     generatePaginatedCSSOverride,
-} from '../utils/styleProcessor'
+} from '@/utils/styleProcessor'
 
 const ID = 'ch-001'
 const PREFIX = `[data-chapter-id="${ID}"]`

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, waitFor } from '@testing-library/react'
-import type { ContentProvider, SearchResult, SpineItemInfo, TocItem } from '../engine/core/contentProvider'
-import type { SegmentMeta } from '../engine/types/vectorRender'
-import type { ReaderStyleConfig } from '../components/Reader/ShadowRenderer'
+import type { ContentProvider, SearchResult, SpineItemInfo, TocItem } from '@/engine/core/contentProvider'
+import type { SegmentMeta } from '@/engine/types/vectorRender'
+import type { ReaderStyleConfig } from '@/components/Reader/ShadowRenderer'
 
 const mocks = vi.hoisted(() => ({
     preprocessChapterContentMock: vi.fn(),
@@ -10,11 +10,11 @@ const mocks = vi.hoisted(() => ({
     shadowRendererSpy: vi.fn(),
 }))
 
-vi.mock('../engine/render/chapterPreprocessService', () => ({
+vi.mock('@/engine/render/chapterPreprocessService', () => ({
     preprocessChapterContent: mocks.preprocessChapterContentMock,
 }))
 
-vi.mock('../hooks/useScrollInertia', () => ({
+vi.mock('@/hooks/useScrollInertia', () => ({
     useScrollInertia: () => ({
         velocity: 0,
         addImpulse: vi.fn(),
@@ -24,11 +24,11 @@ vi.mock('../hooks/useScrollInertia', () => ({
     }),
 }))
 
-vi.mock('../hooks/useScrollEvents', () => ({
+vi.mock('@/hooks/useScrollEvents', () => ({
     useScrollEvents: vi.fn(),
 }))
 
-vi.mock('../hooks/useSelectionMenu', () => ({
+vi.mock('@/hooks/useSelectionMenu', () => ({
     useSelectionMenu: () => ({
         selectionMenu: { visible: false, x: 0, y: 0, text: '', spineIndex: -1 },
         setSelectionMenu: vi.fn(),
@@ -37,7 +37,7 @@ vi.mock('../hooks/useSelectionMenu', () => ({
     }),
 }))
 
-vi.mock('../services/storageService', () => ({
+vi.mock('@/services/storageService', () => ({
     db: {
         progress: {
             put: mocks.progressPutMock,
@@ -52,18 +52,18 @@ vi.mock('../services/storageService', () => ({
     },
 }))
 
-vi.mock('../utils/mediaResourceCleanup', () => ({
+vi.mock('@/utils/mediaResourceCleanup', () => ({
     releaseMediaResources: vi.fn(),
 }))
 
-vi.mock('../utils/idleScheduler', () => ({
+vi.mock('@/utils/idleScheduler', () => ({
     scheduleIdleTask: (task: () => void) => window.setTimeout(task, 0),
     cancelIdleTask: (handle: number) => window.clearTimeout(handle),
 }))
 
-vi.mock('../components/Reader/ShadowRenderer', async () => {
+vi.mock('@/components/Reader/ShadowRenderer', async () => {
     const React = await import('react')
-    const actual = await vi.importActual<typeof import('../components/Reader/ShadowRenderer')>('../components/Reader/ShadowRenderer')
+    const actual = await vi.importActual<typeof import('@/components/Reader/ShadowRenderer')>('@/components/Reader/ShadowRenderer')
     return {
         ...actual,
         ShadowRenderer: (props: {
@@ -86,7 +86,7 @@ vi.mock('../components/Reader/ShadowRenderer', async () => {
     }
 })
 
-import { ScrollReaderView } from '../components/Reader/ScrollReaderView'
+import { ScrollReaderView } from '@/components/Reader/ScrollReaderView'
 
 const DEFAULT_READER_STYLES: ReaderStyleConfig = {
     textColor: '#111',
