@@ -77,21 +77,17 @@ export class VitraContentAdapter implements ContentProvider {
     try {
       const cached = await this.bookCache.get(this.buffer)
       if (cached && cached.sectionsHtml.length > 0) {
-        const sectionsHtml = cached.sectionsHtml.map((html) => this.cleanChapterHtml(html))
         for (let i = 0; i < cached.sectionsHtml.length; i++) {
-          const html = sectionsHtml[i]
+          const html = cached.sectionsHtml[i]
           if (html) {
             this.htmlCache.set(i, html)
-            if (html !== cached.sectionsHtml[i]) {
-              this.cacheDirty = true
-            }
           }
         }
         console.log(
           `[VitraContentAdapter] 缓存命中: ${cached.sectionsHtml.length} sections (${this.book.format})`,
         )
         // 搜索索引延迟到空闲时构建，不阻塞打开流程
-        this.scheduleIdleIndexBuild(sectionsHtml)
+        this.scheduleIdleIndexBuild(cached.sectionsHtml)
       }
     } catch {
       // 缓存读取失败不影响正常流程
@@ -150,7 +146,7 @@ export class VitraContentAdapter implements ContentProvider {
 
     // 1. 内存缓存命中
     const cached = this.htmlCache.get(spineIndex)
-    if (cached) return cached
+    if (cached) return this.normalizeCachedChapterHtml(spineIndex, cached)
 
     // 2. 通过 SectionManager 加载（带 LRU 淘汰）
     const result = await this.sectionManager.load(section)
@@ -197,6 +193,15 @@ export class VitraContentAdapter implements ContentProvider {
 
   private cleanChapterHtml(html: string): string {
     return cleanChapterHtmlForFormat(html, this.book.format)
+  }
+
+  private normalizeCachedChapterHtml(spineIndex: number, html: string): string {
+    const cleaned = this.cleanChapterHtml(html)
+    if (cleaned !== html) {
+      this.htmlCache.set(spineIndex, cleaned)
+      this.cacheDirty = true
+    }
+    return cleaned
   }
 
   /**
