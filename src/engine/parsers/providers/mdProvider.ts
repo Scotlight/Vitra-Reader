@@ -4,6 +4,7 @@ import { stripBookExtension } from '@/engine/core/contentProvider'
 import { VitraSectionSplitter } from '@/engine/core/vitraSectionSplitter'
 import { decodeTextBuffer } from './textDecoding'
 import { EMPTY_SECTION_HTML, DEFAULT_DOCUMENT_LABEL } from '@/engine/render/chapterTitleDetector'
+import { searchPlainChapterTexts, stripHtmlTags } from './chapterSearch'
 
 interface Chapter {
     title: string
@@ -24,7 +25,7 @@ export class MdContentProvider implements ContentProvider {
         this.chapters = chunks.map((chunk, index) => ({
             title: chunk.label || `第 ${index + 1} 章`,
             html: chunk.html || EMPTY_SECTION_HTML,
-            plain: stripTags(chunk.html || ''),
+            plain: stripHtmlTags(chunk.html || ''),
         }))
 
         if (this.chapters.length === 0) {
@@ -61,24 +62,8 @@ export class MdContentProvider implements ContentProvider {
     unloadChapter() {}
 
     async search(keyword: string): Promise<SearchResult[]> {
-        const results: SearchResult[] = []
-        const lk = keyword.toLowerCase()
-        for (let i = 0; i < this.chapters.length; i++) {
-            const plain = this.chapters[i].plain.toLowerCase()
-            let pos = plain.indexOf(lk)
-            while (pos !== -1) {
-                const start = Math.max(0, pos - 20)
-                const end = Math.min(plain.length, pos + keyword.length + 20)
-                results.push({ cfi: `vitra:${i}:0`, excerpt: this.chapters[i].plain.slice(start, end) })
-                pos = plain.indexOf(lk, pos + 1)
-            }
-        }
-        return results
+        return searchPlainChapterTexts(keyword, this.chapters.length, (index) => this.chapters[index].plain)
     }
-}
-
-function stripTags(html: string): string {
-    return html.replace(/<[^>]+>/g, '')
 }
 
 export async function parseMdMetadata(data: ArrayBuffer, filename: string) {
