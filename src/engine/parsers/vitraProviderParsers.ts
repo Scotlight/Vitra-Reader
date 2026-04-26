@@ -23,6 +23,7 @@ import type {
   VitraSearchResult,
   VitraTocItem,
 } from '../types/vitraBook';
+import { cleanChapterHtmlForFormat } from '../render/chapterHtmlCleanup';
 
 type ProviderCompatibleFormat =
   | 'EPUB'
@@ -89,7 +90,7 @@ export class VitraProviderBackedParser extends VitraBaseParser {
     const spineItems = provider.getSpineItems();
     const toc = buildTocWithFallback(provider.getToc(), spineItems);
     const bookId = `vitra-${this.filename}`;
-    const { sections, releaseAll } = createSections(spineItems, provider, bookId);
+    const { sections, releaseAll } = createSections(spineItems, provider, bookId, this.format);
 
     return createBookObject({
       format: this.format,
@@ -226,6 +227,7 @@ function createSections(
   spineItems: readonly SpineItemInfo[],
   provider: ContentProvider,
   bookId: string,
+  format: VitraBookFormat,
 ): {
   readonly sections: readonly VitraBookSection[];
   readonly releaseAll: () => void;
@@ -252,7 +254,8 @@ function createSections(
       const cached = cache.get(spine.index);
       if (cached) return cached;
 
-      const html = await provider.extractChapterHtml(spine.index);
+      const rawHtml = await provider.extractChapterHtml(spine.index);
+      const html = cleanChapterHtmlForFormat(rawHtml, format);
       cache.set(spine.index, html);
       sizeCache.set(spine.index, new Blob([html]).size);
 

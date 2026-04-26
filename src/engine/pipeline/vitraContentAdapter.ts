@@ -25,6 +25,7 @@ import {
   hasChapterIndex,
   searchBookIndex,
 } from '../cache/searchIndexCache'
+import { cleanChapterHtmlForFormat } from '../render/chapterHtmlCleanup'
 
 // ─── 常量 ────────────────────────────────────────────
 
@@ -76,17 +77,21 @@ export class VitraContentAdapter implements ContentProvider {
     try {
       const cached = await this.bookCache.get(this.buffer)
       if (cached && cached.sectionsHtml.length > 0) {
+        const sectionsHtml = cached.sectionsHtml.map((html) => this.cleanChapterHtml(html))
         for (let i = 0; i < cached.sectionsHtml.length; i++) {
-          const html = cached.sectionsHtml[i]
+          const html = sectionsHtml[i]
           if (html) {
             this.htmlCache.set(i, html)
+            if (html !== cached.sectionsHtml[i]) {
+              this.cacheDirty = true
+            }
           }
         }
         console.log(
           `[VitraContentAdapter] 缓存命中: ${cached.sectionsHtml.length} sections (${this.book.format})`,
         )
         // 搜索索引延迟到空闲时构建，不阻塞打开流程
-        this.scheduleIdleIndexBuild(cached.sectionsHtml)
+        this.scheduleIdleIndexBuild(sectionsHtml)
       }
     } catch {
       // 缓存读取失败不影响正常流程
@@ -159,6 +164,8 @@ export class VitraContentAdapter implements ContentProvider {
       html = result
     }
 
+    html = this.cleanChapterHtml(html)
+
     this.htmlCache.set(spineIndex, html)
     this.cacheDirty = true
     if (!hasChapterIndex(this.bookId, spineIndex)) {
@@ -187,6 +194,10 @@ export class VitraContentAdapter implements ContentProvider {
   }
 
   // ── 内部方法 ─────────────────────────────────────
+
+  private cleanChapterHtml(html: string): string {
+    return cleanChapterHtmlForFormat(html, this.book.format)
+  }
 
   /**
    * 空闲时分批构建搜索索引，不阻塞打开流程。
