@@ -6,7 +6,7 @@ import {
     removeHighlight,
     createHighlightDescriptor,
     restoreHighlightsAfterHydration,
-} from '../utils/textFinder'
+} from '@/utils/textFinder'
 
 function makeContainer(html: string): HTMLElement {
     const div = document.createElement('div')

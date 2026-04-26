@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildChapterMetaVector } from '../engine/render/metaVectorManager';
-import type { SegmentMeta } from '../engine/types/vectorRender';
+import { buildChapterMetaVector } from '@/engine/render/metaVectorManager';
+import type { SegmentMeta } from '@/engine/types/vectorRender';
 import {
     canRestoreWindowedVectorPlaceholder,
     computeGlobalVirtualSegmentMountPlan,
     partitionStyleChangeTargets,
     shouldBypassShadowQueueForSegmentMetas,
-} from '../components/Reader/scrollVectorStrategy';
+} from '@/components/Reader/scrollVectorStrategy';
 
 function createSegment(
     index: number,

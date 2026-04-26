@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildFontFamilyWithFallback } from '../utils/fontFallback'
+import { buildFontFamilyWithFallback } from '@/utils/fontFallback'
 
 describe('buildFontFamilyWithFallback', () => {
     it('单字体后追加回退栈', () => {

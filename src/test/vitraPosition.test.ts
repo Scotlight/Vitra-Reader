@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { serializePosition, deserializePosition } from '../engine/render/vitraPosition'
+import { serializePosition, deserializePosition } from '@/engine/render/vitraPosition'
 
 function makeRoot(html: string): HTMLElement {
     const div = document.createElement('div')

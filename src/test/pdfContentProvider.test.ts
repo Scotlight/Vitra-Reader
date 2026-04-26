@@ -1,4 +1,4 @@
-﻿import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
     renderPdfPageMock: vi.fn(),
@@ -10,29 +10,29 @@ const mocks = vi.hoisted(() => ({
     promoteLegacyRuntimeMock: vi.fn(),
 }))
 
-vi.mock('../engine/parsers/providers/pdf/pdfPageRenderer', () => ({
+vi.mock('@/engine/parsers/providers/pdf/pdfPageRenderer', () => ({
     renderPdfPage: mocks.renderPdfPageMock,
     extractPdfPageSearchText: mocks.extractPdfPageSearchTextMock,
 }))
 
-vi.mock('../engine/parsers/providers/pdf/pdfNavigation', () => ({
+vi.mock('@/engine/parsers/providers/pdf/pdfNavigation', () => ({
     buildFallbackPdfToc: (pageCount: number) => Array.from({ length: pageCount }, (_, pageIndex) => ({ id: `page-${pageIndex}`, href: `page-${pageIndex}`, label: `Page ${pageIndex + 1}` })),
     buildPdfHref: (pageIndex: number) => `page-${pageIndex}`,
     loadPdfOutline: mocks.loadPdfOutlineMock,
 }))
 
-vi.mock('../engine/parsers/providers/pdf/pdfPageHtml', () => ({
+vi.mock('@/engine/parsers/providers/pdf/pdfPageHtml', () => ({
     renderPdfPageHtml: mocks.renderPdfPageHtmlMock,
 }))
 
-vi.mock('../engine/parsers/providers/pdf/pdfRuntime', () => ({
+vi.mock('@/engine/parsers/providers/pdf/pdfRuntime', () => ({
     openPdfDocument: mocks.openPdfDocumentMock,
     openPdfDocumentWithFallback: mocks.openPdfDocumentWithFallbackMock,
     promoteLegacyRuntime: mocks.promoteLegacyRuntimeMock,
     shouldFallbackToLegacy: () => false,
 }))
 
-import { PdfContentProvider } from '../engine/parsers/providers/pdf/pdfContentProvider'
+import { PdfContentProvider } from '@/engine/parsers/providers/pdf/pdfContentProvider'
 
 function createMockDoc(pageCount: number) {
     return {
@@ -70,8 +70,8 @@ describe('PdfContentProvider prerender backpressure', () => {
         vi.clearAllMocks()
     })
 
-    it('450ms idle 后只预渲下一页', async () => {
-        mockPerformanceNow([0, 90, 90, 180])
+    it('前景翻页后 900ms idle 只预渲下一页', async () => {
+        mockPerformanceNow([0, 90, 90, 180, 180, 270])
         const provider = new PdfContentProvider(new ArrayBuffer(8))
         await provider.init()
 
@@ -79,12 +79,16 @@ describe('PdfContentProvider prerender backpressure', () => {
         expect(mocks.renderPdfPageMock).toHaveBeenCalledTimes(1)
         expect(mocks.renderPdfPageMock).toHaveBeenNthCalledWith(1, expect.any(Object), 0, null)
 
-        await vi.advanceTimersByTimeAsync(449)
-        expect(mocks.renderPdfPageMock).toHaveBeenCalledTimes(1)
-
-        await vi.advanceTimersByTimeAsync(1)
+        await provider.extractChapterHtml(1)
         expect(mocks.renderPdfPageMock).toHaveBeenCalledTimes(2)
         expect(mocks.renderPdfPageMock).toHaveBeenNthCalledWith(2, expect.any(Object), 1, 90)
+
+        await vi.advanceTimersByTimeAsync(899)
+        expect(mocks.renderPdfPageMock).toHaveBeenCalledTimes(2)
+
+        await vi.advanceTimersByTimeAsync(1)
+        expect(mocks.renderPdfPageMock).toHaveBeenCalledTimes(3)
+        expect(mocks.renderPdfPageMock).toHaveBeenNthCalledWith(3, expect.any(Object), 2, 90)
     })
 
     it('慢页不触发邻页预渲', async () => {

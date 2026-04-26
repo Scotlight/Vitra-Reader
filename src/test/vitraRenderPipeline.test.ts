@@ -5,7 +5,7 @@ import {
     finalizeVitraRenderTrace,
     formatVitraRenderTrace,
     type VitraRenderTraceState,
-} from '../engine/render/vitraRenderPipeline'
+} from '@/engine/render/vitraRenderPipeline'
 
 describe('vitraRenderPipeline', () => {
     it('正常完整流程产生 snapshot', async () => {

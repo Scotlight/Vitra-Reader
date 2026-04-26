@@ -3,7 +3,7 @@ import {
     createPaginatedShadowData,
     hasRenderableChapterContent,
     resolvePaginatedFallbackIndex,
-} from '../components/Reader/paginatedChapterLoad'
+} from '@/components/Reader/paginatedChapterLoad'
 
 describe('paginatedChapterLoad', () => {
     it('识别可渲染的文本章节', () => {

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, waitFor } from '@testing-library/react'
-import type { ContentProvider, SearchResult, SpineItemInfo, TocItem } from '../engine/core/contentProvider'
-import type { ReaderStyleConfig } from '../components/Reader/ShadowRenderer'
-import type { PageBoundary } from '../engine/types/vitraPagination'
+import type { ContentProvider, SearchResult, SpineItemInfo, TocItem } from '@/engine/core/contentProvider'
+import type { ReaderStyleConfig } from '@/components/Reader/ShadowRenderer'
+import type { PageBoundary } from '@/engine/types/vitraPagination'
 
 const mocks = vi.hoisted(() => ({
     preprocessChapterContentMock: vi.fn(),
@@ -11,19 +11,19 @@ const mocks = vi.hoisted(() => ({
     shadowRendererSpy: vi.fn(),
 }))
 
-vi.mock('../engine/render/chapterPreprocessService', () => ({
+vi.mock('@/engine/render/chapterPreprocessService', () => ({
     preprocessChapterContent: mocks.preprocessChapterContentMock,
 }))
 
-vi.mock('../engine', async () => {
-    const actual = await vi.importActual<typeof import('../engine')>('../engine')
+vi.mock('@/engine', async () => {
+    const actual = await vi.importActual<typeof import('@/engine')>('@/engine')
     return {
         ...actual,
         startMeasure: mocks.startMeasureMock,
     }
 })
 
-vi.mock('../hooks/useSelectionMenu', () => ({
+vi.mock('@/hooks/useSelectionMenu', () => ({
     useSelectionMenu: () => ({
         selectionMenu: { visible: false, x: 0, y: 0, text: '', spineIndex: -1 },
         setSelectionMenu: mocks.setSelectionMenuMock,
@@ -32,7 +32,7 @@ vi.mock('../hooks/useSelectionMenu', () => ({
     }),
 }))
 
-vi.mock('../services/storageService', () => ({
+vi.mock('@/services/storageService', () => ({
     db: {
         progress: {
             put: async () => undefined,
@@ -47,18 +47,18 @@ vi.mock('../services/storageService', () => ({
     },
 }))
 
-vi.mock('../utils/mediaResourceCleanup', () => ({
+vi.mock('@/utils/mediaResourceCleanup', () => ({
     releaseMediaResources: vi.fn(),
 }))
 
-vi.mock('../utils/idleScheduler', () => ({
+vi.mock('@/utils/idleScheduler', () => ({
     scheduleIdleTask: (task: () => void) => window.setTimeout(task, 0),
     cancelIdleTask: (handle: number) => window.clearTimeout(handle),
 }))
 
-vi.mock('../components/Reader/ShadowRenderer', async () => {
+vi.mock('@/components/Reader/ShadowRenderer', async () => {
     const React = await import('react')
-    const actual = await vi.importActual<typeof import('../components/Reader/ShadowRenderer')>('../components/Reader/ShadowRenderer')
+    const actual = await vi.importActual<typeof import('@/components/Reader/ShadowRenderer')>('@/components/Reader/ShadowRenderer')
     return {
         ...actual,
         ShadowRenderer: (props: { chapterId: string; htmlContent: string; onReady: (node: HTMLElement, height: number) => void }) => {
@@ -74,7 +74,7 @@ vi.mock('../components/Reader/ShadowRenderer', async () => {
     }
 })
 
-import { PaginatedReaderView } from '../components/Reader/PaginatedReaderView'
+import { PaginatedReaderView } from '@/components/Reader/PaginatedReaderView'
 
 const DEFAULT_READER_STYLES: ReaderStyleConfig = {
     textColor: '#111',

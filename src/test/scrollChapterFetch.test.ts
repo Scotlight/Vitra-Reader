@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildScrollChapterVectorConfig, fetchAndPreprocessChapter } from '../components/Reader/scrollChapterFetch'
+import { buildScrollChapterVectorConfig, fetchAndPreprocessChapter } from '@/components/Reader/scrollChapterFetch'
 
 describe('scrollChapterFetch', () => {
     it('构建章节预处理向量配置', () => {

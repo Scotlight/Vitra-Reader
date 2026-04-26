@@ -5,7 +5,7 @@ import {
     parseChapterSpineIndex,
     resolveViewportChapterState,
     resolveViewportChapterProgress,
-} from '../components/Reader/scrollChapterViewport'
+} from '@/components/Reader/scrollChapterViewport'
 
 describe('scrollChapterViewport', () => {
     it('正确解析章节 data 属性里的 spineIndex', () => {

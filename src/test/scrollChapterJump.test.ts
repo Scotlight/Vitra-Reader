@@ -3,7 +3,7 @@ import {
     findMountedJumpTarget,
     resolveChapterDomId,
     resolveJumpLoadDirection,
-} from '../components/Reader/scrollChapterJump'
+} from '@/components/Reader/scrollChapterJump'
 
 describe('scrollChapterJump', () => {
     it('根据目标和锚点方向返回跳转加载方向', () => {

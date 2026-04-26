@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scanHtmlBySaxStream, consumeMediaOffsetInRange, streamHtmlBySaxStream } from '../engine/render/htmlSaxStream'
+import { scanHtmlBySaxStream, consumeMediaOffsetInRange, streamHtmlBySaxStream } from '@/engine/render/htmlSaxStream'
 
 describe('scanHtmlBySaxStream — 块边界检测', () => {
     it('空字符串返回空数组', () => {

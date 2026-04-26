@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { preprocessChapterCore, vectorizeHtmlToSegmentMetas } from '../engine/render/chapterPreprocessCore'
+import { preprocessChapterCore, vectorizeHtmlToSegmentMetas } from '@/engine/render/chapterPreprocessCore'
 
 describe('chapterPreprocessCore', () => {
     it('大章节向量化后不再同时返回三份 HTML 载荷', () => {

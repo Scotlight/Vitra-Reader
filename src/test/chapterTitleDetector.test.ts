@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isChapterTitle, normalizeTitleLine } from '../engine/render/chapterTitleDetector'
+import { isChapterTitle, normalizeTitleLine } from '@/engine/render/chapterTitleDetector'
 
 describe('normalizeTitleLine', () => {
     it('去除首尾空白', () => {

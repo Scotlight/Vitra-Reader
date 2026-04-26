@@ -1,6 +1,6 @@
-﻿import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computePdfRenderScale, resolvePdfRenderScale, renderPdfPage } from '../engine/parsers/providers/pdf/pdfPageRenderer'
-import { renderPdfPageHtml } from '../engine/parsers/providers/pdf/pdfPageHtml'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { computePdfRenderScale, resolvePdfRenderScale, renderPdfPage } from '@/engine/parsers/providers/pdf/pdfPageRenderer'
+import { renderPdfPageHtml } from '@/engine/parsers/providers/pdf/pdfPageHtml'
 
 describe('pdfPageRenderer', () => {
     const originalDevicePixelRatio = window.devicePixelRatio

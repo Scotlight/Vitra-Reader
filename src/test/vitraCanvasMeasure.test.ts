@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { estimateLineWidth, invalidateCharWidthTable } from '../engine/render/charWidthTable'
+import { estimateLineWidth, invalidateCharWidthTable } from '@/engine/render/charWidthTable'
 
 // 构造最小 CanvasRenderingContext2D mock
 function makeCtx(measureWidth: (text: string) => number): CanvasRenderingContext2D {
