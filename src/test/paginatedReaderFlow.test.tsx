@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, waitFor } from '@testing-library/react'
+import { createRef } from 'react'
 import type { ContentProvider, SearchResult, SpineItemInfo, TocItem } from '@/engine/core/contentProvider'
 import type { ReaderStyleConfig } from '@/components/Reader/ShadowRenderer'
 import type { PageBoundary } from '@/engine/types/vitraPagination'
@@ -74,7 +75,7 @@ vi.mock('@/components/Reader/ShadowRenderer', async () => {
     }
 })
 
-import { PaginatedReaderView } from '@/components/Reader/PaginatedReaderView'
+import { PaginatedReaderView, type PaginatedReaderHandle } from '@/components/Reader/PaginatedReaderView'
 
 const DEFAULT_READER_STYLES: ReaderStyleConfig = {
     textColor: '#111',
@@ -410,5 +411,64 @@ describe('PaginatedReaderView flow', () => {
         await waitFor(() => {
             expect(provider.extractChapterHtml).toHaveBeenNthCalledWith(2, 1)
         })
+    })
+
+    it('再次进入相同章节会复用分页测量缓存', async () => {
+        mocks.preprocessChapterContentMock.mockImplementation(async (input: { htmlContent: string }) => ({
+            htmlContent: input.htmlContent,
+            htmlFragments: [input.htmlContent],
+            externalStyles: [],
+            removedTagCount: 0,
+            removedAttributeCount: 0,
+            usedFallback: false,
+            stylesScoped: true,
+            hasRenderableContent: true,
+        }))
+        mocks.startMeasureMock.mockReturnValue({
+            abort: vi.fn(),
+            result: Promise.resolve<PageBoundary[]>([
+                { sectionIndex: 0, startBlock: 0, endBlock: 1, startOffset: 0, endOffset: 760 },
+            ]),
+        })
+
+        const provider = createProvider([
+            { index: 0, href: 'chapter-1.xhtml', id: 'chapter-1', linear: true },
+            { index: 1, href: 'chapter-2.xhtml', id: 'chapter-2', linear: true },
+        ], {
+            extractChapterHtml: async (spineIndex) => `<p>chapter-${spineIndex + 1}</p>`,
+        })
+        const readerRef = createRef<PaginatedReaderHandle>()
+
+        render(
+            <PaginatedReaderView
+                ref={readerRef}
+                provider={provider}
+                bookId="book-1"
+                pageTurnMode="paginated-single"
+                readerStyles={DEFAULT_READER_STYLES}
+            />
+        )
+
+        await flushUi()
+        await waitFor(() => {
+            expect(mocks.startMeasureMock).toHaveBeenCalledTimes(1)
+        })
+        await flushUi()
+
+        await act(async () => {
+            await readerRef.current?.jumpToSpine(1)
+        })
+        await flushUi()
+        await waitFor(() => {
+            expect(mocks.startMeasureMock).toHaveBeenCalledTimes(2)
+        })
+        await flushUi()
+
+        await act(async () => {
+            await readerRef.current?.jumpToSpine(0)
+        })
+        await flushUi()
+
+        expect(mocks.startMeasureMock).toHaveBeenCalledTimes(2)
     })
 })
