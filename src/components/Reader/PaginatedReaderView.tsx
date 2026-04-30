@@ -11,6 +11,7 @@ import { usePaginatedProgress } from './paginatedReader/usePaginatedProgress';
 import { usePaginationMeasure } from './paginatedReader/usePaginationMeasure';
 import { usePaginatedChapterLoader } from './paginatedReader/usePaginatedChapterLoader';
 import { usePaginatedPageLayout } from './paginatedReader/usePaginatedPageLayout';
+import { buildPaginatedMeasureCacheKey } from './paginatedMeasureCache';
 import { resolveReaderInternalLinkTarget } from './readerInternalLink';
 import styles from './PaginatedReaderView.module.css';
 
@@ -84,6 +85,29 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     const { abortPaginationMeasure, measureBoundariesInShadow, pageBoundariesRef, pageMapReadyRef } =
         usePaginationMeasure(paginationMeasureHostRef);
 
+    const buildPaginationMeasureCacheKey = useCallback((viewportHeight: number) => {
+        const viewportWidth = Math.floor(viewportRef.current?.clientWidth ?? 0);
+        const safeViewportHeight = Math.floor(viewportHeight);
+        if (viewportWidth <= 0 || safeViewportHeight <= 0) return null;
+
+        return buildPaginatedMeasureCacheKey({
+            bookId,
+            spineIndex: currentSpineIndexRef.current,
+            viewportWidth,
+            viewportHeight: safeViewportHeight,
+            pageTurnMode,
+            readerStyles,
+        });
+    }, [bookId, pageTurnMode, readerStyles]);
+
+    const measurePaginatedBoundaries = useCallback((node: HTMLElement, viewportHeight: number) => {
+        return measureBoundariesInShadow(
+            node,
+            viewportHeight,
+            buildPaginationMeasureCacheKey(viewportHeight),
+        );
+    }, [buildPaginationMeasureCacheKey, measureBoundariesInShadow]);
+
     const { loadChapter, spineItems, spineItemsRef } = usePaginatedChapterLoader({
         provider,
         renderedHighlightsRef,
@@ -133,10 +157,10 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         setShadowData(null);
         setIsLoading(false);
         if (viewportHeight <= 0) return;
-        void measureBoundariesInShadow(node, viewportHeight).catch((error) => {
+        void measurePaginatedBoundaries(node, viewportHeight).catch((error) => {
             console.warn('[PaginatedReader] Background block measurement failed:', error);
         });
-    }, [measureBoundariesInShadow, pageBoundariesRef, pageMapReadyRef]);
+    }, [measurePaginatedBoundaries, pageBoundariesRef, pageMapReadyRef]);
 
     const { getColumnWidth } = usePaginatedPageLayout({
         viewportRef,
@@ -150,7 +174,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         isInitialLoadRef,
         currentSpineIndexRef,
         abortPaginationMeasure,
-        measureBoundariesInShadow,
+        measureBoundariesInShadow: measurePaginatedBoundaries,
         scheduleHighlightInjection,
         setCurrentPage,
         setTotalPages,
