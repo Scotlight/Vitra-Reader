@@ -2,6 +2,11 @@ import { useEffect, useCallback, type MutableRefObject, type RefObject } from 'r
 import { releaseMediaResources } from '@/utils/mediaResourceCleanup'
 import { findTextInDOM } from '@/utils/textFinder'
 import type { PageBoundary } from '@/engine/types/vitraPagination'
+import {
+    formatPaginatedTranslateX,
+    resolvePaginatedPageCount,
+    resolvePaginatedPageFromOffset,
+} from './paginatedPageLayoutMath'
 
 interface UsePaginatedPageLayoutOptions {
     viewportRef: RefObject<HTMLDivElement | null>
@@ -54,7 +59,7 @@ export function usePaginatedPageLayout({
         const w = viewport.clientWidth
         container.style.height = `${h}px`
         container.style.transition = 'none'
-        container.style.transform = 'translateX(0)'
+        container.style.transform = formatPaginatedTranslateX(0, w)
 
         releaseMediaResources(container)
         container.appendChild(chapterNode)
@@ -62,8 +67,7 @@ export function usePaginatedPageLayout({
         requestAnimationFrame(() => {
             if (w <= 0) return
             const boundaries = pageBoundariesRef.current ?? []
-            const rawPages = container.scrollWidth / w
-            const pages = Math.max(1, Math.ceil(rawPages - 0.001))
+            const pages = resolvePaginatedPageCount(container.scrollWidth, w)
             const logicalPages = Math.max(1, boundaries.length || pages)
             if (Math.abs(logicalPages - pages) >= 3) {
                 console.warn(
@@ -88,8 +92,8 @@ export function usePaginatedPageLayout({
                 if (range) {
                     const rect = range.getBoundingClientRect()
                     const containerRect = container.getBoundingClientRect()
-                    targetPage = Math.floor((rect.left - containerRect.left + container.scrollLeft) / w)
-                    targetPage = Math.max(0, Math.min(targetPage, pages - 1))
+                    const offsetX = rect.left - containerRect.left + container.scrollLeft
+                    targetPage = resolvePaginatedPageFromOffset(offsetX, w, pages)
                 }
             }
 
@@ -102,7 +106,7 @@ export function usePaginatedPageLayout({
             setCurrentPage(targetPage)
             currentPageRef.current = targetPage
             setDisplayPage(targetPage)
-            container.style.transform = `translateX(${-targetPage * w}px)`
+            container.style.transform = formatPaginatedTranslateX(targetPage, w)
 
             requestAnimationFrame(() => {
                 container.style.transition = ''
@@ -149,9 +153,8 @@ export function usePaginatedPageLayout({
                 if (disposed || w <= 0 || h <= 0) return
 
                 container.style.height = `${h}px`
-                const pages = Math.max(1, Math.ceil(container.scrollWidth / w))
-                const anchorBasedPage = Math.floor(anchorX / w)
-                const nextPage = Math.max(0, Math.min(anchorBasedPage, pages - 1))
+                const pages = resolvePaginatedPageCount(container.scrollWidth, w)
+                const nextPage = resolvePaginatedPageFromOffset(anchorX, w, pages)
 
                 setTotalPages(pages)
                 totalPagesRef.current = pages
@@ -160,7 +163,7 @@ export function usePaginatedPageLayout({
                 setDisplayPage(nextPage)
 
                 container.style.transition = 'none'
-                container.style.transform = `translateX(${-nextPage * w}px)`
+                container.style.transform = formatPaginatedTranslateX(nextPage, w)
                 requestAnimationFrame(() => { container.style.transition = '' })
 
                 void measureBoundariesInShadow(chapterNode, h).catch((error) => {

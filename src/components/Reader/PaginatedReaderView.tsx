@@ -11,6 +11,7 @@ import { usePaginatedProgress } from './paginatedReader/usePaginatedProgress';
 import { usePaginationMeasure } from './paginatedReader/usePaginationMeasure';
 import { usePaginatedChapterLoader } from './paginatedReader/usePaginatedChapterLoader';
 import { usePaginatedPageLayout } from './paginatedReader/usePaginatedPageLayout';
+import { formatPaginatedTranslateX } from './paginatedReader/paginatedPageLayoutMath';
 import { buildPaginatedMeasureCacheKey } from './paginatedMeasureCache';
 import { resolveReaderInternalLinkTarget } from './readerInternalLink';
 import styles from './PaginatedReaderView.module.css';
@@ -68,6 +69,11 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     currentPageRef.current = currentPage;
     totalPagesRef.current = totalPages;
 
+    const setSyncedCurrentSpineIndex = useCallback((spineIndex: number) => {
+        currentSpineIndexRef.current = spineIndex;
+        setCurrentSpineIndex(spineIndex);
+    }, []);
+
     const getHighlightContainer = useCallback((_spineIndex: number): HTMLElement | null => {
         return columnRef.current;
     }, []);
@@ -117,7 +123,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         pageBoundariesRef,
         pageMapReadyRef,
         currentSpineIndexRef,
-        setCurrentSpineIndex,
+        setCurrentSpineIndex: setSyncedCurrentSpineIndex,
         setIsLoading,
         setChapterFading,
         setShadowData,
@@ -135,7 +141,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         spineItemsRef,
         setCurrentPage,
         setDisplayPage,
-        setCurrentSpineIndex,
+        setCurrentSpineIndex: setSyncedCurrentSpineIndex,
         hideSelectionMenu: () => setSelectionMenu((previous) => ({ ...previous, visible: false })),
         loadChapter,
     });
@@ -144,7 +150,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     useEffect(() => {
         if (spineItems.length === 0) return;
         const safeIndex = Math.min(initialSpineIndex, spineItems.length - 1);
-        setCurrentSpineIndex(safeIndex);
+        setSyncedCurrentSpineIndex(safeIndex);
         loadChapter(safeIndex);
     }, [spineItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -204,11 +210,11 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     const jumpToSpine = useCallback(async (targetSpineIndex: number, searchText?: string) => {
         if (targetSpineIndex < 0 || targetSpineIndex >= spineItemsRef.current.length) return;
         pendingSearchTextRef.current = searchText || null;
-        setCurrentSpineIndex(targetSpineIndex);
+        setSyncedCurrentSpineIndex(targetSpineIndex);
         setCurrentPage(0);
         currentPageRef.current = 0;
         await loadChapter(targetSpineIndex);
-    }, [loadChapter, spineItemsRef]);
+    }, [loadChapter, setSyncedCurrentSpineIndex, spineItemsRef]);
 
     // 正文内部链接跳转（PDF 页码 / 普通 href）
     useEffect(() => {
@@ -234,7 +240,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
 
     const columnWidth = getColumnWidth();
     const colW = pageTurnMode === 'paginated-double' ? columnWidth / 2 : columnWidth;
-    const translateX = -(displayPage * columnWidth);
+    const translateX = formatPaginatedTranslateX(displayPage, columnWidth);
 
     return (
         <div className={styles.viewport} ref={viewportRef}>
@@ -272,7 +278,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
                 ref={columnRef}
                 style={{
                     columnWidth: `${colW}px`,
-                    transform: `translateX(${translateX}px)`,
+                    transform: translateX,
                 }}
             />
             {isLoading && <div className={styles.emptyState}>Loading...</div>}
