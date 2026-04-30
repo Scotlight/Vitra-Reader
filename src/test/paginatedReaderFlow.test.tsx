@@ -537,5 +537,8 @@ describe('PaginatedReaderView flow', () => {
 
         const firstPageBlock = view.container.querySelector('[data-page-index="0"]') as HTMLElement | null
         expect(firstPageBlock?.style.visibility).toBe('')
+
+        const secondHiddenPageBlock = view.container.querySelector('[data-page-index="2"]') as HTMLElement | null
+        expect(secondHiddenPageBlock?.getAttribute('data-vitra-horizontal-window')).toBe('hidden')
     })
 })

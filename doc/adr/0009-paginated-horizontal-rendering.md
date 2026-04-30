@@ -75,4 +75,5 @@
 - 不为了减少行数拆分 `PaginatedReaderView`，只外移稳定规则和可测试逻辑。
 - 清理 `columnContainer` 前必须确认要挂载的是新章节节点；同一个 `chapterNode` 已在容器内时不得调用 `releaseMediaResources`。
 - 页窗候选收集必须记录“已收集”状态，不能用候选数量是否为 0 判断是否需要重新扫描。
+- 空白页检测必须识别 `data-vitra-horizontal-window="hidden"`，页窗裁剪隐藏不能等同于真实空白页。
 - 任何延后执行的分页布局帧回调都必须带 cleanup 取消逻辑，并在执行前确认当前容器仍包含对应章节节点。
