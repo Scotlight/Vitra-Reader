@@ -34,13 +34,19 @@ export function usePaginatedHorizontalWindowing({
     const itemsRef = useRef<readonly PaginatedHorizontalWindowItem[]>([])
     const pageWidthRef = useRef(0)
     const frameRef = useRef<number | null>(null)
+    const hasCollectedItemsRef = useRef(false)
+
+    const resetWindowState = () => {
+        restorePaginatedHorizontalWindowItems(itemsRef.current)
+        itemsRef.current = []
+        pageWidthRef.current = 0
+        hasCollectedItemsRef.current = false
+    }
 
     useEffect(() => {
         return () => {
             cancelFrame(frameRef)
-            restorePaginatedHorizontalWindowItems(itemsRef.current)
-            itemsRef.current = []
-            pageWidthRef.current = 0
+            resetWindowState()
         }
     }, [chapterNode])
 
@@ -48,9 +54,7 @@ export function usePaginatedHorizontalWindowing({
         cancelFrame(frameRef)
 
         if (!shouldUsePaginatedHorizontalWindowing(totalPages)) {
-            restorePaginatedHorizontalWindowItems(itemsRef.current)
-            itemsRef.current = []
-            pageWidthRef.current = 0
+            resetWindowState()
             return
         }
 
@@ -64,10 +68,11 @@ export function usePaginatedHorizontalWindowing({
             if (pageWidth <= 0) return
 
             const pageWidthChanged = Math.abs(pageWidthRef.current - pageWidth) > PAGE_WIDTH_CHANGE_TOLERANCE_PX
-            if (itemsRef.current.length === 0 || pageWidthChanged) {
+            if (!hasCollectedItemsRef.current || pageWidthChanged) {
                 restorePaginatedHorizontalWindowItems(itemsRef.current)
                 itemsRef.current = collectPaginatedHorizontalWindowItems(container, pageWidth)
                 pageWidthRef.current = pageWidth
+                hasCollectedItemsRef.current = true
             }
 
             const pageWindow = resolvePaginatedHorizontalWindow(displayPage, totalPages)
