@@ -128,6 +128,20 @@ async function flushUi(): Promise<void> {
     }
 }
 
+function createDomRect(left: number, width: number, height = 20): DOMRect {
+    return {
+        left,
+        right: left + width,
+        top: 0,
+        bottom: height,
+        width,
+        height,
+        x: left,
+        y: 0,
+        toJSON: () => ({}),
+    } as DOMRect
+}
+
 describe('PaginatedReaderView flow', () => {
     beforeEach(() => {
         mocks.preprocessChapterContentMock.mockReset()
@@ -470,5 +484,58 @@ describe('PaginatedReaderView flow', () => {
         await flushUi()
 
         expect(mocks.startMeasureMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('大页数章节会隐藏水平页窗外的可渲染块', async () => {
+        const html = Array.from({ length: 6 }, (_, index) => (
+            `<p data-page-index="${index}">page-${index}</p>`
+        )).join('')
+
+        mocks.preprocessChapterContentMock.mockResolvedValue({
+            htmlContent: html,
+            htmlFragments: [html],
+            externalStyles: [],
+            removedTagCount: 0,
+            removedAttributeCount: 0,
+            usedFallback: false,
+            stylesScoped: true,
+            hasRenderableContent: true,
+        })
+
+        Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+            configurable: true,
+            get() { return 7200 },
+        })
+
+        vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+            const element = this
+            if (element.dataset.pageIndex) {
+                return createDomRect(Number(element.dataset.pageIndex) * 1200 + 10, 100)
+            }
+            return createDomRect(0, 7200, 800)
+        })
+
+        const provider = createProvider(undefined, {
+            extractChapterHtml: async () => html,
+        })
+
+        const view = render(
+            <PaginatedReaderView
+                provider={provider}
+                bookId="book-1"
+                pageTurnMode="paginated-single"
+                readerStyles={DEFAULT_READER_STYLES}
+            />
+        )
+
+        await flushUi()
+
+        await waitFor(() => {
+            const lastPageBlock = view.container.querySelector('[data-page-index="5"]') as HTMLElement | null
+            expect(lastPageBlock?.getAttribute('data-vitra-horizontal-window')).toBe('hidden')
+        })
+
+        const firstPageBlock = view.container.querySelector('[data-page-index="0"]') as HTMLElement | null
+        expect(firstPageBlock?.style.visibility).toBe('')
     })
 })
