@@ -28,24 +28,33 @@ Vitest 配置：
 
 ## 3. 当前测试文件矩阵
 
-当前 `src/test/` 中已确认的代表性测试：
+当前 `src/test/` 中已确认的测试：
 
 - `bookGridVirtualFlow.test.tsx`
+- `chapterHtmlCleanup.test.ts`
 - `chapterPreprocessCore.test.ts`
 - `chapterPreprocessService.test.ts`
+- `chapterSearch.test.ts`
 - `chapterTitleDetector.test.ts`
 - `contentProvider.test.ts`
 - `contentSanitizer.test.ts`
+- `flatChapterProvider.test.ts`
 - `fontFallback.test.ts`
 - `groupManagerState.test.ts`
 - `htmlSaxStream.test.ts`
 - `libraryVirtualGrid.test.ts`
+- `lingoMobiAdapter.test.ts`
 - `mathUtils.test.ts`
 - `metaVectorManager.test.ts`
+- `mobiHtmlRenderer.test.ts`
+- `mobiProvider.test.ts`
 - `mobiTextDecoding.test.ts`
 - `paginatedChapterJump.test.ts`
 - `paginatedChapterLoad.test.ts`
+- `paginatedChapterMount.test.ts`
+- `paginatedHorizontalWindowing.test.ts`
 - `paginatedMeasureCache.test.ts`
+- `paginatedPageLayoutMath.test.ts`
 - `paginatedProgress.test.ts`
 - `paginatedReaderFlow.test.tsx`
 - `pdfContentProvider.test.ts`
@@ -59,9 +68,11 @@ Vitest 配置：
 - `scrollReaderVectorFlow.test.tsx`
 - `scrollSelectionState.test.ts`
 - `scrollVectorStrategy.test.ts`
+- `spineLabel.test.ts`
 - `styleProcessor.test.ts`
 - `textFinder.test.ts`
 - `vitraCanvasMeasure.test.ts`
+- `vitraChapterCleanupIntegration.test.ts`
 - `vitraPaginator.test.ts`
 - `vitraPipeline.test.ts`
 - `vitraPosition.test.ts`
@@ -74,8 +85,9 @@ Vitest 配置：
 - 章节预处理 core / worker service / fallback。
 - VitraPipeline 预览与 warmup 降级。
 - PDF provider、页面渲染、Blob 生命周期。
+- provider 公共章节构建、章节搜索、spine 标题回退和章节 HTML 边缘清洗。
 - 滚动与分页阅读核心流程。
-- 向量化、分页、定位与测量工具链。
+- 向量化、分页、定位、测量、水平页窗裁剪和章节挂载工具链。
 - 书库虚拟列表与分组状态。
 - 阅读统计纯函数。
 - 滚动选区状态解析。
@@ -105,15 +117,14 @@ Vitest 配置：
 最近一次已执行验证：
 
 - `npm run build --silent`：通过。
-- `npx vitest run src/test/readingStatsService.test.ts`：通过，4 个用例通过；沙箱内曾遇到 `esbuild spawn EPERM`，授权到沙箱外重试后通过。
-- `npx vitest run src/test/scrollChapterFetch.test.ts`：通过，4 个用例通过。
-- `npx vitest run src/test/scrollSelectionState.test.ts`：通过，4 个用例通过；沙箱内曾遇到 `esbuild spawn EPERM`，授权到沙箱外重试后通过。
+- `npx vitest run src/test/paginatedChapterMount.test.ts src/test/paginatedHorizontalWindowing.test.ts src/test/paginatedReaderFlow.test.tsx`：通过，3 个测试文件、15 个用例通过；沙箱内曾遇到 `esbuild spawn EPERM`，授权到沙箱外重试后通过。
 
-当前构建告警：
+当前构建状态：
 
-- 仍有压缩后超过 500 kB 的 chunk。
-- `pdf-vendor-BXAeeLSZ.js` 约 `946.90 kB`。
-- `index-ZDQLdoPX.js` 约 `500.45 kB`。
+- 当前未出现 Vite chunk 超过 500 kB 告警。
+- 最大 renderer chunk 是 `pdf-legacy-vendor-Din8IpeN.js`，约 `497.43 kB`，gzip 后约 `150.46 kB`。
+- `pdf-modern-vendor-CE_K4jFx.js` 约 `445.49 kB`，gzip 后约 `131.74 kB`。
+- `index-CRnyh28p.js` 约 `277.38 kB`，gzip 后约 `84.40 kB`。
 - 未再出现 `VitraPipeline` / `VitraContentAdapter` 的 dynamic import 冲突告警。
 
 运行注意事项：
@@ -178,7 +189,17 @@ Vitest 配置：
 - 分页模式是否被连带破坏。
 - 样式注入顺序是否仍正确。
 
-### 7.3 改 `chapterPreprocess*`
+### 7.3 改分页章节挂载、测量或水平页窗
+
+必须核查：
+
+- `paginatedChapterMount.test.ts` 覆盖重复挂载和临时兄弟节点清理。
+- `paginatedHorizontalWindowing.test.ts` 覆盖页窗范围、候选元素收集和恢复。
+- `paginatedReaderFlow.test.tsx` 覆盖分页主流程。
+- 分页模式切换章节后，当前章节图片和资源没有被误清理。
+- resize 后页码、位移和高亮注入没有明显异常。
+
+### 7.4 改 `chapterPreprocess*`
 
 必须核查：
 
@@ -187,15 +208,16 @@ Vitest 配置：
 - 大章节分片与 segment metas 合理。
 - worker 路径与同步 fallback 都可用。
 
-### 7.4 改缓存层
+### 7.5 改缓存层
 
 必须核查：
 
 - 缓存命中不改变功能结果。
 - 清理逻辑不会误删仍在使用的资源。
 - 持久缓存失效时能回退到重新解析。
+- 分页测量缓存 key 变更后，字号、行高、段距、缩进、字距、对齐和页面宽度变化都会触发重新测量。
 
-### 7.5 改存储 / 设置 / 同步 / 翻译
+### 7.6 改存储 / 设置 / 同步 / 翻译
 
 必须核查：
 

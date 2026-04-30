@@ -39,7 +39,6 @@
 - `adr/*.md`：架构决策记录。
 - `plans/*.md`：当前执行计划和实施状态。
 - `requirements/*.md`：需求冻结和分析输入。
-- `recovered/`：恢复稿、历史快照、对照材料，只用于追溯。
 
 ## 快速定位
 
@@ -70,10 +69,10 @@
 - 阅读活跃时长由 `useReadingActivityTracker` 写入 `readingStatsDaily`，并由 `ReadingStatsPanel` 展示。
 - `useSettingsStore` 已持久化 `readerSettings` 与 `savedColors`，不再是纯会话态。
 - 滚动阅读内部拆到 `src/components/Reader/scrollReader/` 的 hook 族。
-- 分页高亮已经外移到 `src/components/Reader/paginatedReader/usePaginatedHighlights.ts`。
+- 分页阅读已经外移章节加载、页面布局计算、测量缓存、水平页窗裁剪、高亮、导航和进度 hook。
 - 同步 payload 构建和下载应用已经外移到 `src/stores/syncStorePayload.ts`。
 - Dexie 当前最高版本是 v6，包含 `readingStatsDaily`。
-- 自动化测试基线覆盖 PDF、分页、滚动向量流、章节预处理服务、书库虚拟列表、分组状态、阅读统计和滚动选区状态。
+- 自动化测试基线覆盖 PDF、分页、滚动向量流、章节预处理服务、章节清洗、provider 公共逻辑、书库虚拟列表、分组状态、阅读统计和滚动选区状态。
 
 ## `docs/` 与 `doc/` 的当前角色
 

@@ -22,7 +22,7 @@
 - `ReaderView` 是阅读器总入口，但主要负责 UI 组合、模式决策、阅读统计采集与子视图挂载
 - `useReaderBookSession` 负责读取 `db.books / db.bookFiles / db.progress`，并装配 `VitraPipeline` 与 `VitraContentAdapter`
 - `useReaderNavigation` 负责 TOC、搜索、`jumpTarget` 与对子阅读器 ref 的命令式派发
-- `ScrollReaderView` 与 `PaginatedReaderView` 分别承接滚动和分页模式；分页高亮已外移到 `paginatedReader/usePaginatedHighlights.ts`
+- `ScrollReaderView` 与 `PaginatedReaderView` 分别承接滚动和分页模式；分页章节加载、布局计算、测量缓存、水平页窗裁剪、高亮、导航和进度逻辑已外移到 `paginatedReader/`
 - `ScrollReaderView` 内部又拆到 `scrollReader/` 目录下的 refs、滚动处理、章节卸载和虚拟运行时 hook
 - `ShadowRenderer` 继续承担章节内容注入、样式注入、向量化渲染与延迟水合的重要职责
 
@@ -56,7 +56,7 @@
   - `openReaderProvider()` 内部创建 `VitraPipeline`，调用 `open({ buffer, filename })`
   - `VitraPipeline.open()` 先 `detectVitraFormat()`，再选择 parser，并返回带 `ready / metadata / preview / cancel` 的 handle
   - 对 provider 兼容格式，`VitraProviderBackedParser.parse()` 会并行装配 provider 与 metadata，随后执行 `provider.init()`
-  - `createSections()` 把 `extractChapterHtml()`、`extractChapterStyles()`、`unloadChapter()` 桥接成 `VitraBookSection`
+  - `providerSectionFactory` 把 `extractChapterHtml()`、`extractChapterStyles()`、`unloadChapter()` 桥接成 `VitraBookSection`
   - `ReaderView` 获得 `VitraBook` 后，再由 `VitraContentAdapter` 适配成 `ContentProvider`
   - 视图层最终只消费 `ContentProvider` 形态，不直接接触底层 parser
 
@@ -140,6 +140,7 @@ Vitra 当前采用五阶段管线：
 
 - 搜索索引内存缓存：`src/engine/cache/searchIndexCache.ts`
 - 资源 Blob URL 会话缓存：`src/utils/assetLoader.ts:72-137`
+- 分页测量结果缓存：`src/components/Reader/paginatedMeasureCache.ts`
 - 翻译结果缓存与 TTL：`src/services/translateService.ts`
 - 阅读设置持久化：`src/stores/useSettingsStore.ts`
 - 阅读统计日聚合：`src/services/readingStatsService.ts`
@@ -181,6 +182,7 @@ Vitra 当前采用五阶段管线：
 - Shadow 渲染中的向量化/延迟水合逻辑变更
 - IndexedDB schema、settings key 设计、缓存排除格式策略变更
 - CSS scope 逻辑变更
+- 分页测量缓存 key、页窗裁剪条件和章节 DOM 挂载清理策略变更
 - `BookFormat`（小写）与 `VitraBookFormat`（大写）之间的映射层变更：`src/engine/core/contentProvider.ts`, `src/engine/core/vitraFormatDetector.ts`, `src/engine/parsers/vitraProviderParsers.ts:39-53`
 
 这些改动必须同步更新模块文档；涉及持久化、同步协议或公共约束时还要更新 ADR。

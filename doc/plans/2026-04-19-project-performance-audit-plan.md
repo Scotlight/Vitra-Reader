@@ -12,7 +12,7 @@
 
 - 性能问题集中在同步 payload、分页高亮、书库元数据、分组状态、构建分包和滚动样式键计算。
 - 这些点同时影响大数据量、可维护性和回归风险，收益高于按行数拆文件。
-- `ScrollReaderView` 属于可深度模块化对象；`PaginatedReaderView` 当前问题主要在高亮策略，适合轻度外移。
+- `ScrollReaderView` 属于可深度模块化对象；`PaginatedReaderView` 保持轻度外移策略，稳定规则、可测试逻辑和性能热点进入专职 hook 或纯函数。
 
 未采用方案：
 
@@ -43,9 +43,9 @@
 
 原因：这些改动会改变同步协议或远端兼容边界，需单独确认。
 
-### 2. P1：分页高亮查询优化
+### 2. P1：分页渲染与高亮查询优化
 
-状态：已完成第一阶段。
+状态：已完成第一阶段，并补充分页测量与水平渲染治理。
 
 已落地：
 
@@ -53,6 +53,10 @@
 - 使用 `db.highlights.where('bookId').equals(bookId).count()` 判断缓存是否失效。
 - 使用 `groupedBySpine` 缓存章节级高亮。
 - 高亮注入进入 idle task，减少同步阻塞。
+- 分页测量结果按书籍、章节、视口和排版参数缓存。
+- 页数、页码约束和水平位移格式化收敛到 `paginatedPageLayoutMath.ts`。
+- 水平页窗裁剪收敛到 `paginatedHorizontalWindowing.ts` 与 `usePaginatedHorizontalWindowing.ts`。
+- 章节节点挂载保护收敛到 `paginatedChapterMount.ts`，避免重复挂载或临时兄弟节点误清理当前章节媒体资源。
 
 仍未做：
 
@@ -105,13 +109,14 @@
 
 - `npm run build --silent` 通过。
 - 未再出现 `VitraPipeline` / `VitraContentAdapter` 的 dynamic import 冲突告警。
-- 仍存在 `chunk > 500 kB` 告警。
-- `pdf-vendor` 仍约 `946.90 kB`。
-- 一个 `index` chunk 仍约 `500.45 kB`。
+- 当前未出现 Vite chunk 超过 500 kB 告警。
+- 最大 renderer chunk 是 `pdf-legacy-vendor-Din8IpeN.js`，约 `497.43 kB`。
+- `pdf-modern-vendor-CE_K4jFx.js` 约 `445.49 kB`。
+- 主入口 chunk `index-CRnyh28p.js` 约 `277.38 kB`。
 
 仍未做：
 
-- 进一步拆分 PDF vendor。
+- 进一步拆分 PDF modern / legacy vendor。
 - 调整 `manualChunks` 或引入更细粒度的按需入口。
 
 原因：当前构建已消除动态导入冲突告警；进一步分包需要更细的启动性能指标和真实设备验证。
@@ -137,9 +142,7 @@
 最近一次验证结果：
 
 - `npm run build --silent`：通过。
-- `npx vitest run src/test/readingStatsService.test.ts`：通过；沙箱内曾遇到 `esbuild spawn EPERM`，授权到沙箱外重试后通过。
-- `npx vitest run src/test/scrollChapterFetch.test.ts`：通过。
-- `npx vitest run src/test/scrollSelectionState.test.ts`：通过；沙箱内 `esbuild spawn EPERM` 后，授权沙箱外重试通过。
+- `npx vitest run src/test/paginatedChapterMount.test.ts src/test/paginatedHorizontalWindowing.test.ts src/test/paginatedReaderFlow.test.tsx`：通过，3 个测试文件、15 个用例通过；沙箱内曾遇到 `esbuild spawn EPERM`，授权到沙箱外重试后通过。
 
 测试边界：
 

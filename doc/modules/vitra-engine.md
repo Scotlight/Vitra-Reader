@@ -12,6 +12,7 @@
 - `src/engine/render/metaVectorManager.ts`
 - `src/components/Reader/ShadowRenderer.tsx`
 - `src/components/Reader/scrollReader/`
+- `src/components/Reader/paginatedReader/`
 
 ## 2. 核心职责
 
@@ -92,7 +93,10 @@ Worker 侧：
 分页模式：
 
 - `PaginatedReaderView` 仍通过 `ShadowRenderer` 渲染完整章节供测量。
-- 高亮注入已经外移到 `usePaginatedHighlights()`。
+- `usePaginationMeasure()` 负责离屏测量和分页测量缓存读写。
+- `usePaginatedPageLayout()` 负责章节节点挂载、页数计算、水平位移和 resize 重新布局。
+- `usePaginatedHorizontalWindowing()` 只对页窗外候选元素做 `visibility` 裁剪，不删除 DOM。
+- `usePaginatedHighlights()` 负责高亮注入和选区检测。
 
 边界：
 
@@ -105,6 +109,10 @@ Worker 侧：
 已落地的性能治理点：
 
 - `useChapterLoader` 不再高频使用 `JSON.stringify(readerStyles)` 作为样式键，改为稳定字段拼接键。
+- 分页测量结果按书籍、章节、视口和排版参数缓存，减少章节回访与 resize 后的重复离屏测量。
+- 分页页数、页码约束和水平位移格式化已经收敛到纯函数。
+- 分页水平页窗裁剪只隐藏页窗外可渲染块，避免把分页主路径改成按页挂载 DOM。
+- 分页章节挂载会保护当前章节节点，避免重复挂载或临时兄弟节点导致媒体资源被误清理。
 - 分页高亮注入使用章节级缓存和 `count()` 失效校验，避免每次注入都重复分组整本高亮。
 - 书库元数据读取拆为核心元数据与注释详情两层；详情只在 notes / highlight 视图需要时读取。
 - 分组状态保存使用字段级比较和清洗逻辑，不再依赖整块 `JSON.stringify`。
@@ -145,6 +153,7 @@ Worker 侧：
 - `npx vitest run src/test/chapterPreprocessService.test.ts`
 - `npx vitest run src/test/scrollChapterFetch.test.ts`
 - `npx vitest run src/test/paginatedProgress.test.ts`
+- `npx vitest run src/test/paginatedChapterMount.test.ts src/test/paginatedHorizontalWindowing.test.ts src/test/paginatedReaderFlow.test.tsx`
 
 涉及高亮或选区时补充：
 

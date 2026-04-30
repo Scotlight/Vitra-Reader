@@ -93,17 +93,22 @@
 
 1. `ReaderView` 基于 `bookFormat + settings.pageTurnMode` 计算 `resolveReaderRenderMode()`。
 2. 固定布局格式只允许 `paginated-single`；可重排格式允许单页、双页和连续滚动。
-3. `PaginatedReaderView` 接收 `paginated-single | paginated-double`，决定列宽、翻页布局和测量容器。
-4. 分页路径仍通过 `ShadowRenderer` 渲染完整章节供分页测量。
-5. 阅读器内设置面板通过 `ReaderModeSettings` 写 `settings.updateSetting('pageTurnMode', ...)`，触发重新决策。
-6. 书库设置面板也写同一设置项。
-7. 分页高亮已经抽到 `usePaginatedHighlights()`，采用章节级缓存加总数失效校验。
+3. `PaginatedReaderView` 接收 `paginated-single | paginated-double`，装配章节加载、分页测量、导航、高亮和进度 hook。
+4. `usePaginatedChapterLoader()` 读取章节 HTML / styles，执行章节预处理，并把预处理结果传给 `ShadowRenderer`。
+5. 分页路径仍通过 `ShadowRenderer` 渲染完整章节供 CSS columns 排版和分页测量。
+6. `usePaginationMeasure()` 先按书籍、章节、视口和排版参数查询 `paginatedMeasureCache`，未命中时再启动离屏测量。
+7. `usePaginatedPageLayout()` 负责章节节点挂载、页数计算、页码约束、水平位移和 resize 后的重新布局。
+8. `mountPaginatedChapterNode()` 在清理容器前保护当前章节节点，避免重复挂载或临时兄弟节点导致当前章节媒体资源被误清理。
+9. `usePaginatedHorizontalWindowing()` 在页数达到阈值后按当前页加 overscan 隐藏页窗外可渲染块，只改变 `visibility`，不删除 DOM。
+10. `usePaginatedHighlights()` 采用章节级缓存加总数失效校验，负责分页高亮和选区检测。
+11. 阅读器内设置面板通过 `ReaderModeSettings` 写 `settings.updateSetting('pageTurnMode', ...)`，触发重新决策；书库设置面板也写同一设置项。
 
 边界：
 
 - 分页模式不复用只适用于滚动模式的假设。
-- 分页主组件当前不是重灾区，后续只做轻度外移，避免过度模块化。
-- 高亮注入重点关注查询策略和缓存失效，而不是把主组件拆成大量小文件。
+- 分页模式保留“整章 DOM + CSS columns + 水平位移”主路径，不按页窗口化挂载 DOM。
+- 页窗裁剪只降低绘制和命中测试成本，不释放 DOM 或资源。
+- 分页路径新增职责优先外移为小型 hook 或纯函数，但不为了减少行数拆分主组件。
 
 ## 8. 搜索与跳转
 
