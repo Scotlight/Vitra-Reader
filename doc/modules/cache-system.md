@@ -7,6 +7,7 @@
 - `src/engine/cache/vitraBookCache.ts`
 - `src/engine/cache/vitraSectionManager.ts`
 - `src/engine/cache/searchIndexCache.ts`
+- `src/components/Reader/paginatedMeasureCache.ts`
 - `src/utils/styleProcessor.ts`
 - `src/utils/assetLoader.ts`
 - `src/engine/pipeline/vitraContentAdapter.ts`
@@ -33,11 +34,12 @@
 - scope CSS 结果缓存。
 - 搜索索引内存缓存。
 - 分页高亮章节级缓存。
+- 分页测量结果缓存。
 
 约束：
 
 - L1 缓存必须有明确的失效或销毁入口。
-- 搜索索引、分页高亮缓存和 Blob URL 不得写入 `db.settings`。
+- 搜索索引、分页高亮缓存、分页测量缓存和 Blob URL 不得写入 `db.settings`。
 
 ### 3.2 L2：LRU section 管理
 
@@ -124,7 +126,22 @@
 - 当前没有章节索引，仍需首次读取该书全部高亮。
 - 新增章节索引需要 Dexie schema 升级，不应作为小改动直接推进。
 
-## 7. 修改约束
+## 7. 分页测量缓存
+
+分页测量缓存位于 `paginatedMeasureCache.ts`，由 `usePaginationMeasure()` 和 `PaginatedReaderView` 共同使用：
+
+- cache key 包含 `bookId`、`spineIndex`、视口宽高、翻页模式和排版字段。
+- 读取命中后会克隆 `PageBoundary[]` 并刷新 LRU 顺序。
+- 写入时同样克隆边界数组，默认最多保留 24 个条目。
+- 空边界、无效 key 不写入缓存。
+
+约束：
+
+- 缓存只能作为性能优化，命中后必须保持分页语义不变。
+- 修改 key 字段时，需要同步评估字体、行高、段距、缩进、字距、对齐和页面宽度是否仍能覆盖分页差异。
+- 缓存不进入 `db.settings`，不参加 WebDAV 同步。
+
+## 8. 修改约束
 
 - 缓存命中不能改变外部行为。
 - 释放资源必须与淘汰或销毁行为绑定。
@@ -132,7 +149,7 @@
 - 不得对所有格式统一启用持久缓存。
 - 新增缓存必须同时写清楚 key、失效条件、清理入口和同步边界。
 
-## 8. 高风险点
+## 9. 高风险点
 
 - LRU 淘汰条件与阈值。
 - `revokeObjectURL` 释放时机。
@@ -141,14 +158,16 @@
 - 样式缓存冲突。
 - 搜索索引与书籍生命周期脱节。
 - 分页高亮缓存失效条件不充分。
+- 分页测量缓存 key 缺少影响排版的字段，导致页码或跳转位置漂移。
 
-## 9. 当前已确认事实
+## 10. 当前已确认事实
 
 - `VitraBookCache.getHash()` 当前已经通过 `computeBufferHash()` 计算 SHA-256，并用 `WeakMap<ArrayBuffer, string>` 缓存结果；旧的递归风险描述不再适用。
 - `VitraBookCache` 直接存 `ArrayBuffer` 压缩结果，避免把 `Uint8Array` 展开成 `number[]` 带来的存储膨胀。
 - `syncStorePayload.ts` 会过滤 `vcache-` 前缀，避免本地持久缓存进入 WebDAV 备份。
+- `paginatedMeasureCache.ts` 是会话内 LRU 缓存，不写入 IndexedDB，也不参与 WebDAV 同步。
 
-## 10. 推荐排查路径
+## 11. 推荐排查路径
 
 - 页面重复渲染：先看 PDF 页面缓存或章节 HTML 缓存。
 - 长时间阅读内存上涨：先看 `VitraSectionManager.destroy()`、PDF `clearPageCaches()` 与 asset session 释放。
@@ -156,3 +175,4 @@
 - 样式处理慢：先看 scope CSS 缓存。
 - 搜索首查慢或命中异常：先看 `scheduleIdleIndexBuild()` 与 `searchIndexCache`。
 - 分页高亮注入慢：先看 `usePaginatedHighlights()` 的 count 失效与 `groupedBySpine` 缓存。
+- 分页重复离屏测量或 resize 后明显变慢：先看 `buildPaginatedMeasureCacheKey()` 与 `usePaginationMeasure()` 的读写路径。

@@ -33,9 +33,9 @@
 
    未完成项：增量上传、本地脏标记、压缩、分片上传。
 
-2. 高风险：分页高亮注入重复读取和分组整本高亮。
+2. 高风险：分页高亮注入重复读取和分组整本高亮；后续分页测量和水平渲染也需要避免重复计算。
 
-   当前状态：已完成第一阶段治理。分页高亮已经外移到 `src/components/Reader/paginatedReader/usePaginatedHighlights.ts`，采用 `count()` 失效校验和 `groupedBySpine` 缓存。
+   当前状态：已完成第一阶段治理。分页高亮已经外移到 `src/components/Reader/paginatedReader/usePaginatedHighlights.ts`，采用 `count()` 失效校验和 `groupedBySpine` 缓存。分页测量缓存、页面布局纯函数、水平页窗裁剪和章节挂载保护也已落到 `src/components/Reader/paginatedReader/` 与 `src/components/Reader/paginatedMeasureCache.ts`。
 
    未完成项：为高亮新增章节索引；该项需要 Dexie schema 升级。
 
@@ -51,11 +51,11 @@
 
    未完成项：独立版本号字段。
 
-5. 中风险：构建产物体积偏大，存在 chunk > 500 kB。
+5. 中风险：构建产物体积偏大，历史上存在 chunk > 500 kB。
 
-   当前状态：部分完成。最近一次 `npm run build --silent` 通过；未再出现 `VitraPipeline` / `VitraContentAdapter` 的 dynamic import 冲突告警。
+   当前状态：第一阶段已完成。最近一次 `npm run build --silent` 通过；未再出现 `VitraPipeline` / `VitraContentAdapter` 的 dynamic import 冲突告警，也未出现 Vite chunk 超过 500 kB 告警。
 
-   未完成项：`pdf-vendor` 仍约 `946.90 kB`，一个 `index` chunk 仍约 `500.45 kB`，Vite 仍有大 chunk 告警。
+   未完成项：PDF modern / legacy vendor 仍是最大体积来源，最大 chunk 为 `pdf-legacy-vendor-Din8IpeN.js`，约 `497.43 kB`。
 
 6. 低中风险：滚动章节加载中高频样式键计算成本偏高。
 
@@ -70,7 +70,5 @@
 
 ## 已验证记录
 
-- `npm run build --silent`：通过，仍有大 chunk 告警。
-- `npx vitest run src/test/readingStatsService.test.ts`：通过。
-- `npx vitest run src/test/scrollChapterFetch.test.ts`：通过。
-- `npx vitest run src/test/scrollSelectionState.test.ts`：通过。
+- `npm run build --silent`：通过，当前未出现 Vite chunk 超过 500 kB 告警。
+- `npx vitest run src/test/paginatedChapterMount.test.ts src/test/paginatedHorizontalWindowing.test.ts src/test/paginatedReaderFlow.test.tsx`：通过，3 个测试文件、15 个用例通过；沙箱内曾遇到 `esbuild spawn EPERM`，授权到沙箱外重试后通过。

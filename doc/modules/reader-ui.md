@@ -103,19 +103,37 @@ Reader UI 层负责：
 
 ## 6. PaginatedReaderView
 
-`PaginatedReaderView` 当前不是最重灾区，保持轻度外移策略。
+`PaginatedReaderView` 保留主组件调度角色，分页链路中的稳定规则和可测试逻辑已经外移到 `src/components/Reader/paginatedReader/`。
 
 当前职责：
 
 - 分页模式布局与翻页体验。
-- 章节预处理、离屏测量和分页容器协同。
+- 章节预处理、离屏测量、分页容器和水平位移协同。
 - 通过 `jumpToSpine()` 暴露命令式跳章接口。
 - 写回分页模式阅读进度。
 - 通过 `ShadowRenderer` 渲染完整章节供分页测量。
 
-已经外移的职责：
+### 6.1 子目录职责矩阵
 
-- `usePaginatedHighlights()`：分页高亮和选区检测。
+| 文件 | 职责 |
+| --- | --- |
+| `usePaginatedChapterLoader.ts` | 读取 spine、加载章节、执行预处理、处理空章节回退。 |
+| `usePaginationMeasure.ts` | 分页离屏测量、测量任务取消、分页测量结果缓存读写。 |
+| `usePaginatedPageLayout.ts` | 章节节点挂载、页数计算、页码约束、水平位移和 resize 重新布局。 |
+| `paginatedChapterMount.ts` | 保护当前章节节点，清理旧容器内容，避免重复挂载误清理媒体资源。 |
+| `paginatedPageLayoutMath.ts` | 页数、页码和 `translateX` 相关纯函数。 |
+| `paginatedHorizontalWindowing.ts` | 计算水平页窗和候选元素隐藏规则。 |
+| `usePaginatedHorizontalWindowing.ts` | 按当前页加 overscan 应用 `visibility` 级别的页窗裁剪。 |
+| `usePaginatedNavigation.ts` | 翻页、跨章节跳转和空白页规避。 |
+| `usePaginatedHighlights.ts` | 分页高亮、选区检测和章节级高亮缓存。 |
+| `usePaginatedProgress.ts` | 分页阅读进度计算与回调。 |
+
+### 6.2 当前性能策略
+
+- 分页测量结果按书籍、章节、视口和排版参数缓存，避免章节回访和 resize 后重复离屏测量。
+- 页面数量、页码约束和水平位移格式化集中在纯函数中维护。
+- 水平页窗裁剪只隐藏页窗外候选元素，不移动、不删除 DOM 节点。
+- 章节节点重复挂载时先判断是否已经独占挂载；同一章节节点旁有临时兄弟节点时，先移出当前章节再清理兄弟节点。
 - 高亮链路采用 `db.highlights.where('bookId').equals(bookId).count()` 做失效校验，缓存 `groupedBySpine`，避免每次章节注入都重复分组整本高亮。
 
 约束：
@@ -123,6 +141,8 @@ Reader UI 层负责：
 - 不要按行数硬拆 `PaginatedReaderView`。
 - 分页路径新增职责先判断是否能轻度外移为 hook。
 - 与滚动模式共享的能力不应复制实现。
+- 分页模式不复用连续滚动的 segment DOM pool。
+- 修改章节挂载、页窗裁剪或测量缓存后，至少执行分页挂载、水平页窗和分页主流程相关测试。
 
 ## 7. ShadowRenderer
 
@@ -145,7 +165,7 @@ Reader UI 层负责：
 - 不要把缓存释放策略散落到多个 UI 组件中。
 - 不要在模式组件内复制公共渲染管线逻辑。
 - 子阅读器应保持统一契约：`provider`、初始定位参数、`readerStyles`、进度/章节回调、`jumpToSpine()`。
-- `ScrollReaderView` 可以继续深度模块化；`PaginatedReaderView` 保持轻度外移。
+- `ScrollReaderView` 可以继续深度模块化；`PaginatedReaderView` 保持主组件调度加专职 hook 的轻度外移结构。
 - 新增阅读统计 UI 时，展示层应从 `readingStatsService` 获取聚合结果，不直接遍历底层表实现统计逻辑。
 
 ## 9. 高风险点

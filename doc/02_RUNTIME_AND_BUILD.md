@@ -46,17 +46,19 @@
 
 结果：通过。
 
-当前仍存在的构建告警：
+当前构建产物边界：
 
-- Vite 仍提示部分 chunk 在压缩后超过 500 kB。
-- `pdf-vendor-BXAeeLSZ.js` 约 `946.90 kB`。
-- `index-ZDQLdoPX.js` 约 `500.45 kB`。
+- 当前未出现 Vite chunk 超过 500 kB 告警。
+- 最大 renderer chunk 是 `pdf-legacy-vendor-Din8IpeN.js`，约 `497.43 kB`，gzip 后约 `150.46 kB`。
+- `pdf-modern-vendor-CE_K4jFx.js` 约 `445.49 kB`，gzip 后约 `131.74 kB`。
+- 主入口 chunk `index-CRnyh28p.js` 约 `277.38 kB`，gzip 后约 `84.40 kB`。
 
 当前已消失的告警：
 
+- Vite chunk 超过 500 kB 告警。
 - 未再出现 `VitraPipeline` / `VitraContentAdapter` 同时静态导入与动态导入导致分包不生效的告警。
 
-结论：构建可用，但大 chunk 告警仍是性能治理项，不应写成已经解决。
+结论：构建可用，PDF runtime vendor 仍是最大体积来源，但当前构建没有超过 500 kB 的 Vite chunk 告警。
 
 ## 5. 测试运行注意事项
 

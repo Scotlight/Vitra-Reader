@@ -51,7 +51,7 @@
 - `src/components/Library/`：书库、导入、书架、注释列表等入口 UI
 - `src/components/Reader/`：阅读器 UI 组件与 Shadow 渲染相关实现
 - `src/components/Reader/scrollReader/`：滚动阅读模式下的 refs、滚动处理、章节卸载、虚拟章节运行时等局部 hook
-- `src/components/Reader/paginatedReader/`：分页阅读模式下的高亮与局部外移 hook
+- `src/components/Reader/paginatedReader/`：分页阅读模式下的章节加载、测量缓存、页面布局、水平页窗裁剪、高亮、导航与进度 hook
 - `src/engine/`：内容解析、缓存、预处理、渲染与适配主干
 - `src/services/`：Dexie、翻译、阅读统计、系统桥接等服务层
 - `src/stores/`：Zustand 状态、设置持久化与同步调度
@@ -96,6 +96,9 @@
 - `src/engine/pipeline/vitraPipeline.ts`
 - `src/engine/pipeline/vitraContentAdapter.ts`
 - `src/engine/parsers/providers/pdfProvider.ts`
+- `src/engine/parsers/providerSectionFactory.ts`
+- `src/engine/parsers/providers/flatChapterProvider.ts`
+- `src/engine/parsers/providers/chapterSearch.ts`
 - `src/engine/parsers/providers/mobiParser.ts`
 - `src/engine/parsers/providers/mobiTextDecoding.ts`
 - `src/engine/parsers/vitraDocxParser.ts`
@@ -109,7 +112,7 @@
 - 在 provider 兼容格式上通过 `providerRegistry` 装配内容提供者与元数据解析器
 - 在 DOCX、漫画归档等格式上走独立 parser，而不是强行复用 provider 路径
 - 为 PDF 提供独立页面渲染与链接提取逻辑
-- 为非 PDF 格式提供通用适配路径
+- 为非 PDF 格式提供通用适配路径，平铺章节 provider、章节搜索和 section factory 已收敛为共享实现
 
 ### 4.3 Vitra 渲染引擎子系统
 
@@ -133,6 +136,7 @@
 
 - `src/engine/cache/vitraBookCache.ts`
 - `src/engine/cache/vitraSectionManager.ts`
+- `src/components/Reader/paginatedMeasureCache.ts`
 - `src/services/storageService.ts`
 - `src/stores/useSyncStore.ts`
 - `src/stores/syncStorePayload.ts`
@@ -144,6 +148,7 @@
 职责：
 
 - 管理章节 HTML、页面 HTML、Blob URL 与样式处理结果
+- 管理分页测量结果的会话内 LRU 缓存
 - 对适合的格式提供 IndexedDB 持久缓存
 - 通过 LRU 控制内存占用与 URL 回收
 - 承载 Dexie 表结构、阅读设置持久化、WebDAV 同步状态、阅读统计、翻译结果缓存与敏感配置加密边界
