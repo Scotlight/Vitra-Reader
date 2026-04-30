@@ -11,6 +11,7 @@ import { usePaginatedProgress } from './paginatedReader/usePaginatedProgress';
 import { usePaginationMeasure } from './paginatedReader/usePaginationMeasure';
 import { usePaginatedChapterLoader } from './paginatedReader/usePaginatedChapterLoader';
 import { usePaginatedPageLayout } from './paginatedReader/usePaginatedPageLayout';
+import { usePaginatedHorizontalWindowing } from './paginatedReader/usePaginatedHorizontalWindowing';
 import { formatPaginatedTranslateX } from './paginatedReader/paginatedPageLayoutMath';
 import { buildPaginatedMeasureCacheKey } from './paginatedMeasureCache';
 import { resolveReaderInternalLinkTarget } from './readerInternalLink';
@@ -192,6 +193,14 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     usePaginatedProgress({
         bookId, currentPage, currentSpineIndex, isLoading,
         onChapterChange, onProgressChange, spineItems, totalPages,
+    });
+
+    usePaginatedHorizontalWindowing({
+        viewportRef,
+        columnRef,
+        chapterNode,
+        displayPage,
+        totalPages,
     });
 
     // Reload chapter when readerStyles change
