@@ -1,5 +1,4 @@
 import { useEffect, useCallback, type MutableRefObject, type RefObject } from 'react'
-import { releaseMediaResources } from '@/utils/mediaResourceCleanup'
 import { findTextInDOM } from '@/utils/textFinder'
 import type { PageBoundary } from '@/engine/types/vitraPagination'
 import {
@@ -7,6 +6,7 @@ import {
     resolvePaginatedPageCount,
     resolvePaginatedPageFromOffset,
 } from './paginatedPageLayoutMath'
+import { mountPaginatedChapterNode } from './paginatedChapterMount'
 
 interface UsePaginatedPageLayoutOptions {
     viewportRef: RefObject<HTMLDivElement | null>
@@ -55,17 +55,28 @@ export function usePaginatedPageLayout({
         const viewport = viewportRef.current
         if (!container || !viewport || !chapterNode) return
 
+        let disposed = false
+        let layoutFrame: number | null = null
+        let transitionFrame: number | null = null
+
+        const cancelLayoutFrames = () => {
+            if (layoutFrame !== null) window.cancelAnimationFrame(layoutFrame)
+            if (transitionFrame !== null) window.cancelAnimationFrame(transitionFrame)
+            layoutFrame = null
+            transitionFrame = null
+        }
+
         const h = viewport.clientHeight
         const w = viewport.clientWidth
         container.style.height = `${h}px`
         container.style.transition = 'none'
         container.style.transform = formatPaginatedTranslateX(0, w)
 
-        releaseMediaResources(container)
-        container.appendChild(chapterNode)
+        mountPaginatedChapterNode(container, chapterNode)
 
-        requestAnimationFrame(() => {
-            if (w <= 0) return
+        layoutFrame = requestAnimationFrame(() => {
+            layoutFrame = null
+            if (disposed || w <= 0 || !container.contains(chapterNode)) return
             const boundaries = pageBoundariesRef.current ?? []
             const pages = resolvePaginatedPageCount(container.scrollWidth, w)
             const logicalPages = Math.max(1, boundaries.length || pages)
@@ -108,7 +119,9 @@ export function usePaginatedPageLayout({
             setDisplayPage(targetPage)
             container.style.transform = formatPaginatedTranslateX(targetPage, w)
 
-            requestAnimationFrame(() => {
+            transitionFrame = requestAnimationFrame(() => {
+                transitionFrame = null
+                if (disposed || !container.contains(chapterNode)) return
                 container.style.transition = ''
                 setChapterFading(false)
                 isInitialLoadRef.current = false
@@ -116,6 +129,11 @@ export function usePaginatedPageLayout({
 
             scheduleHighlightInjection(chapterNode, currentSpineIndexRef.current)
         })
+
+        return () => {
+            disposed = true
+            cancelLayoutFrames()
+        }
     }, [chapterNode, scheduleHighlightInjection]) // eslint-disable-line react-hooks/exhaustive-deps
 
     // Recalculate on resize
@@ -125,6 +143,7 @@ export function usePaginatedPageLayout({
         if (!viewport || !container || !chapterNode) return
 
         let resizeTimer: number | null = null
+        let transitionFrame: number | null = null
         let disposed = false
 
         const recalc = () => {
@@ -164,7 +183,11 @@ export function usePaginatedPageLayout({
 
                 container.style.transition = 'none'
                 container.style.transform = formatPaginatedTranslateX(nextPage, w)
-                requestAnimationFrame(() => { container.style.transition = '' })
+                if (transitionFrame !== null) window.cancelAnimationFrame(transitionFrame)
+                transitionFrame = requestAnimationFrame(() => {
+                    transitionFrame = null
+                    if (!disposed) container.style.transition = ''
+                })
 
                 void measureBoundariesInShadow(chapterNode, h).catch((error) => {
                     if (disposed) return
@@ -179,6 +202,7 @@ export function usePaginatedPageLayout({
             disposed = true
             ro.disconnect()
             if (resizeTimer) window.clearTimeout(resizeTimer)
+            if (transitionFrame !== null) window.cancelAnimationFrame(transitionFrame)
             abortPaginationMeasure()
         }
     }, [chapterNode, abortPaginationMeasure, measureBoundariesInShadow]) // eslint-disable-line react-hooks/exhaustive-deps
