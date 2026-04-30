@@ -1,0 +1,69 @@
+# ADR 0009：分页水平渲染边界
+
+## 状态
+
+已采纳。
+
+## 背景
+
+分页阅读模式当前使用 CSS columns 进行水平排版，再通过 `translateX` 切换页面。连续滚动模式才使用章节向量分段、窗口化挂载和 DOM 节点池。
+
+相关入口：
+
+- `src/components/Reader/PaginatedReaderView.tsx`
+- `src/components/Reader/paginatedReader/usePaginatedPageLayout.ts`
+- `src/components/Reader/paginatedReader/usePaginationMeasure.ts`
+- `src/components/Reader/ShadowRenderer.tsx`
+- `src/engine/render/vitraMeasure.ts`
+- `src/engine/render/vitraPaginator.ts`
+
+## 决策
+
+分页模式继续保留“整章 DOM + CSS columns + 水平位移”的主路径，不在当前阶段改成真正的横向窗口化虚拟渲染。
+
+当前阶段只做低风险优化：
+
+1. 复用分页测量缓存，减少章节回访和 resize 后的重复离屏测量。
+2. 将页面数量、页码约束、水平位移格式化等规则收敛到小型纯函数。
+3. 保持 `PaginatedReaderView` 对外接口不变。
+
+## 原因
+
+完整横向虚拟渲染需要同时处理这些边界：
+
+- CSS columns 的真实排版结果依赖完整 DOM、字体加载、图片尺寸和用户样式。
+- 目录跳转、正文内链接、选区菜单、标注定位都依赖真实 DOM 坐标。
+- 章节尾部空白页规避依赖逻辑页图和实际元素探测。
+- 双页模式把视口宽度、列宽和翻页单位耦合在一起，不能直接复用连续滚动的纵向 segment 窗口。
+
+直接把分页模式改成分段挂载，容易引入页码漂移、标注错位、目录跳转错误和图片跨页异常。
+
+## 当前性能边界
+
+已具备：
+
+- 章节内容预处理在 Worker 中执行。
+- ShadowRenderer 支持大章节分块追加。
+- 分页边界测量使用 idle 批处理。
+- 分页测量结果按书籍、章节、视口和排版参数缓存。
+
+仍未具备：
+
+- 分页模式不按页窗口化挂载 DOM。
+- 分页模式不复用连续滚动的 segment DOM pool。
+- 单个超大章节进入分页模式时，仍需要完整 DOM 参与 CSS columns 排版。
+
+## 后续触发条件
+
+只有满足以下条件，才进入真正横向虚拟渲染设计：
+
+1. 有稳定复现的超大章节分页性能问题。
+2. 已补齐目录跳转、选区、标注、双页模式的回归测试。
+3. 可以证明 segment 边界和页面边界之间存在稳定映射。
+4. 有独立实验分支，不影响现有分页主路径。
+
+## 维护规则
+
+- 分页模式优先优化测量、缓存和重复计算，不优先重写渲染模型。
+- 涉及页码、位移、页面数量的规则必须集中维护，避免散落在组件和 hook 中。
+- 不为了减少行数拆分 `PaginatedReaderView`，只外移稳定规则和可测试逻辑。

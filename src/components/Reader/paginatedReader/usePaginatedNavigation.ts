@@ -14,7 +14,7 @@ interface UsePaginatedNavigationOptions {
     spineItemsRef: MutableRefObject<SpineItemInfo[]>;
     setCurrentPage: Dispatch<SetStateAction<number>>;
     setDisplayPage: Dispatch<SetStateAction<number>>;
-    setCurrentSpineIndex: Dispatch<SetStateAction<number>>;
+    setCurrentSpineIndex: (spineIndex: number) => void;
     hideSelectionMenu: () => void;
     loadChapter: (spineIndex: number, goToLastPage?: boolean, visited?: Set<number>) => Promise<void> | void;
 }
