@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
     applyPaginatedHorizontalWindow,
     collectPaginatedHorizontalWindowItems,
+    isPaginatedHorizontalWindowHiddenElement,
     resolvePaginatedHorizontalWindow,
     restorePaginatedHorizontalWindowItems,
     shouldUsePaginatedHorizontalWindowing,
@@ -77,11 +78,13 @@ describe('paginatedHorizontalWindowing', () => {
         expect(elements[0].style.visibility).toBe('hidden')
         expect(elements[1].style.visibility).toBe('')
         expect(elements[2].getAttribute('data-vitra-horizontal-window')).toBe('hidden')
+        expect(isPaginatedHorizontalWindowHiddenElement(elements[2])).toBe(true)
 
         restorePaginatedHorizontalWindowItems(items)
 
         expect(elements[0].style.visibility).toBe('')
         expect(elements[0].style.pointerEvents).toBe('auto')
         expect(elements[2].hasAttribute('data-vitra-horizontal-window')).toBe(false)
+        expect(isPaginatedHorizontalWindowHiddenElement(elements[2])).toBe(false)
     })
 })

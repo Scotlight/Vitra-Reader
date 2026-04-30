@@ -2,6 +2,8 @@ import { clampPaginatedPage } from './paginatedPageLayoutMath'
 
 const DEFAULT_OVERSCAN_PAGES = 1
 export const DEFAULT_MIN_WINDOWED_PAGE_COUNT = 6
+export const HORIZONTAL_WINDOW_ATTR = 'data-vitra-horizontal-window'
+const HORIZONTAL_WINDOW_HIDDEN = 'hidden'
 const WINDOWED_ELEMENT_SELECTOR = [
     'p',
     'h1',
@@ -110,13 +112,17 @@ function setWindowedElementVisibility(item: PaginatedHorizontalWindowItem, visib
     if (visible) {
         item.element.style.visibility = item.originalVisibility
         item.element.style.pointerEvents = item.originalPointerEvents
-        item.element.removeAttribute('data-vitra-horizontal-window')
+        item.element.removeAttribute(HORIZONTAL_WINDOW_ATTR)
         return
     }
 
     item.element.style.visibility = 'hidden'
     item.element.style.pointerEvents = 'none'
-    item.element.setAttribute('data-vitra-horizontal-window', 'hidden')
+    item.element.setAttribute(HORIZONTAL_WINDOW_ATTR, HORIZONTAL_WINDOW_HIDDEN)
+}
+
+export function isPaginatedHorizontalWindowHiddenElement(element: HTMLElement): boolean {
+    return element.getAttribute(HORIZONTAL_WINDOW_ATTR) === HORIZONTAL_WINDOW_HIDDEN
 }
 
 export function applyPaginatedHorizontalWindow(

@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react';
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react';
 import type { SpineItemInfo } from '@/engine/core/contentProvider';
 import type { PageBoundary } from '@/engine/types/vitraPagination';
+import { shouldSkipPaginatedBlankCandidate } from './paginatedBlankDetection';
 
 interface UsePaginatedNavigationOptions {
     viewportRef: RefObject<HTMLDivElement | null>;
@@ -56,7 +57,7 @@ export function usePaginatedNavigation(options: UsePaginatedNavigationOptions) {
         for (const node of Array.from(candidates)) {
             const element = node as HTMLElement;
             const style = window.getComputedStyle(element);
-            if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity || 1) === 0) {
+            if (shouldSkipPaginatedBlankCandidate(element, style)) {
                 continue;
             }
 
