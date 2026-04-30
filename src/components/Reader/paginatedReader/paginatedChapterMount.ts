@@ -6,6 +6,12 @@ function isOnlyMountedChild(container: HTMLElement, chapterNode: HTMLElement): b
     return container.childElementCount === 1 && container.firstElementChild === chapterNode
 }
 
+function detachMountedChapter(container: HTMLElement, chapterNode: HTMLElement): boolean {
+    if (chapterNode.parentElement !== container) return false
+    container.removeChild(chapterNode)
+    return true
+}
+
 export function mountPaginatedChapterNode(
     container: HTMLElement,
     chapterNode: HTMLElement,
@@ -14,7 +20,8 @@ export function mountPaginatedChapterNode(
         return 'already-mounted'
     }
 
+    const shouldRestoreMountedChapter = detachMountedChapter(container, chapterNode)
     releaseMediaResources(container)
     container.appendChild(chapterNode)
-    return 'mounted'
+    return shouldRestoreMountedChapter ? 'already-mounted' : 'mounted'
 }

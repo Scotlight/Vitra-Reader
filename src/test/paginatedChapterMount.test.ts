@@ -31,6 +31,23 @@ describe('paginatedChapterMount', () => {
         expect(chapterNode.querySelector('img')?.getAttribute('src')).toBe('blob:cover')
     })
 
+    it('同一章节节点旁有临时兄弟节点时不会清理章节资源', () => {
+        const container = document.createElement('div')
+        const chapterNode = document.createElement('article')
+        const staleNode = document.createElement('aside')
+        chapterNode.innerHTML = '<img src="blob:cover" alt="cover" />'
+        staleNode.innerHTML = '<img src="blob:stale" alt="stale" />'
+        container.append(chapterNode, staleNode)
+
+        const result = mountPaginatedChapterNode(container, chapterNode)
+
+        expect(result).toBe('already-mounted')
+        expect(mocks.releaseMediaResourcesMock).toHaveBeenCalledTimes(1)
+        expect(container.children).toHaveLength(1)
+        expect(container.firstElementChild).toBe(chapterNode)
+        expect(chapterNode.querySelector('img')?.getAttribute('src')).toBe('blob:cover')
+    })
+
     it('新章节节点挂载前会清理旧容器内容', () => {
         const container = document.createElement('div')
         const oldNode = document.createElement('article')
