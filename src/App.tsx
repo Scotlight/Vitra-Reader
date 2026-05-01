@@ -1,11 +1,15 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useSettingsStore } from './stores/useSettingsStore'
 import { useSyncStore } from './stores/useSyncStore'
 import { LibraryView } from './components/Library/LibraryView'
-import { ReaderView } from './components/Reader/ReaderView'
 import styles from './App.module.css'
 
 type View = 'library' | 'reader'
+
+const ReaderView = lazy(async () => {
+    const module = await import('./components/Reader/ReaderView')
+    return { default: module.ReaderView }
+})
 
 function App() {
     const [currentView, setCurrentView] = useState<View>('library')
@@ -83,7 +87,9 @@ function App() {
                     <LibraryView onOpenBook={handleOpenBook} />
                 </div>
                 {currentView === 'reader' && currentBookId && (
-                    <ReaderView bookId={currentBookId} onBack={handleBackToLibrary} jumpTarget={jumpTarget} />
+                    <Suspense fallback={<div className={styles.readerLoading}>正在加载阅读器...</div>}>
+                        <ReaderView bookId={currentBookId} onBack={handleBackToLibrary} jumpTarget={jumpTarget} />
+                    </Suspense>
                 )}
             </main>
         </div>

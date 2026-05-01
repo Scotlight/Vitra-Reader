@@ -137,3 +137,12 @@
   justify-content: center;
   opacity: 0.5;
 }
+
+.readerLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+  background: var(--reader-bg);
+}
