@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
-import type { ChapterMetaVector } from '../../../engine';
-import { batchUpdateSegmentHeights } from '../../../engine';
+import type { ChapterMetaVector } from '@/engine';
+import { batchUpdateSegmentHeights } from '@/engine';
 import { SCROLL_HEDGE_EPSILON_PX } from './scrollReaderConstants';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
