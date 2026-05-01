@@ -38,6 +38,7 @@ export function usePaginatedChapterLoader({
 }: UsePaginatedChapterLoaderOptions) {
     const [spineItems, setSpineItems] = useState<SpineItemInfo[]>([])
     const spineItemsRef = useRef<SpineItemInfo[]>([])
+    const loadGenerationRef = useRef(0)
 
     useEffect(() => {
         const items = provider.getSpineItems()
@@ -53,12 +54,16 @@ export function usePaginatedChapterLoader({
         if (spineIndex < 0 || spineIndex >= spineItemsRef.current.length) return
         if (visited.has(spineIndex)) return
         visited.add(spineIndex)
+        const loadGeneration = ++loadGenerationRef.current
+        const isCurrentLoad = () => loadGeneration === loadGenerationRef.current
+
         abortPaginationMeasure()
         pendingLastPageRef.current = goToLastPage
 
         if (!isInitialLoadRef.current) {
             setChapterFading(true)
             await new Promise(resolve => setTimeout(resolve, CHAPTER_FADE_DURATION_MS))
+            if (!isCurrentLoad()) return
         }
 
         setIsLoading(true)
@@ -67,9 +72,11 @@ export function usePaginatedChapterLoader({
         renderedHighlightsRef.current.clear()
         try {
             const rawHtml = await provider.extractChapterHtml(spineIndex)
+            if (!isCurrentLoad()) return
 
             let chapterStyles: string[] = []
             try { chapterStyles = await provider.extractChapterStyles(spineIndex) } catch { /* optional */ }
+            if (!isCurrentLoad()) return
 
             const preprocessed = await preprocessChapterContent({
                 chapterId: `pch-${spineIndex}`,
@@ -78,6 +85,7 @@ export function usePaginatedChapterLoader({
                 htmlContent: rawHtml,
                 externalStyles: chapterStyles,
             })
+            if (!isCurrentLoad()) return
 
             if (!preprocessed.hasRenderableContent) {
                 const fallbackIndex = goToLastPage ? spineIndex - 1 : spineIndex + 1
@@ -96,6 +104,7 @@ export function usePaginatedChapterLoader({
                 chapterId: `pch-${spineIndex}`,
             })
         } catch (err) {
+            if (!isCurrentLoad()) return
             console.error(`[PaginatedReader] Failed to load chapter ${spineIndex}:`, err)
             pageBoundariesRef.current = []
             pageMapReadyRef.current = false

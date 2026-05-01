@@ -74,8 +74,9 @@ describe('paginatedHorizontalWindowing', () => {
         const items = collectPaginatedHorizontalWindowItems(container, 600)
         const stats = applyPaginatedHorizontalWindow(items, { startPage: 1, endPage: 1 })
 
-        expect(stats).toEqual({ total: 3, visible: 1, hidden: 2 })
+        expect(stats).toEqual({ total: 3, visible: 1, hidden: 2, dehydrated: 2, restored: 0 })
         expect(elements[0].style.visibility).toBe('hidden')
+        expect(elements[0].innerHTML).toBe('')
         expect(elements[1].style.visibility).toBe('')
         expect(elements[2].getAttribute('data-vitra-horizontal-window')).toBe('hidden')
         expect(isPaginatedHorizontalWindowHiddenElement(elements[2])).toBe(true)
@@ -84,7 +85,39 @@ describe('paginatedHorizontalWindowing', () => {
 
         expect(elements[0].style.visibility).toBe('')
         expect(elements[0].style.pointerEvents).toBe('auto')
+        expect(elements[0].innerHTML).toBe('one')
         expect(elements[2].hasAttribute('data-vitra-horizontal-window')).toBe(false)
         expect(isPaginatedHorizontalWindowHiddenElement(elements[2])).toBe(false)
+    })
+
+    it('页窗外元素会脱水子 DOM 与媒体资源，回到页窗后恢复', () => {
+        const container = document.createElement('div')
+        container.innerHTML = '<figure><img src="blob:cover" srcset="blob:cover2 2x" alt="cover"><figcaption>cover</figcaption></figure>'
+        const figure = container.querySelector('figure') as HTMLElement
+        const image = figure.querySelector('img') as HTMLImageElement
+
+        mockRect(container, rect(0, 1200, 800))
+        mockRect(figure, rect(650, 200, 120))
+
+        const items = collectPaginatedHorizontalWindowItems(container, 600)
+        const hiddenStats = applyPaginatedHorizontalWindow(items, { startPage: 0, endPage: 0 })
+
+        expect(hiddenStats.dehydrated).toBe(1)
+        expect(figure.innerHTML).toBe('')
+        expect(image.getAttribute('src')).toBeNull()
+        expect(figure.style.minHeight).toBe('120px')
+        expect(figure.getAttribute('data-vitra-horizontal-window')).toBe('hidden')
+
+        let restored = false
+        const visibleStats = applyPaginatedHorizontalWindow(items, { startPage: 1, endPage: 1 }, {
+            onRestored: () => { restored = true },
+        })
+
+        expect(visibleStats.restored).toBe(1)
+        expect(restored).toBe(true)
+        expect(figure.innerHTML).toContain('figcaption')
+        expect(figure.querySelector('img')?.getAttribute('src')).toBe('blob:cover')
+        expect(figure.querySelector('img')?.getAttribute('srcset')).toBe('blob:cover2 2x')
+        expect(figure.style.minHeight).toBe('')
     })
 })

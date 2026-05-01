@@ -16,6 +16,8 @@ interface UsePaginatedHorizontalWindowingOptions {
     chapterNode: HTMLElement | null
     displayPage: number
     totalPages: number
+    currentSpineIndex: number
+    scheduleHighlightInjection?: (node: HTMLElement, spineIndex: number) => void
 }
 
 function cancelFrame(frameRef: MutableRefObject<number | null>): void {
@@ -30,6 +32,8 @@ export function usePaginatedHorizontalWindowing({
     chapterNode,
     displayPage,
     totalPages,
+    currentSpineIndex,
+    scheduleHighlightInjection,
 }: UsePaginatedHorizontalWindowingOptions): void {
     const itemsRef = useRef<readonly PaginatedHorizontalWindowItem[]>([])
     const pageWidthRef = useRef(0)
@@ -76,11 +80,15 @@ export function usePaginatedHorizontalWindowing({
             }
 
             const pageWindow = resolvePaginatedHorizontalWindow(displayPage, totalPages)
-            applyPaginatedHorizontalWindow(itemsRef.current, pageWindow)
+            applyPaginatedHorizontalWindow(itemsRef.current, pageWindow, {
+                onRestored: () => {
+                    scheduleHighlightInjection?.(chapterNode, currentSpineIndex)
+                },
+            })
         })
 
         return () => {
             cancelFrame(frameRef)
         }
-    }, [chapterNode, columnRef, displayPage, totalPages, viewportRef])
+    }, [chapterNode, columnRef, currentSpineIndex, displayPage, scheduleHighlightInjection, totalPages, viewportRef])
 }

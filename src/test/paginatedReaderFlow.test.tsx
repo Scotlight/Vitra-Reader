@@ -142,6 +142,16 @@ function createDomRect(left: number, width: number, height = 20): DOMRect {
     } as DOMRect
 }
 
+function createDeferred<T>() {
+    let resolve!: (value: T) => void
+    let reject!: (error: unknown) => void
+    const promise = new Promise<T>((promiseResolve, promiseReject) => {
+        resolve = promiseResolve
+        reject = promiseReject
+    })
+    return { promise, resolve, reject }
+}
+
 describe('PaginatedReaderView flow', () => {
     beforeEach(() => {
         mocks.preprocessChapterContentMock.mockReset()
@@ -425,6 +435,70 @@ describe('PaginatedReaderView flow', () => {
         await waitFor(() => {
             expect(provider.extractChapterHtml).toHaveBeenNthCalledWith(2, 1)
         })
+    })
+
+    it('快速连续跳转时旧章节加载结果不会覆盖新章节', async () => {
+        const firstChapter = createDeferred<string>()
+        const secondChapter = createDeferred<string>()
+        const readerRef = createRef<PaginatedReaderHandle>()
+
+        mocks.preprocessChapterContentMock.mockImplementation(async ({ htmlContent, spineIndex }) => ({
+            htmlContent,
+            htmlFragments: [htmlContent],
+            externalStyles: [],
+            removedTagCount: 0,
+            removedAttributeCount: 0,
+            usedFallback: false,
+            stylesScoped: true,
+            hasRenderableContent: true,
+            spineIndex,
+        }))
+
+        const provider = createProvider([
+            { index: 0, href: 'chapter-1.xhtml', id: 'chapter-1', linear: true },
+            { index: 1, href: 'chapter-2.xhtml', id: 'chapter-2', linear: true },
+        ], {
+            extractChapterHtml: (spineIndex) => (
+                spineIndex === 0
+                    ? firstChapter.promise
+                    : secondChapter.promise
+            ),
+        })
+
+        const view = render(
+            <PaginatedReaderView
+                ref={readerRef}
+                provider={provider}
+                bookId="book-1"
+                pageTurnMode="paginated-single"
+                readerStyles={DEFAULT_READER_STYLES}
+            />
+        )
+
+        await waitFor(() => {
+            expect(provider.extractChapterHtml).toHaveBeenCalledWith(0)
+        })
+
+        await act(async () => {
+            void readerRef.current?.jumpToSpine(1)
+        })
+
+        await waitFor(() => {
+            expect(provider.extractChapterHtml).toHaveBeenCalledWith(1)
+        })
+
+        secondChapter.resolve('<p>chapter-2-current</p>')
+        await flushUi()
+
+        await waitFor(() => {
+            expect(view.container.textContent).toContain('chapter-2-current')
+        })
+
+        firstChapter.resolve('<p>chapter-1-stale</p>')
+        await flushUi()
+
+        expect(view.container.textContent).toContain('chapter-2-current')
+        expect(view.container.textContent).not.toContain('chapter-1-stale')
     })
 
     it('再次进入相同章节会复用分页测量缓存', async () => {

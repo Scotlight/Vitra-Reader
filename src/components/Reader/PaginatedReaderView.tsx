@@ -201,6 +201,8 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         chapterNode,
         displayPage,
         totalPages,
+        currentSpineIndex,
+        scheduleHighlightInjection,
     });
 
     // Reload chapter when readerStyles change
