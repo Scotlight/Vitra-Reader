@@ -6,6 +6,7 @@ export function useChapterResizeObserver(refs: ScrollReaderRefs) {
         resizeObserverRef,
         observedResizeNodesRef,
         observedResizeHeightsRef,
+        segmentResizeCallbackRef,
     } = refs;
 
     useEffect(() => {
@@ -14,6 +15,9 @@ export function useChapterResizeObserver(refs: ScrollReaderRefs) {
                 const target = entry.target as HTMLElement;
                 const nextHeight = Math.max(1, entry.contentRect.height);
                 observedResizeHeightsRef.current.set(target, nextHeight);
+                if (target.hasAttribute('data-shadow-segment-index')) {
+                    segmentResizeCallbackRef.current?.(target, nextHeight);
+                }
             });
         });
 

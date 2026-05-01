@@ -9,10 +9,11 @@ export function useReaderUnmountCleanup(
     deps: {
         cancelIdlePrefetch: () => void;
         virtualChaptersRef: MutableRefObject<Map<string, VirtualChapterRuntime>>;
+        cleanupVirtualChapterRuntime: (chapterId: string) => void;
     },
 ) {
     const { scrollIdleTimerRef, highlightIdleHandlesRef, virtualSyncRafRef } = refs;
-    const { cancelIdlePrefetch, virtualChaptersRef } = deps;
+    const { cancelIdlePrefetch, virtualChaptersRef, cleanupVirtualChapterRuntime } = deps;
 
     useEffect(() => {
         return () => {
@@ -25,11 +26,14 @@ export function useReaderUnmountCleanup(
                 cancelIdleTask(handle);
             });
             highlightIdleHandlesRef.current.clear();
+            Array.from(virtualChaptersRef.current.keys()).forEach((chapterId) => {
+                cleanupVirtualChapterRuntime(chapterId);
+            });
             virtualChaptersRef.current.clear();
             if (virtualSyncRafRef.current !== null) {
                 cancelAnimationFrame(virtualSyncRafRef.current);
                 virtualSyncRafRef.current = null;
             }
         };
-    }, [cancelIdlePrefetch, virtualChaptersRef]);
+    }, [cancelIdlePrefetch, cleanupVirtualChapterRuntime, virtualChaptersRef]);
 }

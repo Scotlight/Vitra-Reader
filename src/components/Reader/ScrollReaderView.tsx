@@ -14,6 +14,7 @@ import { useAtomicDomCommit } from './scrollReader/useAtomicDomCommit';
 import { useTocJump } from './scrollReader/useTocJump';
 import { useHighlightAndSelection } from './scrollReader/useHighlightAndSelection';
 import { useVirtualSegmentSync } from './scrollReader/useVirtualSegmentSync';
+import { useVirtualHeightCommit } from './scrollReader/useVirtualHeightCommit';
 import { useChapterResizeObserver } from './scrollReader/useChapterResizeObserver';
 import { useIdlePrefetch } from './scrollReader/useIdlePrefetch';
 import { useBookHighlights } from './scrollReader/useBookHighlights';
@@ -139,7 +140,11 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
 
     // ── Aggregate Unmount Cleanup ──
 
-    useReaderUnmountCleanup(refs, { cancelIdlePrefetch, virtualChaptersRef });
+    useReaderUnmountCleanup(refs, {
+        cancelIdlePrefetch,
+        virtualChaptersRef,
+        cleanupVirtualChapterRuntime,
+    });
 
     // Pending shadow renders queue
     const [shadowQueue, setShadowQueue] = useState<LoadedChapter[]>([]);
@@ -193,6 +198,15 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         refreshVirtualChapterLayout,
         observeChapterResizeNodes,
         unobserveChapterResizeNodes,
+    });
+
+    // ── Virtual Segment Height Commit ──
+
+    useVirtualHeightCommit(refs, {
+        chapterVectorsRef,
+        virtualChaptersRef,
+        refreshVirtualChapterLayout,
+        requestFlush,
     });
 
     // ── Shadow Render Complete Handler ──

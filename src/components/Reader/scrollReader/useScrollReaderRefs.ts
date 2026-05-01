@@ -40,6 +40,7 @@ export function useScrollReaderRefs(init: ScrollReaderRefsInit) {
         resizeObserverRef: useRef<ResizeObserver | null>(null),
         observedResizeNodesRef: useRef<Set<HTMLElement>>(new Set()),
         observedResizeHeightsRef: useRef<WeakMap<HTMLElement, number>>(new WeakMap()),
+        segmentResizeCallbackRef: useRef<((target: HTMLElement, height: number) => void) | null>(null),
 
         // ── virtual segment sync ──
         virtualSyncRafRef: useRef<number | null>(null),
