@@ -21,6 +21,11 @@ import { useBookHighlights } from './scrollReader/useBookHighlights';
 import { useScrollPhysics, DEFAULT_SMOOTH_CONFIG, type SmoothScrollConfig } from './scrollReader/useScrollPhysics';
 import { useSpineItems } from './scrollReader/useSpineItems';
 import { useReaderUnmountCleanup } from './scrollReader/useReaderUnmountCleanup';
+import {
+    clampReaderUnit,
+    resolveProgressInChapter,
+    type ReaderModePositionSnapshot,
+} from './readerModeSwitchPosition';
 import type { LoadedChapter } from './scrollReader/scrollReaderTypes';
 import { useSelectionMenu } from '@/hooks/useSelectionMenu';
 import styles from './ScrollReaderView.module.css';
@@ -32,6 +37,7 @@ interface ScrollReaderViewProps {
     bookId: string;
     initialSpineIndex?: number;
     initialScrollOffset?: number;
+    initialChapterProgress?: number;
     smoothConfig?: SmoothScrollConfig;
     readerStyles: ReaderStyleConfig;
     onProgressChange?: (progress: number) => void;
@@ -41,6 +47,7 @@ interface ScrollReaderViewProps {
 
 export interface ScrollReaderHandle {
     jumpToSpine: (spineIndex: number, searchText?: string) => Promise<void>;
+    getPosition: () => ReaderModePositionSnapshot | null;
 }
 
 // ── Component ──
@@ -50,6 +57,7 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
     bookId,
     initialSpineIndex = 0,
     initialScrollOffset = 0,
+    initialChapterProgress,
     smoothConfig = DEFAULT_SMOOTH_CONFIG,
     readerStyles,
     onProgressChange,
@@ -184,6 +192,7 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         spineItems,
         currentSpineIndex,
         initialScrollOffset,
+        initialChapterProgress,
         isInitialized,
         bookId,
         onProgressChange,
@@ -264,8 +273,35 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
     });
 
     // Expose jumpToSpine via ref for parent component
+    const getPosition = useCallback((): ReaderModePositionSnapshot | null => {
+        const spineCount = spineItems.length;
+        if (spineCount === 0) return null;
+
+        const snapshot = pendingProgressSnapshotRef.current;
+        const spineIndex = snapshot?.spineIndex ?? lastKnownAnchorIndexRef.current ?? currentSpineIndex;
+        const scrollTop = viewportRef.current?.scrollTop ?? snapshot?.scrollTop ?? 0;
+        const chapterProgress = snapshot
+            ? resolveProgressInChapter(snapshot.progress, spineIndex, spineCount)
+            : clampReaderUnit(initialChapterProgress ?? 0);
+
+        return {
+            sourceMode: 'scrolled-continuous',
+            spineIndex,
+            position: scrollTop,
+            chapterProgress,
+        };
+    }, [
+        currentSpineIndex,
+        initialChapterProgress,
+        lastKnownAnchorIndexRef,
+        pendingProgressSnapshotRef,
+        spineItems.length,
+        viewportRef,
+    ]);
+
     useImperativeHandle(ref, () => ({
-        jumpToSpine
+        jumpToSpine,
+        getPosition,
     }));
 
     // ── Selection + Highlight ──

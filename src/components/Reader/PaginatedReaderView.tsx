@@ -15,6 +15,10 @@ import { usePaginatedHorizontalWindowing } from './paginatedReader/usePaginatedH
 import { formatPaginatedTranslateX } from './paginatedReader/paginatedPageLayoutMath';
 import { buildPaginatedMeasureCacheKey } from './paginatedMeasureCache';
 import { resolveReaderInternalLinkTarget } from './readerInternalLink';
+import {
+    resolvePageChapterProgress,
+    type ReaderModePositionSnapshot,
+} from './readerModeSwitchPosition';
 import styles from './PaginatedReaderView.module.css';
 
 interface PaginatedReaderViewProps {
@@ -22,6 +26,7 @@ interface PaginatedReaderViewProps {
     bookId: string;
     initialSpineIndex?: number;
     initialPage?: number;
+    initialChapterProgress?: number;
     pageTurnMode: 'paginated-single' | 'paginated-double';
     readerStyles: ReaderStyleConfig;
     onProgressChange?: (progress: number) => void;
@@ -31,6 +36,7 @@ interface PaginatedReaderViewProps {
 
 export interface PaginatedReaderHandle {
     jumpToSpine: (spineIndex: number, searchText?: string) => Promise<void>;
+    getPosition: () => ReaderModePositionSnapshot | null;
 }
 
 export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedReaderViewProps>(({
@@ -38,6 +44,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     bookId,
     initialSpineIndex = 0,
     initialPage = 0,
+    initialChapterProgress,
     pageTurnMode,
     readerStyles,
     onProgressChange,
@@ -188,6 +195,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         setDisplayPage,
         setChapterFading,
         isPageLikelyBlank,
+        initialChapterProgress,
     });
 
     usePaginatedProgress({
@@ -247,7 +255,17 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         return () => { container.removeEventListener('click', handleInternalLink); };
     }, [jumpToSpine, provider, spineItemsRef]);
 
-    useImperativeHandle(ref, () => ({ jumpToSpine }));
+    const getPosition = useCallback((): ReaderModePositionSnapshot | null => {
+        if (spineItemsRef.current.length === 0) return null;
+        return {
+            sourceMode: pageTurnMode,
+            spineIndex: currentSpineIndexRef.current,
+            position: currentPageRef.current,
+            chapterProgress: resolvePageChapterProgress(currentPageRef.current, totalPagesRef.current),
+        };
+    }, [pageTurnMode, spineItemsRef]);
+
+    useImperativeHandle(ref, () => ({ jumpToSpine, getPosition }));
 
     const columnWidth = getColumnWidth();
     const colW = pageTurnMode === 'paginated-double' ? columnWidth / 2 : columnWidth;

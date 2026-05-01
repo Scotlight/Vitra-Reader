@@ -14,12 +14,14 @@ import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { useInitialVirtualSegmentSync } from './useInitialVirtualSegmentSync';
 import { useScrollProgressCommit } from './useScrollProgressCommit';
+import { resolveScrollInitialOffset } from '../readerModeSwitchPosition';
 
 interface UseAtomicDomCommitOptions {
     chapters: LoadedChapter[];
     spineItems: SpineItemInfo[];
     currentSpineIndex: number;
     initialScrollOffset: number;
+    initialChapterProgress?: number;
     isInitialized: boolean;
     bookId: string;
     onProgressChange?: (progress: number) => void;
@@ -54,6 +56,7 @@ export function useAtomicDomCommit(
         spineItems,
         currentSpineIndex,
         initialScrollOffset,
+        initialChapterProgress,
         isInitialized,
         bookId,
         onProgressChange,
@@ -187,9 +190,19 @@ export function useAtomicDomCommit(
             )
         );
 
-        if (!initialScrollDone.current && initialScrollOffset > 0) {
-            viewport.scrollTop = initialScrollOffset;
-            lastScrollTopRef.current = viewport.scrollTop;
+        if (!initialScrollDone.current) {
+            const chapterEl = listEl.querySelector(`[data-chapter-id="ch-${currentSpineIndex}"]`) as HTMLElement | null;
+            const targetScrollTop = resolveScrollInitialOffset({
+                chapterHeight: chapterEl?.scrollHeight ?? 0,
+                chapterTop: chapterEl?.offsetTop ?? 0,
+                initialChapterProgress,
+                initialScrollOffset,
+                viewportHeight: viewport.clientHeight,
+            });
+            if (targetScrollTop > 0) {
+                viewport.scrollTop = targetScrollTop;
+                lastScrollTopRef.current = viewport.scrollTop;
+            }
             initialScrollDone.current = true;
         }
 
@@ -217,7 +230,7 @@ export function useAtomicDomCommit(
         }
         scheduleInitialVirtualSegmentSync();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [chapters, cleanupVirtualChapterRuntime, initialScrollOffset, isInitialized, observeChapterResizeNodes, registerVirtualChapterRuntime, scheduleInitialVirtualSegmentSync, unobserveChapterResizeNodes]);
+    }, [chapters, cleanupVirtualChapterRuntime, currentSpineIndex, initialChapterProgress, initialScrollOffset, isInitialized, observeChapterResizeNodes, registerVirtualChapterRuntime, scheduleInitialVirtualSegmentSync, unobserveChapterResizeNodes]);
 
     const syncViewportState = useCallback((
         scrollTop: number,

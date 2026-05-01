@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useSettingsStore } from '@/stores/useSettingsStore'
+import type { PageTurnMode } from '@/stores/useSettingsStore'
 import { ReaderAppearanceSettings } from './ReaderAppearanceSettings'
 import { ReaderModeSettings } from './ReaderModeSettings'
 import styles from './ReaderView.module.css'
@@ -7,9 +8,10 @@ import styles from './ReaderView.module.css'
 interface ReaderSettingsPanelProps {
     readonly bookFormat: string
     readonly isOpen: boolean
+    readonly onPageTurnModeChange: (mode: PageTurnMode) => void
 }
 
-export function ReaderSettingsPanel({ bookFormat, isOpen }: ReaderSettingsPanelProps) {
+export function ReaderSettingsPanel({ bookFormat, isOpen, onPageTurnModeChange }: ReaderSettingsPanelProps) {
     const settings = useSettingsStore()
 
     return (
@@ -28,7 +30,7 @@ export function ReaderSettingsPanel({ bookFormat, isOpen }: ReaderSettingsPanelP
                             <button className={styles.resetBtn} onClick={settings.resetToDefaults}>重置</button>
                         </div>
                         <ReaderAppearanceSettings />
-                        <ReaderModeSettings bookFormat={bookFormat} />
+                        <ReaderModeSettings bookFormat={bookFormat} onPageTurnModeChange={onPageTurnModeChange} />
                     </div>
                 </motion.div>
             )}

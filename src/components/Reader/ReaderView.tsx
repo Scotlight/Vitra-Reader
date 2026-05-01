@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSettingsStore } from '@/stores/useSettingsStore'
+import type { PageTurnMode } from '@/stores/useSettingsStore'
 import type { ContentProvider, SearchResult } from '@/engine/core/contentProvider'
 import { resolveReaderRenderMode } from '@/engine/core/readerRenderMode'
 import { ScrollReaderView, ScrollReaderHandle } from './ScrollReaderView'
@@ -17,6 +18,10 @@ import { useReaderBookSession } from './useReaderBookSession'
 import { useReaderClock } from './useReaderClock'
 import { useReaderNavigation } from './useReaderNavigation'
 import { useReadingActivityTracker } from './useReadingActivityTracker'
+import {
+    createFallbackModePositionSnapshot,
+    type ReaderModePositionSnapshot,
+} from './readerModeSwitchPosition'
 import styles from './ReaderView.module.css'
 
 interface ReaderViewProps {
@@ -36,6 +41,10 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const [searchQuery, setSearchQuery] = useState('')
     const [searchResults, setSearchResults] = useState<SearchResult[]>([])
     const [isSearching, setIsSearching] = useState(false)
+    const [modeSwitchAnchor, setModeSwitchAnchor] = useState<{
+        serial: number
+        snapshot: ReaderModePositionSnapshot
+    } | null>(null)
     const scrollReaderRef = useRef<ScrollReaderHandle>(null)
     const paginatedReaderRef = useRef<PaginatedReaderHandle>(null)
 
@@ -151,6 +160,9 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             }
         }
     }, [provider])
+    useEffect(() => {
+        setModeSwitchAnchor(null)
+    }, [bookId])
 
     const {
         closePanels,
@@ -210,12 +222,59 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         setSearchQuery(keyword)
         openSearchPanelWithKeyword(keyword)
     }, [openSearchPanelWithKeyword])
+    const getFallbackModePositionSnapshot = useCallback(() => {
+        const fallbackSpineIndex = isScrollMode
+            ? vitraScrollParams.initialSpineIndex
+            : paginatedParams.initialSpineIndex
+        return createFallbackModePositionSnapshot({
+            currentProgress,
+            currentSectionHref,
+            fallbackSpineIndex,
+            provider,
+            sourceMode: effectivePageTurnMode,
+        })
+    }, [
+        currentProgress,
+        currentSectionHref,
+        effectivePageTurnMode,
+        isScrollMode,
+        paginatedParams.initialSpineIndex,
+        provider,
+        vitraScrollParams.initialSpineIndex,
+    ])
+    const handlePageTurnModeChange = useCallback((nextMode: PageTurnMode) => {
+        if (nextMode === settings.pageTurnMode) return
+        const liveSnapshot = isScrollMode
+            ? scrollReaderRef.current?.getPosition()
+            : paginatedReaderRef.current?.getPosition()
+        const snapshot = liveSnapshot ?? getFallbackModePositionSnapshot()
+        setModeSwitchAnchor((current) => ({
+            serial: (current?.serial ?? 0) + 1,
+            snapshot,
+        }))
+        settings.updateSetting('pageTurnMode', nextMode)
+    }, [
+        getFallbackModePositionSnapshot,
+        isScrollMode,
+        settings,
+    ])
 
     const currentChapterLabel = findCurrentChapterLabel(toc, currentSectionHref)
     const headerHeight = Math.max(36, Math.min(96, Number(settings.headerHeight) || 48))
     const footerHeight = Math.max(0, Math.min(96, Number(settings.footerHeight) || 32))
     const footerEnabled = footerHeight > 0
     const progressLabel = `${Math.round(Math.max(0, Math.min(1, currentProgress)) * 100)}%`
+    const modeSwitchSnapshot = modeSwitchAnchor?.snapshot
+    const modeSwitchSerial = modeSwitchAnchor?.serial ?? 0
+    const scrollInitialSpineIndex = modeSwitchSnapshot?.spineIndex ?? vitraScrollParams.initialSpineIndex
+    const scrollInitialOffset = modeSwitchSnapshot?.sourceMode === 'scrolled-continuous'
+        ? modeSwitchSnapshot.position
+        : vitraScrollParams.initialScrollOffset
+    const paginatedInitialSpineIndex = modeSwitchSnapshot?.spineIndex ?? paginatedParams.initialSpineIndex
+    const paginatedInitialPage = modeSwitchSnapshot && modeSwitchSnapshot.sourceMode !== 'scrolled-continuous'
+        ? modeSwitchSnapshot.position
+        : paginatedParams.initialPage
+    const initialChapterProgress = modeSwitchSnapshot?.chapterProgress
 
     return (
         <div
@@ -277,11 +336,13 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
 
                     {isScrollMode && provider && isReady && (
                         <ScrollReaderView
+                            key={`scroll-${modeSwitchSerial}`}
                             ref={scrollReaderRef}
                             provider={provider}
                             bookId={bookId}
-                            initialSpineIndex={vitraScrollParams.initialSpineIndex}
-                            initialScrollOffset={vitraScrollParams.initialScrollOffset}
+                            initialSpineIndex={scrollInitialSpineIndex}
+                            initialScrollOffset={scrollInitialOffset}
+                            initialChapterProgress={initialChapterProgress}
                             smoothConfig={scrollSmoothConfig}
                             readerStyles={readerStyleConfig}
                             onProgressChange={handleProgressChange}
@@ -292,11 +353,13 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
 
                     {!isScrollMode && provider && isReady && (
                         <PaginatedReaderView
+                            key={`paginated-${effectivePageTurnMode}-${modeSwitchSerial}`}
                             ref={paginatedReaderRef}
                             provider={provider}
                             bookId={bookId}
-                            initialSpineIndex={paginatedParams.initialSpineIndex}
-                            initialPage={paginatedParams.initialPage}
+                            initialSpineIndex={paginatedInitialSpineIndex}
+                            initialPage={paginatedInitialPage}
+                            initialChapterProgress={initialChapterProgress}
                             pageTurnMode={effectivePageTurnMode === 'paginated-double' ? 'paginated-double' : 'paginated-single'}
                             readerStyles={readerStyleConfig}
                             onProgressChange={handleProgressChange}
@@ -321,7 +384,11 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                     />
                 )}
 
-                <ReaderSettingsPanel bookFormat={bookFormat} isOpen={settingsOpen} />
+                <ReaderSettingsPanel
+                    bookFormat={bookFormat}
+                    isOpen={settingsOpen}
+                    onPageTurnModeChange={handlePageTurnModeChange}
+                />
             </div>
         </div>
     )

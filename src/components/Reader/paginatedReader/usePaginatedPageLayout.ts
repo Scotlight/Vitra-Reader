@@ -6,6 +6,7 @@ import {
     resolvePaginatedPageCount,
     resolvePaginatedPageFromOffset,
 } from './paginatedPageLayoutMath'
+import { resolvePaginatedInitialPage } from '../readerModeSwitchPosition'
 import { mountPaginatedChapterNode } from './paginatedChapterMount'
 
 interface UsePaginatedPageLayoutOptions {
@@ -27,6 +28,7 @@ interface UsePaginatedPageLayoutOptions {
     setDisplayPage: (page: number) => void
     setChapterFading: (v: boolean) => void
     isPageLikelyBlank: (page: number) => boolean
+    initialChapterProgress?: number
 }
 
 export function usePaginatedPageLayout({
@@ -48,6 +50,7 @@ export function usePaginatedPageLayout({
     setDisplayPage,
     setChapterFading,
     isPageLikelyBlank,
+    initialChapterProgress,
 }: UsePaginatedPageLayoutOptions) {
     // Mount chapter node + calculate pagination
     useEffect(() => {
@@ -88,7 +91,13 @@ export function usePaginatedPageLayout({
             setTotalPages(pages)
             totalPagesRef.current = pages
 
-            let targetPage = 0
+            let targetPage = isInitialLoadRef.current
+                ? resolvePaginatedInitialPage({
+                    initialPage: currentPageRef.current,
+                    initialChapterProgress,
+                    totalPages: pages,
+                })
+                : 0
             let shouldJumpToLastPage = false
             if (pendingLastPageRef.current) {
                 targetPage = pages - 1
