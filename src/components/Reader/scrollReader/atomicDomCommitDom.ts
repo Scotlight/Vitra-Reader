@@ -1,3 +1,6 @@
+import { findTextInDOM } from '@/utils/textFinder';
+import type { LoadedChapter } from './scrollReaderTypes';
+
 export function getOrCreateChapterElement(
     listEl: HTMLElement,
     chapterId: string,
@@ -29,4 +32,26 @@ export function insertChapterElementAtIndex(
     } else {
         listEl.insertBefore(chapterEl, existingNodes[targetIndex] || null);
     }
+}
+
+export function scrollToSearchTextInChapters(
+    viewport: HTMLElement,
+    listEl: HTMLElement,
+    chapters: LoadedChapter[],
+    searchText: string,
+): number | null {
+    for (const ch of chapters) {
+        const el = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
+        if (!el) continue;
+
+        const range = findTextInDOM(el, searchText);
+        if (!range) continue;
+
+        const rect = range.getBoundingClientRect();
+        const vpRect = viewport.getBoundingClientRect();
+        viewport.scrollTop += rect.top - vpRect.top;
+        return viewport.scrollTop;
+    }
+
+    return null;
 }

@@ -1,11 +1,10 @@
 import { useCallback, useLayoutEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import type { SpineItemInfo } from '@/engine/core/contentProvider';
-import { findTextInDOM } from '@/utils/textFinder';
 import { shouldBypassShadowQueueForSegmentMetas } from '../scrollVectorStrategy';
 import styles from '../ScrollReaderView.module.css';
 import { markChapterAsMounted, resolveViewportDerivedMetrics } from './scrollReaderHelpers';
-import { getOrCreateChapterElement, insertChapterElementAtIndex } from './atomicDomCommitDom';
+import { getOrCreateChapterElement, insertChapterElementAtIndex, scrollToSearchTextInChapters } from './atomicDomCommitDom';
 import {
     SCROLL_HEDGE_EPSILON_PX,
     INSTANT_SCROLL_BEHAVIOR,
@@ -193,18 +192,9 @@ export function useAtomicDomCommit(
         if (searchText) {
             pendingSearchTextRef.current = null;
             const mountedChapters = chapters.filter(isCommittedChapter);
-            for (const ch of mountedChapters) {
-                const el = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
-                if (el) {
-                    const range = findTextInDOM(el, searchText);
-                    if (range) {
-                        const rect = range.getBoundingClientRect();
-                        const vpRect = viewport.getBoundingClientRect();
-                        viewport.scrollTop += rect.top - vpRect.top;
-                        lastScrollTopRef.current = viewport.scrollTop;
-                        break;
-                    }
-                }
+            const nextScrollTop = scrollToSearchTextInChapters(viewport, listEl, mountedChapters, searchText);
+            if (nextScrollTop !== null) {
+                lastScrollTopRef.current = nextScrollTop;
             }
         }
 
