@@ -41,6 +41,7 @@ import {
   buildVectorSegments,
   resolveChapterRenderTraits,
 } from './shadowRenderer/renderPlanning';
+import { shouldLogShadowRendererDebug } from '@/utils/readerDebug';
 
 export { segmentPool };
 
@@ -174,12 +175,13 @@ export function ShadowRenderer({
             initialSegmentCount,
             normalizedFragments,
             isLargeChapter,
-            cleanedHtml,
+            sanitizedHtml: cleanedHtml,
           });
 
           chapterWrapper.appendChild(contentDiv);
           enforceDeterministicMediaLayout(chapterWrapper);
 
+          // 清空离屏容器，随后只挂载当前章节 wrapper。
           container.innerHTML = '';
           container.appendChild(chapterWrapper);
           if (cancelled) return null;
@@ -194,7 +196,9 @@ export function ShadowRenderer({
           if (cancelled) return null;
 
           const height = getContainerHeight(chapterWrapper);
-          console.log(`[ShadowRenderer] Chapter "${chapterId}" ready. Height: ${height}px`);
+          if (shouldLogShadowRendererDebug()) {
+            console.log(`[ShadowRenderer] Chapter "${chapterId}" ready. Height: ${height}px`);
+          }
           hasReportedRef.current = true;
           onReady(chapterWrapper, height);
           return {
@@ -221,9 +225,11 @@ export function ShadowRenderer({
 
           const isWorkerVectorized = segmentMetas && segmentMetas.length > 0;
           if (isWorkerVectorized) {
-            console.log(
-              `[ShadowRenderer] Chapter "${chapterId}" using IO-driven hydration (${activeSegments.length - activeInitialSegmentCount} deferred segments)`,
-            );
+            if (shouldLogShadowRendererDebug()) {
+              console.log(
+                `[ShadowRenderer] Chapter "${chapterId}" using IO-driven hydration (${activeSegments.length - activeInitialSegmentCount} deferred segments)`,
+              );
+            }
             return;
           }
 
@@ -261,14 +267,18 @@ export function ShadowRenderer({
 
           if (!cancelled && activeChapterWrapper.isConnected) {
             const finalHeight = getContainerHeight(activeChapterWrapper);
-            console.log(
-              `[ShadowRenderer] Chapter "${chapterId}" vectorized hydration done. Final: ${finalHeight}px`,
-            );
+            if (shouldLogShadowRendererDebug()) {
+              console.log(
+                `[ShadowRenderer] Chapter "${chapterId}" vectorized hydration done. Final: ${finalHeight}px`,
+              );
+            }
           }
         });
 
         const traceSnapshot = finalizeRenderTrace(trace);
-        console.log(formatRenderTrace(traceSnapshot));
+        if (shouldLogShadowRendererDebug()) {
+          console.log(formatRenderTrace(traceSnapshot));
+        }
       } catch (error) {
         if (cancelled) return;
         const err = error instanceof Error ? error : new Error(String(error));
@@ -284,7 +294,9 @@ export function ShadowRenderer({
       const wrapper = container.querySelector('.chapter-content') as HTMLElement | null;
       if (!wrapper || !wrapper.isConnected) return;
       const recalibratedHeight = getContainerHeight(wrapper);
-      console.log(`[ShadowRenderer] Font loaded recalibration for "${chapterId}": ${recalibratedHeight}px`);
+      if (shouldLogShadowRendererDebug()) {
+        console.log(`[ShadowRenderer] Font loaded recalibration for "${chapterId}": ${recalibratedHeight}px`);
+      }
       onReady(wrapper, recalibratedHeight);
     };
     document.fonts?.addEventListener?.('loadingdone', handleFontLoaded);

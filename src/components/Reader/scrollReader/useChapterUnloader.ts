@@ -7,6 +7,7 @@ import { UNLOAD_ABOVE_RADIUS, UNLOAD_BELOW_RADIUS, UNLOAD_COOLDOWN_MS } from './
 import { segmentPool } from '../ShadowRenderer';
 import { releaseMediaResources } from '@/utils/mediaResourceCleanup';
 import { cancelIdleTask } from '@/utils/idleScheduler';
+import { shouldLogScrollReaderDebug } from '@/utils/readerDebug';
 
 interface UseChapterUnloaderOptions {
     provider: ContentProvider;
@@ -103,7 +104,9 @@ export function useChapterUnloader(
                 };
             }));
 
-            console.log(`[ScrollReader] Collapsed to placeholders: ${toUnload.map(ch => ch.spineIndex).join(', ')}`);
+            if (shouldLogScrollReaderDebug()) {
+                console.log(`[ScrollReader] Collapsed to placeholders: ${toUnload.map(ch => ch.spineIndex).join(', ')}`);
+            }
         };
 
         const timer = setTimeout(checkUnload, UNLOAD_COOLDOWN_MS);

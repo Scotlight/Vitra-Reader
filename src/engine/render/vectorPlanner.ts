@@ -1,11 +1,11 @@
 import type {
-    VitraVectorPlanInput,
-    VitraVectorRenderConfig,
-    VitraVectorRenderPlan,
-    VitraVectorPipelineStage,
+    VectorPlanInput,
+    VectorRenderConfig,
+    VectorRenderPlan,
+    VectorPipelineStage,
 } from '../types/vectorRender'
 
-const VECTOR_PIPELINE_STAGES: readonly VitraVectorPipelineStage[] = [
+const VECTOR_PIPELINE_STAGES: readonly VectorPipelineStage[] = [
     'parse',
     'measure',
     'paginate',
@@ -13,7 +13,7 @@ const VECTOR_PIPELINE_STAGES: readonly VitraVectorPipelineStage[] = [
     'hydrate',
 ]
 
-export const DEFAULT_VITRA_VECTOR_CONFIG: Readonly<VitraVectorRenderConfig> = Object.freeze({
+export const DEFAULT_VECTOR_RENDER_CONFIG: Readonly<VectorRenderConfig> = Object.freeze({
     largeChapterThreshold: 450_000,
     veryLargeChapterThreshold: 750_000,
     hugeChapterThreshold: 1_200_000,
@@ -21,23 +21,23 @@ export const DEFAULT_VITRA_VECTOR_CONFIG: Readonly<VitraVectorRenderConfig> = Ob
     maxInitialSegments: 4,
 })
 
-export function resolveVitraVectorConfig(
-    config?: Partial<VitraVectorRenderConfig>,
-): VitraVectorRenderConfig {
-    if (!config) return { ...DEFAULT_VITRA_VECTOR_CONFIG }
+export function resolveVectorRenderConfig(
+    config?: Partial<VectorRenderConfig>,
+): VectorRenderConfig {
+    if (!config) return { ...DEFAULT_VECTOR_RENDER_CONFIG }
 
     return {
-        largeChapterThreshold: config.largeChapterThreshold ?? DEFAULT_VITRA_VECTOR_CONFIG.largeChapterThreshold,
-        veryLargeChapterThreshold: config.veryLargeChapterThreshold ?? DEFAULT_VITRA_VECTOR_CONFIG.veryLargeChapterThreshold,
-        hugeChapterThreshold: config.hugeChapterThreshold ?? DEFAULT_VITRA_VECTOR_CONFIG.hugeChapterThreshold,
-        minInitialSegments: config.minInitialSegments ?? DEFAULT_VITRA_VECTOR_CONFIG.minInitialSegments,
-        maxInitialSegments: config.maxInitialSegments ?? DEFAULT_VITRA_VECTOR_CONFIG.maxInitialSegments,
+        largeChapterThreshold: config.largeChapterThreshold ?? DEFAULT_VECTOR_RENDER_CONFIG.largeChapterThreshold,
+        veryLargeChapterThreshold: config.veryLargeChapterThreshold ?? DEFAULT_VECTOR_RENDER_CONFIG.veryLargeChapterThreshold,
+        hugeChapterThreshold: config.hugeChapterThreshold ?? DEFAULT_VECTOR_RENDER_CONFIG.hugeChapterThreshold,
+        minInitialSegments: config.minInitialSegments ?? DEFAULT_VECTOR_RENDER_CONFIG.minInitialSegments,
+        maxInitialSegments: config.maxInitialSegments ?? DEFAULT_VECTOR_RENDER_CONFIG.maxInitialSegments,
     }
 }
 
 function computeInitialSegmentsBySize(
     chapterSize: number,
-    config: VitraVectorRenderConfig,
+    config: VectorRenderConfig,
 ): number {
     if (chapterSize >= config.hugeChapterThreshold) return config.minInitialSegments
     if (chapterSize >= config.veryLargeChapterThreshold) return config.minInitialSegments + 1
@@ -49,17 +49,17 @@ function clampInitialSegments(segmentCount: number, candidate: number): number {
     return Math.max(1, Math.min(segmentCount, candidate))
 }
 
-function isVectorEligible(input: VitraVectorPlanInput, threshold: number): boolean {
+function isVectorEligible(input: VectorPlanInput, threshold: number): boolean {
     if (input.mode !== 'scroll') return false
     if (input.chapterSize < threshold) return false
     return input.segmentCount > 1
 }
 
-export function buildVitraVectorRenderPlan(
-    input: VitraVectorPlanInput,
-    config?: Partial<VitraVectorRenderConfig>,
-): VitraVectorRenderPlan {
-    const resolved = resolveVitraVectorConfig(config)
+export function buildVectorRenderPlan(
+    input: VectorPlanInput,
+    config?: Partial<VectorRenderConfig>,
+): VectorRenderPlan {
+    const resolved = resolveVectorRenderConfig(config)
     if (input.mode !== 'scroll') {
         return { enabled: false, reason: 'mode-disabled', initialSegmentCount: 0, stages: VECTOR_PIPELINE_STAGES }
     }

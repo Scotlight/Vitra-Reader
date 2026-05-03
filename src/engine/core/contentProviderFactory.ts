@@ -11,15 +11,15 @@ function buildAdapterBookId(format: BookFormat): string {
 }
 
 async function createProviderViaPipeline(format: BookFormat, data: ArrayBuffer): Promise<ContentProvider> {
-    const { VitraPipeline } = await import('../pipeline/vitraPipeline')
-    const { VitraContentAdapter } = await import('../pipeline/vitraContentAdapter')
-    const pipeline = new VitraPipeline()
+    const { BookPipeline } = await import('../pipeline/pipeline')
+    const { BookContentAdapter } = await import('../pipeline/contentAdapter')
+    const pipeline = new BookPipeline()
     const handle = await pipeline.open({
         buffer: data,
         filename: `factory-input.${format}`,
     })
     const book = await handle.ready
-    return new VitraContentAdapter(book, buildAdapterBookId(format), data)
+    return new BookContentAdapter(book, buildAdapterBookId(format), data)
 }
 
 export async function createContentProvider(format: BookFormat, data: ArrayBuffer): Promise<ContentProvider> {
@@ -39,8 +39,8 @@ export async function parseBookMetadata(format: BookFormat, data: ArrayBuffer, f
         return parseMetadataForBackedFormat(format, data, filename)
     }
 
-    const { VitraPipeline } = await import('../pipeline/vitraPipeline')
-    const pipeline = new VitraPipeline()
+    const { BookPipeline } = await import('../pipeline/pipeline')
+    const pipeline = new BookPipeline()
     const handle = await pipeline.open({ buffer: data, filename })
     const metadata = await handle.metadata
     return {

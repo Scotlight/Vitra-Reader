@@ -3,7 +3,7 @@ import type {
   ChapterPreprocessResult,
 } from '../types/chapterPreprocess';
 import type { SegmentMeta, VectorizeConfig } from '../types/vectorRender';
-import { buildVitraVectorRenderPlan } from './vitraVectorPlanner';
+import { buildVectorRenderPlan } from './vectorPlanner';
 import {
   sanitizeChapterHtml,
   sanitizeStyleSheets,
@@ -50,7 +50,7 @@ function shouldDropFullHtmlPayload(
   segmentMetas: readonly SegmentMeta[] | undefined,
 ): boolean {
   if (!segmentMetas || segmentMetas.length === 0) return false;
-  return buildVitraVectorRenderPlan({
+  return buildVectorRenderPlan({
     mode: 'scroll',
     chapterSize: cleanedHtml.length,
     segmentCount: segmentMetas.length,

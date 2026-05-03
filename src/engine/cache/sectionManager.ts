@@ -1,12 +1,12 @@
 /**
- * Vitra Section LRU 内存管理器
+ * Section LRU 内存管理器
  *
  * 对应文档 5.2：Section Blob URL 的引用计数 + LRU 淘汰。
  * 最多同时保持 maxLoaded 个 section 的 Blob URL，
  * 超出时淘汰最久未访问的条目并 revoke Blob URL。
  */
 
-import type { VitraBookSection } from '../types/vitraBook'
+import type { BookSection } from '../types/book'
 
 // ─── 常量 ────────────────────────────────────────────
 
@@ -14,12 +14,12 @@ const DEFAULT_MAX_LOADED = 5
 
 // ─── 公共接口 ────────────────────────────────────────
 
-export interface VitraSectionManagerOptions {
+export interface SectionManagerOptions {
     /** 最多同时保持多少个 section 已加载（默认 5） */
     maxLoaded?: number
 }
 
-export interface VitraSectionManagerStats {
+export interface SectionManagerStats {
     readonly loaded: number
     readonly maxLoaded: number
     readonly evictions: number
@@ -29,18 +29,18 @@ export interface VitraSectionManagerStats {
 
 interface LoadedEntry {
     url: string
-    section: VitraBookSection
+    section: BookSection
     lastAccess: number
 }
 
 // ─── 核心类 ──────────────────────────────────────────
 
-export class VitraSectionManager {
+export class SectionManager {
     private loaded = new Map<string | number, LoadedEntry>()
     private maxLoaded: number
     private evictions = 0
 
-    constructor(options: VitraSectionManagerOptions = {}) {
+    constructor(options: SectionManagerOptions = {}) {
         this.maxLoaded = Math.max(1, Math.floor(options.maxLoaded ?? DEFAULT_MAX_LOADED))
     }
 
@@ -50,7 +50,7 @@ export class VitraSectionManager {
      * 如果已加载则直接返回（更新 LRU 时间戳），
      * 否则调用 section.load() 并在超过容量时淘汰最旧条目。
      */
-    async load(section: VitraBookSection): Promise<string> {
+    async load(section: BookSection): Promise<string> {
         const id = section.id
 
         // 缓存命中 → 更新访问时间
@@ -103,7 +103,7 @@ export class VitraSectionManager {
     /**
      * 返回管理器统计
      */
-    getStats(): VitraSectionManagerStats {
+    getStats(): SectionManagerStats {
         return {
             loaded: this.loaded.size,
             maxLoaded: this.maxLoaded,

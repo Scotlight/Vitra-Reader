@@ -25,7 +25,7 @@ export interface ReaderBookSessionState {
     readonly paginatedParams: ReaderPaginatedParams
     readonly provider: ContentProvider | null
     readonly toc: TocItem[]
-    readonly vitraScrollParams: ReaderScrollParams
+    readonly scrollParams: ReaderScrollParams
 }
 
 export const INITIAL_READER_BOOK_SESSION_STATE: ReaderBookSessionState = {
@@ -36,7 +36,7 @@ export const INITIAL_READER_BOOK_SESSION_STATE: ReaderBookSessionState = {
     paginatedParams: INITIAL_PAGINATED_PARAMS,
     provider: null,
     toc: [],
-    vitraScrollParams: INITIAL_SCROLL_PARAMS,
+    scrollParams: INITIAL_SCROLL_PARAMS,
 }
 
 export async function loadReaderBookSession(
@@ -63,10 +63,10 @@ export async function loadReaderBookSession(
             paginatedParams: resolvePaginatedParams(format, pageTurnMode, initialLocation),
             provider,
             toc,
-            vitraScrollParams: resolveScrollParams(format, pageTurnMode, initialLocation),
+            scrollParams: resolveScrollParams(format, pageTurnMode, initialLocation),
         }
     } catch (error) {
-        console.error('[ReaderView] Vitra pipeline init failed:', error)
+        console.error('[ReaderView] book pipeline init failed:', error)
         return { ...INITIAL_READER_BOOK_SESSION_STATE, bookTitleText: bookTitle }
     }
 }
@@ -85,17 +85,17 @@ async function openReaderProvider(
     bookData: ArrayBuffer,
     format: BookFormat,
 ): Promise<ContentProvider> {
-    const [{ VitraPipeline }, { VitraContentAdapter }] = await Promise.all([
-        import('@/engine/pipeline/vitraPipeline'),
-        import('@/engine/pipeline/vitraContentAdapter'),
+    const [{ BookPipeline }, { BookContentAdapter }] = await Promise.all([
+        import('@/engine/pipeline/pipeline'),
+        import('@/engine/pipeline/contentAdapter'),
     ])
-    const pipeline = new VitraPipeline()
+    const pipeline = new BookPipeline()
     const handle = await pipeline.open({
         buffer: bookData,
         filename: `${fileStem}.${format}`,
     })
-    const vitraBook = await handle.ready
-    const provider = new VitraContentAdapter(vitraBook, bookId, bookData)
+    const parsedBook = await handle.ready
+    const provider = new BookContentAdapter(parsedBook, bookId, bookData)
     await provider.init()
     return provider
 }

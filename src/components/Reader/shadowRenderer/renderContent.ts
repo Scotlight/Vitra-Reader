@@ -76,7 +76,7 @@ export async function appendRenderedContent(
     initialSegmentCount: number;
     normalizedFragments: readonly string[];
     isLargeChapter: boolean;
-    cleanedHtml: string;
+    sanitizedHtml: string;
   },
 ): Promise<HTMLElement[]> {
   const segmentEls: HTMLElement[] = [];
@@ -93,9 +93,10 @@ export async function appendRenderedContent(
   if (options.normalizedFragments.length > 1) {
     await appendHtmlFragmentsChunked(contentDiv, options.normalizedFragments);
   } else if (options.isLargeChapter) {
-    await appendHtmlContentChunked(contentDiv, options.cleanedHtml);
+    await appendHtmlContentChunked(contentDiv, options.sanitizedHtml);
   } else {
-    contentDiv.innerHTML = options.cleanedHtml;
+    // sanitizedHtml 只接收 buildLocalProcessedPayload / worker 预处理后的已清洗 HTML。
+    contentDiv.innerHTML = options.sanitizedHtml;
   }
 
   return segmentEls;

@@ -49,31 +49,32 @@ export interface HtmlSaxStreamHandlers {
 }
 
 function isWhitespace(charCode: number): boolean {
-  return charCode === 0x20 || charCode === 0x0A || charCode === 0x09 || charCode === 0x0D || charCode === 0x0C;
+  return ' \n\t\r\f'.includes(String.fromCharCode(charCode));
 }
 
 function isTagNameChar(charCode: number): boolean {
-  const isNumber = charCode >= 0x30 && charCode <= 0x39;
-  const isUpper = charCode >= 0x41 && charCode <= 0x5A;
-  const isLower = charCode >= 0x61 && charCode <= 0x7A;
-  return isNumber || isUpper || isLower || charCode === 0x2D || charCode === 0x3A || charCode === 0x5F;
+  const char = String.fromCharCode(charCode);
+  const isNumber = char >= '0' && char <= '9';
+  const isUpper = char >= 'A' && char <= 'Z';
+  const isLower = char >= 'a' && char <= 'z';
+  return isNumber || isUpper || isLower || char === '-' || char === ':' || char === '_';
 }
 
 function findTagEnd(html: string, from: number): number {
-  let quote = 0;
+  let quote = '';
   for (let index = from; index < html.length; index += 1) {
-    const code = html.charCodeAt(index);
-    if (quote !== 0) {
-      if (code === quote) {
-        quote = 0;
+    const char = html[index];
+    if (quote !== '') {
+      if (char === quote) {
+        quote = '';
       }
       continue;
     }
-    if (code === 0x22 || code === 0x27) {
-      quote = code;
+    if (char === '"' || char === "'") {
+      quote = char;
       continue;
     }
-    if (code === 0x3E) {
+    if (char === '>') {
       return index + 1;
     }
   }
@@ -81,15 +82,15 @@ function findTagEnd(html: string, from: number): number {
 }
 
 function readTagToken(html: string, start: number): HtmlTagToken | null {
-  if (start < 0 || start >= html.length || html.charCodeAt(start) !== 0x3C) {
+  if (start < 0 || start >= html.length || html[start] !== '<') {
     return null;
   }
 
   let cursor = start + 1;
   if (cursor >= html.length) return null;
 
-  const leading = html.charCodeAt(cursor);
-  if (leading === 0x21 || leading === 0x3F) {
+  const leading = html[cursor];
+  if (leading === '!' || leading === '?') {
     return {
       name: '',
       isClosing: false,
@@ -99,7 +100,7 @@ function readTagToken(html: string, start: number): HtmlTagToken | null {
   }
 
   let isClosing = false;
-  if (leading === 0x2F) {
+  if (leading === '/') {
     isClosing = true;
     cursor += 1;
   }

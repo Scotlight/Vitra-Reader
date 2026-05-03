@@ -14,10 +14,10 @@
 | --- | --- |
 | `useSyncStore` | `sync:webdavUrl`, `sync:webdavPath`, `sync:webdavUser`, `sync:syncMode`, `sync:restoreMode`, `sync:replaceBeforeRestore`, `sync:lastSyncTime`, `sync:remoteEtag` |
 | `useSettingsStore` | `settings:readerSettings`, `settings:savedColors` |
-| `translateService` | `translateConfig` |
+| `translateService` | `translate:config` |
 | `groupManagerRepository` | `groups:groups`, `groups:bookMap`, `groups:bookOrder`, `groups:homeOrder` |
 | `libraryMetaRepository` | `library:favoriteBookIds`, `library:trashBookIds` |
-| `VitraBookCache` | `vcache-{hash}` |
+| `BookCache` | `vcache-{hash}` |
 
 遗留兼容键：
 

@@ -14,8 +14,8 @@
 - `src/components/Reader/paginatedReader/usePaginatedPageLayout.ts`
 - `src/components/Reader/paginatedReader/usePaginationMeasure.ts`
 - `src/components/Reader/ShadowRenderer.tsx`
-- `src/engine/render/vitraMeasure.ts`
-- `src/engine/render/vitraPaginator.ts`
+- `src/engine/render/measure.ts`
+- `src/engine/render/paginator.ts`
 
 ## 决策
 

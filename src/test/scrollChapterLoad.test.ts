@@ -5,8 +5,10 @@ import {
     createPreprocessedChapterState,
     createVectorRestoreChapterState,
     insertLoadingChapterState,
+    markChapterShadowRenderError,
     queueChapterForShadowRender,
     replaceChapterState,
+    removeShadowQueueChapter,
     rollbackFailedChapterState,
 } from '@/components/Reader/scrollChapterLoad'
 
@@ -118,5 +120,22 @@ describe('scrollChapterLoad', () => {
 
         expect(rollbackFailedChapterState([loadingChapter], 4, placeholder)).toEqual([placeholder])
         expect(rollbackFailedChapterState([loadingChapter], 4, undefined)).toEqual([])
+    })
+
+    it('shadow 渲染失败时章节进入 error 状态并移出 shadowQueue', () => {
+        const shadowChapter = createVectorRestoreChapterState(createLoadingChapterState({
+            chapterId: 'ch-5',
+            currentReaderStyleKey: 'style-a',
+            spineIndex: 5,
+        }), 'style-a')
+
+        expect(markChapterShadowRenderError([shadowChapter], 5)).toEqual([
+            {
+                ...shadowChapter,
+                domNode: null,
+                status: 'error',
+            },
+        ])
+        expect(removeShadowQueueChapter([shadowChapter], 5)).toEqual([])
     })
 })

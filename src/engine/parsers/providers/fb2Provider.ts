@@ -1,6 +1,6 @@
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '@/engine/core/contentProvider'
 import { stripBookExtension } from '@/engine/core/contentProvider'
-import { VitraSectionSplitter } from '@/engine/core/vitraSectionSplitter'
+import { SectionSplitter } from '@/engine/core/sectionSplitter'
 import { decodeTextBuffer } from './textDecoding'
 import { EMPTY_SECTION_HTML, DEFAULT_DOCUMENT_LABEL } from '@/engine/render/chapterTitleDetector'
 import { escapeHtml } from '@/engine/core/contentSanitizer'
@@ -29,7 +29,7 @@ export class Fb2ContentProvider implements ContentProvider {
         const doc = parser.parseFromString(text, 'application/xml')
         const body = doc.querySelector('body')
         const fullHtml = fb2NodeToHtml(body ?? doc.documentElement)
-        const chunks = VitraSectionSplitter.split(fullHtml)
+        const chunks = SectionSplitter.split(fullHtml)
         this.chapters = chunks.map((chunk, index) => ({
             title: chunk.label || `第 ${index + 1} 章`,
             html: chunk.html || EMPTY_SECTION_HTML,

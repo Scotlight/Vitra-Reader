@@ -1,5 +1,5 @@
 /**
- * vitraPosition — DOM 路径 + 文本锚定位置序列化
+ * DOM 路径 + 文本锚定位置序列化
  *
  * 提供比 PageBoundary (blockIndex 方式) 更稳定的位置定位：
  * - 基于 DOM 元素路径（tag index chain）+ 文本偏移
@@ -10,7 +10,7 @@
 // ─── 类型定义 ──────────────────────────────────────────
 
 /** 稳定位置描述符 */
-export interface VitraPosition {
+export interface SerializedPosition {
     /** 章节在 spine 中的索引 */
     spineIndex: number
     /**
@@ -29,7 +29,7 @@ export interface VitraPosition {
 }
 
 /** 反序列化结果 */
-export interface VitraPositionResult {
+export interface PositionResult {
     /** 恢复到的 DOM node */
     node: Node
     /** node 内的偏移量 */
@@ -125,7 +125,7 @@ export function serializePosition(
     node: Node,
     offset: number,
     spineIndex: number,
-): VitraPosition | null {
+): SerializedPosition | null {
     const domPath = buildDomPath(root, node)
     if (!domPath) return null
 
@@ -173,7 +173,7 @@ function fuzzyMatchByContext(
     root: HTMLElement,
     contextBefore: string,
     contextAfter: string,
-): VitraPositionResult | null {
+): PositionResult | null {
     if (contextBefore.length < MIN_CONTEXT_LENGTH && contextAfter.length < MIN_CONTEXT_LENGTH) {
         return null
     }
@@ -219,7 +219,7 @@ function fuzzyMatchByContext(
 function resolveNodeAtOffset(
     nodeStarts: { node: Text; start: number }[],
     absoluteOffset: number,
-): VitraPositionResult | null {
+): PositionResult | null {
     for (let i = nodeStarts.length - 1; i >= 0; i--) {
         const entry = nodeStarts[i]
         if (absoluteOffset >= entry.start) {
@@ -248,8 +248,8 @@ function resolveNodeAtOffset(
  */
 export function deserializePosition(
     root: HTMLElement,
-    position: VitraPosition,
-): VitraPositionResult | null {
+    position: SerializedPosition,
+): PositionResult | null {
     // 方式 1: 精确 DOM path
     const exactNode = walkDomPath(root, position.domPath)
     if (exactNode) {
@@ -282,7 +282,7 @@ export function deserializePosition(
  */
 export function scrollToPosition(
     scrollContainer: HTMLElement,
-    result: VitraPositionResult,
+    result: PositionResult,
     behavior: ScrollBehavior = 'instant',
 ): void {
     const targetNode = result.node

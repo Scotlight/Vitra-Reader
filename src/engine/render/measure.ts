@@ -1,19 +1,19 @@
 /**
- * Vitra 离屏 DOM 测量服务
+ * 离屏 DOM 测量服务
  *
  * 将 HTML 注入离屏容器进行块级元素测量，
- * 结合 vitraPaginator 生成分页边界（PageBoundary）。
+ * 结合 paginator 生成分页边界（PageBoundary）。
  *
  * 对应文档 4.2 Stage 2 (Measure) + Stage 3 (Paginate)。
  */
 
-import type { PageBoundary } from '../types/vitraPagination'
+import type { PageBoundary } from '../types/pagination'
 import {
     buildPageBoundariesFromDomIdle,
-    type VitraBlockMeasureOptions,
-    type VitraIdlePaginationProgress,
-} from './vitraPaginator'
-import type { VitraPaginateOptions } from '../types/vitraPagination'
+    type BlockMeasureOptions,
+    type IdlePaginationProgress,
+} from './paginator'
+import type { PaginateOptions } from '../types/pagination'
 
 // ─── 配置默认值 ──────────────────────────────────────
 
@@ -24,7 +24,7 @@ const DEFAULT_CANVAS_TEXT_CACHE_ENTRIES = 3000
 
 // ─── 公共接口 ────────────────────────────────────────
 
-export interface VitraMeasureConfig {
+export interface MeasureConfig {
     /** DOM 测量批次大小（默认 100） */
     batchSize?: number
     /** 空闲回调超时（默认 120ms） */
@@ -37,7 +37,7 @@ export interface VitraMeasureConfig {
     canvasTextCacheEntries?: number
 }
 
-export interface VitraMeasureRequest {
+export interface MeasureRequest {
     /** 待测量的 HTML 源节点（将被 cloneNode 复制） */
     sourceNode: HTMLElement
     /** 视口高度（px） */
@@ -45,14 +45,14 @@ export interface VitraMeasureRequest {
     /** 离屏宿主容器（不可见但参与布局） */
     host: HTMLElement
     /** 可选测量配置 */
-    config?: VitraMeasureConfig
+    config?: MeasureConfig
     /** 可选分页选项 */
-    paginateOptions?: VitraPaginateOptions
+    paginateOptions?: PaginateOptions
     /** 进度回调（每批次触发） */
-    onProgress?: (progress: VitraIdlePaginationProgress) => void
+    onProgress?: (progress: IdlePaginationProgress) => void
 }
 
-export interface VitraMeasureHandle {
+export interface MeasureHandle {
     /** 等待测量完成，返回分页边界 */
     readonly result: Promise<readonly PageBoundary[]>
     /** 取消测量 */
@@ -71,7 +71,7 @@ export interface VitraMeasureHandle {
  *
  * @returns 可取消的测量句柄
  */
-export function startMeasure(request: VitraMeasureRequest): VitraMeasureHandle {
+export function startMeasure(request: MeasureRequest): MeasureHandle {
     const {
         sourceNode,
         viewportHeight,
@@ -90,7 +90,7 @@ export function startMeasure(request: VitraMeasureRequest): VitraMeasureHandle {
     measureNode.style.width = '100%'
     host.appendChild(measureNode)
 
-    const measureOpts: VitraBlockMeasureOptions = {
+    const measureOpts: BlockMeasureOptions = {
         batchSize: config.batchSize ?? DEFAULT_BATCH_SIZE,
         idleTimeoutMs: config.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS,
         signal: controller.signal,
@@ -141,8 +141,8 @@ export async function measurePageBoundaries(
     sourceNode: HTMLElement,
     viewportHeight: number,
     host: HTMLElement,
-    config?: VitraMeasureConfig,
-    paginateOptions?: VitraPaginateOptions,
+    config?: MeasureConfig,
+    paginateOptions?: PaginateOptions,
 ): Promise<readonly PageBoundary[]> {
     const handle = startMeasure({
         sourceNode,

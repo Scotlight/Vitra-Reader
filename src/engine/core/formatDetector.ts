@@ -1,4 +1,4 @@
-import type { VitraBookFormat } from '../types/vitraBook';
+import type { EngineBookFormat } from '../types/book';
 
 const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04];
 const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46];
@@ -12,7 +12,7 @@ const MAX_ZIP_ENTRY_SCAN = 768;
 const MIN_HEADER_SIZE = 30;
 const MAX_MIMETYPE_LENGTH = 96;
 
-const TEXT_FALLBACK_MAP: Record<string, VitraBookFormat> = {
+const TEXT_FALLBACK_MAP: Record<string, EngineBookFormat> = {
   txt: 'TXT',
   fb2: 'FB2',
   md: 'MD',
@@ -41,10 +41,10 @@ interface ZipLocalEntry {
   readonly compressedSize: number;
 }
 
-export async function detectVitraFormat(
+export async function detectFormat(
   buffer: ArrayBuffer,
   filename: string,
-): Promise<VitraBookFormat> {
+): Promise<EngineBookFormat> {
   const binaryDetected = detectBinaryFormat(buffer, filename);
   if (binaryDetected) {
     return binaryDetected;
@@ -58,7 +58,7 @@ export async function detectVitraFormat(
 function detectBinaryFormat(
   buffer: ArrayBuffer,
   filename: string,
-): VitraBookFormat | null {
+): EngineBookFormat | null {
   if (startsWithMagic(buffer, PDF_MAGIC)) return 'PDF';
   if (startsWithMagic(buffer, RAR_MAGIC_PREFIX)) return 'CBR';
   if (startsWithMagic(buffer, SEVEN_Z_MAGIC)) return 'CB7';
@@ -68,7 +68,7 @@ function detectBinaryFormat(
   return null;
 }
 
-function detectZipSubFormat(buffer: ArrayBuffer, filename: string): VitraBookFormat {
+function detectZipSubFormat(buffer: ArrayBuffer, filename: string): EngineBookFormat {
   const entries = listZipLocalEntries(buffer, MAX_ZIP_ENTRY_SCAN);
   const names = entries.map((entry) => normalizeZipName(entry.name));
   if (isEpubContainer(buffer, entries, names)) return 'EPUB';
@@ -154,7 +154,7 @@ function isMobiLike(buffer: ArrayBuffer): boolean {
   return readAscii(buffer, MOBI_MAGIC_OFFSET, 8) === 'BOOKMOBI';
 }
 
-function resolveMobiFamily(filename: string): VitraBookFormat {
+function resolveMobiFamily(filename: string): EngineBookFormat {
   const ext = getExtension(filename);
   if (ext === 'azw3') return 'AZW3';
   if (ext === 'azw') return 'AZW';
@@ -163,8 +163,8 @@ function resolveMobiFamily(filename: string): VitraBookFormat {
 
 function detectByExtension(
   filename: string,
-  fallback: VitraBookFormat = 'TXT',
-): VitraBookFormat {
+  fallback: EngineBookFormat = 'TXT',
+): EngineBookFormat {
   const ext = getExtension(filename);
   return TEXT_FALLBACK_MAP[ext] ?? fallback;
 }

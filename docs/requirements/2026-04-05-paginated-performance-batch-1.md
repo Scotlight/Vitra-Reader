@@ -27,7 +27,7 @@
 ## 非目标
 
 - 本批次不实现翻页模式 `segmentMetas` 分段分页。
-- 不改写 `vitraPaginator` 的分页算法。
+- 不改写 `paginator` 的分页算法。
 - 不做跨会话持久化缓存。
 - 不处理 PDF provider 的专用渲染路径优化。
 
@@ -41,5 +41,5 @@
 
 - `src/components/Reader/PaginatedReaderView.tsx:173-185`
 - `src/components/Reader/PaginatedReaderView.tsx:107-134`
-- `src/engine/render/vitraMeasure.ts:68-111`
-- `src/engine/render/vitraPaginator.ts:280-305`
+- `src/engine/render/measure.ts:68-111`
+- `src/engine/render/paginator.ts:280-305`

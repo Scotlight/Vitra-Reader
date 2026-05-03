@@ -1,4 +1,4 @@
-import type { BlockMetrics } from '../types/vitraPagination'
+import type { BlockMetrics } from '../types/pagination'
 import { clampNumber } from '@/utils/mathUtils'
 import { estimateLineWidth, invalidateCharWidthTable } from './charWidthTable'
 

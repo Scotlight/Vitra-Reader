@@ -1,7 +1,7 @@
 import { marked } from 'marked'
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '@/engine/core/contentProvider'
 import { stripBookExtension } from '@/engine/core/contentProvider'
-import { VitraSectionSplitter } from '@/engine/core/vitraSectionSplitter'
+import { SectionSplitter } from '@/engine/core/sectionSplitter'
 import { decodeTextBuffer } from './textDecoding'
 import { EMPTY_SECTION_HTML, DEFAULT_DOCUMENT_LABEL } from '@/engine/render/chapterTitleDetector'
 import { searchPlainChapterTexts, stripHtmlTags } from './chapterSearch'
@@ -26,7 +26,7 @@ export class MdContentProvider implements ContentProvider {
         const text = decodeTextBuffer(this.data, 'md').text
         const rendered = await marked.parse(text)
         const html = typeof rendered === 'string' ? rendered : String(rendered)
-        const chunks = VitraSectionSplitter.split(html)
+        const chunks = SectionSplitter.split(html)
         this.chapters = chunks.map((chunk, index) => ({
             title: chunk.label || `第 ${index + 1} 章`,
             html: chunk.html || EMPTY_SECTION_HTML,

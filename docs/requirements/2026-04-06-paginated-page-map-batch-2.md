@@ -12,7 +12,7 @@
 
 ## 约束
 
-- 不重写 `vitraPaginator` 算法。
+- 不重写 `paginator` 算法。
 - 不引入完整翻页向量化分页器。
 - 不改变 `PaginatedReaderView` 对外接口。
 - 修复必须兼容当前的离屏测量异步流程与中途 abort 机制。
@@ -41,4 +41,4 @@
 - `src/components/Reader/PaginatedReaderView.tsx:307-316`
 - `src/components/Reader/PaginatedReaderView.tsx:401-405`
 - `src/components/Reader/PaginatedReaderView.tsx:455-463`
-- `src/engine/render/vitraMeasure.ts:68-111`
+- `src/engine/render/measure.ts:68-111`

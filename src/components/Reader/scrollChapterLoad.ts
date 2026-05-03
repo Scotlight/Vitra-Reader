@@ -1,7 +1,7 @@
 import type { ChapterPreprocessResult } from '@/engine/types/chapterPreprocess'
 import type { SegmentMeta } from '@/engine/types/vectorRender'
 
-export type LoadedChapterStatus = 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder'
+export type LoadedChapterStatus = 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder' | 'error'
 export type ChapterInsertDirection = 'prev' | 'next' | 'initial'
 
 export interface LoadedChapterState {
@@ -106,6 +106,28 @@ export function appendShadowQueueChapter(
         ...queue.filter((item) => item.spineIndex !== chapter.spineIndex),
         chapter,
     ]
+}
+
+export function removeShadowQueueChapter(
+    queue: readonly LoadedChapterState[],
+    spineIndex: number,
+): LoadedChapterState[] {
+    return queue.filter((item) => item.spineIndex !== spineIndex)
+}
+
+export function markChapterShadowRenderError(
+    chapters: readonly LoadedChapterState[],
+    spineIndex: number,
+): LoadedChapterState[] {
+    return chapters.map((chapter) =>
+        chapter.spineIndex === spineIndex
+            ? {
+                ...chapter,
+                domNode: null,
+                status: 'error' as const,
+            }
+            : chapter
+    )
 }
 
 export function queueChapterForShadowRender(input: {

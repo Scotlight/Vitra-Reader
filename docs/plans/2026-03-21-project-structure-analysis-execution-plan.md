@@ -29,7 +29,7 @@
 - `git branch --show-current`
 - `Get-ChildItem -Force`
 - `rg --files src/engine src/services src/stores src/hooks`
-- `rg -n "ReaderView|LibraryView|VitraPipeline|importBook|storageService" ...`
+- `rg -n "ReaderView|LibraryView|BookPipeline|importBook|storageService" ...`
 - `mcp__ace-tool-rs__search_context`
 
 ## Rollback Rule

@@ -25,10 +25,10 @@
 2. `App` 渲染 `ReaderView(bookId, jumpTarget)`。
 3. `ReaderView` 调用 `useReaderBookSession({ bookId, pageTurnMode })`，不再内联读取 Dexie。
 4. `useReaderBookSession` 并行读取 `db.books`、`db.bookFiles`、`db.progress`。
-5. `openReaderProvider()` 基于书籍格式和文件二进制调用 `VitraPipeline.open({ buffer, filename })`。
-6. `VitraPipeline.open()` 嗅探格式，选择 parser，并返回 `ready / metadata / preview / cancel` handle。
-7. `handle.ready` 返回 `VitraBook` 后，`VitraContentAdapter` 把它适配成 `ContentProvider`，随后执行 `provider.init()`。
-8. `VitraContentAdapter.init()` 对允许缓存的格式尝试从 `VitraBookCache` 预热 `htmlCache`，并延迟构建搜索索引。
+5. `openReaderProvider()` 基于书籍格式和文件二进制调用 `BookPipeline.open({ buffer, filename })`。
+6. `BookPipeline.open()` 嗅探格式，选择 parser，并返回 `ready / metadata / preview / cancel` handle。
+7. `handle.ready` 返回 `ParsedBook` 后，`BookContentAdapter` 把它适配成 `ContentProvider`，随后执行 `provider.init()`。
+8. `BookContentAdapter.init()` 对允许缓存的格式尝试从 `BookCache` 预热 `htmlCache`，并延迟构建搜索索引。
 9. `resolveSessionToc()` 读取 provider TOC，空目录时从 spine 生成回退目录。
 10. `resolveInitialLocation()` 把 `progress.location` 解析为 `vitra:{spineIndex}:{pageOrOffset}`、`bdise:` 或旧 href 位置。
 11. `resolveScrollParams()` / `resolvePaginatedParams()` 结合 `resolveReaderRenderMode()` 生成滚动或分页初始参数。
@@ -38,7 +38,7 @@
 边界：
 
 - 打开流程收敛在 `useReaderBookSession`。
-- 非 PDF 内容通过 `VitraPipeline + VitraContentAdapter` 统一进入阅读器。
+- 非 PDF 内容通过 `BookPipeline + BookContentAdapter` 统一进入阅读器。
 - Reader UI 最终消费 `ContentProvider`，不直接接触具体 parser。
 
 ## 4. 打开一本 PDF
@@ -209,15 +209,15 @@
 
 ### 10.5 翻译配置与缓存
 
-- `loadTranslateConfig()` 从 `db.settings['translateConfig']` 读取配置，并解密 API key。
-- `saveTranslateConfig()` 合并当前配置后加密 API key，再写回 `translateConfig`。
+- `loadTranslateConfig()` 优先从 `db.settings['translate:config']` 读取配置；若只存在旧键 `translateConfig`，会迁移到新键并删除旧键。
+- `saveTranslateConfig()` 合并当前配置后加密 API key，再写回 `translate:config`。
 - `translateText()` 根据 provider、语言、模型、endpoint 和文本生成 cache key。
 - 命中 `translationCache` 时直接返回。
 - 未命中时调用对应 provider，成功后写入 `translationCache` 并执行 TTL / `lastAccessAt` 清理。
 
 边界：
 
-- `translateConfig` 是敏感配置，不参加 WebDAV 同步。
+- `translate:config` 和旧键 `translateConfig` 都是敏感配置，不参加 WebDAV 同步。
 - 翻译结果缓存是独立表，不混入 `settings`。
 
 ## 11. 书库元数据与统计页面
@@ -238,8 +238,8 @@
 
 1. 阅读器退出或切换文档时，`App` 切回 `library` 并清空 `currentBookId`。
 2. `useReaderBookSession` cleanup 调用当前 provider 的 `destroy()`；如果异步会话在组件销毁后才返回，也会立即销毁 provider。
-3. `VitraContentAdapter.destroy()` 释放 section manager、`htmlCache`、asset session，并异步写回持久缓存。
-4. `VitraSectionManager.destroy()` 清理已加载资源。
+3. `BookContentAdapter.destroy()` 释放 section manager、`htmlCache`、asset session，并异步写回持久缓存。
+4. `SectionManager.destroy()` 清理已加载资源。
 5. PDF provider 销毁时释放文档对象。
 
 边界：

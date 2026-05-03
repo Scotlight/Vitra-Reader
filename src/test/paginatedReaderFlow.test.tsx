@@ -3,7 +3,7 @@ import { act, render, waitFor } from '@testing-library/react'
 import { createRef } from 'react'
 import type { ContentProvider, SearchResult, SpineItemInfo, TocItem } from '@/engine/core/contentProvider'
 import type { ReaderStyleConfig } from '@/components/Reader/ShadowRenderer'
-import type { PageBoundary } from '@/engine/types/vitraPagination'
+import type { PageBoundary } from '@/engine/types/pagination'
 
 const mocks = vi.hoisted(() => ({
     preprocessChapterContentMock: vi.fn(),
@@ -16,8 +16,8 @@ vi.mock('@/engine/render/chapterPreprocessService', () => ({
     preprocessChapterContent: mocks.preprocessChapterContentMock,
 }))
 
-vi.mock('@/engine/render/vitraMeasure', async () => {
-    const actual = await vi.importActual<typeof import('@/engine/render/vitraMeasure')>('@/engine/render/vitraMeasure')
+vi.mock('@/engine/render/measure', async () => {
+    const actual = await vi.importActual<typeof import('@/engine/render/measure')>('@/engine/render/measure')
     return {
         ...actual,
         startMeasure: mocks.startMeasureMock,

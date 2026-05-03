@@ -1,4 +1,4 @@
-import type { VitraBookFormat } from '@/engine/types/vitraBook'
+import type { EngineBookFormat } from '@/engine/types/book'
 
 /**
  * 章节 HTML 边缘清理：
@@ -31,7 +31,7 @@ const EDGE_PRESERVED_CONTENT_TAGS = new Set([
 ])
 
 const EDGE_PRESERVED_CONTENT_SELECTOR = Array.from(EDGE_PRESERVED_CONTENT_TAGS).join(',')
-const SKIP_CLEANUP_FORMATS = new Set<VitraBookFormat>(['PDF'])
+const SKIP_CLEANUP_FORMATS = new Set<EngineBookFormat>(['PDF'])
 
 function parseHtmlDocument(html: string): Document {
     return new DOMParser().parseFromString(html, 'text/html')
@@ -93,10 +93,10 @@ export function trimChapterEdgeWhitespace(html: string): string {
     return doc.body.innerHTML.trim()
 }
 
-export function shouldCleanChapterHtml(format: VitraBookFormat): boolean {
+export function shouldCleanChapterHtml(format: EngineBookFormat): boolean {
     return !SKIP_CLEANUP_FORMATS.has(format)
 }
 
-export function cleanChapterHtmlForFormat(html: string, format: VitraBookFormat): string {
+export function cleanChapterHtmlForFormat(html: string, format: EngineBookFormat): string {
     return shouldCleanChapterHtml(format) ? trimChapterEdgeWhitespace(html) : html
 }

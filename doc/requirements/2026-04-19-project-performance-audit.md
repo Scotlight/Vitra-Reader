@@ -53,7 +53,7 @@
 
 5. 中风险：构建产物体积偏大，历史上存在 chunk > 500 kB。
 
-   当前状态：第一阶段已完成。最近一次 `npm run build --silent` 通过；未再出现 `VitraPipeline` / `VitraContentAdapter` 的 dynamic import 冲突告警，也未出现 Vite chunk 超过 500 kB 告警。
+   当前状态：第一阶段已完成。最近一次 `npm run build --silent` 通过；未再出现 `BookPipeline` / `BookContentAdapter` 的 dynamic import 冲突告警，也未出现 Vite chunk 超过 500 kB 告警。
 
    未完成项：PDF modern / legacy vendor 仍是最大体积来源，最大 chunk 为 `pdf-legacy-vendor-Din8IpeN.js`，约 `497.43 kB`。
 

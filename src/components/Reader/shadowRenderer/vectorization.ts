@@ -74,7 +74,7 @@ export function vectorizeChapterContent(
 // ── 2. 段 DOM 操作 ──
 
 export function materializeVectorSegment(targetEl: HTMLElement, segment: ChapterVectorSegment): void {
-    // 优先使用 Worker 侧的 _htmlContent (innerHTML 设值)
+    // _htmlContent 来自 Worker 预处理后的 SegmentMeta，已经完成 HTML 清洗。
     if (segment._htmlContent) {
         targetEl.innerHTML = segment._htmlContent;
         return;

@@ -35,7 +35,7 @@ Reader UI 层负责：
 
 `ReaderView` 组合的主要 hook：
 
-- `useReaderBookSession`：读取 `db.books` / `db.bookFiles` / `db.progress`，创建 `VitraPipeline` 与 `VitraContentAdapter`，解析初始定位。
+- `useReaderBookSession`：读取 `db.books` / `db.bookFiles` / `db.progress`，创建 `BookPipeline` 与 `BookContentAdapter`，解析初始定位。
 - `useReaderNavigation`：目录点击、搜索执行、搜索结果跳转、`jumpTarget` 延迟派发。
 - `useReaderAnnotations`：书签与高亮数据。
 - `useAutoScrollActiveToc`：TOC 激活项自动滚动。

@@ -1,6 +1,6 @@
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '@/engine/core/contentProvider'
 import { stripBookExtension } from '@/engine/core/contentProvider'
-import { VitraSectionSplitter } from '@/engine/core/vitraSectionSplitter'
+import { SectionSplitter } from '@/engine/core/sectionSplitter'
 import { decodeTextBuffer } from './textDecoding'
 import { EMPTY_SECTION_HTML, DEFAULT_DOCUMENT_LABEL } from '@/engine/render/chapterTitleDetector'
 import { searchPlainChapterTexts, stripHtmlTags } from './chapterSearch'
@@ -28,7 +28,7 @@ export class HtmlContentProvider implements ContentProvider {
         const bodyMatch = text.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
         const body = bodyMatch ? bodyMatch[1] : text
 
-        const chunks = VitraSectionSplitter.split(body)
+        const chunks = SectionSplitter.split(body)
         this.chapters = chunks.map((chunk, index) => ({
             title: chunk.label || `第 ${index + 1} 章`,
             html: chunk.html || EMPTY_SECTION_HTML,

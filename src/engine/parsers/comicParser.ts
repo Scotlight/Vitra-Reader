@@ -2,16 +2,16 @@
 // 漫画 Parser — CBZ / CBT / CBR / CB7
 // ═══════════════════════════════════════════════════════
 
-import { VitraBaseParser } from '../core/vitraBaseParser';
+import { BaseParser } from '../core/baseParser';
 import { stripBookExtension } from '../core/contentProvider';
 import type {
-  VitraBook,
-  VitraBookFormat,
-  VitraBookMetadata,
-  VitraBookSection,
-  VitraReadingDirection,
-  VitraTocItem,
-} from '../types/vitraBook';
+  ParsedBook,
+  EngineBookFormat,
+  ParsedBookMetadata,
+  BookSection,
+  ReadingDirection,
+  BookTocItem,
+} from '../types/book';
 import type { ArchiveLoader } from './comicArchiveAdapters';
 import {
   createZipLoader,
@@ -41,11 +41,11 @@ function mimeFromFilename(filename: string): string {
 
 // ───────────────────────── 基类 ─────────────────────────
 
-abstract class VitraComicParserBase extends VitraBaseParser {
-  protected abstract readonly comicFormat: VitraBookFormat;
+abstract class ComicParserBase extends BaseParser {
+  protected abstract readonly comicFormat: EngineBookFormat;
   protected abstract createLoader(): ArchiveLoader;
 
-  async parse(): Promise<VitraBook> {
+  async parse(): Promise<ParsedBook> {
     const loader = this.createLoader();
     const comicInfo = await this.tryLoadComicInfo(loader);
     const imageEntries = this.sortImageEntries(loader);
@@ -55,7 +55,7 @@ abstract class VitraComicParserBase extends VitraBaseParser {
       throw new Error(`漫画文件中未找到图片: ${this.filename}`);
     }
 
-    const direction: VitraReadingDirection = comicInfo?.direction ?? 'ltr';
+    const direction: ReadingDirection = comicInfo?.direction ?? 'ltr';
     const metadata = this.buildMetadata(comicInfo);
     const coverIndex = comicInfo?.coverPageIndex ?? 0;
     const { sections, destroy } = this.buildSections(imageEntries, loader);
@@ -101,7 +101,7 @@ abstract class VitraComicParserBase extends VitraBaseParser {
     }
   }
 
-  private buildMetadata(comicInfo: ComicMetadata | null): VitraBookMetadata {
+  private buildMetadata(comicInfo: ComicMetadata | null): ParsedBookMetadata {
     const fallbackTitle = stripBookExtension(this.filename);
     const title = comicInfo?.title || comicInfo?.series || fallbackTitle || 'Untitled';
     const author: string[] = [];
@@ -123,11 +123,11 @@ abstract class VitraComicParserBase extends VitraBaseParser {
   private buildSections(
     imageEntries: string[],
     loader: ArchiveLoader,
-  ): { sections: VitraBookSection[]; destroy: () => void } {
+  ): { sections: BookSection[]; destroy: () => void } {
     const urlCache = new Map<number, string>();
     const imgUrlCache = new Map<number, string>();
 
-    const sections: VitraBookSection[] = imageEntries.map((filename, index) => {
+    const sections: BookSection[] = imageEntries.map((filename, index) => {
       const entry = loader.entries.find((e) => e.filename === filename);
       const size = entry?.size ?? 0;
 
@@ -183,7 +183,7 @@ img{display:block;max-width:100%;max-height:100%;margin:auto;object-fit:contain}
     };
   }
 
-  private buildToc(imageEntries: string[]): VitraTocItem[] {
+  private buildToc(imageEntries: string[]): BookTocItem[] {
     // 漫画通常无目录，按页数生成简单导航
     return imageEntries.map((_, index) => ({
       label: `第 ${index + 1} 页`,
@@ -225,7 +225,7 @@ img{display:block;max-width:100%;max-height:100%;margin:auto;object-fit:contain}
 
 // ───────────────────────── CBZ ─────────────────────────
 
-export class VitraCbzParser extends VitraComicParserBase {
+export class CbzParser extends ComicParserBase {
   protected readonly comicFormat = 'CBZ' as const;
   protected createLoader(): ArchiveLoader {
     return createZipLoader(this.buffer);
@@ -234,7 +234,7 @@ export class VitraCbzParser extends VitraComicParserBase {
 
 // ───────────────────────── CBT ─────────────────────────
 
-export class VitraCbtParser extends VitraComicParserBase {
+export class CbtParser extends ComicParserBase {
   protected readonly comicFormat = 'CBT' as const;
   protected createLoader(): ArchiveLoader {
     return createTarLoader(this.buffer);
@@ -243,7 +243,7 @@ export class VitraCbtParser extends VitraComicParserBase {
 
 // ───────────────────────── CBR ─────────────────────────
 
-export class VitraCbrParser extends VitraComicParserBase {
+export class CbrParser extends ComicParserBase {
   protected readonly comicFormat = 'CBR' as const;
   protected createLoader(): ArchiveLoader {
     return createRarLoader(this.buffer);
@@ -252,7 +252,7 @@ export class VitraCbrParser extends VitraComicParserBase {
 
 // ───────────────────────── CB7 ─────────────────────────
 
-export class VitraCb7Parser extends VitraComicParserBase {
+export class Cb7Parser extends ComicParserBase {
   protected readonly comicFormat = 'CB7' as const;
   protected createLoader(): ArchiveLoader {
     return create7zLoader(this.buffer);

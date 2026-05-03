@@ -4,13 +4,13 @@ import type {
 } from '../core/contentProvider'
 import { upsertChapterIndex } from '../cache/searchIndexCache'
 import type {
-    VitraBookFormat,
-    VitraBookSection,
-} from '../types/vitraBook'
+    EngineBookFormat,
+    BookSection,
+} from '../types/book'
 import { cleanChapterHtmlForFormat } from '../render/chapterHtmlCleanup'
 
 export interface ProviderSectionFactoryResult {
-    readonly sections: readonly VitraBookSection[]
+    readonly sections: readonly BookSection[]
     readonly releaseAll: () => void
 }
 
@@ -24,12 +24,12 @@ interface ProviderSectionFactoryInput {
     readonly spineItems: readonly SpineItemInfo[]
     readonly provider: ContentProvider
     readonly bookId: string
-    readonly format: VitraBookFormat
+    readonly format: EngineBookFormat
 }
 
 /**
- * 将 legacy ContentProvider 的章节接口适配成 VitraBookSection。
- * 这里是 provider-backed 格式进入 VitraBook 层的第一道内容规范化入口。
+ * 将 legacy ContentProvider 的章节接口适配成 BookSection。
+ * 这里是 provider-backed 格式进入 ParsedBook 层的第一道内容规范化入口。
  */
 export function createProviderSections(
     input: ProviderSectionFactoryInput,
@@ -74,7 +74,7 @@ function createProviderSection({
     input,
     caches,
     releaseSection,
-}: CreateProviderSectionInput): VitraBookSection {
+}: CreateProviderSectionInput): BookSection {
     return {
         id: spine.id || spine.index,
         href: spine.href,

@@ -9,7 +9,7 @@ export interface SectionChunk {
   readonly index: number;
 }
 
-export class VitraSectionSplitter {
+export class SectionSplitter {
   static split(html: string): SectionChunk[] {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const headings = this.getHeadingElements(doc);

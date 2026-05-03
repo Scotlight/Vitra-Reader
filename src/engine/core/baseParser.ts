@@ -1,4 +1,4 @@
-import type { VitraBook, VitraBookMetadata } from '../types/vitraBook';
+import type { ParsedBook, ParsedBookMetadata } from '../types/book';
 
 interface StringReadOptions {
   readonly buffer?: ArrayBuffer;
@@ -7,7 +7,7 @@ interface StringReadOptions {
   readonly encoding?: string;
 }
 
-export abstract class VitraBaseParser {
+export abstract class BaseParser {
   protected readonly buffer: ArrayBuffer;
   protected readonly filename: string;
 
@@ -16,9 +16,9 @@ export abstract class VitraBaseParser {
     this.filename = filename;
   }
 
-  abstract parse(): Promise<VitraBook>;
+  abstract parse(): Promise<ParsedBook>;
 
-  async getMetadata(): Promise<VitraBookMetadata> {
+  async getMetadata(): Promise<ParsedBookMetadata> {
     const parsed = await this.parse();
     return parsed.metadata;
   }

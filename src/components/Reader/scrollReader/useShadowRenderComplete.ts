@@ -5,6 +5,7 @@ import type { ChapterMetaVector } from '@/engine/types/vectorRender';
 import type { LoadedChapter } from './scrollReaderTypes';
 import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
+import { shouldLogScrollReaderDebug } from '@/utils/readerDebug';
 
 interface UseShadowRenderCompleteOptions {
     chapterVectorsRef: MutableRefObject<Map<string, ChapterMetaVector>>;
@@ -56,7 +57,9 @@ export function useShadowRenderComplete(
         node: HTMLElement,
         height: number,
     ) => {
-        console.log(`[ScrollReader] Shadow ready: spine ${spineIndex}, height ${height}px`);
+        if (shouldLogScrollReaderDebug()) {
+            console.log(`[ScrollReader] Shadow ready: spine ${spineIndex}, height ${height}px`);
+        }
 
         const chapterId = `ch-${spineIndex}`;
         const ch = chaptersRef.current.find(c => c.spineIndex === spineIndex);
@@ -76,7 +79,9 @@ export function useShadowRenderComplete(
                 const batch = pendingReadyRef.current.splice(0);
                 if (batch.length === 0) return;
 
-                console.log(`[ScrollReader] Flush batch: ${batch.map(b => `spine ${b.spineIndex}`).join(', ')}`);
+                if (shouldLogScrollReaderDebug()) {
+                    console.log(`[ScrollReader] Flush batch: ${batch.map(b => `spine ${b.spineIndex}`).join(', ')}`);
+                }
 
                 const batchIndices = new Set(batch.map(b => b.spineIndex));
                 setShadowQueue(prev => prev.filter(c => !batchIndices.has(c.spineIndex)));
@@ -144,6 +149,7 @@ export function useShadowRenderComplete(
         const meta = vector.segments[segIndex];
         if (!meta) return;
 
+        // meta.htmlContent 来自章节预处理的 SegmentMeta，进入此处前已经完成 HTML 清洗。
         segmentEl.innerHTML = meta.htmlContent;
         segmentEl.setAttribute('data-shadow-segment-state', 'hydrated');
         segmentEl.style.minHeight = '0px';

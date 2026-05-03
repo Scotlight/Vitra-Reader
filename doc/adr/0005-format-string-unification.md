@@ -9,27 +9,27 @@
 项目中存在两套格式字符串：
 
 - `BookFormat`（`contentProvider.ts`）：小写 string union，`'epub' | 'pdf' | 'txt' | ...`，用于 UI 层、存储层、格式检测入口
-- `VitraBookFormat`（`vitraBook.ts`）：大写 string union，`'EPUB' | 'PDF' | 'TXT' | ...`，用于引擎内部 pipeline、parser 分发
+- `EngineBookFormat`（`book.ts`）：大写 string union，`'EPUB' | 'PDF' | 'TXT' | ...`，用于引擎内部 pipeline、parser 分发
 
 两套并存导致：
 
 1. `readerRenderMode.ts` 的 Set 里同时写 `'pdf'` 和 `'PDF'`、`'djvu'` 和 `'DJVU'` 等，每次新增格式都要双写
 2. 调用方需要知道当前上下文用哪套，`readerRenderMode.ts` 用 `AnyFormatString = BookFormat | string` 绕过类型检查
-3. 引擎边界（`contentProviderFactory.ts` → `vitraPipeline.ts`）存在隐式大小写转换，转换点不统一
+3. 引擎边界（`contentProviderFactory.ts` → `pipeline.ts`）存在隐式大小写转换，转换点不统一
 
 ## 考虑过的方案
 
 ### 方案 1（已采用）：边界规范化，引擎内统一大写，UI 层保持小写
 
-在 `vitraPipeline.ts` 入口做一次 `toUpperCase()` 规范化，`VitraBookFormat` 继续大写。`readerRenderMode.ts` 在 `resolveRenderProfile` 入口做 `toLowerCase()` 规范化，Set 只保留小写。两套类型继续共存但各自职责清晰：`BookFormat` 是外部协议，`VitraBookFormat` 是引擎内部协议，边界做一次转换。
+在 `pipeline.ts` 入口做一次 `toUpperCase()` 规范化，`EngineBookFormat` 继续大写。`readerRenderMode.ts` 在 `resolveRenderProfile` 入口做 `toLowerCase()` 规范化，Set 只保留小写。两套类型继续共存但各自职责清晰：`BookFormat` 是外部协议，`EngineBookFormat` 是引擎内部协议，边界做一次转换。
 
 ### 方案 2（已否决）：合并为单一 enum，全局替换
 
-把 `BookFormat` 和 `VitraBookFormat` 合并为一套，全局替换 17 个文件的引用。
+把 `BookFormat` 和 `EngineBookFormat` 合并为一套，全局替换 17 个文件的引用。
 
 ### 方案 3（已否决）：全部统一小写
 
-把引擎内部也改成小写，废弃 `VitraBookFormat`。
+把引擎内部也改成小写，废弃 `EngineBookFormat`。
 
 ## 决策
 
@@ -44,7 +44,7 @@
 具体修改：
 
 - `readerRenderMode.ts`：`resolveRenderProfile` 入口 `format.toLowerCase()`，Set 只保留小写
-- `vitraPipeline.ts`：`detectVitraFormat` 已经在内部处理大小写，无需额外改动（已验证）
+- `pipeline.ts`：`detectFormat` 已经在内部处理大小写，无需额外改动（已验证）
 
 ## 影响
 

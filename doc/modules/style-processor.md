@@ -56,7 +56,7 @@
 - `assetLoader.ts` 会话 URL 生命周期主入口：`resolveSessionAssetUrl()` / `hasSessionAssetUrl()` / `releaseAssetSession()`，源码见 `src/utils/assetLoader.ts:72-137`
 - EPUB 资源加载在 `resolveBlobUrl()` 中调用 `resolveSessionAssetUrl()`，并把归一化后的 archive path 转成 Blob URL：`src/engine/parsers/providers/epubResourceLoader.ts:104-121`
 - EPUB provider 通过 `isAssetUrlAvailable()` / `releaseAssetSession()` 把 asset session 生命周期暴露给上层：`src/engine/parsers/providers/epubProvider.ts:38-44`
-- `VitraContentAdapter.destroy()` 会继续调用 `book.releaseAssetSession?.()` 收口资源释放：`src/engine/pipeline/vitraContentAdapter.ts:84-90`
+- `BookContentAdapter.destroy()` 会继续调用 `book.releaseAssetSession?.()` 收口资源释放：`src/engine/pipeline/contentAdapter.ts:84-90`
 - style sanitize 当前精确入口仍以 `sanitizeStyleSheets()` 为准：`src/engine/core/contentSanitizer.ts:118-122`
 - `ShadowRenderer` 本地 fallback 路径也会执行 `extractStyles()` / `removeStyleTags()` / `sanitizeStyleSheets()` / `scopeStyles()`：`src/components/Reader/ShadowRenderer.tsx:746-751`
 

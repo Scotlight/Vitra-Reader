@@ -26,8 +26,8 @@
   → provider.extractChapterHtml(spineIndex)      ← 逐章提取 HTML
   → ShadowRenderer 注入 HTML 到 Shadow DOM
   → PaginatedReaderView / ScrollReaderView 渲染
-      ├─ vitraMeasure.startMeasure()             ← 已接入 Vitra 分页测量
-      ├─ vitraVectorPlanner.buildVitraVectorRenderPlan()  ← 已接入大章节决策
+      ├─ measure.startMeasure()             ← 已接入 Vitra 分页测量
+      ├─ vectorPlanner.buildVectorRenderPlan()  ← 已接入大章节决策
       └─ readerCss.buildReaderCssTemplate()      ← 已接入 CSS 模板
 ```
 
@@ -54,10 +54,10 @@
 ## Vitra 引擎链路（已实现，未接入 UI）
 
 ```
-VitraPipeline.open({ buffer, filename })
-  → detectVitraFormat(buffer, filename)           ← 格式嗅探（Magic Bytes + 扩展名）
+BookPipeline.open({ buffer, filename })
+  → detectFormat(buffer, filename)           ← 格式嗅探（Magic Bytes + 扩展名）
   → VitraXxxParser.parse()                       ← 统一 Parser 接口
-  → VitraBook                                    ← 统一 Book 模型
+  → ParsedBook                                    ← 统一 Book 模型
       ├─ book.metadata                           ← 元数据
       ├─ book.toc                                ← 目录树
       ├─ book.sections[i].load()                 ← 懒加载章节 HTML (Blob URL)
@@ -72,7 +72,7 @@ VitraPipeline.open({ buffer, filename })
 | 文件 | 职责 | 状态 |
 |------|------|------|
 | **类型层** | | |
-| `src/types/vitraBook.ts` | `VitraBook`/`VitraBookSection`/`VitraTocItem` 统一模型 | ✅ 完成 |
+| `src/engine/types/book.ts` | `ParsedBook`/`BookSection`/`BookTocItem` 统一模型 | ✅ 完成 |
 | `src/types/vitraPagination.ts` | `BlockMetrics`/`PageBoundary` 分页类型 | ✅ 完成 |
 | `src/types/vectorRender.ts` | 向量渲染管线类型 | ✅ 完成 |
 | **核心引擎** | | |
@@ -81,14 +81,14 @@ VitraPipeline.open({ buffer, filename })
 | `src/services/vitraBaseParser.ts` | 抽象基类 | ✅ 完成 |
 | `src/services/vitraSectionSplitter.ts` | 通用 HTML 章节分割器 | ✅ 完成 |
 | `src/services/vitraSectionFactory.ts` | Section → Blob URL 工厂 | ✅ 完成 |
-| `src/services/vitraPipeline.ts` | 统一 open 入口 | ✅ 完成 |
+| `src/engine/pipeline/pipeline.ts` | 统一 open 入口 | ✅ 完成 |
 | **分页引擎** | | |
-| `src/services/vitraPaginator.ts` | DOM/Canvas 双策略分页算法 | ✅ 完成 |
-| `src/services/vitraCanvasMeasure.ts` | Canvas 快速测量 | ✅ 完成 |
-| `src/services/vitraMeasure.ts` | 离屏 DOM 测量服务 | ✅ 完成 |
+| `src/engine/render/paginator.ts` | DOM/Canvas 双策略分页算法 | ✅ 完成 |
+| `src/engine/render/canvasMeasure.ts` | Canvas 快速测量 | ✅ 完成 |
+| `src/engine/render/measure.ts` | 离屏 DOM 测量服务 | ✅ 完成 |
 | **渲染管线** | | |
-| `src/services/vitraRenderPipeline.ts` | 5 阶段追踪（parse→measure→paginate→render→hydrate） | ✅ 完成 |
-| `src/services/vitraVectorPlanner.ts` | 大章节向量化决策 | ✅ 完成 |
+| `src/engine/render/renderStageTrace.ts` | 5 阶段追踪（parse→measure→paginate→render→hydrate） | ✅ 完成 |
+| `src/engine/render/vectorPlanner.ts` | 大章节向量化决策 | ✅ 完成 |
 | `src/services/vitraHydration.ts` | 7 阶段渐进式水合调度 | ✅ 完成 |
 | **辅助** | | |
 | `src/services/readerRenderMode.ts` | 渲染模式决策（reflowable/fixed-layout） | ✅ 完成 |
@@ -105,13 +105,13 @@ VitraPipeline.open({ buffer, filename })
 
 ## 接口对比
 
-| 维度 | 旧系统 (ContentProvider) | Vitra 引擎 (VitraBook) |
+| 维度 | 旧系统 (ContentProvider) | Vitra 引擎 (ParsedBook) |
 |------|--------------------------|------------------------|
-| **入口** | `createContentProvider(format, data)` | `VitraPipeline.open({buffer, filename})` |
-| **格式类型** | `BookFormat` (10 种) | `VitraBookFormat` (20 种，含漫画/DJVU/DOCX) |
+| **入口** | `createContentProvider(format, data)` | `BookPipeline.open({buffer, filename})` |
+| **格式类型** | `BookFormat` (10 种) | `EngineBookFormat` (20 种，含漫画/DJVU/DOCX) |
 | **章节获取** | `provider.extractChapterHtml(i): Promise<string>` | `section.load(): Promise<string>` (Blob URL) |
 | **章节释放** | `provider.unloadChapter(i)` (空操作居多) | `section.unload()` (revoke Blob URL) |
-| **目录** | `provider.getToc(): TocItem[]` | `book.toc: VitraTocItem[]` (递归树) |
+| **目录** | `provider.getToc(): TocItem[]` | `book.toc: BookTocItem[]` (递归树) |
 | **搜索** | `provider.search(keyword): SearchResult[]` | ❌ 未实现 |
 | **样式** | `provider.extractChapterStyles(): string[]` | ❌ 未迁移（EPUB 特有） |
 | **布局方向** | 无 | `book.direction: 'ltr' \| 'rtl' \| 'auto'` |
@@ -127,9 +127,9 @@ VitraPipeline.open({ buffer, filename })
 
 | UI 组件 | 使用的 Vitra 模块 | 用途 |
 |---------|-------------------|------|
-| `PaginatedReaderView.tsx` | `vitraMeasure.startMeasure()` | 离屏 DOM 测量 + 分页 |
+| `PaginatedReaderView.tsx` | `measure.startMeasure()` | 离屏 DOM 测量 + 分页 |
 | `PaginatedReaderView.tsx` | `vitraPagination.PageBoundary` | 分页数据类型 |
-| `ShadowRenderer.tsx` | `vitraVectorPlanner.buildVitraVectorRenderPlan()` | 大章节向量化决策 |
+| `ShadowRenderer.tsx` | `vectorPlanner.buildVectorRenderPlan()` | 大章节向量化决策 |
 | `ShadowRenderer.tsx` | `readerCss.buildReaderCssTemplate()` | CSS 注入 |
 | `ReaderView.tsx` | `readerRenderMode.resolveReaderRenderMode()` | 渲染模式决策 |
 
@@ -138,19 +138,19 @@ VitraPipeline.open({ buffer, filename })
 ## 融合路线（待实施）
 
 ### Phase 1: ReaderView 双轨并行
-- `ReaderView.tsx` 同时支持 `ContentProvider` 和 `VitraBook` 两种数据源
-- 新增 `useVitraBook` hook，内部调用 `VitraPipeline.open()`
+- `ReaderView.tsx` 同时支持 `ContentProvider` 和 `ParsedBook` 两种数据源
+- 新增 `useParsedBook` hook，内部调用 `BookPipeline.open()`
 - 通过 feature flag 或格式判断决定走哪条链路
 
 ### Phase 2: PaginatedReaderView / ScrollReaderView 适配
 - 章节加载从 `provider.extractChapterHtml(i)` 迁移到 `section.load()`
 - Blob URL 生命周期管理（load/unload）
-- TOC 从 `TocItem[]` 适配 `VitraTocItem[]`
+- TOC 从 `TocItem[]` 适配 `BookTocItem[]`
 
 ### Phase 3: 搜索迁移
-- 在 VitraBook 层实现全文搜索（或复用旧 Provider 的 search 逻辑）
+- 在 ParsedBook 层实现全文搜索（或复用旧 Provider 的 search 逻辑）
 
 ### Phase 4: 移除旧系统
 - 删除 `ContentProvider` 接口及所有 Provider 实现
 - 删除 `contentProviderFactory.ts`
-- `BookFormat` → `VitraBookFormat` 统一
+- `BookFormat` → `EngineBookFormat` 统一

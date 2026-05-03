@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PageBoundary } from '@/engine/types/vitraPagination'
+import type { PageBoundary } from '@/engine/types/pagination'
 import {
     buildPaginatedMeasureCacheKey,
     readPaginatedMeasureCache,

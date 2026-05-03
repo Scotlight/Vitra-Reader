@@ -1,6 +1,6 @@
 import { useEffect, useCallback, type MutableRefObject, type RefObject } from 'react'
 import { findTextInDOM } from '@/utils/textFinder'
-import type { PageBoundary } from '@/engine/types/vitraPagination'
+import type { PageBoundary } from '@/engine/types/pagination'
 import {
     formatPaginatedTranslateX,
     resolvePaginatedPageCount,

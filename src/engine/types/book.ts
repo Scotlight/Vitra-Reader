@@ -1,4 +1,4 @@
-export type VitraBookFormat =
+export type EngineBookFormat =
   | 'EPUB'
   | 'MOBI'
   | 'AZW3'
@@ -19,10 +19,10 @@ export type VitraBookFormat =
   | 'CBR'
   | 'CB7';
 
-export type VitraLayoutMode = 'reflowable' | 'pre-paginated';
-export type VitraReadingDirection = 'ltr' | 'rtl' | 'auto';
+export type BookLayoutMode = 'reflowable' | 'pre-paginated';
+export type ReadingDirection = 'ltr' | 'rtl' | 'auto';
 
-export interface VitraBookMetadata {
+export interface ParsedBookMetadata {
   readonly title: string;
   readonly author: readonly string[];
   readonly publisher?: string;
@@ -35,7 +35,7 @@ export interface VitraBookMetadata {
   readonly rights?: string;
 }
 
-export interface VitraBookSection {
+export interface BookSection {
   readonly id: string | number;
   readonly href: string;
   readonly load: () => Promise<string>;
@@ -46,28 +46,28 @@ export interface VitraBookSection {
   readonly styles?: readonly string[];
 }
 
-export interface VitraTocItem {
+export interface BookTocItem {
   readonly label: string;
   readonly href: string;
-  readonly children?: readonly VitraTocItem[];
+  readonly children?: readonly BookTocItem[];
 }
 
-export interface VitraSearchResult {
+export interface BookSearchResult {
   readonly cfi: string;
   readonly excerpt: string;
 }
 
-export interface VitraBook {
-  readonly format: VitraBookFormat;
-  readonly metadata: VitraBookMetadata;
-  readonly sections: readonly VitraBookSection[];
-  readonly toc: readonly VitraTocItem[];
-  readonly layout: VitraLayoutMode;
-  readonly direction: VitraReadingDirection;
+export interface ParsedBook {
+  readonly format: EngineBookFormat;
+  readonly metadata: ParsedBookMetadata;
+  readonly sections: readonly BookSection[];
+  readonly toc: readonly BookTocItem[];
+  readonly layout: BookLayoutMode;
+  readonly direction: ReadingDirection;
   readonly resolveHref: (href: string) => { index: number; anchor?: string } | null;
   readonly getCover: () => Promise<Blob | null>;
   readonly isAssetUrlAvailable?: (url: string) => boolean;
   readonly releaseAssetSession?: () => void;
   readonly destroy: () => void;
-  readonly search: (keyword: string) => VitraSearchResult[];
+  readonly search: (keyword: string) => BookSearchResult[];
 }

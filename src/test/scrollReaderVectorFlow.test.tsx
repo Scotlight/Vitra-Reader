@@ -7,6 +7,7 @@ import type { ReaderStyleConfig } from '@/components/Reader/ShadowRenderer'
 const mocks = vi.hoisted(() => ({
     preprocessChapterContentMock: vi.fn(),
     progressPutMock: vi.fn(),
+    shadowRendererErrorChapterIds: new Set<string>(),
     shadowRendererSpy: vi.fn(),
 }))
 
@@ -70,10 +71,15 @@ vi.mock('@/components/Reader/ShadowRenderer', async () => {
             chapterId: string
             htmlContent: string
             segmentMetas?: SegmentMeta[]
+            onError?: (error: Error) => void
             onReady: (node: HTMLElement, height: number) => void
         }) => {
             mocks.shadowRendererSpy(props.chapterId)
             React.useEffect(() => {
+                if (mocks.shadowRendererErrorChapterIds.has(props.chapterId)) {
+                    props.onError?.(new Error(`shadow failed: ${props.chapterId}`))
+                    return
+                }
                 const node = document.createElement('div')
                 if (props.segmentMetas && props.segmentMetas.length > 1) {
                     node.setAttribute('data-vitra-vectorized', 'true')
@@ -190,6 +196,7 @@ describe('ScrollReaderView vector flow', () => {
     beforeEach(() => {
         mocks.preprocessChapterContentMock.mockReset()
         mocks.progressPutMock.mockReset()
+        mocks.shadowRendererErrorChapterIds.clear()
         mocks.shadowRendererSpy.mockReset()
         vi.stubGlobal('ResizeObserver', ResizeObserverMock)
         vi.stubGlobal('requestAnimationFrame', ((callback: FrameRequestCallback) => {
@@ -296,6 +303,26 @@ describe('ScrollReaderView vector flow', () => {
 
         expect(provider.extractChapterHtml).toHaveBeenCalledTimes(1)
         expect(mocks.preprocessChapterContentMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('ShadowRenderer 失败时显示章节错误占位', async () => {
+        const provider = createProvider()
+        mocks.shadowRendererErrorChapterIds.add('ch-0')
+        mocks.preprocessChapterContentMock.mockResolvedValue(createNonVectorPreprocessResult())
+
+        const view = render(
+            <ScrollReaderView
+                provider={provider}
+                bookId="book-1"
+                readerStyles={DEFAULT_READER_STYLES}
+            />
+        )
+
+        await flushUi()
+
+        await waitFor(() => {
+            expect(view.container.textContent).toContain('章节加载失败')
+        })
     })
 
     it('正文内目录链接点击后跳转到目标章节', async () => {

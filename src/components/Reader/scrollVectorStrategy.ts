@@ -1,7 +1,7 @@
 import {
     computeVisibleRange,
 } from '@/engine/render/metaVectorManager';
-import { buildVitraVectorRenderPlan } from '@/engine/render/vitraVectorPlanner';
+import { buildVectorRenderPlan } from '@/engine/render/vectorPlanner';
 import type { ChapterMetaVector, SegmentMeta } from '@/engine/types/vectorRender';
 
 export interface WindowedVectorCacheCandidate {
@@ -45,7 +45,7 @@ export function shouldBypassShadowQueueForSegmentMetas(
     segmentMetas: readonly SegmentMeta[] | undefined,
 ): boolean {
     if (!segmentMetas || segmentMetas.length === 0) return false;
-    return buildVitraVectorRenderPlan({
+    return buildVectorRenderPlan({
         mode: 'scroll',
         chapterSize: resolveVectorChapterSize(segmentMetas),
         segmentCount: segmentMetas.length,

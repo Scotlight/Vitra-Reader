@@ -1,59 +1,59 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { VitraBook, VitraBookSection } from '@/engine/types/vitraBook'
+import type { ParsedBook, BookSection } from '@/engine/types/book'
 
 const mocks = vi.hoisted(() => ({
   detectFormatMock: vi.fn(),
   parseMock: vi.fn(),
 }))
 
-vi.mock('@/engine/core/vitraFormatDetector', () => ({
-  detectVitraFormat: mocks.detectFormatMock,
+vi.mock('@/engine/core/formatDetector', () => ({
+  detectFormat: mocks.detectFormatMock,
 }))
 
-vi.mock('@/engine/core/vitraBaseParser', () => ({
-  VitraBaseParser: class {},
+vi.mock('@/engine/core/baseParser', () => ({
+  BaseParser: class {},
 }))
 
-vi.mock('@/engine/parsers/vitraProviderParsers', () => {
+vi.mock('@/engine/parsers/providerParsers', () => {
   class MockParser {
     parse = mocks.parseMock
   }
   return {
-    VitraAzw3Parser: MockParser,
-    VitraAzwParser: MockParser,
-    VitraEpubParser: MockParser,
-    VitraFb2Parser: MockParser,
-    VitraHtmlParser: MockParser,
-    VitraMdParser: MockParser,
-    VitraMobiParser: MockParser,
-    VitraPdfParser: MockParser,
-    VitraTxtParser: MockParser,
-    VitraXmlParser: MockParser,
+    Azw3Parser: MockParser,
+    AzwParser: MockParser,
+    EpubParser: MockParser,
+    Fb2Parser: MockParser,
+    HtmlParser: MockParser,
+    MdParser: MockParser,
+    MobiParser: MockParser,
+    PdfParser: MockParser,
+    TxtParser: MockParser,
+    XmlParser: MockParser,
   }
 })
 
-vi.mock('@/engine/parsers/vitraDocxParser', () => {
+vi.mock('@/engine/parsers/docxParser', () => {
   class MockParser {
     parse = mocks.parseMock
   }
-  return { VitraDocxParser: MockParser }
+  return { DocxParser: MockParser }
 })
 
-vi.mock('@/engine/parsers/vitraComicParser', () => {
+vi.mock('@/engine/parsers/comicParser', () => {
   class MockParser {
     parse = mocks.parseMock
   }
   return {
-    VitraCbzParser: MockParser,
-    VitraCbtParser: MockParser,
-    VitraCbrParser: MockParser,
-    VitraCb7Parser: MockParser,
+    CbzParser: MockParser,
+    CbtParser: MockParser,
+    CbrParser: MockParser,
+    Cb7Parser: MockParser,
   }
 })
 
-import { VitraPipeline } from '@/engine/pipeline/vitraPipeline'
+import { BookPipeline } from '@/engine/pipeline/pipeline'
 
-function createBook(sections: readonly VitraBookSection[]): VitraBook {
+function createBook(sections: readonly BookSection[]): ParsedBook {
   return {
     format: 'PDF',
     metadata: { title: 'Smoke', author: [] },
@@ -68,7 +68,7 @@ function createBook(sections: readonly VitraBookSection[]): VitraBook {
   }
 }
 
-function createSection(id: string, load: () => Promise<string>): VitraBookSection {
+function createSection(id: string, load: () => Promise<string>): BookSection {
   return {
     id,
     href: id,
@@ -78,7 +78,7 @@ function createSection(id: string, load: () => Promise<string>): VitraBookSectio
   }
 }
 
-describe('VitraPipeline preview resilience', () => {
+describe('BookPipeline preview resilience', () => {
   beforeEach(() => {
     mocks.detectFormatMock.mockReset()
     mocks.parseMock.mockReset()
@@ -96,7 +96,7 @@ describe('VitraPipeline preview resilience', () => {
     })
     mocks.parseMock.mockResolvedValue(createBook([firstSection]))
 
-    const pipeline = new VitraPipeline()
+    const pipeline = new BookPipeline()
     const handle = await pipeline.open({ buffer: new ArrayBuffer(8), filename: 'sample.pdf' })
 
     await expect(handle.preview).resolves.toEqual([])
@@ -112,7 +112,7 @@ describe('VitraPipeline preview resilience', () => {
     })
     mocks.parseMock.mockResolvedValue(createBook([firstSection, secondSection]))
 
-    const pipeline = new VitraPipeline()
+    const pipeline = new BookPipeline()
     const handle = await pipeline.open({ buffer: new ArrayBuffer(8), filename: 'sample.pdf', previewCount: 2 })
 
     await expect(handle.preview).resolves.toEqual([

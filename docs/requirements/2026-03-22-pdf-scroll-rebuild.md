@@ -1,4 +1,4 @@
-﻿# PDF 连续滚动重建需求冻结
+# PDF 连续滚动重建需求冻结
 
 - 日期：`2026-03-22`
 - 主题：`pdf-scroll-rebuild`
@@ -31,7 +31,7 @@
 - `src/engine/parsers/providers/pdfProvider.ts` 收敛为兼容入口或薄包装，而不是继续堆积实现
 - PDF 阅读模式决策只允许 `scrolled-continuous`
 - PDF 在连续滚动模式下可正常打开、滚动、目录跳转与页内链接跳转
-- PDF 搜索在当前 `ReaderView -> VitraContentAdapter` 链路下仍然可用
+- PDF 搜索在当前 `ReaderView -> BookContentAdapter` 链路下仍然可用
 - 构建检查通过
 
 ## Non-Goals

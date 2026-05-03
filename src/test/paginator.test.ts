@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { paginateBlocks } from '@/engine/render/vitraPaginator'
-import type { BlockMetrics } from '@/engine/types/vitraPagination'
+import { paginateBlocks } from '@/engine/render/paginator'
+import type { BlockMetrics } from '@/engine/types/pagination'
 
 function block(offsetTop: number, height: number, isBreakable = true): BlockMetrics {
     return { element: `p:${offsetTop}`, offsetTop, height, isBreakable }

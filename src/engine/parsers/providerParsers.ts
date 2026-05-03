@@ -10,20 +10,20 @@ import {
   type ProviderBackedFormat,
 } from '../core/providerRegistry';
 import { buildSpineFallbackLabel } from '../core/spineLabel';
-import { VitraBaseParser } from '../core/vitraBaseParser';
+import { BaseParser } from '../core/baseParser';
 import {
   searchBookIndex,
   clearBookIndex,
 } from '../cache/searchIndexCache';
 import { createProviderSections } from './providerSectionFactory';
 import type {
-  VitraBook,
-  VitraBookFormat,
-  VitraBookMetadata,
-  VitraBookSection,
-  VitraSearchResult,
-  VitraTocItem,
-} from '../types/vitraBook';
+  ParsedBook,
+  EngineBookFormat,
+  ParsedBookMetadata,
+  BookSection,
+  BookSearchResult,
+  BookTocItem,
+} from '../types/book';
 
 type ProviderCompatibleFormat =
   | 'EPUB'
@@ -56,7 +56,7 @@ const PROVIDER_FORMAT_MAP: Record<ProviderCompatibleFormat, ProviderBackedFormat
   FB2: 'fb2',
 };
 
-const PRE_PAGINATED_FORMATS: ReadonlySet<VitraBookFormat> = new Set(['PDF']);
+const PRE_PAGINATED_FORMATS: ReadonlySet<EngineBookFormat> = new Set(['PDF']);
 
 interface RawMetadata {
   readonly title?: string;
@@ -67,7 +67,7 @@ interface RawMetadata {
   readonly language?: string;
 }
 
-export class VitraProviderBackedParser extends VitraBaseParser {
+export class ProviderBackedParser extends BaseParser {
   private readonly format: ProviderCompatibleFormat;
 
   constructor(buffer: ArrayBuffer, filename: string, format: ProviderCompatibleFormat) {
@@ -75,7 +75,7 @@ export class VitraProviderBackedParser extends VitraBaseParser {
     this.format = format;
   }
 
-  async parse(): Promise<VitraBook> {
+  async parse(): Promise<ParsedBook> {
     const providerFormat = PROVIDER_FORMAT_MAP[this.format];
     // Provider 和 metadata 解析器只读 buffer，无需复制
     // 直接传递原始 buffer 避免大文件（如 PDF）的 CPU 密集型复制操作
@@ -89,7 +89,7 @@ export class VitraProviderBackedParser extends VitraBaseParser {
     const coverBlob = toCoverBlob((rawMetadata as RawMetadata).cover);
     const spineItems = provider.getSpineItems();
     const toc = buildTocWithFallback(provider.getToc(), spineItems);
-    const bookId = `vitra-${this.filename}`;
+    const bookId = `parsed-${this.filename}`;
     const { sections, releaseAll } = createProviderSections({
       spineItems,
       provider,
@@ -110,40 +110,40 @@ export class VitraProviderBackedParser extends VitraBaseParser {
   }
 }
 
-export class VitraEpubParser extends VitraProviderBackedParser {
+export class EpubParser extends ProviderBackedParser {
   constructor(buffer: ArrayBuffer, filename: string) { super(buffer, filename, 'EPUB'); }
 }
-export class VitraPdfParser extends VitraProviderBackedParser {
+export class PdfParser extends ProviderBackedParser {
   constructor(buffer: ArrayBuffer, filename: string) { super(buffer, filename, 'PDF'); }
 }
-export class VitraTxtParser extends VitraProviderBackedParser {
+export class TxtParser extends ProviderBackedParser {
   constructor(buffer: ArrayBuffer, filename: string) { super(buffer, filename, 'TXT'); }
 }
-export class VitraMobiParser extends VitraProviderBackedParser {
+export class MobiParser extends ProviderBackedParser {
   constructor(buffer: ArrayBuffer, filename: string) { super(buffer, filename, 'MOBI'); }
 }
-export class VitraAzwParser extends VitraProviderBackedParser {
+export class AzwParser extends ProviderBackedParser {
   constructor(buffer: ArrayBuffer, filename: string) { super(buffer, filename, 'AZW'); }
 }
-export class VitraAzw3Parser extends VitraProviderBackedParser {
+export class Azw3Parser extends ProviderBackedParser {
   constructor(buffer: ArrayBuffer, filename: string) { super(buffer, filename, 'AZW3'); }
 }
-export class VitraHtmlParser extends VitraProviderBackedParser {
+export class HtmlParser extends ProviderBackedParser {
   constructor(buffer: ArrayBuffer, filename: string, format: 'HTML' | 'HTM' | 'XHTML' | 'MHTML' = 'HTML') {
     super(buffer, filename, format);
   }
 }
-export class VitraXmlParser extends VitraProviderBackedParser {
+export class XmlParser extends ProviderBackedParser {
   constructor(buffer: ArrayBuffer, filename: string) { super(buffer, filename, 'XML'); }
 }
-export class VitraMdParser extends VitraProviderBackedParser {
+export class MdParser extends ProviderBackedParser {
   constructor(buffer: ArrayBuffer, filename: string) { super(buffer, filename, 'MD'); }
 }
-export class VitraFb2Parser extends VitraProviderBackedParser {
+export class Fb2Parser extends ProviderBackedParser {
   constructor(buffer: ArrayBuffer, filename: string) { super(buffer, filename, 'FB2'); }
 }
 
-function normalizeMetadata(raw: RawMetadata, filename: string): VitraBookMetadata {
+function normalizeMetadata(raw: RawMetadata, filename: string): ParsedBookMetadata {
   const fallbackTitle = stripBookExtension(filename);
   const title = (raw.title || '').trim() || fallbackTitle || 'Untitled';
   const author = normalizeAuthor(raw.author);
@@ -183,7 +183,7 @@ function toCoverBlob(cover: unknown): Blob | null {
   return new Blob([bytes], { type: mimeMatch[1] || 'application/octet-stream' });
 }
 
-function normalizeToc(items: readonly TocItem[]): readonly VitraTocItem[] {
+function normalizeToc(items: readonly TocItem[]): readonly BookTocItem[] {
   return items.map((item) => ({
     label: item.label,
     href: item.href,
@@ -194,7 +194,7 @@ function normalizeToc(items: readonly TocItem[]): readonly VitraTocItem[] {
 function buildTocWithFallback(
   items: readonly TocItem[],
   spineItems: readonly SpineItemInfo[],
-): readonly VitraTocItem[] {
+): readonly BookTocItem[] {
   const normalized = normalizeToc(items).filter((item) => item.href && item.label);
   if (normalized.length > 0) {
     return normalized;
@@ -207,17 +207,17 @@ function buildTocWithFallback(
 }
 
 interface CreateBookObjectInput {
-  readonly format: VitraBookFormat;
-  readonly metadata: VitraBookMetadata;
-  readonly toc: readonly VitraTocItem[];
-  readonly sections: readonly VitraBookSection[];
+  readonly format: EngineBookFormat;
+  readonly metadata: ParsedBookMetadata;
+  readonly toc: readonly BookTocItem[];
+  readonly sections: readonly BookSection[];
   readonly provider: ContentProvider;
   readonly coverBlob: Blob | null;
   readonly releaseSections: () => void;
   readonly bookId: string;
 }
 
-function createBookObject(input: CreateBookObjectInput): VitraBook {
+function createBookObject(input: CreateBookObjectInput): ParsedBook {
   const isAssetUrlAvailable = input.provider.isAssetUrlAvailable
     ? (url: string) => input.provider.isAssetUrlAvailable?.(url) ?? true
     : undefined
@@ -236,7 +236,7 @@ function createBookObject(input: CreateBookObjectInput): VitraBook {
     getCover: async () => input.coverBlob,
     isAssetUrlAvailable,
     releaseAssetSession,
-    search: (keyword: string): VitraSearchResult[] => searchBookIndex(input.bookId, keyword),
+    search: (keyword: string): BookSearchResult[] => searchBookIndex(input.bookId, keyword),
     destroy: () => {
       input.releaseSections();
       clearBookIndex(input.bookId);

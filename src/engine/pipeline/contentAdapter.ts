@@ -1,10 +1,10 @@
 /**
- * VitraContentAdapter — 将 VitraBook 适配为 ContentProvider 接口
+ * BookContentAdapter — 将 ParsedBook 适配为 ContentProvider 接口
  *
  * 集成组件：
- *   - VitraPipeline → VitraBook（数据源）
- *   - VitraBookCache（跨会话 gzip 压缩缓存，加速再次打开）
- *   - VitraSectionManager（LRU 淘汰 provider 内部资源）
+ *   - BookPipeline → ParsedBook（数据源）
+ *   - BookCache（跨会话 gzip 压缩缓存，加速再次打开）
+ *   - SectionManager（LRU 淘汰 provider 内部资源）
  *   - searchIndexCache（全文搜索索引）
  */
 
@@ -15,17 +15,18 @@ import type {
   SearchResult,
 } from '../core/contentProvider'
 import type {
-  VitraBook,
-  VitraTocItem,
-} from '../types/vitraBook'
-import { VitraBookCache } from '../cache/vitraBookCache'
-import { VitraSectionManager } from '../cache/vitraSectionManager'
+  ParsedBook,
+  BookTocItem,
+} from '../types/book'
+import { BookCache } from '../cache/bookCache'
+import { SectionManager } from '../cache/sectionManager'
 import {
   upsertChapterIndex,
   hasChapterIndex,
   searchBookIndex,
 } from '../cache/searchIndexCache'
 import { cleanChapterHtmlForFormat } from '../render/chapterHtmlCleanup'
+import { shouldLogContentAdapterDebug } from '@/utils/readerDebug'
 
 // ─── 常量 ────────────────────────────────────────────
 
@@ -47,25 +48,25 @@ type ScheduledIndexHandle =
 
 // ─── 适配器 ──────────────────────────────────────────
 
-export class VitraContentAdapter implements ContentProvider {
-  private readonly book: VitraBook
+export class BookContentAdapter implements ContentProvider {
+  private readonly book: ParsedBook
   private readonly bookId: string
   private readonly buffer: ArrayBuffer
   private readonly htmlCache = new Map<number, string>()
-  private readonly sectionManager: VitraSectionManager
-  private readonly bookCache: VitraBookCache
+  private readonly sectionManager: SectionManager
+  private readonly bookCache: BookCache
   private cacheDirty = false
   private scheduledIndexHandle: ScheduledIndexHandle | null = null
   private scheduledIndexCancelled = false
 
-  constructor(book: VitraBook, bookId: string, buffer: ArrayBuffer) {
+  constructor(book: ParsedBook, bookId: string, buffer: ArrayBuffer) {
     this.book = book
     this.bookId = bookId
     this.buffer = buffer
-    this.sectionManager = new VitraSectionManager({
+    this.sectionManager = new SectionManager({
       maxLoaded: SECTION_MANAGER_MAX_LOADED,
     })
-    this.bookCache = new VitraBookCache()
+    this.bookCache = new BookCache()
   }
 
   // ── ContentProvider 接口实现 ──────────────────────
@@ -83,9 +84,11 @@ export class VitraContentAdapter implements ContentProvider {
             this.htmlCache.set(i, html)
           }
         }
-        console.log(
-          `[VitraContentAdapter] 缓存命中: ${cached.sectionsHtml.length} sections (${this.book.format})`,
-        )
+        if (shouldLogContentAdapterDebug()) {
+          console.log(
+            `[BookContentAdapter] 缓存命中: ${cached.sectionsHtml.length} sections (${this.book.format})`,
+          )
+        }
         // 搜索索引延迟到空闲时构建，不阻塞打开流程
         this.scheduleIdleIndexBuild(cached.sectionsHtml)
       }
@@ -110,7 +113,7 @@ export class VitraContentAdapter implements ContentProvider {
   }
 
   getToc(): TocItem[] {
-    return mapVitraToc(this.book.toc)
+    return mapBookToc(this.book.toc)
   }
 
   getSpineItems(): SpineItemInfo[] {
@@ -142,7 +145,7 @@ export class VitraContentAdapter implements ContentProvider {
 
   async extractChapterHtml(spineIndex: number): Promise<string> {
     const section = this.book.sections[spineIndex]
-    if (!section) throw new Error(`[VitraContentAdapter] 无效 spineIndex: ${spineIndex}`)
+    if (!section) throw new Error(`[BookContentAdapter] 无效 spineIndex: ${spineIndex}`)
 
     // 1. 内存缓存命中：旧缓存可能还带章节边缘空白，按需规范化当前章节即可。
     if (this.htmlCache.has(spineIndex)) {
@@ -308,11 +311,11 @@ export class VitraContentAdapter implements ContentProvider {
 
 // ─── TOC 映射 ────────────────────────────────────────
 
-function mapVitraToc(items: readonly VitraTocItem[]): TocItem[] {
+function mapBookToc(items: readonly BookTocItem[]): TocItem[] {
   return items.map((item, i) => ({
     id: `vtoc-${i}`,
     href: item.href,
     label: item.label,
-    subitems: item.children?.length ? mapVitraToc(item.children) : undefined,
+    subitems: item.children?.length ? mapBookToc(item.children) : undefined,
   }))
 }

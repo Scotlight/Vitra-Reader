@@ -28,7 +28,7 @@
 
 ## 验收标准
 
-- `ReaderView` 不再直接创建 `VitraPipeline` / `VitraContentAdapter`
+- `ReaderView` 不再直接创建 `BookPipeline` / `BookContentAdapter`
 - `ReaderView` 不再内联 `buildFallbackTocFromSpine`、href 匹配等纯函数
 - `ReaderView` 不再内联 jump / toc / search / jumpTarget 编排逻辑
 - `npm run lint` 通过

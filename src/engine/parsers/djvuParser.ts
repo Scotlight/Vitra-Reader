@@ -2,16 +2,16 @@
 // DJVU Parser — 骨架实现（等待许可证确认）
 // ═══════════════════════════════════════════════════════
 
-import { VitraBaseParser } from '../core/vitraBaseParser';
+import { BaseParser } from '../core/baseParser';
 import { stripBookExtension } from '../core/contentProvider';
 import type {
-  VitraBook,
-  VitraBookMetadata,
-  VitraBookSection,
-} from '../types/vitraBook';
+  ParsedBook,
+  ParsedBookMetadata,
+  BookSection,
+} from '../types/book';
 
-export class VitraDjvuParser extends VitraBaseParser {
-  async parse(): Promise<VitraBook> {
+export class DjvuParser extends BaseParser {
+  async parse(): Promise<ParsedBook> {
     // 尝试动态加载 djvu.js
     let djvuModule: DjvuModule;
     try {
@@ -27,7 +27,7 @@ export class VitraDjvuParser extends VitraBaseParser {
     return this.parseWithDjvu(djvuModule);
   }
 
-  private async parseWithDjvu(djvuModule: DjvuModule): Promise<VitraBook> {
+  private async parseWithDjvu(djvuModule: DjvuModule): Promise<ParsedBook> {
     const DjVuDocument = djvuModule.DjVuDocument ?? djvuModule.default?.DjVuDocument;
     if (!DjVuDocument) {
       throw new Error('djvu.js 模块加载异常：未找到 DjVuDocument 导出');
@@ -67,7 +67,7 @@ export class VitraDjvuParser extends VitraBaseParser {
     };
   }
 
-  private buildMetadata(pageCount: number): VitraBookMetadata {
+  private buildMetadata(pageCount: number): ParsedBookMetadata {
     return {
       title: stripBookExtension(this.filename),
       author: ['未知作者'],
@@ -79,11 +79,11 @@ export class VitraDjvuParser extends VitraBaseParser {
   private buildSections(
     doc: DjvuDocumentInstance,
     pageCount: number,
-  ): { sections: VitraBookSection[]; destroy: () => void } {
+  ): { sections: BookSection[]; destroy: () => void } {
     const urlCache = new Map<number, string>();
     const imgUrlCache = new Map<number, string>();
 
-    const sections: VitraBookSection[] = Array.from({ length: pageCount }, (_, index) => ({
+    const sections: BookSection[] = Array.from({ length: pageCount }, (_, index) => ({
       id: index,
       href: `djvu-page-${index}`,
       size: 0,

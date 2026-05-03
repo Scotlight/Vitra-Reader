@@ -1,7 +1,7 @@
 /**
  * 共享章节标题检测模块
  *
- * 合并 txtProvider 与 vitraSectionSplitter 的标题检测逻辑，
+ * 合并 txtProvider 与 sectionSplitter 的标题检测逻辑，
  * 供所有格式的章节分割器统一使用。
  */
 

@@ -25,7 +25,7 @@
 
 - `ReaderView` 直接内联完整书籍加载链路。当前已由 `useReaderBookSession` 承担会话装配。
 - `ScrollReaderView` 是未拆分的单一超大组件。当前滚动模式已拆到 `src/components/Reader/scrollReader/` hook 族。
-- `VitraBookCache` hash 计算存在递归风险。当前实现使用 `computeBufferHash()` 与 `WeakMap<ArrayBuffer, string>`。
+- `BookCache` hash 计算存在递归风险。当前实现使用 `computeBufferHash()` 与 `WeakMap<ArrayBuffer, string>`。
 - `db.settings` 键空间只能靠散落约定维护。当前同步边界集中在 `src/stores/syncStorePayload.ts`，并已有治理文档。
 
 ## 仍然保留价值的历史提醒

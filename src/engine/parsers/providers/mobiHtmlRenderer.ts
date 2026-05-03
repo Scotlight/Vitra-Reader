@@ -1,4 +1,4 @@
-import { VitraSectionSplitter } from '@/engine/core/vitraSectionSplitter'
+import { SectionSplitter } from '@/engine/core/sectionSplitter'
 import {
     DEFAULT_DOCUMENT_LABEL,
     EMPTY_SECTION_HTML,
@@ -137,7 +137,7 @@ function toRenderedChapter(html: string, index: number, styles: readonly string[
 }
 
 function splitWithoutExplicitMarkers(bodyHtml: string): string[] {
-    const chunks = VitraSectionSplitter.split(bodyHtml)
+    const chunks = SectionSplitter.split(bodyHtml)
     return chunks.length > 0 ? chunks.map((chunk) => chunk.html || EMPTY_SECTION_HTML) : [EMPTY_SECTION_HTML]
 }
 

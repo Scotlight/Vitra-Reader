@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { VitraContentAdapter } from '@/engine/pipeline/vitraContentAdapter'
-import { VitraTxtParser } from '@/engine/parsers/vitraProviderParsers'
+import { BookContentAdapter } from '@/engine/pipeline/contentAdapter'
+import { TxtParser } from '@/engine/parsers/providerParsers'
 import type {
-    VitraBook,
-    VitraBookFormat,
-    VitraBookSection,
-} from '@/engine/types/vitraBook'
+    ParsedBook,
+    EngineBookFormat,
+    BookSection,
+} from '@/engine/types/book'
 
 function toArrayBuffer(text: string): ArrayBuffer {
     const bytes = new TextEncoder().encode(text)
     return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
 }
 
-function createBook(format: VitraBookFormat, html: string): VitraBook {
-    const section: VitraBookSection = {
+function createBook(format: EngineBookFormat, html: string): ParsedBook {
+    const section: BookSection = {
         id: 'section-0',
         href: 'section-0',
         linear: true,
@@ -36,9 +36,9 @@ function createBook(format: VitraBookFormat, html: string): VitraBook {
     }
 }
 
-describe('Vitra 章节清洗集成', () => {
+describe('章节清洗集成', () => {
     it('TXT 经 pipeline section 加载后会清理章节首尾空白', async () => {
-        const parser = new VitraTxtParser(toArrayBuffer('\n\n第一章\n正文\n\n'), 'blank.txt')
+        const parser = new TxtParser(toArrayBuffer('\n\n第一章\n正文\n\n'), 'blank.txt')
         const book = await parser.parse()
 
         const html = await book.sections[0].load()
@@ -50,7 +50,7 @@ describe('Vitra 章节清洗集成', () => {
     })
 
     it('adapter 对非 PDF 章节做兜底清洗', async () => {
-        const adapter = new VitraContentAdapter(
+        const adapter = new BookContentAdapter(
             createBook('HTML', '<p>&nbsp;</p><p>正文</p><br>'),
             'cleanup-html',
             new ArrayBuffer(0),
@@ -64,7 +64,7 @@ describe('Vitra 章节清洗集成', () => {
 
     it('adapter 不清洗 PDF 页面结构', async () => {
         const rawHtml = '<div></div><div style="position:absolute"></div>'
-        const adapter = new VitraContentAdapter(
+        const adapter = new BookContentAdapter(
             createBook('PDF', rawHtml),
             'cleanup-pdf',
             new ArrayBuffer(0),

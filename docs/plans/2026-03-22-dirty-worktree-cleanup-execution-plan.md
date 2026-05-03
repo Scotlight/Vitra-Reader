@@ -10,7 +10,7 @@ Wave 3: run focused verification for changed source behavior and repository buil
 Wave 4: commit the reconciled result and emit cleanup receipts.
 
 Verification commands:
-- `npm run test:run -- src/test/chapterPreprocessCore.test.ts src/test/mobiTextDecoding.test.ts src/test/pdfContentProvider.test.ts src/test/pdfPageRenderer.test.ts src/test/vitraPipeline.test.ts`
+- `npm run test:run -- src/test/chapterPreprocessCore.test.ts src/test/mobiTextDecoding.test.ts src/test/pdfContentProvider.test.ts src/test/pdfPageRenderer.test.ts src/test/pipeline.test.ts`
 - `npm run build --silent`
 - `git status --short`
 

@@ -4,13 +4,13 @@
 
 主要文件：
 
-- `src/engine/cache/vitraBookCache.ts`
-- `src/engine/cache/vitraSectionManager.ts`
+- `src/engine/cache/bookCache.ts`
+- `src/engine/cache/sectionManager.ts`
 - `src/engine/cache/searchIndexCache.ts`
 - `src/components/Reader/paginatedMeasureCache.ts`
 - `src/utils/styleProcessor.ts`
 - `src/utils/assetLoader.ts`
-- `src/engine/pipeline/vitraContentAdapter.ts`
+- `src/engine/pipeline/contentAdapter.ts`
 - `src/engine/parsers/providers/pdfProvider.ts` 中页面缓存相关实现
 
 ## 2. 目标
@@ -30,7 +30,7 @@
 
 - PDF 页面 HTML 缓存。
 - PDF 页面图像 URL 缓存。
-- `VitraContentAdapter.htmlCache` 中的章节 HTML。
+- `BookContentAdapter.htmlCache` 中的章节 HTML。
 - scope CSS 结果缓存。
 - 搜索索引内存缓存。
 - 分页高亮章节级缓存。
@@ -43,14 +43,14 @@
 
 ### 3.2 L2：LRU section 管理
 
-典型实现：`VitraSectionManager`。
+典型实现：`SectionManager`。
 
 职责：
 
 - 限制同时保留的 section 资源数。
 - 命中时更新访问时间。
 - 淘汰最旧资源，并释放 URL / section。
-- 支撑 `VitraContentAdapter.extractChapterHtml()` 的 section 生命周期。
+- 支撑 `BookContentAdapter.extractChapterHtml()` 的 section 生命周期。
 
 约束：
 
@@ -59,14 +59,14 @@
 
 ### 3.3 L3：持久化缓存
 
-典型实现：`VitraBookCache`。
+典型实现：`BookCache`。
 
 职责：
 
 - 使用稳定 key 存储书籍级章节 HTML 缓存。
 - 提升重复打开速度。
 - 排除不适合持久缓存的格式。
-- 在 `VitraContentAdapter.init()` / `destroy()` 两端接入预热与写回。
+- 在 `BookContentAdapter.init()` / `destroy()` 两端接入预热与写回。
 
 当前 key 前缀：
 
@@ -95,7 +95,7 @@
 - `hasSessionAssetUrl()`：判断 URL 是否仍属于有效 session。
 - `releaseAssetSession()`：批量释放 session 下的 Blob URL。
 
-当前 EPUB 资源加载通过 provider 暴露资源 session 生命周期，`VitraContentAdapter.destroy()` 会继续调用 `releaseAssetSession()` 收口资源释放。
+当前 EPUB 资源加载通过 provider 暴露资源 session 生命周期，`BookContentAdapter.destroy()` 会继续调用 `releaseAssetSession()` 收口资源释放。
 
 约束：
 
@@ -162,16 +162,16 @@
 
 ## 10. 当前已确认事实
 
-- `VitraBookCache.getHash()` 当前已经通过 `computeBufferHash()` 计算 SHA-256，并用 `WeakMap<ArrayBuffer, string>` 缓存结果；旧的递归风险描述不再适用。
-- `VitraBookCache` 直接存 `ArrayBuffer` 压缩结果，避免把 `Uint8Array` 展开成 `number[]` 带来的存储膨胀。
+- `BookCache.getHash()` 当前已经通过 `computeBufferHash()` 计算 SHA-256，并用 `WeakMap<ArrayBuffer, string>` 缓存结果；旧的递归风险描述不再适用。
+- `BookCache` 直接存 `ArrayBuffer` 压缩结果，避免把 `Uint8Array` 展开成 `number[]` 带来的存储膨胀。
 - `syncStorePayload.ts` 会过滤 `vcache-` 前缀，避免本地持久缓存进入 WebDAV 备份。
 - `paginatedMeasureCache.ts` 是会话内 LRU 缓存，不写入 IndexedDB，也不参与 WebDAV 同步。
 
 ## 11. 推荐排查路径
 
 - 页面重复渲染：先看 PDF 页面缓存或章节 HTML 缓存。
-- 长时间阅读内存上涨：先看 `VitraSectionManager.destroy()`、PDF `clearPageCaches()` 与 asset session 释放。
-- 重复打开慢：先看 `VitraBookCache.get()/put()` 与 `VitraContentAdapter.init()/destroy()`。
+- 长时间阅读内存上涨：先看 `SectionManager.destroy()`、PDF `clearPageCaches()` 与 asset session 释放。
+- 重复打开慢：先看 `BookCache.get()/put()` 与 `BookContentAdapter.init()/destroy()`。
 - 样式处理慢：先看 scope CSS 缓存。
 - 搜索首查慢或命中异常：先看 `scheduleIdleIndexBuild()` 与 `searchIndexCache`。
 - 分页高亮注入慢：先看 `usePaginatedHighlights()` 的 count 失效与 `groupedBySpine` 缓存。

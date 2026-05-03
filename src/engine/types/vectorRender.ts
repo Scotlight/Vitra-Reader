@@ -1,13 +1,13 @@
-export type VitraRenderMode = 'scroll' | 'paginated';
+export type ReaderRenderMode = 'scroll' | 'paginated';
 
-export type VitraVectorPipelineStage =
+export type VectorPipelineStage =
     | 'parse'
     | 'measure'
     | 'paginate'
     | 'render'
     | 'hydrate';
 
-export interface VitraVectorRenderConfig {
+export interface VectorRenderConfig {
     largeChapterThreshold: number;
     veryLargeChapterThreshold: number;
     hugeChapterThreshold: number;
@@ -15,23 +15,23 @@ export interface VitraVectorRenderConfig {
     maxInitialSegments: number;
 }
 
-export interface VitraVectorPlanInput {
-    mode: VitraRenderMode;
+export interface VectorPlanInput {
+    mode: ReaderRenderMode;
     chapterSize: number;
     segmentCount: number;
 }
 
-export type VitraVectorPlanReason =
+export type VectorPlanReason =
     | 'mode-disabled'
     | 'chapter-not-large'
     | 'single-segment'
     | 'vector-enabled';
 
-export interface VitraVectorRenderPlan {
+export interface VectorRenderPlan {
     enabled: boolean;
-    reason: VitraVectorPlanReason;
+    reason: VectorPlanReason;
     initialSegmentCount: number;
-    stages: readonly VitraVectorPipelineStage[];
+    stages: readonly VectorPipelineStage[];
 }
 
 /** 段级元数据向量项 */

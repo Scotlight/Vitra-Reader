@@ -11,6 +11,7 @@ import { loadReadingStatsRowsForSync } from '@/services/readingStatsService'
 import type { SyncMode } from './useSyncStore'
 
 const SENSITIVE_SETTINGS_KEYS = new Set([
+    'translate:config',
     'translateConfig',
     'sync:webdavUrl', 'sync:webdavUser', 'sync:webdavPath',
     'sync:remoteEtag', 'sync:syncMode', 'sync:restoreMode', 'sync:replaceBeforeRestore',

@@ -1,4 +1,4 @@
-﻿# PDF 连续滚动重建设计
+# PDF 连续滚动重建设计
 
 - 日期：`2026-03-22`
 - 主题：`pdf-scroll-rebuild`
@@ -14,7 +14,7 @@
 1. `pdfjs-dist` 只负责文档打开、页面获取、文本提取、注释解析与 canvas 渲染
 2. PDF 阅读器层职责由本项目自己维护，不把模式决策和阅读器接线混在 provider 内
 3. PDF 是固定版式文档，但阅读交互仅支持连续滚动；“固定版式”与“分页视图”不再强绑定
-4. 搜索能力必须适配当前 `VitraContentAdapter` 的 HTML 索引机制，不能只留在 provider 内部未接线的异步搜索函数里
+4. 搜索能力必须适配当前 `BookContentAdapter` 的 HTML 索引机制，不能只留在 provider 内部未接线的异步搜索函数里
 
 ## 模块边界
 
@@ -54,7 +54,7 @@
 
 ## 搜索策略
 
-当前 `ReaderView` 实际搜索链路走 `VitraContentAdapter -> searchIndexCache`，不是直接调用 `PdfContentProvider.search()`。
+当前 `ReaderView` 实际搜索链路走 `BookContentAdapter -> searchIndexCache`，不是直接调用 `PdfContentProvider.search()`。
 
 因此本次重建会把每页提取出的纯文本以隐藏文本层写回页面 HTML，让现有 HTML 索引链自然获得 PDF 搜索能力；同时保留 provider 内部逐页文本搜索实现，作为 PDF 专属能力的完整保留。
 

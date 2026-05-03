@@ -1,4 +1,4 @@
-import type { VitraBookSection } from '../types/vitraBook';
+import type { BookSection } from '../types/book';
 
 export interface SectionChunkInput {
   readonly index: number;
@@ -7,7 +7,7 @@ export interface SectionChunkInput {
 }
 
 export interface SectionFactoryResult {
-  readonly sections: readonly VitraBookSection[];
+  readonly sections: readonly BookSection[];
   readonly destroy: () => void;
 }
 
@@ -43,7 +43,7 @@ export function createBlobSectionsFromChunks(
       size: blobSize,
       load,
       unload,
-    } satisfies VitraBookSection;
+    } satisfies BookSection;
   });
 
   return {

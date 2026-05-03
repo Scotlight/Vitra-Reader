@@ -1,5 +1,5 @@
 /**
- * Vitra 解析缓存服务
+ * 解析缓存服务
  *
  * 对应文档 5.1：将 Parser 输出的 sections HTML 压缩后
  * 存入 IndexedDB，再次打开时直接解压跳过格式解析。
@@ -14,14 +14,14 @@
 
 import { gzipSync, gunzipSync, strToU8, strFromU8 } from 'fflate'
 import { db } from '@/services/storageService'
-import type { VitraBookFormat } from '../types/vitraBook'
+import type { EngineBookFormat } from '../types/book'
 
 // ─── 常量 ────────────────────────────────────────────
 
 const CACHE_KEY_PREFIX = 'vcache-'
 
 /** 不缓存的格式集合 */
-const SKIP_CACHE_FORMATS = new Set<VitraBookFormat>([
+const SKIP_CACHE_FORMATS = new Set<EngineBookFormat>([
     'PDF', 'DJVU', 'MOBI', 'AZW', 'AZW3', 'CBZ', 'CBT', 'CBR', 'CB7',
 ])
 
@@ -30,14 +30,14 @@ const HAS_COMPRESSION_STREAM = typeof CompressionStream === 'function' && typeof
 
 // ─── 公共接口 ────────────────────────────────────────
 
-export interface VitraCachedBook {
+export interface CachedBook {
     /** 章节 HTML 数组（与 sections 索引一一对应） */
     readonly sectionsHtml: readonly string[]
     /** 缓存写入时间戳 */
     readonly cachedAt: number
 }
 
-export interface VitraCacheStats {
+export interface BookCacheStats {
     readonly hits: number
     readonly misses: number
 }
@@ -100,7 +100,7 @@ async function decodeSectionsAsync(compressed: Uint8Array): Promise<string[]> {
 
 // ─── 核心类 ──────────────────────────────────────────
 
-export class VitraBookCache {
+export class BookCache {
     private stats: { hits: number; misses: number } = { hits: 0, misses: 0 }
     /** 缓存 buffer → hash 映射，避免同一文件重复计算 SHA-256 */
     private hashCache = new WeakMap<ArrayBuffer, string>()
@@ -116,7 +116,7 @@ export class VitraBookCache {
     /**
      * 判断给定格式是否应该被缓存
      */
-    shouldCache(format: VitraBookFormat): boolean {
+    shouldCache(format: EngineBookFormat): boolean {
         return !SKIP_CACHE_FORMATS.has(format)
     }
 
@@ -125,7 +125,7 @@ export class VitraBookCache {
      *
      * @returns 缓存数据，未命中返回 null
      */
-    async get(buffer: ArrayBuffer): Promise<VitraCachedBook | null> {
+    async get(buffer: ArrayBuffer): Promise<CachedBook | null> {
         const hash = await this.getHash(buffer)
         const key = buildCacheKey(hash)
 
@@ -179,7 +179,7 @@ export class VitraBookCache {
     }
 
     /**
-     * 清除所有 Vitra 解析缓存
+     * 清除所有解析缓存
      */
     async clear(): Promise<void> {
         const allKeys = await db.settings.toCollection().primaryKeys()
@@ -194,7 +194,7 @@ export class VitraBookCache {
     /**
      * 返回缓存命中统计
      */
-    getStats(): VitraCacheStats {
+    getStats(): BookCacheStats {
         return { ...this.stats }
     }
 }

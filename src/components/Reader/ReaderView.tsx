@@ -6,37 +6,33 @@ import { resolveReaderRenderMode } from '@/engine/core/readerRenderMode'
 import { ScrollReaderView, ScrollReaderHandle } from './ScrollReaderView'
 import { PaginatedReaderView, PaginatedReaderHandle } from './PaginatedReaderView'
 import { useAutoScrollActiveToc } from './useAutoScrollActiveToc'
-import { ReaderFooter } from './ReaderFooter'
 import { ReaderLeftPanel, type ReaderPanelTab } from './ReaderLeftPanel'
-import { ReaderSettingsPanel } from './ReaderSettingsPanel'
-import { ReaderToolbar } from './ReaderToolbar'
+import { ReaderSurface } from './ReaderSurface'
 import { buildFontFamilyWithFallback } from '@/utils/fontFallback'
 import { findCurrentChapterLabel, normalizeTocHref } from './readerToc'
 import { useReaderAnnotations } from './useReaderAnnotations'
-import { contrastRatio } from './readerTheme'
 import { useReaderBookSession } from './useReaderBookSession'
 import { useReaderClock } from './useReaderClock'
 import { useReaderNavigation } from './useReaderNavigation'
 import { useReadingActivityTracker } from './useReadingActivityTracker'
+import { resolveReaderColors } from './readerColors'
+import { buildReaderStyleConfig, buildScrollSmoothConfig } from './readerStyleConfig'
 import {
     createFallbackModePositionSnapshot,
     type ReaderModePositionSnapshot,
 } from './readerModeSwitchPosition'
 import styles from './ReaderView.module.css'
-
 interface ReaderViewProps {
     bookId: string
     onBack: () => void
     jumpTarget?: { location: string; searchText?: string } | null
 }
-
 export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const tocListRef = useRef<HTMLDivElement>(null)
     const providerRef = useRef<ContentProvider | null>(null)
     const [leftPanelOpen, setLeftPanelOpen] = useState(false)
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [activeTab, setActiveTab] = useState<ReaderPanelTab>('toc')
-
     const [currentSectionHref, setCurrentSectionHref] = useState<string>('')
     const [searchQuery, setSearchQuery] = useState('')
     const [searchResults, setSearchResults] = useState<SearchResult[]>([])
@@ -47,7 +43,6 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     } | null>(null)
     const scrollReaderRef = useRef<ScrollReaderHandle>(null)
     const paginatedReaderRef = useRef<PaginatedReaderHandle>(null)
-
     const settings = useSettingsStore()
     const {
         bookFormat,
@@ -57,7 +52,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         paginatedParams,
         provider,
         toc,
-        vitraScrollParams,
+        scrollParams,
         setCurrentProgress,
     } = useReaderBookSession({
         bookId,
@@ -68,79 +63,36 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         bookId,
         isReady,
     })
-    const {
-        bookmarks,
-        deleteBookmark,
-        deleteHighlight,
-        expandedNoteId,
-        highlights,
-        setExpandedNoteId,
-    } = useReaderAnnotations({
+    const annotationState = useReaderAnnotations({
         activeTab,
         bookId,
         leftPanelOpen,
     })
-
     const modeDecision = resolveReaderRenderMode(bookFormat, settings.pageTurnMode)
     const effectivePageTurnMode = modeDecision.effectiveMode
     const isScrollMode = effectivePageTurnMode === 'scrolled-continuous'
     const resolvedReaderFontFamily = buildFontFamilyWithFallback(settings.fontFamily)
-    const readerColors = (() => {
-        const fallbackByTheme: Record<string, { text: string; bg: string }> = {
-            light: { text: '#1a1a1a', bg: '#ffffff' },
-            dark: { text: '#e0e0e0', bg: '#16213e' },
-            sepia: { text: '#5b4636', bg: '#f4ecd8' },
-            green: { text: '#2d4a3e', bg: '#c7edcc' },
-        }
-        const base = fallbackByTheme[settings.themeId] || fallbackByTheme.light
-        const candidateText = settings.customTextColor || base.text
-        const candidateBg = settings.customBgColor || base.bg
-        const safeText = settings.customTextColor
-            ? candidateText
-            : (contrastRatio(candidateText, candidateBg) < 3 ? (settings.themeId === 'dark' ? '#e0e0e0' : '#1a1a1a') : candidateText)
-
-        return {
-            textColor: safeText,
-            bgColor: candidateBg,
-        }
-    })()
-
-    const readerStyleConfig = useMemo(() => ({
-        textColor: readerColors.textColor,
-        bgColor: readerColors.bgColor,
-        fontSize: settings.fontSize,
-        fontFamily: resolvedReaderFontFamily,
-        lineHeight: settings.lineHeight,
-        paragraphSpacing: settings.paragraphSpacing,
-        textIndentEm: settings.paragraphIndentEnabled ? 2 : 0,
-        letterSpacing: settings.letterSpacing,
-        textAlign: settings.textAlign,
-        pageWidth: settings.pageWidth,
-        isPdfDarkMode: bookFormat === 'pdf' && settings.themeId === 'dark',
-    }), [
+    const readerColors = resolveReaderColors(settings)
+    const readerStyleConfig = useMemo(() => buildReaderStyleConfig(
+        settings,
+        readerColors,
+        resolvedReaderFontFamily,
+        bookFormat,
+    ), [
+        bookFormat,
         readerColors.textColor,
         readerColors.bgColor,
-        settings.fontSize,
         resolvedReaderFontFamily,
+        settings.fontSize,
         settings.lineHeight,
         settings.paragraphSpacing,
         settings.paragraphIndentEnabled,
         settings.letterSpacing,
         settings.textAlign,
         settings.pageWidth,
-        bookFormat,
         settings.themeId,
     ])
-    const scrollSmoothConfig = useMemo(() => ({
-        enabled: settings.smoothScrollEnabled,
-        stepSizePx: settings.smoothStepSizePx,
-        animationTimeMs: settings.smoothAnimationTimeMs,
-        accelerationDeltaMs: settings.smoothAccelerationDeltaMs,
-        accelerationMax: settings.smoothAccelerationMax,
-        tailToHeadRatio: settings.smoothTailToHeadRatio,
-        easing: settings.smoothAnimationEasing,
-        reverseWheelDirection: settings.smoothReverseWheelDirection,
-    }), [
+    const scrollSmoothConfig = useMemo(() => buildScrollSmoothConfig(settings), [
         settings.smoothScrollEnabled,
         settings.smoothStepSizePx,
         settings.smoothAnimationTimeMs,
@@ -150,10 +102,8 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         settings.smoothAnimationEasing,
         settings.smoothReverseWheelDirection,
     ])
-
     useEffect(() => {
         providerRef.current = provider
-
         return () => {
             if (providerRef.current === provider) {
                 providerRef.current = null
@@ -163,7 +113,6 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     useEffect(() => {
         setModeSwitchAnchor(null)
     }, [bookId])
-
     const {
         closePanels,
         handleSearch,
@@ -209,12 +158,10 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             window.removeEventListener('touchstart', recordActiveReading)
         }
     }, [markActivity])
-
     const handleProgressChange = useCallback((progress: number) => {
         setCurrentProgress(progress)
         markActivity()
     }, [markActivity, setCurrentProgress])
-
     const handleChapterChange = useCallback((_label: string, href: string) => {
         setCurrentSectionHref(normalizeTocHref(href))
     }, [])
@@ -224,7 +171,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     }, [openSearchPanelWithKeyword])
     const getFallbackModePositionSnapshot = useCallback(() => {
         const fallbackSpineIndex = isScrollMode
-            ? vitraScrollParams.initialSpineIndex
+            ? scrollParams.initialSpineIndex
             : paginatedParams.initialSpineIndex
         return createFallbackModePositionSnapshot({
             currentProgress,
@@ -240,7 +187,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         isScrollMode,
         paginatedParams.initialSpineIndex,
         provider,
-        vitraScrollParams.initialSpineIndex,
+        scrollParams.initialSpineIndex,
     ])
     const handlePageTurnModeChange = useCallback((nextMode: PageTurnMode) => {
         if (nextMode === settings.pageTurnMode) return
@@ -258,67 +205,74 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         isScrollMode,
         settings,
     ])
-
-    const currentChapterLabel = findCurrentChapterLabel(toc, currentSectionHref)
-    const headerHeight = Math.max(36, Math.min(96, Number(settings.headerHeight) || 48))
-    const footerHeight = Math.max(0, Math.min(96, Number(settings.footerHeight) || 32))
-    const footerEnabled = footerHeight > 0
-    const progressLabel = `${Math.round(Math.max(0, Math.min(1, currentProgress)) * 100)}%`
-    const modeSwitchSnapshot = modeSwitchAnchor?.snapshot
-    const modeSwitchSerial = modeSwitchAnchor?.serial ?? 0
-    const scrollInitialSpineIndex = modeSwitchSnapshot?.spineIndex ?? vitraScrollParams.initialSpineIndex
-    const scrollInitialOffset = modeSwitchSnapshot?.sourceMode === 'scrolled-continuous'
-        ? modeSwitchSnapshot.position
-        : vitraScrollParams.initialScrollOffset
-    const paginatedInitialSpineIndex = modeSwitchSnapshot?.spineIndex ?? paginatedParams.initialSpineIndex
-    const paginatedInitialPage = modeSwitchSnapshot && modeSwitchSnapshot.sourceMode !== 'scrolled-continuous'
-        ? modeSwitchSnapshot.position
-        : paginatedParams.initialPage
-    const initialChapterProgress = modeSwitchSnapshot?.chapterProgress
-
+    const content = (
+        <>
+            {!isReady && (
+                <div className={styles.blockingLoadingOverlay}>
+                    <div className={styles.loading}>Loading...</div>
+                </div>
+            )}
+            {isScrollMode && provider && isReady && (
+                <ScrollReaderView
+                    key={`scroll-${modeSwitchAnchor?.serial ?? 0}`}
+                    ref={scrollReaderRef}
+                    provider={provider}
+                    bookId={bookId}
+                    initialSpineIndex={modeSwitchAnchor?.snapshot?.spineIndex ?? scrollParams.initialSpineIndex}
+                    initialScrollOffset={modeSwitchAnchor?.snapshot?.sourceMode === 'scrolled-continuous'
+                        ? modeSwitchAnchor.snapshot.position
+                        : scrollParams.initialScrollOffset}
+                    initialChapterProgress={modeSwitchAnchor?.snapshot?.chapterProgress}
+                    smoothConfig={scrollSmoothConfig}
+                    readerStyles={readerStyleConfig}
+                    onProgressChange={handleProgressChange}
+                    onChapterChange={handleChapterChange}
+                    onSelectionSearch={handleSelectionSearch}
+                />
+            )}
+            {!isScrollMode && provider && isReady && (
+                <PaginatedReaderView
+                    key={`paginated-${effectivePageTurnMode}-${modeSwitchAnchor?.serial ?? 0}`}
+                    ref={paginatedReaderRef}
+                    provider={provider}
+                    bookId={bookId}
+                    initialSpineIndex={modeSwitchAnchor?.snapshot?.spineIndex ?? paginatedParams.initialSpineIndex}
+                    initialPage={modeSwitchAnchor?.snapshot && modeSwitchAnchor.snapshot.sourceMode !== 'scrolled-continuous'
+                        ? modeSwitchAnchor.snapshot.position
+                        : paginatedParams.initialPage}
+                    initialChapterProgress={modeSwitchAnchor?.snapshot?.chapterProgress}
+                    pageTurnMode={effectivePageTurnMode === 'paginated-double' ? 'paginated-double' : 'paginated-single'}
+                    readerStyles={readerStyleConfig}
+                    onProgressChange={handleProgressChange}
+                    onChapterChange={handleChapterChange}
+                    onSelectionSearch={handleSelectionSearch}
+                />
+            )}
+        </>
+    )
     return (
-        <div
-            className={styles.readerContainer}
-            style={{
-                background: readerColors.bgColor,
-                color: readerColors.textColor,
-                ['--reader-bg-color']: readerColors.bgColor,
-                ['--reader-text-color']: readerColors.textColor,
-                ['--reader-font-family']: resolvedReaderFontFamily,
-                ['--reader-font-size']: `${settings.fontSize}px`,
-                ['--reader-line-height']: String(settings.lineHeight),
-                ['--reader-letter-spacing']: `${settings.letterSpacing}px`,
-                ['--reader-paragraph-spacing']: `${settings.paragraphSpacing}px`,
-                ['--reader-text-align']: settings.textAlign,
-            }}
-        >
-            <ReaderToolbar
-                bookTitleText={bookTitleText}
-                headerHeight={headerHeight}
-                leftPanelOpen={leftPanelOpen}
-                onBack={onBack}
-                settingsOpen={settingsOpen}
-                toggleLeftPanel={toggleLeftPanel}
-                toggleSettingsPanel={toggleSettingsPanel}
-            />
-
-            <div className={styles.contentArea} style={{ paddingTop: `${headerHeight}px`, paddingBottom: `${footerEnabled ? footerHeight : 0}px` }}>
-                {(leftPanelOpen || settingsOpen) && <div className={styles.panelBackdrop} onClick={closePanels} />}
-
+        <ReaderSurface
+            bookFormat={bookFormat}
+            bookTitleText={bookTitleText}
+            chapterLabel={findCurrentChapterLabel(toc, currentSectionHref)}
+            clockText={clockText}
+            closePanels={closePanels}
+            content={content}
+            leftPanel={(
                 <ReaderLeftPanel
                     activeTab={activeTab}
-                    bookmarks={bookmarks}
+                    bookmarks={annotationState.bookmarks}
                     currentSectionHref={currentSectionHref}
-                    deleteBookmark={deleteBookmark}
-                    deleteHighlight={deleteHighlight}
-                    expandedNoteId={expandedNoteId}
+                    deleteBookmark={annotationState.deleteBookmark}
+                    deleteHighlight={annotationState.deleteHighlight}
+                    expandedNoteId={annotationState.expandedNoteId}
                     handleSearch={handleSearch}
                     handleTocClick={handleTocClick}
-                    highlights={highlights}
+                    highlights={annotationState.highlights}
                     isOpen={leftPanelOpen}
                     isSearching={isSearching}
                     jumpToAnnotation={jumpToAnnotation}
-                    onExpandedNoteChange={setExpandedNoteId}
+                    onExpandedNoteChange={annotationState.setExpandedNoteId}
                     onSearchQueryChange={setSearchQuery}
                     onTabChange={setActiveTab}
                     searchQuery={searchQuery}
@@ -326,70 +280,19 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                     toc={toc}
                     tocListRef={tocListRef}
                 />
-
-                <div className={styles.readerWrapper}>
-                    {!isReady && (
-                        <div className={styles.blockingLoadingOverlay}>
-                            <div className={styles.loading}>Loading...</div>
-                        </div>
-                    )}
-
-                    {isScrollMode && provider && isReady && (
-                        <ScrollReaderView
-                            key={`scroll-${modeSwitchSerial}`}
-                            ref={scrollReaderRef}
-                            provider={provider}
-                            bookId={bookId}
-                            initialSpineIndex={scrollInitialSpineIndex}
-                            initialScrollOffset={scrollInitialOffset}
-                            initialChapterProgress={initialChapterProgress}
-                            smoothConfig={scrollSmoothConfig}
-                            readerStyles={readerStyleConfig}
-                            onProgressChange={handleProgressChange}
-                            onChapterChange={handleChapterChange}
-                            onSelectionSearch={handleSelectionSearch}
-                        />
-                    )}
-
-                    {!isScrollMode && provider && isReady && (
-                        <PaginatedReaderView
-                            key={`paginated-${effectivePageTurnMode}-${modeSwitchSerial}`}
-                            ref={paginatedReaderRef}
-                            provider={provider}
-                            bookId={bookId}
-                            initialSpineIndex={paginatedInitialSpineIndex}
-                            initialPage={paginatedInitialPage}
-                            initialChapterProgress={initialChapterProgress}
-                            pageTurnMode={effectivePageTurnMode === 'paginated-double' ? 'paginated-double' : 'paginated-single'}
-                            readerStyles={readerStyleConfig}
-                            onProgressChange={handleProgressChange}
-                            onChapterChange={handleChapterChange}
-                            onSelectionSearch={handleSelectionSearch}
-                        />
-                    )}
-                </div>
-
-                {footerEnabled && (
-                    <ReaderFooter
-                        bgColor={readerColors.bgColor}
-                        chapterLabel={currentChapterLabel}
-                        clockText={clockText}
-                        footerHeight={footerHeight}
-                        progressLabel={progressLabel}
-                        showChapter={settings.showFooterChapter}
-                        showProgress={settings.showFooterProgress}
-                        showTime={settings.showFooterTime}
-                        textColor={readerColors.textColor}
-                        themeId={settings.themeId}
-                    />
-                )}
-
-                <ReaderSettingsPanel
-                    bookFormat={bookFormat}
-                    isOpen={settingsOpen}
-                    onPageTurnModeChange={handlePageTurnModeChange}
-                />
-            </div>
-        </div>
+            )}
+            footerHeight={Math.max(0, Math.min(96, Number(settings.footerHeight) || 32))}
+            headerHeight={Math.max(36, Math.min(96, Number(settings.headerHeight) || 48))}
+            leftPanelOpen={leftPanelOpen}
+            onBack={onBack}
+            onPageTurnModeChange={handlePageTurnModeChange}
+            progressLabel={`${Math.round(Math.max(0, Math.min(1, currentProgress)) * 100)}%`}
+            readerColors={readerColors}
+            resolvedReaderFontFamily={resolvedReaderFontFamily}
+            settings={settings}
+            settingsOpen={settingsOpen}
+            toggleLeftPanel={toggleLeftPanel}
+            toggleSettingsPanel={toggleSettingsPanel}
+        />
     )
 }

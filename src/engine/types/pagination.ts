@@ -13,7 +13,7 @@ export interface PageBoundary {
     endOffset: number
 }
 
-export interface VitraPaginateOptions {
+export interface PaginateOptions {
     gap?: number
     minBreakableSpaceRatio?: number
 }

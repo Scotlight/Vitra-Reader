@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, type RefObject } from 'react'
-import { startMeasure, type VitraMeasureHandle } from '@/engine/render/vitraMeasure'
-import type { PageBoundary } from '@/engine/types/vitraPagination'
+import { startMeasure, type MeasureHandle } from '@/engine/render/measure'
+import type { PageBoundary } from '@/engine/types/pagination'
 import {
     readPaginatedMeasureCache,
     writePaginatedMeasureCache,
@@ -10,7 +10,7 @@ export function usePaginationMeasure(paginationMeasureHostRef: RefObject<HTMLDiv
     const pageBoundariesRef = useRef<readonly PageBoundary[]>([])
     const pageMapReadyRef = useRef(false)
     const paginationMeasureSeqRef = useRef(0)
-    const paginationMeasureHandleRef = useRef<VitraMeasureHandle | null>(null)
+    const paginationMeasureHandleRef = useRef<MeasureHandle | null>(null)
     const measureCacheRef = useRef<Map<string, readonly PageBoundary[]>>(new Map())
 
     const abortPaginationMeasure = useCallback(() => {

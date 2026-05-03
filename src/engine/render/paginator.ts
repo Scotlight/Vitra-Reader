@@ -1,8 +1,8 @@
-import type { BlockMetrics, PageBoundary, VitraPaginateOptions } from '../types/vitraPagination'
+import type { BlockMetrics, PageBoundary, PaginateOptions } from '../types/pagination'
 import {
     collectCanvasBlockMetricsIdle,
     isCanvasMeasureEligible,
-} from './vitraCanvasMeasure'
+} from './canvasMeasure'
 import { clampNumber } from '@/utils/mathUtils'
 
 const DEFAULT_GAP = 0
@@ -13,7 +13,7 @@ const DEFAULT_IDLE_TIMEOUT_MS = 120
 const MIN_IDLE_BATCH_SIZE = 20
 const MAX_IDLE_BATCH_SIZE = 600
 
-export interface VitraBlockMeasureOptions {
+export interface BlockMeasureOptions {
     batchSize?: number
     idleTimeoutMs?: number
     signal?: AbortSignal
@@ -22,17 +22,17 @@ export interface VitraBlockMeasureOptions {
     canvasTextCacheEntries?: number
     onBatchMeasured?: (
         blocks: readonly BlockMetrics[],
-        progress: VitraBlockMeasureProgress,
+        progress: BlockMeasureProgress,
     ) => void
 }
 
-export interface VitraBlockMeasureProgress {
+export interface BlockMeasureProgress {
     blocksMeasured: number
     processedCandidates: number
     totalCandidates: number
 }
 
-export interface VitraIdlePaginationProgress extends VitraBlockMeasureProgress {
+export interface IdlePaginationProgress extends BlockMeasureProgress {
     boundaries: readonly PageBoundary[]
     done: boolean
 }
@@ -75,7 +75,7 @@ function ensureNotAborted(signal?: AbortSignal): void {
 function resolveMeasureStrategy(
     root: HTMLElement,
     selector: string,
-    strategy: VitraBlockMeasureOptions['strategy'],
+    strategy: BlockMeasureOptions['strategy'],
 ): 'dom' | 'canvas' {
     const resolved = strategy ?? 'auto'
     if (resolved === 'dom') return 'dom'
@@ -139,7 +139,7 @@ function createChunkedBoundaries(blockIndex: number, blockHeight: number, viewpo
 export function paginateBlocks(
     blocks: readonly BlockMetrics[],
     viewportHeight: number,
-    options: VitraPaginateOptions = {},
+    options: PaginateOptions = {},
 ): PageBoundary[] {
     if (blocks.length === 0) return []
     const safeViewportHeight = Math.max(1, Math.floor(viewportHeight))
@@ -205,7 +205,7 @@ export function collectBlockMetrics(root: HTMLElement, selector = DEFAULT_BLOCK_
 export async function collectBlockMetricsIdle(
     root: HTMLElement,
     selector = DEFAULT_BLOCK_SELECTOR,
-    options: VitraBlockMeasureOptions = {},
+    options: BlockMeasureOptions = {},
 ): Promise<BlockMetrics[]> {
     const strategy = resolveMeasureStrategy(root, selector, options.strategy)
     if (strategy === 'canvas') {
@@ -293,7 +293,7 @@ export async function collectBlockMetricsIdle(
 export function buildPageBoundariesFromDom(
     root: HTMLElement,
     viewportHeight: number,
-    options: VitraPaginateOptions = {},
+    options: PaginateOptions = {},
 ): PageBoundary[] {
     const blocks = collectBlockMetrics(root)
     return paginateBlocks(blocks, viewportHeight, options)
@@ -302,11 +302,11 @@ export function buildPageBoundariesFromDom(
 export async function buildPageBoundariesFromDomIdle(
     root: HTMLElement,
     viewportHeight: number,
-    options: VitraPaginateOptions = {},
-    measureOptions: VitraBlockMeasureOptions = {},
-    onProgress?: (progress: VitraIdlePaginationProgress) => void,
+    options: PaginateOptions = {},
+    measureOptions: BlockMeasureOptions = {},
+    onProgress?: (progress: IdlePaginationProgress) => void,
 ): Promise<PageBoundary[]> {
-    let latestProgress: VitraBlockMeasureProgress = {
+    let latestProgress: BlockMeasureProgress = {
         blocksMeasured: 0,
         processedCandidates: 0,
         totalCandidates: 0,

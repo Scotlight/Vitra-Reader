@@ -64,7 +64,7 @@
 
 当前版本已按源码校正以下事实：
 
-- 阅读器打开链路收敛为 `App -> ReaderView -> useReaderBookSession -> VitraPipeline -> VitraContentAdapter`。
+- 阅读器打开链路收敛为 `App -> ReaderView -> useReaderBookSession -> BookPipeline -> BookContentAdapter`。
 - 阅读器公共交互已经拆分到 `useReaderNavigation`、`useReaderAnnotations`、`useAutoScrollActiveToc`、`useReaderClock`。
 - 阅读活跃时长由 `useReadingActivityTracker` 写入 `readingStatsDaily`，并由 `ReadingStatsPanel` 展示。
 - `useSettingsStore` 已持久化 `readerSettings` 与 `savedColors`，不再是纯会话态。

@@ -93,20 +93,20 @@
 - `src/engine/core/contentProvider.ts`
 - `src/engine/core/contentProviderFactory.ts`
 - `src/engine/core/providerRegistry.ts`
-- `src/engine/pipeline/vitraPipeline.ts`
-- `src/engine/pipeline/vitraContentAdapter.ts`
+- `src/engine/pipeline/pipeline.ts`
+- `src/engine/pipeline/contentAdapter.ts`
 - `src/engine/parsers/providers/pdfProvider.ts`
 - `src/engine/parsers/providerSectionFactory.ts`
 - `src/engine/parsers/providers/flatChapterProvider.ts`
 - `src/engine/parsers/providers/chapterSearch.ts`
 - `src/engine/parsers/providers/mobiParser.ts`
 - `src/engine/parsers/providers/mobiTextDecoding.ts`
-- `src/engine/parsers/vitraDocxParser.ts`
-- `src/engine/parsers/vitraComicParser.ts`
+- `src/engine/parsers/docxParser.ts`
+- `src/engine/parsers/comicParser.ts`
 
 职责：
 
-- 通过 `VitraPipeline` 统一调度格式嗅探、parser 创建、预览与实际解析
+- 通过 `BookPipeline` 统一调度格式嗅探、parser 创建、预览与实际解析
 - 通过 `ContentProvider` 统一抽象对外暴露阅读能力：`src/engine/core/contentProvider.ts:25-37`
 - 在 `detectFormat()` 中完成格式识别：`src/engine/core/contentProvider.ts:117-136`
 - 在 provider 兼容格式上通过 `providerRegistry` 装配内容提供者与元数据解析器
@@ -134,8 +134,8 @@
 
 主要位于：
 
-- `src/engine/cache/vitraBookCache.ts`
-- `src/engine/cache/vitraSectionManager.ts`
+- `src/engine/cache/bookCache.ts`
+- `src/engine/cache/sectionManager.ts`
 - `src/components/Reader/paginatedMeasureCache.ts`
 - `src/services/storageService.ts`
 - `src/stores/useSyncStore.ts`

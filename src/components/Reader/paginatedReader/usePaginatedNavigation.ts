@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react';
 import type { SpineItemInfo } from '@/engine/core/contentProvider';
-import type { PageBoundary } from '@/engine/types/vitraPagination';
+import type { PageBoundary } from '@/engine/types/pagination';
 import { shouldSkipPaginatedBlankCandidate } from './paginatedBlankDetection';
 
 interface UsePaginatedNavigationOptions {

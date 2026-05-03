@@ -2,9 +2,9 @@
 // DOCX Parser — 使用 mammoth 转换 HTML
 // ═══════════════════════════════════════════════════════
 
-import { VitraBaseParser } from '../core/vitraBaseParser';
-import { VitraSectionSplitter } from '../core/vitraSectionSplitter';
-import { createBlobSectionsFromChunks } from '../core/vitraSectionFactory';
+import { BaseParser } from '../core/baseParser';
+import { SectionSplitter } from '../core/sectionSplitter';
+import { createBlobSectionsFromChunks } from '../core/sectionFactory';
 import { stripBookExtension } from '../core/contentProvider';
 import {
   upsertChapterIndex,
@@ -12,24 +12,24 @@ import {
   clearBookIndex,
 } from '../cache/searchIndexCache';
 import type {
-  VitraBook,
-  VitraBookMetadata,
-  VitraBookSection,
-  VitraSearchResult,
-  VitraTocItem,
-} from '../types/vitraBook';
+  ParsedBook,
+  ParsedBookMetadata,
+  BookSection,
+  BookSearchResult,
+  BookTocItem,
+} from '../types/book';
 
-export class VitraDocxParser extends VitraBaseParser {
-  async parse(): Promise<VitraBook> {
+export class DocxParser extends BaseParser {
+  async parse(): Promise<ParsedBook> {
     const [html, metadata] = await Promise.all([
       this.convertToHtml(),
       this.extractMetadata(),
     ]);
 
-    const chunks = VitraSectionSplitter.split(html);
+    const chunks = SectionSplitter.split(html);
     const { sections, destroy } = createBlobSectionsFromChunks(chunks, 'docx');
     const toc = this.buildTocFromChunks(chunks, sections);
-    const bookId = `vitra-${this.filename}`;
+    const bookId = `parsed-${this.filename}`;
 
     // 建立搜索索引（DOCX 只有一段 HTML，按 chunk 分段索引）
     chunks.forEach((chunk, i) => {
@@ -45,7 +45,7 @@ export class VitraDocxParser extends VitraBaseParser {
       direction: 'auto',
       resolveHref: (href: string) => this.resolveHref(href, sections),
       getCover: async () => null,
-      search: (keyword: string): VitraSearchResult[] => searchBookIndex(bookId, keyword),
+      search: (keyword: string): BookSearchResult[] => searchBookIndex(bookId, keyword),
       destroy: () => {
         clearBookIndex(bookId);
         destroy();
@@ -59,7 +59,7 @@ export class VitraDocxParser extends VitraBaseParser {
     return result.value;
   }
 
-  private async extractMetadata(): Promise<VitraBookMetadata> {
+  private async extractMetadata(): Promise<ParsedBookMetadata> {
     const fallbackTitle = stripBookExtension(this.filename);
     try {
       const { unzipSync } = await import('fflate');
@@ -114,8 +114,8 @@ export class VitraDocxParser extends VitraBaseParser {
 
   private buildTocFromChunks(
     chunks: readonly { label: string; index: number }[],
-    sections: readonly VitraBookSection[],
-  ): VitraTocItem[] {
+    sections: readonly BookSection[],
+  ): BookTocItem[] {
     return chunks.map((chunk) => ({
       label: chunk.label,
       href: sections[chunk.index]?.href ?? `docx-${chunk.index}`,
@@ -125,7 +125,7 @@ export class VitraDocxParser extends VitraBaseParser {
 
   private resolveHref(
     href: string,
-    sections: readonly VitraBookSection[],
+    sections: readonly BookSection[],
   ): { index: number; anchor?: string } | null {
     const [rawHref, anchor] = href.split('#', 2);
     const index = sections.findIndex((s) => s.href === rawHref);

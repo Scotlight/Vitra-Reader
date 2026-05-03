@@ -56,7 +56,7 @@
 当前已消失的告警：
 
 - Vite chunk 超过 500 kB 告警。
-- 未再出现 `VitraPipeline` / `VitraContentAdapter` 同时静态导入与动态导入导致分包不生效的告警。
+- 未再出现 `BookPipeline` / `BookContentAdapter` 同时静态导入与动态导入导致分包不生效的告警。
 
 结论：构建可用，PDF runtime vendor 仍是最大体积来源，但当前构建没有超过 500 kB 的 Vite chunk 告警。
 

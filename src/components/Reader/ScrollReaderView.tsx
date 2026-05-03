@@ -3,7 +3,8 @@ import {
     forwardRef, memo, useImperativeHandle
 } from 'react';
 import type { ContentProvider } from '@/engine/core/contentProvider';
-import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
+import type { ReaderStyleConfig } from './ShadowRenderer';
+import { ScrollReaderShell } from './ScrollReaderShell';
 import { useVirtualChapterRuntime } from './scrollReader/useVirtualChapterRuntime';
 import { useScrollReaderRefs } from './scrollReader/useScrollReaderRefs';
 import { useChapterUnloader } from './scrollReader/useChapterUnloader';
@@ -26,12 +27,13 @@ import {
     resolveProgressInChapter,
     type ReaderModePositionSnapshot,
 } from './readerModeSwitchPosition';
+import {
+    markChapterShadowRenderError,
+    removeShadowQueueChapter,
+} from './scrollChapterLoad';
+import { markScrollPipelineIdle } from './scrollReader/scrollPipelineRuntime';
 import type { LoadedChapter } from './scrollReader/scrollReaderTypes';
 import { useSelectionMenu } from '@/hooks/useSelectionMenu';
-import styles from './ScrollReaderView.module.css';
-
-// ── Types ──
-
 interface ScrollReaderViewProps {
     provider: ContentProvider;
     bookId: string;
@@ -44,14 +46,10 @@ interface ScrollReaderViewProps {
     onChapterChange?: (label: string, href: string) => void;
     onSelectionSearch?: (keyword: string) => void;
 }
-
 export interface ScrollReaderHandle {
     jumpToSpine: (spineIndex: number, searchText?: string) => Promise<void>;
     getPosition: () => ReaderModePositionSnapshot | null;
 }
-
-// ── Component ──
-
 const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderViewProps>(({
     provider,
     bookId,
@@ -75,57 +73,35 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         pendingProgressSnapshotRef,
         lastKnownAnchorIndexRef,
     } = refs;
-
     const [chapters, setChapters] = useState<LoadedChapter[]>([]);
     const [currentSpineIndex, setCurrentSpineIndex] = useState(initialSpineIndex);
     const [isInitialized, setIsInitialized] = useState(false);
-
     const spineItems = useSpineItems(refs, provider);
-
-    // ── Highlights ──
-
     const { handleHighlightCreated, highlightsBySpineIndex } = useBookHighlights({
         bookId,
         highlightDirtyChaptersRef,
         lastReportedProgressRef,
         pendingProgressSnapshotRef,
     });
-
-    // ── Selection Menu (shared hook) ──
     const getHighlightContainer = useCallback((spineIndex: number): HTMLElement | null => {
         const listEl = chapterListRef.current;
         if (!listEl) return null;
         return listEl.querySelector(`[data-chapter-id="ch-${spineIndex}"]`) as HTMLElement | null;
     }, []);
-
     const {
         selectionMenu, setSelectionMenu,
         renderedHighlightsRef,
         renderSelectionUI,
     } = useSelectionMenu({ bookId, onSelectionSearch, getHighlightContainer, onHighlightCreated: handleHighlightCreated });
-
-    // Clear rendered highlights cache when book changes
     useEffect(() => {
         renderedHighlightsRef.current.clear();
     }, [bookId, renderedHighlightsRef]);
-
     const shadowResourceExists = useCallback((url: string) => {
         return provider.isAssetUrlAvailable?.(url) ?? true;
     }, [provider]);
-
-    // Keep refs in sync with state
     chaptersRef.current = chapters;
-
-    // ── Physics / Scroll ──
-
     const { stop } = useScrollPhysics(viewportRef, smoothConfig);
-
-    // ── Idle Prefetch Scheduling ──
-
     const { scheduleIdlePrefetch, cancelIdlePrefetch } = useIdlePrefetch(refs);
-
-    // ── Chapter Resize Observer ──
-
     const {
         observeResizeNode,
         unobserveResizeNode,
@@ -133,9 +109,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         unobserveChapterResizeNodes,
         resetResizeObservers,
     } = useChapterResizeObserver(refs);
-
-    // ── Virtual Chapter Runtime ──
-
     const {
         virtualChaptersRef,
         chapterVectorsRef,
@@ -145,21 +118,12 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         refreshVirtualChapterLayout,
         registerVirtualChapterRuntime,
     } = useVirtualChapterRuntime({ observeResizeNode, unobserveResizeNode });
-
-    // ── Aggregate Unmount Cleanup ──
-
     useReaderUnmountCleanup(refs, {
         cancelIdlePrefetch,
         virtualChaptersRef,
         cleanupVirtualChapterRuntime,
     });
-
-    // Pending shadow renders queue
     const [shadowQueue, setShadowQueue] = useState<LoadedChapter[]>([]);
-
-    // ── Spine Initialization ──
-
-    // Load initial chapter once spineItems are available
     useEffect(() => {
         if (spineItems.length === 0 || isInitialized) return;
         if (loadingLockRef.current.size > 0) return; // already loading
@@ -169,9 +133,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         loadChapter(safeIndex, 'initial');
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [spineItems]);
-
-    // ── Chapter Loading ──
-
     const { loadChapter, runPredictivePrefetch } = useChapterLoader(refs, {
         provider,
         readerStyles,
@@ -184,9 +145,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         scheduleIdlePrefetch,
         cancelIdlePrefetch,
     });
-
-    // ── Atomic DOM Commit ──
-
     const { requestFlush, commitProgressSnapshot, syncViewportState } = useAtomicDomCommit(refs, {
         chapters,
         spineItems,
@@ -208,18 +166,12 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         observeChapterResizeNodes,
         unobserveChapterResizeNodes,
     });
-
-    // ── Virtual Segment Height Commit ──
-
     useVirtualHeightCommit(refs, {
         chapterVectorsRef,
         virtualChaptersRef,
         refreshVirtualChapterLayout,
         requestFlush,
     });
-
-    // ── Shadow Render Complete Handler ──
-
     const { handleShadowReady, forceHydrateSegment, materializeAllVirtualSegments } = useShadowRenderComplete(refs, {
         chapterVectorsRef,
         virtualChaptersRef,
@@ -229,9 +181,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         setShadowQueue,
         requestFlush,
     });
-
-    // ── Scroll Event Handler ──
-
     useScrollHandler(refs, {
         spineItems,
         loadChapter,
@@ -241,9 +190,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         syncViewportState,
         commitProgressSnapshot,
     });
-
-    // ── Chapter Unloading ──
-
     useChapterUnloader(refs, {
         provider,
         currentSpineIndex,
@@ -252,9 +198,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         chapterVectorsRef,
         setChapters,
     });
-
-    // ── TOC Jump ──
-
     const { jumpToSpine } = useTocJump(refs, {
         provider,
         onChapterChange,
@@ -271,19 +214,15 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         cancelIdlePrefetch,
         stop,
     });
-
-    // Expose jumpToSpine via ref for parent component
     const getPosition = useCallback((): ReaderModePositionSnapshot | null => {
         const spineCount = spineItems.length;
         if (spineCount === 0) return null;
-
         const snapshot = pendingProgressSnapshotRef.current;
         const spineIndex = snapshot?.spineIndex ?? lastKnownAnchorIndexRef.current ?? currentSpineIndex;
         const scrollTop = viewportRef.current?.scrollTop ?? snapshot?.scrollTop ?? 0;
         const chapterProgress = snapshot
             ? resolveProgressInChapter(snapshot.progress, spineIndex, spineCount)
             : clampReaderUnit(initialChapterProgress ?? 0);
-
         return {
             sourceMode: 'scrolled-continuous',
             spineIndex,
@@ -298,14 +237,10 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         spineItems.length,
         viewportRef,
     ]);
-
     useImperativeHandle(ref, () => ({
         jumpToSpine,
         getPosition,
     }));
-
-    // ── Selection + Highlight ──
-
     const { scheduleHighlightInjection } = useHighlightAndSelection(refs, {
         chapters,
         highlightsBySpineIndex,
@@ -313,9 +248,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         selectionMenu,
         setSelectionMenu,
     });
-
-    // ── Active-only 虚拟段同步 ──
-
     useVirtualSegmentSync(refs, {
         chapters,
         highlightsBySpineIndex,
@@ -325,79 +257,27 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         refreshVirtualChapterLayout,
         scheduleHighlightInjection,
     });
-
-    // ── Render ──
-
+    const handleShadowRenderError = useCallback((spineIndex: number, chapterId: string, err: Error) => {
+        console.error(`[ScrollReader] Shadow error for ${chapterId}:`, err);
+        setShadowQueue(prev => removeShadowQueueChapter(prev, spineIndex) as LoadedChapter[]);
+        setChapters(prev => markChapterShadowRenderError(prev, spineIndex) as LoadedChapter[]);
+        markScrollPipelineIdle(refs);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     return (
-        <div
-            className={styles.vitraViewport}
-            ref={viewportRef}
-            style={{ overflow: 'hidden' }} // Override to disable native scrolling
-        >
-            {/* Shadow rendering area */}
-            <div className={styles.shadowArea}>
-                {shadowQueue.map(ch => (
-                    <ShadowRenderer
-                        key={ch.id}
-                        htmlContent={ch.htmlContent}
-                        htmlFragments={ch.htmlFragments}
-                        segmentMetas={ch.segmentMetas}
-                        chapterId={ch.id}
-                        externalStyles={ch.externalStyles}
-                        preprocessed
-                        readerStyles={readerStyles}
-                        resourceExists={shadowResourceExists}
-                        onReady={(node, height) => handleShadowReady(ch.spineIndex, node, height)}
-                        onError={(err) => {
-                            console.error(`[ScrollReader] Shadow error for ${ch.id}:`, err);
-                            setShadowQueue(prev => prev.filter(q => q.spineIndex !== ch.spineIndex));
-                        }}
-                    />
-                ))}
-            </div>
-
-            {/* Chapter list — DOM nodes are mounted here by useLayoutEffect */}
-            <div className={styles.chapterList} ref={chapterListRef}>
-                {/* Loading indicator at top */}
-                {chapters.length > 0 &&
-                    chapters[0].spineIndex > 0 &&
-                    (chapters[0].status === 'loading' || chapters[0].status === 'shadow-rendering') && (
-                        <div className={styles.loadingIndicator}>
-                            <span className={styles.loadingDot} />
-                            <span className={styles.loadingDot} />
-                            <span className={styles.loadingDot} />
-                        </div>
-                    )}
-                {/* Error state placeholders — shown when a chapter fails to load */}
-                {chapters.filter(ch => ch.status === 'error').map(ch => (
-                    <div key={ch.id} className={styles.chapterErrorPlaceholder}>
-                        章节加载失败
-                    </div>
-                ))}
-            </div>
-
-            {/* Loading indicator at bottom */}
-            {chapters.length > 0 && (
-                chapters[chapters.length - 1].status === 'loading' ||
-                chapters[chapters.length - 1].status === 'shadow-rendering'
-            ) && (
-                    <div className={styles.loadingIndicator}>
-                        <span className={styles.loadingDot} />
-                        <span className={styles.loadingDot} />
-                        <span className={styles.loadingDot} />
-                    </div>
-                )}
-
-            {/* Empty state */}
-            {!isInitialized && chapters.length === 0 && (
-                <div className={styles.emptyState}>Loading...</div>
-            )}
-
-            {renderSelectionUI()}
-        </div>
+        <ScrollReaderShell
+            chapters={chapters}
+            chapterListRef={chapterListRef}
+            handleShadowReady={handleShadowReady}
+            handleShadowRenderError={handleShadowRenderError}
+            isInitialized={isInitialized}
+            readerStyles={readerStyles}
+            renderSelectionUI={renderSelectionUI}
+            shadowQueue={shadowQueue}
+            shadowResourceExists={shadowResourceExists}
+            viewportRef={viewportRef}
+        />
     );
 });
-
 ScrollReaderViewComponent.displayName = 'ScrollReaderView';
-
 export const ScrollReaderView = memo(ScrollReaderViewComponent);

@@ -1,6 +1,6 @@
-import type { VitraVectorPipelineStage } from '../types/vectorRender'
+import type { VectorPipelineStage } from '../types/vectorRender'
 
-const PIPELINE_STAGE_ORDER: readonly VitraVectorPipelineStage[] = [
+const PIPELINE_STAGE_ORDER: readonly VectorPipelineStage[] = [
     'parse',
     'measure',
     'paginate',
@@ -8,7 +8,7 @@ const PIPELINE_STAGE_ORDER: readonly VitraVectorPipelineStage[] = [
     'hydrate',
 ]
 
-const STAGE_ORDER_INDEX: Readonly<Record<VitraVectorPipelineStage, number>> = Object.freeze({
+const STAGE_ORDER_INDEX: Readonly<Record<VectorPipelineStage, number>> = Object.freeze({
     parse: 0,
     measure: 1,
     paginate: 2,
@@ -16,29 +16,29 @@ const STAGE_ORDER_INDEX: Readonly<Record<VitraVectorPipelineStage, number>> = Ob
     hydrate: 4,
 })
 
-export interface VitraRenderStageTiming {
-    stage: VitraVectorPipelineStage
+export interface RenderStageTiming {
+    stage: VectorPipelineStage
     startAt: number
     endAt: number
     durationMs: number
 }
 
-export interface VitraRenderTraceSnapshot {
+export interface RenderTraceSnapshot {
     chapterId: string
     startedAt: number
     finishedAt: number
     durationMs: number
-    stages: readonly VitraRenderStageTiming[]
+    stages: readonly RenderStageTiming[]
 }
 
-export interface VitraRenderTraceState {
+export interface RenderTraceState {
     chapterId: string
     startedAt: number
     finishedAt: number | null
-    stageTimings: Partial<Record<VitraVectorPipelineStage, VitraRenderStageTiming>>
+    stageTimings: Partial<Record<VectorPipelineStage, RenderStageTiming>>
 }
 
-export function createVitraRenderTrace(chapterId: string): VitraRenderTraceState {
+export function createRenderTrace(chapterId: string): RenderTraceState {
     return {
         chapterId,
         startedAt: performance.now(),
@@ -47,27 +47,27 @@ export function createVitraRenderTrace(chapterId: string): VitraRenderTraceState
     }
 }
 
-function findMissingPreStages(trace: VitraRenderTraceState, stage: VitraVectorPipelineStage): VitraVectorPipelineStage[] {
+function findMissingPreStages(trace: RenderTraceState, stage: VectorPipelineStage): VectorPipelineStage[] {
     const targetIndex = STAGE_ORDER_INDEX[stage]
     return PIPELINE_STAGE_ORDER
         .slice(0, targetIndex)
         .filter((pre) => !trace.stageTimings[pre])
 }
 
-function assertStageEligibility(trace: VitraRenderTraceState, stage: VitraVectorPipelineStage): void {
+function assertStageEligibility(trace: RenderTraceState, stage: VectorPipelineStage): void {
     if (trace.stageTimings[stage]) {
-        throw new Error(`[VitraRenderPipeline] stage already completed: ${stage}`)
+        throw new Error(`[RenderStageTrace] stage already completed: ${stage}`)
     }
     const missingPreStages = findMissingPreStages(trace, stage)
     if (missingPreStages.length === 0) return
     throw new Error(
-        `[VitraRenderPipeline] invalid stage order for "${stage}", missing: ${missingPreStages.join(', ')}`,
+        `[RenderStageTrace] invalid stage order for "${stage}", missing: ${missingPreStages.join(', ')}`,
     )
 }
 
 function recordStageTiming(
-    trace: VitraRenderTraceState,
-    stage: VitraVectorPipelineStage,
+    trace: RenderTraceState,
+    stage: VectorPipelineStage,
     startAt: number,
     endAt: number,
 ): void {
@@ -79,9 +79,9 @@ function recordStageTiming(
     }
 }
 
-export async function runVitraRenderStage<T>(
-    trace: VitraRenderTraceState,
-    stage: VitraVectorPipelineStage,
+export async function runRenderStage<T>(
+    trace: RenderTraceState,
+    stage: VectorPipelineStage,
     task: () => T | Promise<T>,
 ): Promise<T> {
     assertStageEligibility(trace, stage)
@@ -98,13 +98,13 @@ export async function runVitraRenderStage<T>(
     }
 }
 
-export function finalizeVitraRenderTrace(trace: VitraRenderTraceState): VitraRenderTraceSnapshot {
+export function finalizeRenderTrace(trace: RenderTraceState): RenderTraceSnapshot {
     const stageTimings = PIPELINE_STAGE_ORDER.map((stage) => trace.stageTimings[stage]).filter(
-        (item): item is VitraRenderStageTiming => Boolean(item),
+        (item): item is RenderStageTiming => Boolean(item),
     )
     if (stageTimings.length !== PIPELINE_STAGE_ORDER.length) {
         const missing = PIPELINE_STAGE_ORDER.filter((stage) => !trace.stageTimings[stage])
-        throw new Error(`[VitraRenderPipeline] finalize failed, missing stages: ${missing.join(', ')}`)
+        throw new Error(`[RenderStageTrace] finalize failed, missing stages: ${missing.join(', ')}`)
     }
 
     const finishedAt = performance.now()
@@ -118,9 +118,9 @@ export function finalizeVitraRenderTrace(trace: VitraRenderTraceState): VitraRen
     }
 }
 
-export function formatVitraRenderTrace(trace: VitraRenderTraceSnapshot): string {
+export function formatRenderTrace(trace: RenderTraceSnapshot): string {
     const stageSummary = trace.stages
         .map((stage) => `${stage.stage}:${stage.durationMs.toFixed(1)}ms`)
         .join(' | ')
-    return `[VitraRenderPipeline] ${trace.chapterId} total:${trace.durationMs.toFixed(1)}ms :: ${stageSummary}`
+    return `[RenderStageTrace] ${trace.chapterId} total:${trace.durationMs.toFixed(1)}ms :: ${stageSummary}`
 }

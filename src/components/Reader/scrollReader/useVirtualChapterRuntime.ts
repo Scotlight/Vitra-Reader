@@ -105,6 +105,7 @@ export function useVirtualChapterRuntime(options: UseVirtualChapterRuntimeOption
         segmentEl.setAttribute('data-shadow-segment-state', 'hydrated');
         segmentEl.style.contain = 'layout style paint';
         segmentEl.style.minHeight = '0px';
+        // segment.htmlContent 来自章节预处理生成的 SegmentMeta，进入虚拟段挂载前已经完成 HTML 清洗。
         segmentEl.innerHTML = segment.htmlContent;
         updateVirtualSegmentLayout(segmentEl, segment);
 

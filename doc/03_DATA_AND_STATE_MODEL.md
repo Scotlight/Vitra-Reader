@@ -82,7 +82,7 @@
 - PDF 页面 HTML 与图像 URL 缓存。
 - Vitra section LRU。
 - scope CSS 缓存。
-- VitraBookCache 持久章节缓存。
+- BookCache 持久章节缓存。
 - 翻译结果缓存。
 - 阅读统计日聚合。
 
@@ -121,7 +121,7 @@
 `db.settings` 是复合键空间，当前至少承载：
 
 - 阅读设置：`settings:readerSettings`、`settings:savedColors`。
-- 翻译配置：`translateConfig`。
+- 翻译配置：主键 `translate:config`，兼容旧键 `translateConfig`。
 - WebDAV 配置与同步元数据。
 - 书库组织：`groups:groups`、`groups:bookMap`、`groups:bookOrder`、`groups:homeOrder`。
 - 旧书架兼容：`shelves`、`shelfBookMap`。
@@ -195,20 +195,20 @@
 
 翻译链路拆成两类持久化状态：
 
-- `translateConfig`：配置，存于 `db.settings`，API key 字段经过 `safeStorage` 加解密。
+- `translate:config`：配置，存于 `db.settings`，API key 字段经过 `safeStorage` 加解密；旧键 `translateConfig` 只作为迁移和同步过滤兼容键保留。
 - `translationCache`：结果缓存，存于独立表，带 TTL 和 `lastAccessAt` 清理。
 
 约束：
 
-- `translateConfig` 属于敏感键，不参与 WebDAV 同步。
+- `translate:config` 和旧键 `translateConfig` 都属于敏感键，不参与 WebDAV 同步。
 - 翻译结果缓存不写入 `settings`。
 
 ## 9. 当前缓存真值
 
 - PDF provider 内缓存：页面 HTML、页面图像 URL、PDF runtime 状态。
-- `VitraSectionManager`：section 级 LRU，淘汰时释放 URL 并调用 `section.unload()`。
+- `SectionManager`：section 级 LRU，淘汰时释放 URL 并调用 `section.unload()`。
 - `scopeCssCache`：CSS 作用域处理结果缓存。
-- `VitraBookCache`：可缓存格式的章节 HTML 持久缓存，键前缀 `vcache-`。
+- `BookCache`：可缓存格式的章节 HTML 持久缓存，键前缀 `vcache-`。
 - `searchIndexCache`：会话级搜索索引，不进入 `settings`。
 - `assetLoader`：sessionKey 级 Blob URL 管理。
 

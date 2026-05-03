@@ -3,7 +3,7 @@
  */
 
 /* ── 主视口容器 ── */
-.vitraViewport {
+.scrollViewport {
     position: relative;
     width: 100%;
     height: 100%;
@@ -74,7 +74,7 @@
     margin: 0 3px;
     border-radius: 50%;
     background: currentColor;
-    animation: vitra-pulse 1.2s ease-in-out infinite;
+    animation: reader-pulse 1.2s ease-in-out infinite;
 }
 
 .loadingDot:nth-child(2) {
@@ -85,7 +85,7 @@
     animation-delay: 0.4s;
 }
 
-@keyframes vitra-pulse {
+@keyframes reader-pulse {
 
     0%,
     80%,

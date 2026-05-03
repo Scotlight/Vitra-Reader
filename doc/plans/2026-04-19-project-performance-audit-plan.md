@@ -108,7 +108,7 @@
 已验证：
 
 - `npm run build --silent` 通过。
-- 未再出现 `VitraPipeline` / `VitraContentAdapter` 的 dynamic import 冲突告警。
+- 未再出现 `BookPipeline` / `BookContentAdapter` 的 dynamic import 冲突告警。
 - 当前未出现 Vite chunk 超过 500 kB 告警。
 - 最大 renderer chunk 是 `pdf-legacy-vendor-Din8IpeN.js`，约 `497.43 kB`。
 - `pdf-modern-vendor-CE_K4jFx.js` 约 `445.49 kB`。

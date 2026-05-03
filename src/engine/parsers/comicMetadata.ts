@@ -2,7 +2,7 @@
 // ComicInfo.xml 解析 — 提取漫画元数据
 // ═══════════════════════════════════════════════════════
 
-import type { VitraReadingDirection } from '../types/vitraBook';
+import type { ReadingDirection } from '../types/book';
 
 export interface ComicMetadata {
   readonly title?: string;
@@ -13,7 +13,7 @@ export interface ComicMetadata {
   readonly summary?: string;
   readonly language?: string;
   readonly manga?: boolean;
-  readonly direction: VitraReadingDirection;
+  readonly direction: ReadingDirection;
   readonly coverPageIndex: number;
 }
 

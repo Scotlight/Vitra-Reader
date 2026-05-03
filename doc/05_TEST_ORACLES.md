@@ -71,19 +71,19 @@ Vitest 配置：
 - `spineLabel.test.ts`
 - `styleProcessor.test.ts`
 - `textFinder.test.ts`
-- `vitraCanvasMeasure.test.ts`
+- `canvasMeasure.test.ts`
 - `vitraChapterCleanupIntegration.test.ts`
-- `vitraPaginator.test.ts`
-- `vitraPipeline.test.ts`
-- `vitraPosition.test.ts`
-- `vitraRenderPipeline.test.ts`
+- `paginator.test.ts`
+- `pipeline.test.ts`
+- `position.test.ts`
+- `renderStageTrace.test.ts`
 
 覆盖范围：
 
 - 格式检测与文件名规范。
 - 内容消毒与样式作用域隔离。
 - 章节预处理 core / worker service / fallback。
-- VitraPipeline 预览与 warmup 降级。
+- BookPipeline 预览与 warmup 降级。
 - PDF provider、页面渲染、Blob 生命周期。
 - provider 公共章节构建、章节搜索、spine 标题回退和章节 HTML 边缘清洗。
 - 滚动与分页阅读核心流程。
@@ -125,7 +125,7 @@ Vitest 配置：
 - 最大 renderer chunk 是 `pdf-legacy-vendor-Din8IpeN.js`，约 `497.43 kB`，gzip 后约 `150.46 kB`。
 - `pdf-modern-vendor-CE_K4jFx.js` 约 `445.49 kB`，gzip 后约 `131.74 kB`。
 - `index-CRnyh28p.js` 约 `277.38 kB`，gzip 后约 `84.40 kB`。
-- 未再出现 `VitraPipeline` / `VitraContentAdapter` 的 dynamic import 冲突告警。
+- 未再出现 `BookPipeline` / `BookContentAdapter` 的 dynamic import 冲突告警。
 
 运行注意事项：
 
@@ -225,7 +225,7 @@ Vitest 配置：
 - `readingStatsDaily` 表结构与同步 payload 一致。
 - `useSettingsStore` 能保存并恢复 `readerSettings` / `savedColors`。
 - WebDAV 密码仍保持 session-only。
-- 上传 payload 过滤 `translateConfig`、WebDAV 敏感键、`vcache-`、`tcache:`。
+- 上传 payload 过滤 `translate:config`、旧键 `translateConfig`、WebDAV 敏感键、`vcache-`、`tcache:`。
 - ETag 冲突时拒绝覆盖。
 - `restoreData()` 在 `replaceBeforeRestore` 不同取值下符合预期。
 - 翻译配置 API key 经过 safeStorage。

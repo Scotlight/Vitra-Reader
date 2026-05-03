@@ -9,13 +9,13 @@
  * - 水合阶段：HYDRATE_*
  *
  * 所有常量为 readonly，仅在模块内定义，不接收运行时注入。
- * 若需要运行时可调参数，应通过 DEFAULT_VITRA_VECTOR_CONFIG 或 ReaderStyleConfig。
+ * 若需要运行时可调参数，应通过 DEFAULT_VECTOR_RENDER_CONFIG 或 ReaderStyleConfig。
  */
 
-import { DEFAULT_VITRA_VECTOR_CONFIG } from '@/engine/render/vitraVectorPlanner';
+import { DEFAULT_VECTOR_RENDER_CONFIG } from '@/engine/render/vectorPlanner';
 
 // ── 章节大小 / 向量化 ──
-export const LARGE_CHAPTER_HTML_THRESHOLD = DEFAULT_VITRA_VECTOR_CONFIG.largeChapterThreshold;
+export const LARGE_CHAPTER_HTML_THRESHOLD = DEFAULT_VECTOR_RENDER_CONFIG.largeChapterThreshold;
 export const CHUNK_APPEND_BATCH_SIZE = 120;
 export const CHUNK_APPEND_MIN_BATCH_SIZE = 40;
 export const VECTOR_SEGMENT_CHAR_BUDGET = 16_000;
