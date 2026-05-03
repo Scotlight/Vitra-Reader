@@ -51,6 +51,26 @@ function buildReaderStyleKey(readerStyles: ReaderStyleConfig): string {
     ].join('|');
 }
 
+function buildLoadingChapter(
+    spineIndex: number,
+    chapterId: string,
+    existingChapter: LoadedChapter | undefined,
+    currentReaderStyleKey: string,
+): LoadedChapter {
+    return {
+        spineIndex,
+        id: chapterId,
+        htmlContent: '',
+        htmlFragments: [],
+        externalStyles: existingChapter?.externalStyles || [],
+        segmentMetas: existingChapter?.segmentMetas,
+        vectorStyleKey: existingChapter?.vectorStyleKey ?? currentReaderStyleKey,
+        domNode: null,
+        height: existingChapter?.height || 0,
+        status: 'loading',
+    };
+}
+
 /**
  * 章节加载编排：
  * - loadChapter: 单章节按需加载 (支持 prev/next/initial 方向、forceReload)
@@ -102,18 +122,12 @@ export function useChapterLoader(
 
         const chapterId = `ch-${spineIndex}`;
 
-        const loadingChapter: LoadedChapter = {
+        const loadingChapter = buildLoadingChapter(
             spineIndex,
-            id: chapterId,
-            htmlContent: '',
-            htmlFragments: [],
-            externalStyles: existingChapter?.externalStyles || [],
-            segmentMetas: existingChapter?.segmentMetas,
-            vectorStyleKey: existingChapter?.vectorStyleKey ?? currentReaderStyleKey,
-            domNode: null,
-            height: existingChapter?.height || 0,
-            status: 'loading',
-        };
+            chapterId,
+            existingChapter,
+            currentReaderStyleKey,
+        );
 
         setChapters(prev => {
             if (existingChapter) {
