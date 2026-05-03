@@ -18,6 +18,7 @@ import {
     markScrollPipelineIdle,
     markScrollPipelineRenderingOffscreen,
     releaseChapterLoadLock,
+    resolveChapterLoadDirection,
 } from './scrollPipelineRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 
@@ -245,9 +246,7 @@ export function useChapterLoader(
         }
 
         vectorTargets.forEach((chapter) => {
-            const direction = chapter.spineIndex < currentSpineIndex
-                ? 'prev'
-                : (chapter.spineIndex > currentSpineIndex ? 'next' : 'initial');
+            const direction = resolveChapterLoadDirection(chapter.spineIndex, currentSpineIndex);
             void loadChapter(chapter.spineIndex, direction, true);
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -263,7 +262,7 @@ export function useChapterLoader(
             if (hasActiveChapterLoad(refs, index)) return;
             const existing = chaptersRef.current.find((chapter) => chapter.spineIndex === index);
             if (existing && existing.status !== 'placeholder') return;
-            void loadChapter(index, index < currentSpineIndex ? 'prev' : 'next');
+            void loadChapter(index, resolveChapterLoadDirection(index, currentSpineIndex));
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentSpineIndex, loadChapter]);

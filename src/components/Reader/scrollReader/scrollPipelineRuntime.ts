@@ -52,3 +52,12 @@ export function getPredictivePrefetchCandidates(currentSpineIndex: number, total
         currentSpineIndex + 1,
     ].filter((index) => index >= 0 && index < totalSpine);
 }
+
+export function resolveChapterLoadDirection(
+    targetSpineIndex: number,
+    currentSpineIndex: number,
+): 'prev' | 'next' | 'initial' {
+    if (targetSpineIndex < currentSpineIndex) return 'prev';
+    if (targetSpineIndex > currentSpineIndex) return 'next';
+    return 'initial';
+}
