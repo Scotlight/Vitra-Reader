@@ -1,4 +1,5 @@
 import { findTextInDOM } from '@/utils/textFinder';
+import { resolveScrollInitialOffset } from '../readerModeSwitchPosition';
 import type { LoadedChapter } from './scrollReaderTypes';
 
 export function getOrCreateChapterElement(
@@ -54,4 +55,26 @@ export function scrollToSearchTextInChapters(
     }
 
     return null;
+}
+
+export function scrollToInitialChapterOffset(options: {
+    viewport: HTMLElement;
+    listEl: HTMLElement;
+    currentSpineIndex: number;
+    initialChapterProgress?: number;
+    initialScrollOffset: number;
+}): number | null {
+    const chapterEl = options.listEl.querySelector(`[data-chapter-id="ch-${options.currentSpineIndex}"]`) as HTMLElement | null;
+    const targetScrollTop = resolveScrollInitialOffset({
+        chapterHeight: chapterEl?.scrollHeight ?? 0,
+        chapterTop: chapterEl?.offsetTop ?? 0,
+        initialChapterProgress: options.initialChapterProgress,
+        initialScrollOffset: options.initialScrollOffset,
+        viewportHeight: options.viewport.clientHeight,
+    });
+
+    if (targetScrollTop <= 0) return null;
+
+    options.viewport.scrollTop = targetScrollTop;
+    return options.viewport.scrollTop;
 }

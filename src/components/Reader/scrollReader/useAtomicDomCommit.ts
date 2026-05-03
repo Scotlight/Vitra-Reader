@@ -4,7 +4,12 @@ import type { SpineItemInfo } from '@/engine/core/contentProvider';
 import { shouldBypassShadowQueueForSegmentMetas } from '../scrollVectorStrategy';
 import styles from '../ScrollReaderView.module.css';
 import { markChapterAsMounted, resolveViewportDerivedMetrics } from './scrollReaderHelpers';
-import { getOrCreateChapterElement, insertChapterElementAtIndex, scrollToSearchTextInChapters } from './atomicDomCommitDom';
+import {
+    getOrCreateChapterElement,
+    insertChapterElementAtIndex,
+    scrollToInitialChapterOffset,
+    scrollToSearchTextInChapters,
+} from './atomicDomCommitDom';
 import {
     SCROLL_HEDGE_EPSILON_PX,
     INSTANT_SCROLL_BEHAVIOR,
@@ -16,7 +21,6 @@ import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { useInitialVirtualSegmentSync } from './useInitialVirtualSegmentSync';
 import { useScrollProgressCommit } from './useScrollProgressCommit';
-import { resolveScrollInitialOffset } from '../readerModeSwitchPosition';
 
 interface UseAtomicDomCommitOptions {
     chapters: LoadedChapter[];
@@ -173,17 +177,15 @@ export function useAtomicDomCommit(
         setChapters(markReadyChaptersMounted);
 
         if (!initialScrollDone.current) {
-            const chapterEl = listEl.querySelector(`[data-chapter-id="ch-${currentSpineIndex}"]`) as HTMLElement | null;
-            const targetScrollTop = resolveScrollInitialOffset({
-                chapterHeight: chapterEl?.scrollHeight ?? 0,
-                chapterTop: chapterEl?.offsetTop ?? 0,
+            const nextScrollTop = scrollToInitialChapterOffset({
+                viewport,
+                listEl,
+                currentSpineIndex,
                 initialChapterProgress,
                 initialScrollOffset,
-                viewportHeight: viewport.clientHeight,
             });
-            if (targetScrollTop > 0) {
-                viewport.scrollTop = targetScrollTop;
-                lastScrollTopRef.current = viewport.scrollTop;
+            if (nextScrollTop !== null) {
+                lastScrollTopRef.current = nextScrollTop;
             }
             initialScrollDone.current = true;
         }
