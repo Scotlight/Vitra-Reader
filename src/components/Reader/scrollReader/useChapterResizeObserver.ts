@@ -1,4 +1,11 @@
 import { useCallback, useEffect } from 'react';
+import {
+    getChapterResizeTargets,
+    handleResizeObserverEntries,
+    observeResizeNode as observeResizeTarget,
+    resetResizeObserverTargets,
+    unobserveResizeNode as unobserveResizeTarget,
+} from './chapterResizeObserverTargets';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 
 export function useChapterResizeObserver(refs: ScrollReaderRefs) {
@@ -11,13 +18,10 @@ export function useChapterResizeObserver(refs: ScrollReaderRefs) {
 
     useEffect(() => {
         const observer = new ResizeObserver((entries) => {
-            entries.forEach((entry) => {
-                const target = entry.target as HTMLElement;
-                const nextHeight = Math.max(1, entry.contentRect.height);
-                observedResizeHeightsRef.current.set(target, nextHeight);
-                if (target.hasAttribute('data-shadow-segment-index')) {
-                    segmentResizeCallbackRef.current?.(target, nextHeight);
-                }
+            handleResizeObserverEntries({
+                entries,
+                observedResizeHeightsRef,
+                segmentResizeCallbackRef,
             });
         });
 
@@ -33,25 +37,25 @@ export function useChapterResizeObserver(refs: ScrollReaderRefs) {
     }, []);
 
     const observeResizeNode = useCallback((node: HTMLElement | null) => {
-        if (!node) return;
-        if (observedResizeNodesRef.current.has(node)) return;
-        observedResizeNodesRef.current.add(node);
-        observedResizeHeightsRef.current.set(node, Math.max(1, node.getBoundingClientRect().height));
-        resizeObserverRef.current?.observe(node);
+        observeResizeTarget({
+            node,
+            resizeObserver: resizeObserverRef.current,
+            observedResizeNodesRef,
+            observedResizeHeightsRef,
+        });
     }, []);
 
     const unobserveResizeNode = useCallback((node: HTMLElement | null) => {
-        if (!node) return;
-        if (!observedResizeNodesRef.current.has(node)) return;
-        observedResizeNodesRef.current.delete(node);
-        resizeObserverRef.current?.unobserve(node);
+        unobserveResizeTarget({
+            node,
+            resizeObserver: resizeObserverRef.current,
+            observedResizeNodesRef,
+        });
     }, []);
 
     const observeChapterResizeNodes = useCallback((chapterEl: HTMLElement | null) => {
         if (!chapterEl) return;
-        const segments = Array.from(
-            chapterEl.querySelectorAll('[data-shadow-segment-index]')
-        ) as HTMLElement[];
+        const segments = getChapterResizeTargets(chapterEl);
         if (segments.length > 0) {
             segments.forEach((segmentEl) => observeResizeNode(segmentEl));
             return;
@@ -61,9 +65,7 @@ export function useChapterResizeObserver(refs: ScrollReaderRefs) {
 
     const unobserveChapterResizeNodes = useCallback((chapterEl: HTMLElement | null) => {
         if (!chapterEl) return;
-        const segments = Array.from(
-            chapterEl.querySelectorAll('[data-shadow-segment-index]')
-        ) as HTMLElement[];
+        const segments = getChapterResizeTargets(chapterEl);
         if (segments.length > 0) {
             segments.forEach((segmentEl) => unobserveResizeNode(segmentEl));
         }
@@ -71,11 +73,11 @@ export function useChapterResizeObserver(refs: ScrollReaderRefs) {
     }, [unobserveResizeNode]);
 
     const resetResizeObservers = useCallback(() => {
-        observedResizeNodesRef.current.forEach((node) => {
-            resizeObserverRef.current?.unobserve(node);
+        resetResizeObserverTargets({
+            resizeObserver: resizeObserverRef.current,
+            observedResizeNodesRef,
+            observedResizeHeightsRef,
         });
-        observedResizeNodesRef.current.clear();
-        observedResizeHeightsRef.current = new WeakMap<HTMLElement, number>();
     }, []);
 
     return {
