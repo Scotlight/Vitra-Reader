@@ -126,6 +126,19 @@ function upsertQueuedChapter(prev: LoadedChapter[], chapter: LoadedChapter): Loa
     return [...removeChapterFromQueue(prev, chapter.spineIndex), chapter];
 }
 
+function isStyleRefreshTarget(chapter: LoadedChapter): boolean {
+    return chapter.status === 'mounted' || chapter.status === 'ready';
+}
+
+function buildShadowRerenderChapter(chapter: LoadedChapter, vectorStyleKey: string): LoadedChapter {
+    return {
+        ...chapter,
+        domNode: null,
+        vectorStyleKey,
+        status: 'shadow-rendering',
+    };
+}
+
 /**
  * 章节加载编排：
  * - loadChapter: 单章节按需加载 (支持 prev/next/initial 方向、forceReload)
@@ -270,9 +283,7 @@ export function useChapterLoader(
         }
         readerStylesKeyRef.current = nextKey;
 
-        const rerenderTargets = chaptersRef.current.filter((chapter) =>
-            chapter.status === 'mounted' || chapter.status === 'ready'
-        );
+        const rerenderTargets = chaptersRef.current.filter(isStyleRefreshTarget);
         if (rerenderTargets.length === 0) return;
 
         const partition = partitionStyleChangeTargets(rerenderTargets);
@@ -280,12 +291,7 @@ export function useChapterLoader(
         const vectorTargets = partition.vectorReloadTargets;
 
         const rerenderIndexes = new Set(shadowTargets.map((chapter) => chapter.spineIndex));
-        const rerenderQueue = shadowTargets.map((chapter) => ({
-            ...chapter,
-            domNode: null,
-            vectorStyleKey: nextKey,
-            status: 'shadow-rendering' as const,
-        }));
+        const rerenderQueue = shadowTargets.map((chapter) => buildShadowRerenderChapter(chapter, nextKey));
 
         renderedHighlightsRef.current.clear();
         if (rerenderIndexes.size > 0) {
@@ -296,7 +302,7 @@ export function useChapterLoader(
             ]);
             setChapters((prev) => prev.map((chapter) =>
                 rerenderIndexes.has(chapter.spineIndex)
-                    ? { ...chapter, domNode: null, vectorStyleKey: nextKey, status: 'shadow-rendering' as const }
+                    ? buildShadowRerenderChapter(chapter, nextKey)
                     : chapter
             ));
         }
