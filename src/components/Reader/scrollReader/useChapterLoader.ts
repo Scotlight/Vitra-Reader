@@ -85,6 +85,31 @@ function applyLoadingChapter(
     return [...prev, loadingChapter];
 }
 
+function buildReadyWindowedVectorChapter(options: {
+    chapterId: string;
+    spineIndex: number;
+    baseChapter: LoadedChapter;
+    externalStyles: string[];
+    readerStyles: ReaderStyleConfig;
+    segmentMetas: NonNullable<LoadedChapter['segmentMetas']>;
+}): { chapter: LoadedChapter; vector: ChapterMetaVector } {
+    const { node, height } = createWindowedVectorChapterShell({
+        chapterId: options.chapterId,
+        externalStyles: options.externalStyles,
+        readerStyles: options.readerStyles,
+        segmentMetas: options.segmentMetas,
+    });
+    return {
+        chapter: {
+            ...options.baseChapter,
+            domNode: node,
+            height,
+            status: 'ready',
+        },
+        vector: buildChapterMetaVector(options.chapterId, options.spineIndex, options.segmentMetas),
+    };
+}
+
 /**
  * 章节加载编排：
  * - loadChapter: 单章节按需加载 (支持 prev/next/initial 方向、forceReload)
@@ -149,19 +174,16 @@ export function useChapterLoader(
             if (!forceReload && canRestoreWindowedVectorPlaceholder(existingChapter, currentReaderStyleKey)) {
                 const restoredMetas = existingChapter?.segmentMetas;
                 if (restoredMetas && restoredMetas.length > 0) {
-                    const { node, height } = createWindowedVectorChapterShell({
+                    const ready = buildReadyWindowedVectorChapter({
                         chapterId,
+                        spineIndex,
+                        baseChapter: loadingChapter,
                         externalStyles: existingChapter.externalStyles,
                         readerStyles,
                         segmentMetas: restoredMetas,
                     });
-                    chapterVectorsRef.current.set(chapterId, buildChapterMetaVector(chapterId, spineIndex, restoredMetas));
-                    setChapters(prev => prev.map(ch => ch.spineIndex === spineIndex ? {
-                        ...loadingChapter,
-                        domNode: node,
-                        height,
-                        status: 'ready',
-                    } : ch));
+                    chapterVectorsRef.current.set(chapterId, ready.vector);
+                    setChapters(prev => prev.map(ch => ch.spineIndex === spineIndex ? ready.chapter : ch));
                     markScrollPipelineIdle(refs);
                     return;
                 }
@@ -187,20 +209,17 @@ export function useChapterLoader(
 
             if (shouldBypassShadowQueueForSegmentMetas(preprocessed.segmentMetas)) {
                 const vectorMetas = preprocessed.segmentMetas || [];
-                const { node, height } = createWindowedVectorChapterShell({
+                const ready = buildReadyWindowedVectorChapter({
                     chapterId,
+                    spineIndex,
+                    baseChapter: loaded,
                     externalStyles: preprocessed.externalStyles,
                     readerStyles,
                     segmentMetas: vectorMetas,
                 });
-                chapterVectorsRef.current.set(chapterId, buildChapterMetaVector(chapterId, spineIndex, vectorMetas));
+                chapterVectorsRef.current.set(chapterId, ready.vector);
                 setChapters(prev =>
-                    prev.map(ch => ch.spineIndex === spineIndex ? {
-                        ...loaded,
-                        domNode: node,
-                        height,
-                        status: 'ready',
-                    } : ch)
+                    prev.map(ch => ch.spineIndex === spineIndex ? ready.chapter : ch)
                 );
                 setShadowQueue(prev => prev.filter(ch => ch.spineIndex !== spineIndex));
                 markScrollPipelineIdle(refs);
