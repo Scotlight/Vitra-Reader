@@ -7,7 +7,7 @@ import { resetScrollPipelineRuntime } from './scrollPipelineRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { clearMountedChapterDom } from './tocJumpDomCleanup';
 import { scrollMountedChapterIntoView } from './tocJumpMountedChapter';
-import { prepareTocJumpRuntime } from './tocJumpRuntime';
+import { commitTocJumpTarget, prepareTocJumpRuntime } from './tocJumpRuntime';
 import { createTocJumpInternalLinkHandler } from './tocJumpInternalLinks';
 
 interface UseTocJumpOptions {
@@ -85,14 +85,13 @@ export function useTocJump(
             progressTimerRef,
         });
 
-        setCurrentSpineIndex(targetSpineIndex);
-        lastKnownAnchorIndexRef.current = targetSpineIndex;
-        if (onChapterChange && spineItemsRef.current[targetSpineIndex]) {
-            onChapterChange(
-                spineItemsRef.current[targetSpineIndex].id,
-                spineItemsRef.current[targetSpineIndex].href,
-            );
-        }
+        commitTocJumpTarget({
+            targetSpineIndex,
+            spineItemsRef,
+            lastKnownAnchorIndexRef,
+            setCurrentSpineIndex,
+            onChapterChange,
+        });
 
         const existing = chaptersRef.current.find(ch =>
             ch.spineIndex === targetSpineIndex && ch.status === 'mounted'
@@ -138,8 +137,12 @@ export function useTocJump(
         setChapters([]);
         setShadowQueue([]);
         resetScrollPipelineRuntime(refs);
-        setCurrentSpineIndex(targetSpineIndex);
-        lastKnownAnchorIndexRef.current = targetSpineIndex;
+        commitTocJumpTarget({
+            targetSpineIndex,
+            spineItemsRef,
+            lastKnownAnchorIndexRef,
+            setCurrentSpineIndex,
+        });
 
         if (jumpGenerationRef.current !== generation) return;
 
