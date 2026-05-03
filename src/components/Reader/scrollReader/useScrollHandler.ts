@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import type { SpineItemInfo } from '@/engine/core/contentProvider';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
-import { PRELOAD_THRESHOLD_PX, SCROLL_IDLE_RESUME_MS } from './scrollReaderConstants';
+import { PRELOAD_THRESHOLD_PX } from './scrollReaderConstants';
 import { detectScrollDirection, shouldPreloadChapter, ScrollDirection } from '@/utils/scrollDetection';
 import { isScrollPipelineIdle } from './scrollPipelineRuntime';
 import { normalizeScrollDirection, resolveScrollPreloadRequest } from './scrollPreloadTarget';
+import { scheduleScrollIdleResume } from './scrollHandlerTimers';
 
 interface UseScrollHandlerOptions {
     spineItems: SpineItemInfo[];
@@ -55,15 +56,12 @@ export function useScrollHandler(
         const handleScroll = () => {
             isUserScrollingRef.current = true;
             cancelIdlePrefetch();
-            if (scrollIdleTimerRef.current !== null) {
-                window.clearTimeout(scrollIdleTimerRef.current);
-            }
-            scrollIdleTimerRef.current = window.setTimeout(() => {
-                isUserScrollingRef.current = false;
-                scheduleIdlePrefetch(() => {
-                    runPredictivePrefetch();
-                });
-            }, SCROLL_IDLE_RESUME_MS);
+            scheduleScrollIdleResume({
+                isUserScrollingRef,
+                scrollIdleTimerRef,
+                scheduleIdlePrefetch,
+                runPredictivePrefetch,
+            });
 
             const scrollTop = viewport.scrollTop;
             const viewportHeight = viewport.clientHeight;
