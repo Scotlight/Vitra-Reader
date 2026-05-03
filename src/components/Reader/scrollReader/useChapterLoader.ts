@@ -71,6 +71,20 @@ function buildLoadingChapter(
     };
 }
 
+function applyLoadingChapter(
+    prev: LoadedChapter[],
+    loadingChapter: LoadedChapter,
+    spineIndex: number,
+    direction: 'prev' | 'next' | 'initial',
+    existingChapter: LoadedChapter | undefined,
+): LoadedChapter[] {
+    if (existingChapter) {
+        return prev.map(ch => ch.spineIndex === spineIndex ? loadingChapter : ch);
+    }
+    if (direction === 'prev') return [loadingChapter, ...prev];
+    return [...prev, loadingChapter];
+}
+
 /**
  * 章节加载编排：
  * - loadChapter: 单章节按需加载 (支持 prev/next/initial 方向、forceReload)
@@ -129,13 +143,7 @@ export function useChapterLoader(
             currentReaderStyleKey,
         );
 
-        setChapters(prev => {
-            if (existingChapter) {
-                return prev.map(ch => ch.spineIndex === spineIndex ? loadingChapter : ch);
-            }
-            if (direction === 'prev') return [loadingChapter, ...prev];
-            return [...prev, loadingChapter];
-        });
+        setChapters(prev => applyLoadingChapter(prev, loadingChapter, spineIndex, direction, existingChapter));
 
         try {
             if (!forceReload && canRestoreWindowedVectorPlaceholder(existingChapter, currentReaderStyleKey)) {
