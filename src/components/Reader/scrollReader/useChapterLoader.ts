@@ -13,6 +13,7 @@ import { loadPreprocessedChapterContent } from './chapterContentLoader';
 import type { LoadedChapter } from './scrollReaderTypes';
 import {
     beginChapterLoad,
+    getPredictivePrefetchCandidates,
     hasActiveChapterLoad,
     markScrollPipelineIdle,
     markScrollPipelineRenderingOffscreen,
@@ -255,14 +256,8 @@ export function useChapterLoader(
     const runPredictivePrefetch = useCallback(() => {
         if (isUserScrollingRef.current) return;
 
-        const totalSpine = spineItemsRef.current.length;
-        if (totalSpine === 0) return;
-
-        const candidateIndexes = [
-            currentSpineIndex - 1,
-            currentSpineIndex,
-            currentSpineIndex + 1,
-        ].filter((index) => index >= 0 && index < totalSpine);
+        const candidateIndexes = getPredictivePrefetchCandidates(currentSpineIndex, spineItemsRef.current.length);
+        if (candidateIndexes.length === 0) return;
 
         candidateIndexes.forEach((index) => {
             if (hasActiveChapterLoad(refs, index)) return;

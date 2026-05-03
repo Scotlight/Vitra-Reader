@@ -43,3 +43,12 @@ export function resetScrollPipelineRuntime(refs: ScrollPipelineRuntimeRefs): voi
     refs.loadingLockRef.current.clear();
     refs.pipelineRef.current = ScrollPipelineState.IDLE;
 }
+
+export function getPredictivePrefetchCandidates(currentSpineIndex: number, totalSpine: number): number[] {
+    if (totalSpine === 0) return [];
+    return [
+        currentSpineIndex - 1,
+        currentSpineIndex,
+        currentSpineIndex + 1,
+    ].filter((index) => index >= 0 && index < totalSpine);
+}
