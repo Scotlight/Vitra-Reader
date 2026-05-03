@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 import type { ChapterMetaVector } from '@/engine';
-import { batchUpdateSegmentHeights } from '@/engine';
 import { SCROLL_HEDGE_EPSILON_PX } from './scrollReaderConstants';
+import {
+    applyPendingVirtualHeightUpdates,
+    recordPendingSegmentHeightUpdate,
+    resolveSegmentResizeTarget,
+} from './virtualHeightCommitState';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 
@@ -48,27 +52,12 @@ export function useVirtualHeightCommit(
         const pending = pendingUpdatesRef.current;
         if (pending.size === 0) return;
 
-        const anchorIndex = lastKnownAnchorIndexRef.current;
-        let aboveAnchorDelta = 0;
-
-        pending.forEach((segmentMap, chapterId) => {
-            const vector = chapterVectorsRef.current.get(chapterId);
-            if (!vector) return;
-
-            const updates: Array<{ index: number; realHeight: number }> = [];
-            segmentMap.forEach((height, index) => {
-                updates.push({ index, realHeight: height });
-            });
-            if (updates.length === 0) return;
-
-            const totalDelta = batchUpdateSegmentHeights(vector, updates);
-            const runtime = virtualChaptersRef.current.get(chapterId);
-            if (!runtime) return;
-
-            if (runtime.spineIndex < anchorIndex) {
-                aboveAnchorDelta += totalDelta;
-            }
-            refreshVirtualChapterLayout(runtime);
+        const aboveAnchorDelta = applyPendingVirtualHeightUpdates({
+            pending,
+            chapterVectors: chapterVectorsRef.current,
+            virtualChapters: virtualChaptersRef.current,
+            anchorIndex: lastKnownAnchorIndexRef.current,
+            refreshVirtualChapterLayout,
         });
 
         pending.clear();
@@ -81,23 +70,17 @@ export function useVirtualHeightCommit(
     }, [refreshVirtualChapterLayout, requestFlush]);
 
     const commitSegmentResize = useCallback((target: HTMLElement, height: number) => {
-        const indexAttr = target.getAttribute('data-shadow-segment-index');
-        if (indexAttr === null) return;
-        const segmentIndex = Number.parseInt(indexAttr, 10);
-        if (!Number.isFinite(segmentIndex) || segmentIndex < 0) return;
+        const resizeTarget = resolveSegmentResizeTarget(target);
+        if (!resizeTarget) return;
 
-        const chapterEl = target.closest('[data-chapter-id]') as HTMLElement | null;
-        if (!chapterEl) return;
-        const chapterId = chapterEl.getAttribute('data-chapter-id');
-        if (!chapterId) return;
-        if (!chapterVectorsRef.current.has(chapterId)) return;
+        if (!chapterVectorsRef.current.has(resizeTarget.chapterId)) return;
 
-        let segmentMap = pendingUpdatesRef.current.get(chapterId);
-        if (!segmentMap) {
-            segmentMap = new Map();
-            pendingUpdatesRef.current.set(chapterId, segmentMap);
-        }
-        segmentMap.set(segmentIndex, height);
+        recordPendingSegmentHeightUpdate(
+            pendingUpdatesRef.current,
+            resizeTarget.chapterId,
+            resizeTarget.segmentIndex,
+            height,
+        );
 
         if (flushRafRef.current === null) {
             flushRafRef.current = requestAnimationFrame(flushPendingHeightUpdates);
