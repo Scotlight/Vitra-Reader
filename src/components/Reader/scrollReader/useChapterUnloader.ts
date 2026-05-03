@@ -1,11 +1,9 @@
 import { useEffect } from 'react';
 import type { ContentProvider } from '@/engine/core/contentProvider';
 import { cancelIdleTask } from '@/utils/idleScheduler';
-import { releaseMediaResources } from '@/utils/mediaResourceCleanup';
 import { shouldLogScrollReaderDebug } from '@/utils/readerDebug';
-import { segmentPool } from '../ShadowRenderer';
 import { UNLOAD_COOLDOWN_MS } from './scrollReaderConstants';
-import { markChapterAsPlaceholder } from './scrollReaderHelpers';
+import { releaseChapterDomResources } from './chapterUnloaderDom';
 import {
     collapseUnloadedChaptersToPlaceholders,
     resolveChaptersToUnload,
@@ -74,17 +72,11 @@ export function useChapterUnloader(
                 }
                 highlightDirtyChaptersRef.current.delete(ch.spineIndex);
                 cleanupVirtualChapterRuntime(ch.id);
-                if (listEl) {
-                    const domEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
-                    if (domEl) {
-                        unobserveChapterResizeNodes(domEl);
-                        domEl.querySelectorAll('section[data-shadow-segment-index]').forEach(seg => {
-                            segmentPool.release(seg as HTMLElement);
-                        });
-                        releaseMediaResources(domEl);
-                        markChapterAsPlaceholder(domEl, ch.height);
-                    }
-                }
+                releaseChapterDomResources({
+                    listEl,
+                    chapter: ch,
+                    unobserveChapterResizeNodes,
+                });
                 provider.unloadChapter(ch.spineIndex);
                 chapterVectorsRef.current.delete(ch.id);
             });
