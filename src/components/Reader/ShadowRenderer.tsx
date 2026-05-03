@@ -1,8 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
 import styles from './ShadowRenderer.module.css';
-import { waitForAssetLoad, getContainerHeight, type AssetLoadOptions } from '@/utils/assetLoader';
-import { generateCSSOverride, generatePaginatedCSSOverride } from '@/utils/styleProcessor';
-import { SegmentDomPool } from '@/engine/render/segmentDomPool';
+import { waitForAssetLoad, getContainerHeight } from '@/utils/assetLoader';
 import {
   createRenderTrace,
   finalizeRenderTrace,
@@ -18,31 +16,33 @@ export { createWindowedVectorChapterShell } from './shadowRenderer/windowedVecto
 
 // ── 子模块 import ──
 import {
-  LARGE_CHAPTER_HTML_THRESHOLD,
-  VECTOR_MIN_SEGMENT_EST_HEIGHT,
   VECTOR_HYDRATE_YIELD_EVERY_SEGMENTS,
   VECTOR_HYDRATE_MEASURE_BATCH_SIZE,
   SEGMENT_ASSET_SELECTOR,
-  MEDIA_SENSITIVE_LOAD_TIMEOUT_MS,
-  MEDIA_SENSITIVE_MAX_TRACKED_IMAGES,
-  RENDER_VECTORIZED_LOAD_TIMEOUT_MS,
-  RENDER_LARGE_CHAPTER_LOAD_TIMEOUT_MS,
-  RENDER_VECTORIZED_MAX_TRACKED_IMAGES,
-  RENDER_LARGE_MAX_TRACKED_IMAGES,
-  RENDER_NORMAL_MAX_TRACKED_IMAGES,
   HYDRATE_MEDIA_CHECK_INTERVAL,
-  HYDRATE_MEDIA_LOAD_TIMEOUT_MS,
-  HYDRATE_MEDIA_MAX_TRACKED_IMAGES,
 } from './shadowRenderer/shadowRendererConstants';
-import type { ChapterVectorSegment, ShadowRenderContext } from './shadowRenderer/shadowRendererTypes';
-import { vectorizeChapterContent, materializeVectorSegment, applyPlaceholderSizing, resolveInitialShadowSegmentCount, calibrateSegmentIntrinsicSizeBatch, getSegmentMetaTotalChars, hasSegmentMetaMedia } from './shadowRenderer/vectorization';
-import { appendHtmlContentChunked, appendHtmlFragmentsChunked, normalizeHtmlFragments } from './shadowRenderer/htmlChunkedAppend';
-import { hasLayoutSensitiveMedia, enforceDeterministicMediaLayout } from './shadowRenderer/mediaLayout';
+import type { ShadowRenderContext } from './shadowRenderer/shadowRendererTypes';
+import { materializeVectorSegment, resolveInitialShadowSegmentCount, calibrateSegmentIntrinsicSizeBatch } from './shadowRenderer/vectorization';
+import { normalizeHtmlFragments } from './shadowRenderer/htmlChunkedAppend';
+import { enforceDeterministicMediaLayout } from './shadowRenderer/mediaLayout';
 import { buildScopedContentCss, type ReaderStyleConfig } from './shadowRenderer/contentCss';
 import { buildLocalProcessedPayload } from './shadowRenderer/localProcessedPayload';
 import { yieldForHydration } from './shadowRenderer/yieldScheduling';
+import {
+  appendRenderedContent,
+  appendRenderStyles,
+  createChapterWrapper,
+  createFlowRootDiv,
+  segmentPool,
+} from './shadowRenderer/renderContent';
+import {
+  buildHydrateAssetLoadOptions,
+  buildRenderAssetLoadOptions,
+  buildVectorSegments,
+  resolveChapterRenderTraits,
+} from './shadowRenderer/renderPlanning';
 
-export const segmentPool = new SegmentDomPool();
+export { segmentPool };
 
 type ShadowRendererMode = 'scroll' | 'paginated';
 
@@ -58,175 +58,6 @@ export interface ShadowRendererProps {
   readerStyles: ReaderStyleConfig;
   resourceExists?: (url: string) => boolean;
   mode?: ShadowRendererMode;
-}
-
-function createChapterWrapper(chapterId: string): HTMLDivElement {
-  const chapterWrapper = document.createElement('div');
-  chapterWrapper.setAttribute('data-chapter-id', chapterId);
-  chapterWrapper.className = 'chapter-content';
-  chapterWrapper.style.width = '100%';
-  chapterWrapper.style.position = 'relative';
-  chapterWrapper.style.display = 'flow-root';
-  return chapterWrapper;
-}
-
-function appendRenderStyles(
-  chapterWrapper: HTMLElement,
-  options: {
-    mode: ShadowRendererMode;
-    chapterId: string;
-    processedStyles: readonly string[];
-    contentCss: string;
-  },
-): void {
-  const styleEl = document.createElement('style');
-  const cssOverride = options.mode === 'paginated'
-    ? generatePaginatedCSSOverride(options.chapterId)
-    : generateCSSOverride(options.chapterId);
-  styleEl.textContent = [
-    cssOverride,
-    options.processedStyles.join('\n'),
-    options.contentCss,
-  ].join('\n');
-  chapterWrapper.appendChild(styleEl);
-}
-
-function createFlowRootDiv(): HTMLDivElement {
-  const contentDiv = document.createElement('div');
-  contentDiv.style.display = 'flow-root';
-  return contentDiv;
-}
-
-function createShadowSegmentElement(
-  segment: ChapterVectorSegment,
-  segmentIndex: number,
-  initialSegmentCount: number,
-): HTMLElement {
-  const segmentEl = segmentPool.acquire();
-  segmentEl.setAttribute('data-shadow-segment-index', String(segmentIndex));
-  segmentEl.style.width = '100%';
-  segmentEl.style.position = 'relative';
-  segmentEl.style.contain = 'layout style paint';
-  segmentEl.style.contentVisibility = 'auto';
-
-  if (segmentIndex < initialSegmentCount) {
-    materializeVectorSegment(segmentEl, segment);
-    segmentEl.setAttribute('data-shadow-segment-state', 'hydrated');
-    segmentEl.style.containIntrinsicSize = `${Math.max(VECTOR_MIN_SEGMENT_EST_HEIGHT, segment.estimatedHeight)}px`;
-  } else {
-    segmentEl.setAttribute('data-shadow-segment-state', 'placeholder');
-    applyPlaceholderSizing(segmentEl, segment.estimatedHeight);
-  }
-
-  return segmentEl;
-}
-
-async function appendRenderedContent(
-  contentDiv: HTMLElement,
-  options: {
-    canUseVectorized: boolean;
-    vectorSegments: readonly ChapterVectorSegment[];
-    initialSegmentCount: number;
-    normalizedFragments: readonly string[];
-    isLargeChapter: boolean;
-    cleanedHtml: string;
-  },
-): Promise<HTMLElement[]> {
-  const segmentEls: HTMLElement[] = [];
-
-  if (options.canUseVectorized) {
-    options.vectorSegments.forEach((segment, segmentIndex) => {
-      const segmentEl = createShadowSegmentElement(segment, segmentIndex, options.initialSegmentCount);
-      contentDiv.appendChild(segmentEl);
-      segmentEls.push(segmentEl);
-    });
-    return segmentEls;
-  }
-
-  if (options.normalizedFragments.length > 1) {
-    await appendHtmlFragmentsChunked(contentDiv, options.normalizedFragments);
-  } else if (options.isLargeChapter) {
-    await appendHtmlContentChunked(contentDiv, options.cleanedHtml);
-  } else {
-    contentDiv.innerHTML = options.cleanedHtml;
-  }
-
-  return segmentEls;
-}
-
-function buildRenderAssetLoadOptions(options: {
-  cleanedHtmlLength: number;
-  mediaSensitiveChapter: boolean;
-  canUseVectorized: boolean;
-  isLargeChapter: boolean;
-  resourceExists?: (url: string) => boolean;
-}): AssetLoadOptions {
-  return {
-    chapterSizeHint: options.cleanedHtmlLength,
-    timeoutMs: options.mediaSensitiveChapter
-      ? MEDIA_SENSITIVE_LOAD_TIMEOUT_MS
-      : (options.canUseVectorized ? RENDER_VECTORIZED_LOAD_TIMEOUT_MS : (options.isLargeChapter ? RENDER_LARGE_CHAPTER_LOAD_TIMEOUT_MS : undefined)),
-    maxTrackedImages: options.mediaSensitiveChapter
-      ? MEDIA_SENSITIVE_MAX_TRACKED_IMAGES
-      : (options.canUseVectorized ? RENDER_VECTORIZED_MAX_TRACKED_IMAGES : (options.isLargeChapter ? RENDER_LARGE_MAX_TRACKED_IMAGES : RENDER_NORMAL_MAX_TRACKED_IMAGES)),
-    largeChapterThreshold: options.mediaSensitiveChapter
-      ? Number.POSITIVE_INFINITY
-      : LARGE_CHAPTER_HTML_THRESHOLD,
-    resourceExists: options.resourceExists,
-  };
-}
-
-function buildHydrateAssetLoadOptions(
-  segment: ChapterVectorSegment,
-  resourceExists?: (url: string) => boolean,
-): AssetLoadOptions {
-  return {
-    chapterSizeHint: segment.charCount,
-    timeoutMs: HYDRATE_MEDIA_LOAD_TIMEOUT_MS,
-    maxTrackedImages: HYDRATE_MEDIA_MAX_TRACKED_IMAGES,
-    largeChapterThreshold: LARGE_CHAPTER_HTML_THRESHOLD,
-    resourceExists,
-  };
-}
-
-function resolveChapterRenderTraits(
-  cleanedHtml: string,
-  segmentMetas?: readonly SegmentMeta[],
-): {
-  chapterSize: number;
-  isLargeChapter: boolean;
-  mediaSensitiveChapter: boolean;
-} {
-  const chapterSize = cleanedHtml.length > 0
-    ? cleanedHtml.length
-    : getSegmentMetaTotalChars(segmentMetas);
-  return {
-    chapterSize,
-    isLargeChapter: chapterSize >= LARGE_CHAPTER_HTML_THRESHOLD,
-    mediaSensitiveChapter: cleanedHtml.length > 0
-      ? hasLayoutSensitiveMedia(cleanedHtml)
-      : hasSegmentMetaMedia(segmentMetas),
-  };
-}
-
-function buildVectorSegments(options: {
-  mode: ShadowRendererMode;
-  isLargeChapter: boolean;
-  segmentMetas?: readonly SegmentMeta[];
-  cleanedHtml: string;
-  readerStyles: ReaderStyleConfig;
-}): ChapterVectorSegment[] {
-  if (options.mode !== 'scroll' || !options.isLargeChapter) return [];
-  if (options.segmentMetas && options.segmentMetas.length > 0) {
-    return options.segmentMetas.map((meta): ChapterVectorSegment => ({
-      index: meta.index,
-      nodes: [],
-      charCount: meta.charCount,
-      estimatedHeight: meta.estimatedHeight,
-      _htmlContent: meta.htmlContent,
-    }));
-  }
-  return vectorizeChapterContent(options.cleanedHtml, options.readerStyles);
 }
 
 /**
