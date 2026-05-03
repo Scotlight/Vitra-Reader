@@ -157,6 +157,18 @@ function buildShadowRerenderChapter(chapter: LoadedChapter, vectorStyleKey: stri
     };
 }
 
+function applyShadowRerenderChapters(
+    prev: LoadedChapter[],
+    rerenderIndexes: ReadonlySet<number>,
+    vectorStyleKey: string,
+): LoadedChapter[] {
+    return prev.map((chapter) =>
+        rerenderIndexes.has(chapter.spineIndex)
+            ? buildShadowRerenderChapter(chapter, vectorStyleKey)
+            : chapter
+    );
+}
+
 /**
  * 章节加载编排：
  * - loadChapter: 单章节按需加载 (支持 prev/next/initial 方向、forceReload)
@@ -315,11 +327,7 @@ export function useChapterLoader(
         if (rerenderIndexes.size > 0) {
             pendingReadyRef.current = removePendingReadyEntries(pendingReadyRef.current, rerenderIndexes);
             setShadowQueue((prev) => replaceQueuedChapters(prev, rerenderIndexes, rerenderQueue));
-            setChapters((prev) => prev.map((chapter) =>
-                rerenderIndexes.has(chapter.spineIndex)
-                    ? buildShadowRerenderChapter(chapter, nextKey)
-                    : chapter
-            ));
+            setChapters((prev) => applyShadowRerenderChapters(prev, rerenderIndexes, nextKey));
         }
 
         vectorTargets.forEach((chapter) => {
