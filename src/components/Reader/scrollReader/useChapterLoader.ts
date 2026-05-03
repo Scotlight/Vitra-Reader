@@ -137,6 +137,13 @@ function replaceQueuedChapters(
     ];
 }
 
+function removePendingReadyEntries(
+    pending: Array<{ spineIndex: number; node: HTMLElement; height: number }>,
+    indexes: ReadonlySet<number>,
+): Array<{ spineIndex: number; node: HTMLElement; height: number }> {
+    return pending.filter((item) => !indexes.has(item.spineIndex));
+}
+
 function isStyleRefreshTarget(chapter: LoadedChapter): boolean {
     return chapter.status === 'mounted' || chapter.status === 'ready';
 }
@@ -306,7 +313,7 @@ export function useChapterLoader(
 
         renderedHighlightsRef.current.clear();
         if (rerenderIndexes.size > 0) {
-            pendingReadyRef.current = pendingReadyRef.current.filter((item) => !rerenderIndexes.has(item.spineIndex));
+            pendingReadyRef.current = removePendingReadyEntries(pendingReadyRef.current, rerenderIndexes);
             setShadowQueue((prev) => replaceQueuedChapters(prev, rerenderIndexes, rerenderQueue));
             setChapters((prev) => prev.map((chapter) =>
                 rerenderIndexes.has(chapter.spineIndex)
