@@ -5,10 +5,10 @@ import type { ContentProvider } from '@/engine/core/contentProvider';
 import type { LoadedChapter } from './scrollReaderTypes';
 import { resetScrollPipelineRuntime } from './scrollPipelineRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
-import { resolveReaderInternalLinkTarget } from '../readerInternalLink';
 import { clearMountedChapterDom } from './tocJumpDomCleanup';
 import { scrollMountedChapterIntoView } from './tocJumpMountedChapter';
 import { prepareTocJumpRuntime } from './tocJumpRuntime';
+import { createTocJumpInternalLinkHandler } from './tocJumpInternalLinks';
 
 interface UseTocJumpOptions {
     provider: ContentProvider;
@@ -151,20 +151,11 @@ export function useTocJump(
         const listEl = chapterListRef.current;
         if (!listEl) return;
 
-        const handleInternalLink = (event: MouseEvent) => {
-            const target = event.target;
-            if (!(target instanceof Element)) return;
-
-            const anchor = target.closest('a');
-            if (!(anchor instanceof HTMLAnchorElement)) return;
-            const targetSpine = resolveReaderInternalLinkTarget(anchor, provider);
-            if (targetSpine === null) return;
-            if (targetSpine < 0 || targetSpine >= spineItemsRef.current.length) return;
-
-            event.preventDefault();
-            event.stopPropagation();
-            void jumpToSpine(targetSpine);
-        };
+        const handleInternalLink = createTocJumpInternalLinkHandler({
+            provider,
+            spineItemsRef,
+            jumpToSpine,
+        });
 
         listEl.addEventListener('click', handleInternalLink);
         return () => {
