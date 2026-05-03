@@ -8,6 +8,7 @@ import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { resolveReaderInternalLinkTarget } from '../readerInternalLink';
 import { clearMountedChapterDom } from './tocJumpDomCleanup';
 import { scrollMountedChapterIntoView } from './tocJumpMountedChapter';
+import { prepareTocJumpRuntime } from './tocJumpRuntime';
 
 interface UseTocJumpOptions {
     provider: ContentProvider;
@@ -73,19 +74,16 @@ export function useTocJump(
 
         const generation = ++jumpGenerationRef.current;
 
-        cancelIdlePrefetch();
-        isUserScrollingRef.current = false;
-        if (scrollIdleTimerRef.current !== null) {
-            window.clearTimeout(scrollIdleTimerRef.current);
-            scrollIdleTimerRef.current = null;
-        }
-        pendingSearchTextRef.current = searchText || null;
-        initialScrollDone.current = true;
-        stop();
-        if (progressTimerRef.current) {
-            window.clearTimeout(progressTimerRef.current);
-            progressTimerRef.current = null;
-        }
+        prepareTocJumpRuntime({
+            searchText,
+            cancelIdlePrefetch,
+            stop,
+            isUserScrollingRef,
+            scrollIdleTimerRef,
+            pendingSearchTextRef,
+            initialScrollDone,
+            progressTimerRef,
+        });
 
         setCurrentSpineIndex(targetSpineIndex);
         lastKnownAnchorIndexRef.current = targetSpineIndex;
