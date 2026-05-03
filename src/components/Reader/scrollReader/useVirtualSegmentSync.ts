@@ -1,15 +1,13 @@
 import { useCallback, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import type { Highlight } from '@/services/storageService';
-import { computeGlobalVirtualSegmentMountPlan } from '../scrollVectorStrategy';
 import {
-    RANGE_HYDRATION_OVERSCAN_SEGMENTS,
-    RANGE_HYDRATION_PRELOAD_MARGIN_PX,
-    GLOBAL_VIRTUAL_SEGMENT_BUDGET,
-} from './scrollReaderConstants';
+    resolveVirtualSegmentMountPlan,
+    syncPlannedVirtualSegments,
+} from './virtualSegmentSyncPlan';
 import type { LoadedChapter } from './scrollReaderTypes';
-import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
+import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 
 interface UseVirtualSegmentSyncOptions {
     chapters: LoadedChapter[];
@@ -59,39 +57,15 @@ export function useVirtualSegmentSync(
             refreshVirtualChapterLayout(runtime);
         });
 
-        const mountPlan = computeGlobalVirtualSegmentMountPlan(
-            runtimes.map((runtime) => ({
-                chapterId: runtime.chapterId,
-                chapterTop: runtime.chapterEl.offsetTop,
-                vector: runtime.vector,
-            })),
-            scrollTop,
-            viewportHeight,
-            {
-                overscanSegments: RANGE_HYDRATION_OVERSCAN_SEGMENTS,
-                preloadMarginPx: RANGE_HYDRATION_PRELOAD_MARGIN_PX,
-                globalSegmentBudget: GLOBAL_VIRTUAL_SEGMENT_BUDGET,
-            },
-        );
+        const mountPlan = resolveVirtualSegmentMountPlan(runtimes, scrollTop, viewportHeight);
 
         runtimes.forEach((runtime) => {
-            const nextIndices = new Set(mountPlan.get(runtime.chapterId) ?? []);
-            let virtualDomChanged = false;
-
-            Array.from(runtime.activeSegmentEls.keys()).forEach((segmentIndex) => {
-                if (!nextIndices.has(segmentIndex)) {
-                    virtualDomChanged = true;
-                    releaseVirtualSegment(runtime, segmentIndex);
-                }
-            });
-
-            Array.from(nextIndices).sort((a, b) => a - b).forEach((segmentIndex) => {
-                const alreadyMounted = runtime.activeSegmentEls.has(segmentIndex);
-                mountVirtualSegment(runtime, segmentIndex);
-                if (!alreadyMounted) {
-                    virtualDomChanged = true;
-                }
-            });
+            const virtualDomChanged = syncPlannedVirtualSegments(
+                runtime,
+                mountPlan,
+                mountVirtualSegment,
+                releaseVirtualSegment,
+            );
 
             refreshVirtualChapterLayout(runtime);
             if (virtualDomChanged && (highlightsBySpineIndex.get(runtime.spineIndex)?.length ?? 0) > 0) {

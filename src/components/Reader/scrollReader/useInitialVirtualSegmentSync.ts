@@ -1,11 +1,9 @@
 import { useCallback } from 'react';
 import type { MutableRefObject } from 'react';
-import { computeGlobalVirtualSegmentMountPlan } from '../scrollVectorStrategy';
 import {
-    GLOBAL_VIRTUAL_SEGMENT_BUDGET,
-    RANGE_HYDRATION_OVERSCAN_SEGMENTS,
-    RANGE_HYDRATION_PRELOAD_MARGIN_PX,
-} from './scrollReaderConstants';
+    mountPlannedVirtualSegments,
+    resolveVirtualSegmentMountPlan,
+} from './virtualSegmentSyncPlan';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 
@@ -36,26 +34,10 @@ export function useInitialVirtualSegmentSync(
             const scrollTop = viewportEl.scrollTop;
             const viewportHeight = viewportEl.clientHeight;
             const runtimes = Array.from(virtualChaptersRef.current.values());
-            const mountPlan = computeGlobalVirtualSegmentMountPlan(
-                runtimes.map((runtime) => ({
-                    chapterId: runtime.chapterId,
-                    chapterTop: runtime.chapterEl.offsetTop,
-                    vector: runtime.vector,
-                })),
-                scrollTop,
-                viewportHeight,
-                {
-                    overscanSegments: RANGE_HYDRATION_OVERSCAN_SEGMENTS,
-                    preloadMarginPx: RANGE_HYDRATION_PRELOAD_MARGIN_PX,
-                    globalSegmentBudget: GLOBAL_VIRTUAL_SEGMENT_BUDGET,
-                },
-            );
+            const mountPlan = resolveVirtualSegmentMountPlan(runtimes, scrollTop, viewportHeight);
 
             runtimes.forEach((runtime) => {
-                const nextIndices = new Set(mountPlan.get(runtime.chapterId) ?? []);
-                Array.from(nextIndices).sort((a, b) => a - b).forEach((segmentIndex) => {
-                    mountVirtualSegment(runtime, segmentIndex);
-                });
+                mountPlannedVirtualSegments(runtime, mountPlan, mountVirtualSegment);
                 refreshVirtualChapterLayout(runtime);
             });
         });
