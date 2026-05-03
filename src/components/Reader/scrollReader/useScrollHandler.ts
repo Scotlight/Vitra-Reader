@@ -4,6 +4,7 @@ import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { PRELOAD_THRESHOLD_PX, SCROLL_IDLE_RESUME_MS } from './scrollReaderConstants';
 import { detectScrollDirection, shouldPreloadChapter, ScrollDirection } from '@/utils/scrollDetection';
 import { isScrollPipelineIdle } from './scrollPipelineRuntime';
+import { resolveScrollPreloadRequest } from './scrollPreloadTarget';
 
 interface UseScrollHandlerOptions {
     spineItems: SpineItemInfo[];
@@ -78,23 +79,15 @@ export function useScrollHandler(
             );
 
             if (needsPreload && isScrollPipelineIdle(refs)) {
-                const sortedChapters = [...chaptersRef.current].sort((a, b) => a.spineIndex - b.spineIndex);
-                const mountedChapters = sortedChapters.filter(ch => ch.status === 'mounted');
-
-                if (mountedChapters.length === 0) {
+                const preloadRequest = resolveScrollPreloadRequest(
+                    chaptersRef.current,
+                    direction,
+                    spineItems.length,
+                );
+                if (preloadRequest?.kind === 'predictive') {
                     runPredictivePrefetch();
-                }
-
-                if (direction === 'up' && mountedChapters.length > 0) {
-                    const earliest = mountedChapters[0].spineIndex;
-                    if (earliest > 0) {
-                        loadChapter(earliest - 1, 'prev');
-                    }
-                } else if (direction === 'down' && mountedChapters.length > 0) {
-                    const latest = mountedChapters[mountedChapters.length - 1].spineIndex;
-                    if (latest < spineItems.length - 1) {
-                        loadChapter(latest + 1, 'next');
-                    }
+                } else if (preloadRequest?.kind === 'chapter') {
+                    loadChapter(preloadRequest.spineIndex, preloadRequest.loadKind);
                 }
             }
 
