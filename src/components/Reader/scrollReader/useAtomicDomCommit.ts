@@ -4,16 +4,13 @@ import type { SpineItemInfo } from '@/engine/core/contentProvider';
 import { shouldBypassShadowQueueForSegmentMetas } from '../scrollVectorStrategy';
 import styles from '../ScrollReaderView.module.css';
 import { markChapterAsMounted, resolveViewportDerivedMetrics } from './scrollReaderHelpers';
+import { scheduleAtomicScrollAdjustmentFlush } from './atomicScrollAdjustment';
 import {
     getOrCreateChapterElement,
     insertChapterElementAtIndex,
     scrollToInitialChapterOffset,
     scrollToSearchTextInChapters,
 } from './atomicDomCommitDom';
-import {
-    SCROLL_HEDGE_EPSILON_PX,
-    INSTANT_SCROLL_BEHAVIOR,
-} from './scrollReaderConstants';
 import type { LoadedChapter } from './scrollReaderTypes';
 import { isCommittedChapter, isReadyChapter, markReadyChaptersMounted } from './atomicDomCommitState';
 import { markScrollPipelineIdle } from './scrollPipelineRuntime';
@@ -106,38 +103,12 @@ export function useAtomicDomCommit(
     });
 
     const requestFlush = useCallback(() => {
-        if (flushRafRef.current !== null) return;
-
-        flushRafRef.current = requestAnimationFrame(() => {
-            flushRafRef.current = null;
-
-            const viewport = viewportRef.current;
-            if (!viewport) {
-                pendingDeltaRef.current = 0;
-                return;
-            }
-
-            const totalDelta = pendingDeltaRef.current;
-            if (Math.abs(totalDelta) <= SCROLL_HEDGE_EPSILON_PX) {
-                pendingDeltaRef.current = 0;
-                return;
-            }
-
-            pendingDeltaRef.current = 0;
-            ignoreScrollEventRef.current = true;
-            const targetTop = viewport.scrollTop + totalDelta;
-            viewport.scrollTo({ top: targetTop, behavior: INSTANT_SCROLL_BEHAVIOR });
-
-            if (unlockAdjustingRafRef.current !== null) {
-                cancelAnimationFrame(unlockAdjustingRafRef.current);
-            }
-
-            unlockAdjustingRafRef.current = requestAnimationFrame(() => {
-                unlockAdjustingRafRef.current = requestAnimationFrame(() => {
-                    unlockAdjustingRafRef.current = null;
-                    ignoreScrollEventRef.current = false;
-                });
-            });
+        scheduleAtomicScrollAdjustmentFlush({
+            viewportRef,
+            flushRafRef,
+            pendingDeltaRef,
+            ignoreScrollEventRef,
+            unlockAdjustingRafRef,
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
