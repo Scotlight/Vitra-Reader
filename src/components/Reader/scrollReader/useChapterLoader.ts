@@ -118,6 +118,14 @@ function buildReadyWindowedVectorChapter(options: {
     };
 }
 
+function removeChapterFromQueue(prev: LoadedChapter[], spineIndex: number): LoadedChapter[] {
+    return prev.filter(ch => ch.spineIndex !== spineIndex);
+}
+
+function upsertQueuedChapter(prev: LoadedChapter[], chapter: LoadedChapter): LoadedChapter[] {
+    return [...removeChapterFromQueue(prev, chapter.spineIndex), chapter];
+}
+
 /**
  * 章节加载编排：
  * - loadChapter: 单章节按需加载 (支持 prev/next/initial 方向、forceReload)
@@ -229,13 +237,13 @@ export function useChapterLoader(
                 setChapters(prev =>
                     updateChapterBySpineIndex(prev, spineIndex, () => ready.chapter)
                 );
-                setShadowQueue(prev => prev.filter(ch => ch.spineIndex !== spineIndex));
+                setShadowQueue(prev => removeChapterFromQueue(prev, spineIndex));
                 markScrollPipelineIdle(refs);
             } else {
                 setChapters(prev =>
                     updateChapterBySpineIndex(prev, spineIndex, () => loaded)
                 );
-                setShadowQueue(prev => [...prev.filter(ch => ch.spineIndex !== spineIndex), loaded]);
+                setShadowQueue(prev => upsertQueuedChapter(prev, loaded));
 
                 markScrollPipelineRenderingOffscreen(refs);
             }
