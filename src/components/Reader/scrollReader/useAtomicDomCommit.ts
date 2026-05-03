@@ -10,6 +10,7 @@ import {
     INSTANT_SCROLL_BEHAVIOR,
 } from './scrollReaderConstants';
 import type { LoadedChapter } from './scrollReaderTypes';
+import { isCommittedChapter, isReadyChapter, markReadyChaptersMounted } from './atomicDomCommitState';
 import { markScrollPipelineIdle } from './scrollPipelineRuntime';
 import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
@@ -142,7 +143,7 @@ export function useAtomicDomCommit(
         const listEl = chapterListRef.current;
         if (!viewport || !listEl) return;
 
-        const readyChapters = chapters.filter(ch => ch.status === 'ready');
+        const readyChapters = chapters.filter(isReadyChapter);
         if (readyChapters.length === 0) return;
 
         readyChapters.forEach(ch => {
@@ -184,11 +185,7 @@ export function useAtomicDomCommit(
 
         markScrollPipelineIdle(refs);
 
-        setChapters(prev =>
-            prev.map(ch =>
-                ch.status === 'ready' ? { ...ch, status: 'mounted', mountedAt: Date.now() } : ch
-            )
-        );
+        setChapters(markReadyChaptersMounted);
 
         if (!initialScrollDone.current) {
             const chapterEl = listEl.querySelector(`[data-chapter-id="ch-${currentSpineIndex}"]`) as HTMLElement | null;
@@ -209,7 +206,7 @@ export function useAtomicDomCommit(
         const searchText = pendingSearchTextRef.current;
         if (searchText) {
             pendingSearchTextRef.current = null;
-            const mountedChapters = chapters.filter(ch => ch.status === 'ready' || ch.status === 'mounted');
+            const mountedChapters = chapters.filter(isCommittedChapter);
             for (const ch of mountedChapters) {
                 const el = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
                 if (el) {
@@ -225,7 +222,7 @@ export function useAtomicDomCommit(
             }
         }
 
-        if (!isInitialized && chapters.some(ch => ch.status === 'ready' || ch.status === 'mounted')) {
+        if (!isInitialized && chapters.some(isCommittedChapter)) {
             setIsInitialized(true);
         }
         scheduleInitialVirtualSegmentSync();
