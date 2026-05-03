@@ -2,10 +2,14 @@ import { useCallback, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import { buildChapterMetaVector } from '@/engine/render/metaVectorManager';
 import type { ChapterMetaVector } from '@/engine/types/vectorRender';
-import type { LoadedChapter } from './scrollReaderTypes';
-import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
-import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { shouldLogScrollReaderDebug } from '@/utils/readerDebug';
+import {
+    applyShadowReadyBatch,
+    removeReadyChaptersFromShadowQueue,
+} from './shadowRenderCompleteState';
+import type { LoadedChapter } from './scrollReaderTypes';
+import type { ScrollReaderRefs } from './useScrollReaderRefs';
+import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 
 interface UseShadowRenderCompleteOptions {
     chapterVectorsRef: MutableRefObject<Map<string, ChapterMetaVector>>;
@@ -84,24 +88,8 @@ export function useShadowRenderComplete(
                 }
 
                 const batchIndices = new Set(batch.map(b => b.spineIndex));
-                setShadowQueue(prev => prev.filter(c => !batchIndices.has(c.spineIndex)));
-
-                setChapters(prev => {
-                    let updated = prev;
-                    for (const item of batch) {
-                        const index = updated.findIndex(c => c.spineIndex === item.spineIndex);
-                        if (index < 0) continue;
-                        if (updated[index].status === 'mounted') continue;
-                        if (updated === prev) updated = [...prev];
-                        updated[index] = {
-                            ...updated[index],
-                            domNode: item.node,
-                            height: item.height,
-                            status: 'ready',
-                        };
-                    }
-                    return updated;
-                });
+                setShadowQueue(prev => removeReadyChaptersFromShadowQueue(prev, batchIndices));
+                setChapters(prev => applyShadowReadyBatch(prev, batch));
             });
         }
 
