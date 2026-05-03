@@ -8,6 +8,10 @@ export interface PendingReadyEntry {
     height: number;
 }
 
+export function isStyleRefreshTarget(chapter: LoadedChapter): boolean {
+    return chapter.status === 'mounted' || chapter.status === 'ready';
+}
+
 export function buildLoadingChapter(
     spineIndex: number,
     chapterId: string,
@@ -25,6 +29,15 @@ export function buildLoadingChapter(
         domNode: null,
         height: existingChapter?.height || 0,
         status: 'loading',
+    };
+}
+
+export function buildShadowRerenderChapter(chapter: LoadedChapter, vectorStyleKey: string): LoadedChapter {
+    return {
+        ...chapter,
+        domNode: null,
+        vectorStyleKey,
+        status: 'shadow-rendering',
     };
 }
 
@@ -48,6 +61,18 @@ export function applyLoadingChapter(
     }
     if (direction === 'prev') return [loadingChapter, ...prev];
     return [...prev, loadingChapter];
+}
+
+export function applyShadowRerenderChapters(
+    prev: LoadedChapter[],
+    rerenderIndexes: ReadonlySet<number>,
+    vectorStyleKey: string,
+): LoadedChapter[] {
+    return prev.map((chapter) =>
+        rerenderIndexes.has(chapter.spineIndex)
+            ? buildShadowRerenderChapter(chapter, vectorStyleKey)
+            : chapter
+    );
 }
 
 export function removeChapterFromQueue(prev: LoadedChapter[], spineIndex: number): LoadedChapter[] {
@@ -74,29 +99,4 @@ export function removePendingReadyEntries(
     indexes: ReadonlySet<number>,
 ): PendingReadyEntry[] {
     return pending.filter((item) => !indexes.has(item.spineIndex));
-}
-
-export function isStyleRefreshTarget(chapter: LoadedChapter): boolean {
-    return chapter.status === 'mounted' || chapter.status === 'ready';
-}
-
-export function buildShadowRerenderChapter(chapter: LoadedChapter, vectorStyleKey: string): LoadedChapter {
-    return {
-        ...chapter,
-        domNode: null,
-        vectorStyleKey,
-        status: 'shadow-rendering',
-    };
-}
-
-export function applyShadowRerenderChapters(
-    prev: LoadedChapter[],
-    rerenderIndexes: ReadonlySet<number>,
-    vectorStyleKey: string,
-): LoadedChapter[] {
-    return prev.map((chapter) =>
-        rerenderIndexes.has(chapter.spineIndex)
-            ? buildShadowRerenderChapter(chapter, vectorStyleKey)
-            : chapter
-    );
 }

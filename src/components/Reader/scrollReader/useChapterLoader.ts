@@ -9,7 +9,6 @@ import {
     shouldBypassShadowQueueForSegmentMetas,
 } from '../scrollVectorStrategy';
 import { loadPreprocessedChapterContent } from './chapterContentLoader';
-import type { LoadedChapter } from './scrollReaderTypes';
 import {
     applyLoadingChapter,
     applyShadowRerenderChapters,
@@ -33,6 +32,7 @@ import {
     releaseChapterLoadLock,
     resolveChapterLoadDirection,
 } from './scrollPipelineRuntime';
+import type { LoadedChapter } from './scrollReaderTypes';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 
 interface UseChapterLoaderOptions {

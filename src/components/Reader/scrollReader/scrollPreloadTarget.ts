@@ -1,6 +1,10 @@
 import type { ScrollDirection } from '@/utils/scrollDetection';
 import type { LoadedChapter } from './scrollReaderTypes';
 
+export type ScrollPreloadRequest =
+    | { kind: 'predictive' }
+    | { kind: 'chapter'; spineIndex: number; loadKind: 'prev' | 'next' };
+
 export function normalizeScrollDirection(
     rawDirection: ScrollDirection,
     scrollTop: number,
@@ -8,10 +12,6 @@ export function normalizeScrollDirection(
 ): ScrollDirection {
     return Math.abs(scrollTop - previousScrollTop) < 0.5 ? 'none' : rawDirection;
 }
-
-export type ScrollPreloadRequest =
-    | { kind: 'predictive' }
-    | { kind: 'chapter'; spineIndex: number; loadKind: 'prev' | 'next' };
 
 export function resolveScrollPreloadRequest(
     chapters: LoadedChapter[],
@@ -26,10 +26,14 @@ export function resolveScrollPreloadRequest(
 
     if (direction === 'up') {
         const earliest = mountedChapters[0].spineIndex;
-        if (earliest > 0) return { kind: 'chapter', spineIndex: earliest - 1, loadKind: 'prev' };
+        if (earliest > 0) {
+            return { kind: 'chapter', spineIndex: earliest - 1, loadKind: 'prev' };
+        }
     } else if (direction === 'down') {
         const latest = mountedChapters[mountedChapters.length - 1].spineIndex;
-        if (latest < spineItemCount - 1) return { kind: 'chapter', spineIndex: latest + 1, loadKind: 'next' };
+        if (latest < spineItemCount - 1) {
+            return { kind: 'chapter', spineIndex: latest + 1, loadKind: 'next' };
+        }
     }
 
     return null;

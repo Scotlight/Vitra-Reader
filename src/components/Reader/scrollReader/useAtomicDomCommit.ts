@@ -3,7 +3,6 @@ import type { MutableRefObject } from 'react';
 import type { SpineItemInfo } from '@/engine/core/contentProvider';
 import { shouldBypassShadowQueueForSegmentMetas } from '../scrollVectorStrategy';
 import styles from '../ScrollReaderView.module.css';
-import { markChapterAsMounted, resolveViewportDerivedMetrics } from './scrollReaderHelpers';
 import { scheduleAtomicScrollAdjustmentFlush } from './atomicScrollAdjustment';
 import {
     getOrCreateChapterElement,
@@ -11,13 +10,14 @@ import {
     scrollToInitialChapterOffset,
     scrollToSearchTextInChapters,
 } from './atomicDomCommitDom';
-import type { LoadedChapter } from './scrollReaderTypes';
 import { isCommittedChapter, isReadyChapter, markReadyChaptersMounted } from './atomicDomCommitState';
 import { markScrollPipelineIdle } from './scrollPipelineRuntime';
-import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
-import type { ScrollReaderRefs } from './useScrollReaderRefs';
+import { markChapterAsMounted, resolveViewportDerivedMetrics } from './scrollReaderHelpers';
+import type { LoadedChapter } from './scrollReaderTypes';
 import { useInitialVirtualSegmentSync } from './useInitialVirtualSegmentSync';
 import { useScrollProgressCommit } from './useScrollProgressCommit';
+import type { ScrollReaderRefs } from './useScrollReaderRefs';
+import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 
 interface UseAtomicDomCommitOptions {
     chapters: LoadedChapter[];

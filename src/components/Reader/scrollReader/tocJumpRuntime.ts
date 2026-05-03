@@ -13,6 +13,14 @@ interface PrepareTocJumpRuntimeOptions {
     progressTimerRef: MutableRefObject<number | null>;
 }
 
+interface CommitTocJumpTargetOptions {
+    targetSpineIndex: number;
+    spineItemsRef: MutableRefObject<SpineItemInfo[]>;
+    lastKnownAnchorIndexRef: MutableRefObject<number>;
+    setCurrentSpineIndex: (value: number) => void;
+    onChapterChange?: (label: string, href: string) => void;
+}
+
 export function prepareTocJumpRuntime({
     searchText,
     cancelIdlePrefetch,
@@ -38,14 +46,6 @@ export function prepareTocJumpRuntime({
     }
 }
 
-interface CommitTocJumpTargetOptions {
-    targetSpineIndex: number;
-    spineItemsRef: MutableRefObject<SpineItemInfo[]>;
-    lastKnownAnchorIndexRef: MutableRefObject<number>;
-    setCurrentSpineIndex: (value: number) => void;
-    onChapterChange?: (label: string, href: string) => void;
-}
-
 export function commitTocJumpTarget({
     targetSpineIndex,
     spineItemsRef,
@@ -60,6 +60,7 @@ export function commitTocJumpTarget({
         onChapterChange(spineItem.id, spineItem.href);
     }
 }
+
 export function findMountedTocJumpChapter(
     chapters: LoadedChapter[],
     targetSpineIndex: number,

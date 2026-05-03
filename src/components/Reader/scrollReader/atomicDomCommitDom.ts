@@ -2,6 +2,14 @@ import { findTextInDOM } from '@/utils/textFinder';
 import { resolveScrollInitialOffset } from '../readerModeSwitchPosition';
 import type { LoadedChapter } from './scrollReaderTypes';
 
+interface ScrollToInitialChapterOffsetOptions {
+    viewport: HTMLElement;
+    listEl: HTMLElement;
+    currentSpineIndex: number;
+    initialChapterProgress?: number;
+    initialScrollOffset: number;
+}
+
 export function getOrCreateChapterElement(
     listEl: HTMLElement,
     chapterId: string,
@@ -35,6 +43,22 @@ export function insertChapterElementAtIndex(
     }
 }
 
+export function scrollToInitialChapterOffset(options: ScrollToInitialChapterOffsetOptions): number | null {
+    const chapterEl = options.listEl.querySelector(`[data-chapter-id="ch-${options.currentSpineIndex}"]`) as HTMLElement | null;
+    const targetScrollTop = resolveScrollInitialOffset({
+        chapterHeight: chapterEl?.scrollHeight ?? 0,
+        chapterTop: chapterEl?.offsetTop ?? 0,
+        initialChapterProgress: options.initialChapterProgress,
+        initialScrollOffset: options.initialScrollOffset,
+        viewportHeight: options.viewport.clientHeight,
+    });
+
+    if (targetScrollTop <= 0) return null;
+
+    options.viewport.scrollTop = targetScrollTop;
+    return options.viewport.scrollTop;
+}
+
 export function scrollToSearchTextInChapters(
     viewport: HTMLElement,
     listEl: HTMLElement,
@@ -55,26 +79,4 @@ export function scrollToSearchTextInChapters(
     }
 
     return null;
-}
-
-export function scrollToInitialChapterOffset(options: {
-    viewport: HTMLElement;
-    listEl: HTMLElement;
-    currentSpineIndex: number;
-    initialChapterProgress?: number;
-    initialScrollOffset: number;
-}): number | null {
-    const chapterEl = options.listEl.querySelector(`[data-chapter-id="ch-${options.currentSpineIndex}"]`) as HTMLElement | null;
-    const targetScrollTop = resolveScrollInitialOffset({
-        chapterHeight: chapterEl?.scrollHeight ?? 0,
-        chapterTop: chapterEl?.offsetTop ?? 0,
-        initialChapterProgress: options.initialChapterProgress,
-        initialScrollOffset: options.initialScrollOffset,
-        viewportHeight: options.viewport.clientHeight,
-    });
-
-    if (targetScrollTop <= 0) return null;
-
-    options.viewport.scrollTop = targetScrollTop;
-    return options.viewport.scrollTop;
 }
