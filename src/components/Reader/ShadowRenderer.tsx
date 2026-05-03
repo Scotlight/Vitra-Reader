@@ -1,15 +1,15 @@
 import { useRef, useEffect, useCallback } from 'react';
 import styles from './ShadowRenderer.module.css';
-import { waitForAssetLoad, getContainerHeight } from '@/utils/assetLoader';
+import { waitForAssetLoad, getContainerHeight, type AssetLoadOptions } from '@/utils/assetLoader';
 import { generateCSSOverride, generatePaginatedCSSOverride } from '@/utils/styleProcessor';
 import { SegmentDomPool } from '@/engine/render/segmentDomPool';
 import {
-  createVitraRenderTrace,
-  finalizeVitraRenderTrace,
-  formatVitraRenderTrace,
-  runVitraRenderStage,
-} from '@/engine/render/vitraRenderPipeline';
-import { buildVitraVectorRenderPlan } from '@/engine/render/vitraVectorPlanner';
+  createRenderTrace,
+  finalizeRenderTrace,
+  formatRenderTrace,
+  runRenderStage,
+} from '@/engine/render/renderStageTrace';
+import { buildVectorRenderPlan } from '@/engine/render/vectorPlanner';
 import type { SegmentMeta } from '@/engine/types/vectorRender';
 
 // ── Re-export 公共 API（保持调用方 import 不变） ──
@@ -44,6 +44,8 @@ import { yieldForHydration } from './shadowRenderer/yieldScheduling';
 
 export const segmentPool = new SegmentDomPool();
 
+type ShadowRendererMode = 'scroll' | 'paginated';
+
 export interface ShadowRendererProps {
   htmlContent: string;
   htmlFragments?: string[];
@@ -55,7 +57,176 @@ export interface ShadowRendererProps {
   onError?: (error: Error) => void;
   readerStyles: ReaderStyleConfig;
   resourceExists?: (url: string) => boolean;
-  mode?: 'scroll' | 'paginated';
+  mode?: ShadowRendererMode;
+}
+
+function createChapterWrapper(chapterId: string): HTMLDivElement {
+  const chapterWrapper = document.createElement('div');
+  chapterWrapper.setAttribute('data-chapter-id', chapterId);
+  chapterWrapper.className = 'chapter-content';
+  chapterWrapper.style.width = '100%';
+  chapterWrapper.style.position = 'relative';
+  chapterWrapper.style.display = 'flow-root';
+  return chapterWrapper;
+}
+
+function appendRenderStyles(
+  chapterWrapper: HTMLElement,
+  options: {
+    mode: ShadowRendererMode;
+    chapterId: string;
+    processedStyles: readonly string[];
+    contentCss: string;
+  },
+): void {
+  const styleEl = document.createElement('style');
+  const cssOverride = options.mode === 'paginated'
+    ? generatePaginatedCSSOverride(options.chapterId)
+    : generateCSSOverride(options.chapterId);
+  styleEl.textContent = [
+    cssOverride,
+    options.processedStyles.join('\n'),
+    options.contentCss,
+  ].join('\n');
+  chapterWrapper.appendChild(styleEl);
+}
+
+function createFlowRootDiv(): HTMLDivElement {
+  const contentDiv = document.createElement('div');
+  contentDiv.style.display = 'flow-root';
+  return contentDiv;
+}
+
+function createShadowSegmentElement(
+  segment: ChapterVectorSegment,
+  segmentIndex: number,
+  initialSegmentCount: number,
+): HTMLElement {
+  const segmentEl = segmentPool.acquire();
+  segmentEl.setAttribute('data-shadow-segment-index', String(segmentIndex));
+  segmentEl.style.width = '100%';
+  segmentEl.style.position = 'relative';
+  segmentEl.style.contain = 'layout style paint';
+  segmentEl.style.contentVisibility = 'auto';
+
+  if (segmentIndex < initialSegmentCount) {
+    materializeVectorSegment(segmentEl, segment);
+    segmentEl.setAttribute('data-shadow-segment-state', 'hydrated');
+    segmentEl.style.containIntrinsicSize = `${Math.max(VECTOR_MIN_SEGMENT_EST_HEIGHT, segment.estimatedHeight)}px`;
+  } else {
+    segmentEl.setAttribute('data-shadow-segment-state', 'placeholder');
+    applyPlaceholderSizing(segmentEl, segment.estimatedHeight);
+  }
+
+  return segmentEl;
+}
+
+async function appendRenderedContent(
+  contentDiv: HTMLElement,
+  options: {
+    canUseVectorized: boolean;
+    vectorSegments: readonly ChapterVectorSegment[];
+    initialSegmentCount: number;
+    normalizedFragments: readonly string[];
+    isLargeChapter: boolean;
+    cleanedHtml: string;
+  },
+): Promise<HTMLElement[]> {
+  const segmentEls: HTMLElement[] = [];
+
+  if (options.canUseVectorized) {
+    options.vectorSegments.forEach((segment, segmentIndex) => {
+      const segmentEl = createShadowSegmentElement(segment, segmentIndex, options.initialSegmentCount);
+      contentDiv.appendChild(segmentEl);
+      segmentEls.push(segmentEl);
+    });
+    return segmentEls;
+  }
+
+  if (options.normalizedFragments.length > 1) {
+    await appendHtmlFragmentsChunked(contentDiv, options.normalizedFragments);
+  } else if (options.isLargeChapter) {
+    await appendHtmlContentChunked(contentDiv, options.cleanedHtml);
+  } else {
+    contentDiv.innerHTML = options.cleanedHtml;
+  }
+
+  return segmentEls;
+}
+
+function buildRenderAssetLoadOptions(options: {
+  cleanedHtmlLength: number;
+  mediaSensitiveChapter: boolean;
+  canUseVectorized: boolean;
+  isLargeChapter: boolean;
+  resourceExists?: (url: string) => boolean;
+}): AssetLoadOptions {
+  return {
+    chapterSizeHint: options.cleanedHtmlLength,
+    timeoutMs: options.mediaSensitiveChapter
+      ? MEDIA_SENSITIVE_LOAD_TIMEOUT_MS
+      : (options.canUseVectorized ? RENDER_VECTORIZED_LOAD_TIMEOUT_MS : (options.isLargeChapter ? RENDER_LARGE_CHAPTER_LOAD_TIMEOUT_MS : undefined)),
+    maxTrackedImages: options.mediaSensitiveChapter
+      ? MEDIA_SENSITIVE_MAX_TRACKED_IMAGES
+      : (options.canUseVectorized ? RENDER_VECTORIZED_MAX_TRACKED_IMAGES : (options.isLargeChapter ? RENDER_LARGE_MAX_TRACKED_IMAGES : RENDER_NORMAL_MAX_TRACKED_IMAGES)),
+    largeChapterThreshold: options.mediaSensitiveChapter
+      ? Number.POSITIVE_INFINITY
+      : LARGE_CHAPTER_HTML_THRESHOLD,
+    resourceExists: options.resourceExists,
+  };
+}
+
+function buildHydrateAssetLoadOptions(
+  segment: ChapterVectorSegment,
+  resourceExists?: (url: string) => boolean,
+): AssetLoadOptions {
+  return {
+    chapterSizeHint: segment.charCount,
+    timeoutMs: HYDRATE_MEDIA_LOAD_TIMEOUT_MS,
+    maxTrackedImages: HYDRATE_MEDIA_MAX_TRACKED_IMAGES,
+    largeChapterThreshold: LARGE_CHAPTER_HTML_THRESHOLD,
+    resourceExists,
+  };
+}
+
+function resolveChapterRenderTraits(
+  cleanedHtml: string,
+  segmentMetas?: readonly SegmentMeta[],
+): {
+  chapterSize: number;
+  isLargeChapter: boolean;
+  mediaSensitiveChapter: boolean;
+} {
+  const chapterSize = cleanedHtml.length > 0
+    ? cleanedHtml.length
+    : getSegmentMetaTotalChars(segmentMetas);
+  return {
+    chapterSize,
+    isLargeChapter: chapterSize >= LARGE_CHAPTER_HTML_THRESHOLD,
+    mediaSensitiveChapter: cleanedHtml.length > 0
+      ? hasLayoutSensitiveMedia(cleanedHtml)
+      : hasSegmentMetaMedia(segmentMetas),
+  };
+}
+
+function buildVectorSegments(options: {
+  mode: ShadowRendererMode;
+  isLargeChapter: boolean;
+  segmentMetas?: readonly SegmentMeta[];
+  cleanedHtml: string;
+  readerStyles: ReaderStyleConfig;
+}): ChapterVectorSegment[] {
+  if (options.mode !== 'scroll' || !options.isLargeChapter) return [];
+  if (options.segmentMetas && options.segmentMetas.length > 0) {
+    return options.segmentMetas.map((meta): ChapterVectorSegment => ({
+      index: meta.index,
+      nodes: [],
+      charCount: meta.charCount,
+      estimatedHeight: meta.estimatedHeight,
+      _htmlContent: meta.htmlContent,
+    }));
+  }
+  return vectorizeChapterContent(options.cleanedHtml, options.readerStyles);
 }
 
 /**
@@ -107,16 +278,11 @@ export function ShadowRenderer({
         await document.fonts.ready;
       }
 
-      const trace = createVitraRenderTrace(chapterId);
+      const trace = createRenderTrace(chapterId);
       try {
-        const chapterWrapper = document.createElement('div');
-        chapterWrapper.setAttribute('data-chapter-id', chapterId);
-        chapterWrapper.className = 'chapter-content';
-        chapterWrapper.style.width = '100%';
-        chapterWrapper.style.position = 'relative';
-        chapterWrapper.style.display = 'flow-root';
+        const chapterWrapper = createChapterWrapper(chapterId);
 
-        const processed = await runVitraRenderStage(trace, 'parse', () => {
+        const processed = await runRenderStage(trace, 'parse', () => {
           if (preprocessed) {
             return {
               cleanedHtml: htmlContent,
@@ -130,52 +296,40 @@ export function ShadowRenderer({
         const cleanedHtml = processed.cleanedHtml;
         const processedStyles = processed.processedStyles;
         const normalizedFragments = processed.fragments;
-        const chapterSize = cleanedHtml.length > 0
-          ? cleanedHtml.length
-          : getSegmentMetaTotalChars(segmentMetas);
-        const isLargeChapter = chapterSize >= LARGE_CHAPTER_HTML_THRESHOLD;
-        const mediaSensitiveChapter = cleanedHtml.length > 0
-          ? hasLayoutSensitiveMedia(cleanedHtml)
-          : hasSegmentMetaMedia(segmentMetas);
+        const {
+          chapterSize,
+          isLargeChapter,
+          mediaSensitiveChapter,
+        } = resolveChapterRenderTraits(cleanedHtml, segmentMetas);
 
-        const vectorSegments = await runVitraRenderStage(trace, 'measure', () => {
-          if (mode !== 'scroll' || !isLargeChapter) return [];
-          if (segmentMetas && segmentMetas.length > 0) {
-            return segmentMetas.map((meta): ChapterVectorSegment => ({
-              index: meta.index,
-              nodes: [],
-              charCount: meta.charCount,
-              estimatedHeight: meta.estimatedHeight,
-              _htmlContent: meta.htmlContent,
-            }));
-          }
-          return vectorizeChapterContent(cleanedHtml, readerStyles);
+        const vectorSegments = await runRenderStage(trace, 'measure', () => {
+          return buildVectorSegments({
+            mode,
+            isLargeChapter,
+            segmentMetas,
+            cleanedHtml,
+            readerStyles,
+          });
         });
 
-        const vectorPlan = await runVitraRenderStage(trace, 'paginate', () => {
-          return buildVitraVectorRenderPlan({
+        const vectorPlan = await runRenderStage(trace, 'paginate', () => {
+          return buildVectorRenderPlan({
             mode,
             chapterSize,
             segmentCount: vectorSegments.length,
           });
         });
 
-        const renderContext = await runVitraRenderStage<ShadowRenderContext | null>(trace, 'render', async () => {
-          const styleEl = document.createElement('style');
-          const cssOverride = mode === 'paginated'
-            ? generatePaginatedCSSOverride(chapterId)
-            : generateCSSOverride(chapterId);
-          styleEl.textContent = [
-            cssOverride,
-            processedStyles.join('\n'),
-            buildContentCss(),
-          ].join('\n');
-          chapterWrapper.appendChild(styleEl);
+        const renderContext = await runRenderStage<ShadowRenderContext | null>(trace, 'render', async () => {
+          appendRenderStyles(chapterWrapper, {
+            mode,
+            chapterId,
+            processedStyles,
+            contentCss: buildContentCss(),
+          });
 
-          const contentDiv = document.createElement('div');
-          contentDiv.style.display = 'flow-root';
+          const contentDiv = createFlowRootDiv();
           const canUseVectorized = vectorPlan.enabled;
-          const segmentEls: HTMLElement[] = [];
           const initialSegmentCount = canUseVectorized
             ? resolveInitialShadowSegmentCount(
               vectorSegments.length,
@@ -183,35 +337,14 @@ export function ShadowRenderer({
               mediaSensitiveChapter,
             )
             : 0;
-
-          if (canUseVectorized) {
-            vectorSegments.forEach((segment, segmentIndex) => {
-              const segmentEl = segmentPool.acquire();
-              segmentEl.setAttribute('data-shadow-segment-index', String(segmentIndex));
-              segmentEl.style.width = '100%';
-              segmentEl.style.position = 'relative';
-              segmentEl.style.contain = 'layout style paint';
-              segmentEl.style.contentVisibility = 'auto';
-
-              if (segmentIndex < initialSegmentCount) {
-                materializeVectorSegment(segmentEl, segment);
-                segmentEl.setAttribute('data-shadow-segment-state', 'hydrated');
-                segmentEl.style.containIntrinsicSize = `${Math.max(VECTOR_MIN_SEGMENT_EST_HEIGHT, segment.estimatedHeight)}px`;
-              } else {
-                segmentEl.setAttribute('data-shadow-segment-state', 'placeholder');
-                applyPlaceholderSizing(segmentEl, segment.estimatedHeight);
-              }
-
-              contentDiv.appendChild(segmentEl);
-              segmentEls.push(segmentEl);
-            });
-          } else if (normalizedFragments.length > 1) {
-            await appendHtmlFragmentsChunked(contentDiv, normalizedFragments);
-          } else if (isLargeChapter) {
-            await appendHtmlContentChunked(contentDiv, cleanedHtml);
-          } else {
-            contentDiv.innerHTML = cleanedHtml;
-          }
+          const segmentEls = await appendRenderedContent(contentDiv, {
+            canUseVectorized,
+            vectorSegments,
+            initialSegmentCount,
+            normalizedFragments,
+            isLargeChapter,
+            cleanedHtml,
+          });
 
           chapterWrapper.appendChild(contentDiv);
           enforceDeterministicMediaLayout(chapterWrapper);
@@ -220,19 +353,13 @@ export function ShadowRenderer({
           container.appendChild(chapterWrapper);
           if (cancelled) return null;
 
-          await waitForAssetLoad(chapterWrapper, {
-            chapterSizeHint: cleanedHtml.length,
-            timeoutMs: mediaSensitiveChapter
-              ? MEDIA_SENSITIVE_LOAD_TIMEOUT_MS
-              : (canUseVectorized ? RENDER_VECTORIZED_LOAD_TIMEOUT_MS : (isLargeChapter ? RENDER_LARGE_CHAPTER_LOAD_TIMEOUT_MS : undefined)),
-            maxTrackedImages: mediaSensitiveChapter
-              ? MEDIA_SENSITIVE_MAX_TRACKED_IMAGES
-              : (canUseVectorized ? RENDER_VECTORIZED_MAX_TRACKED_IMAGES : (isLargeChapter ? RENDER_LARGE_MAX_TRACKED_IMAGES : RENDER_NORMAL_MAX_TRACKED_IMAGES)),
-            largeChapterThreshold: mediaSensitiveChapter
-              ? Number.POSITIVE_INFINITY
-              : LARGE_CHAPTER_HTML_THRESHOLD,
+          await waitForAssetLoad(chapterWrapper, buildRenderAssetLoadOptions({
+            cleanedHtmlLength: cleanedHtml.length,
+            mediaSensitiveChapter,
+            canUseVectorized,
+            isLargeChapter,
             resourceExists,
-          });
+          }));
           if (cancelled) return null;
 
           const height = getContainerHeight(chapterWrapper);
@@ -250,7 +377,7 @@ export function ShadowRenderer({
 
         if (!renderContext || cancelled) return;
 
-        await runVitraRenderStage(trace, 'hydrate', async () => {
+        await runRenderStage(trace, 'hydrate', async () => {
           const {
             chapterWrapper: activeChapterWrapper,
             canUseVectorized,
@@ -285,13 +412,7 @@ export function ShadowRenderer({
 
             const hasMediaAsset = targetEl.querySelector(SEGMENT_ASSET_SELECTOR);
             if (idx % HYDRATE_MEDIA_CHECK_INTERVAL === 0 && hasMediaAsset) {
-              await waitForAssetLoad(targetEl, {
-                chapterSizeHint: segment.charCount,
-                timeoutMs: HYDRATE_MEDIA_LOAD_TIMEOUT_MS,
-                maxTrackedImages: HYDRATE_MEDIA_MAX_TRACKED_IMAGES,
-                largeChapterThreshold: LARGE_CHAPTER_HTML_THRESHOLD,
-                resourceExists,
-              });
+              await waitForAssetLoad(targetEl, buildHydrateAssetLoadOptions(segment, resourceExists));
             }
 
             const isLastSegment = idx === activeSegments.length - 1;
@@ -315,8 +436,8 @@ export function ShadowRenderer({
           }
         });
 
-        const traceSnapshot = finalizeVitraRenderTrace(trace);
-        console.log(formatVitraRenderTrace(traceSnapshot));
+        const traceSnapshot = finalizeRenderTrace(trace);
+        console.log(formatRenderTrace(traceSnapshot));
       } catch (error) {
         if (cancelled) return;
         const err = error instanceof Error ? error : new Error(String(error));
