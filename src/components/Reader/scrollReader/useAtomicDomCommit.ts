@@ -5,6 +5,7 @@ import { findTextInDOM } from '@/utils/textFinder';
 import { shouldBypassShadowQueueForSegmentMetas } from '../scrollVectorStrategy';
 import styles from '../ScrollReaderView.module.css';
 import { markChapterAsMounted, resolveViewportDerivedMetrics } from './scrollReaderHelpers';
+import { getOrCreateChapterElement, insertChapterElementAtIndex } from './atomicDomCommitDom';
 import {
     SCROLL_HEDGE_EPSILON_PX,
     INSTANT_SCROLL_BEHAVIOR,
@@ -147,14 +148,7 @@ export function useAtomicDomCommit(
         if (readyChapters.length === 0) return;
 
         readyChapters.forEach(ch => {
-            const existingChapterEl = listEl.querySelector(`[data-chapter-id="${ch.id}"]`) as HTMLElement | null;
-            const isInsertion = !existingChapterEl;
-
-            const chapterEl = existingChapterEl || document.createElement('div');
-            if (!existingChapterEl) {
-                chapterEl.setAttribute('data-chapter-id', ch.id);
-                chapterEl.className = styles.chapterBlock;
-            }
+            const { chapterEl, isInsertion } = getOrCreateChapterElement(listEl, ch.id, styles.chapterBlock);
             unobserveChapterResizeNodes(chapterEl);
             markChapterAsMounted(chapterEl, ch.height);
             chapterEl.replaceChildren();
@@ -165,15 +159,7 @@ export function useAtomicDomCommit(
 
             if (isInsertion) {
                 const targetIndex = chapters.indexOf(ch);
-                const existingNodes = Array.from(listEl.children);
-
-                if (targetIndex === 0 && existingNodes.length > 0) {
-                    listEl.prepend(chapterEl);
-                } else if (targetIndex >= existingNodes.length) {
-                    listEl.appendChild(chapterEl);
-                } else {
-                    listEl.insertBefore(chapterEl, existingNodes[targetIndex] || null);
-                }
+                insertChapterElementAtIndex(listEl, chapterEl, targetIndex);
             }
             observeChapterResizeNodes(chapterEl);
             if (ch.segmentMetas && shouldBypassShadowQueueForSegmentMetas(ch.segmentMetas)) {
