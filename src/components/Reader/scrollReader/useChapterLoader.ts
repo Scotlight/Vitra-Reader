@@ -23,6 +23,7 @@ import {
     upsertQueuedChapter,
 } from './chapterLoaderState';
 import { buildReadyWindowedVectorChapter } from './chapterLoaderVector';
+import { buildReaderStyleKey } from './readerStyleKey';
 import {
     beginChapterLoad,
     getPredictivePrefetchCandidates,
@@ -45,22 +46,6 @@ interface UseChapterLoaderOptions {
     setShadowQueue: (updater: (prev: LoadedChapter[]) => LoadedChapter[]) => void;
     scheduleIdlePrefetch: (task: () => void) => void;
     cancelIdlePrefetch: () => void;
-}
-
-function buildReaderStyleKey(readerStyles: ReaderStyleConfig): string {
-    return [
-        `fontSize=${readerStyles.fontSize}`,
-        `pageWidth=${readerStyles.pageWidth}`,
-        `lineHeight=${readerStyles.lineHeight}`,
-        `paragraphSpacing=${readerStyles.paragraphSpacing}`,
-        `textIndentEm=${readerStyles.textIndentEm}`,
-        `letterSpacing=${readerStyles.letterSpacing}`,
-        `textAlign=${readerStyles.textAlign}`,
-        `fontFamily=${encodeURIComponent(readerStyles.fontFamily)}`,
-        `textColor=${readerStyles.textColor}`,
-        `bgColor=${readerStyles.bgColor}`,
-        `isPdfDarkMode=${readerStyles.isPdfDarkMode ? '1' : '0'}`,
-    ].join('|');
 }
 
 /**
