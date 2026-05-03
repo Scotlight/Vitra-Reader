@@ -10,6 +10,7 @@ import {
     INSTANT_SCROLL_BEHAVIOR,
 } from './scrollReaderConstants';
 import type { LoadedChapter } from './scrollReaderTypes';
+import { markScrollPipelineIdle } from './scrollPipelineRuntime';
 import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { useInitialVirtualSegmentSync } from './useInitialVirtualSegmentSync';
@@ -82,7 +83,6 @@ export function useAtomicDomCommit(
         initialScrollDone,
         lastScrollTopRef,
         pendingSearchTextRef,
-        pipelineRef,
         lastKnownAnchorIndexRef,
         lastReportedProgressRef,
         pendingProgressSnapshotRef,
@@ -182,7 +182,7 @@ export function useAtomicDomCommit(
             }
         });
 
-        pipelineRef.current = 'idle';
+        markScrollPipelineIdle(refs);
 
         setChapters(prev =>
             prev.map(ch =>

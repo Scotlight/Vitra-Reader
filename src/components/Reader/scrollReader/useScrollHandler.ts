@@ -3,6 +3,7 @@ import type { SpineItemInfo } from '@/engine/core/contentProvider';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { PRELOAD_THRESHOLD_PX, SCROLL_IDLE_RESUME_MS } from './scrollReaderConstants';
 import { detectScrollDirection, shouldPreloadChapter, ScrollDirection } from '@/utils/scrollDetection';
+import { isScrollPipelineIdle } from './scrollPipelineRuntime';
 
 interface UseScrollHandlerOptions {
     spineItems: SpineItemInfo[];
@@ -41,7 +42,6 @@ export function useScrollHandler(
         isUserScrollingRef,
         scrollIdleTimerRef,
         lastScrollTopRef,
-        pipelineRef,
         chaptersRef,
         progressTimerRef,
         pendingProgressSnapshotRef,
@@ -77,7 +77,7 @@ export function useScrollHandler(
                 { threshold: PRELOAD_THRESHOLD_PX }
             );
 
-            if (needsPreload && pipelineRef.current === 'idle') {
+            if (needsPreload && isScrollPipelineIdle(refs)) {
                 const sortedChapters = [...chaptersRef.current].sort((a, b) => a.spineIndex - b.spineIndex);
                 const mountedChapters = sortedChapters.filter(ch => ch.status === 'mounted');
 

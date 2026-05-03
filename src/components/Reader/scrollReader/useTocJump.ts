@@ -6,6 +6,7 @@ import { segmentPool } from '../ShadowRenderer';
 import type { ChapterMetaVector } from '@/engine/types/vectorRender';
 import type { ContentProvider } from '@/engine/core/contentProvider';
 import type { LoadedChapter } from './scrollReaderTypes';
+import { resetScrollPipelineRuntime } from './scrollPipelineRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { resolveReaderInternalLinkTarget } from '../readerInternalLink';
 
@@ -66,8 +67,6 @@ export function useTocJump(
         isUserScrollingRef,
         lastScrollTopRef,
         lastKnownAnchorIndexRef,
-        loadingLockRef,
-        pipelineRef,
     } = refs;
 
     const jumpToSpine = useCallback(async (targetSpineIndex: number, searchText?: string) => {
@@ -164,8 +163,7 @@ export function useTocJump(
         chaptersRef.current = [];
         setChapters([]);
         setShadowQueue([]);
-        loadingLockRef.current.clear();
-        pipelineRef.current = 'idle';
+        resetScrollPipelineRuntime(refs);
         setCurrentSpineIndex(targetSpineIndex);
         lastKnownAnchorIndexRef.current = targetSpineIndex;
 

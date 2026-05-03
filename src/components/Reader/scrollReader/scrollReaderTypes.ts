@@ -1,4 +1,5 @@
 import type { SegmentMeta } from '@/engine/types/vectorRender';
+import { RenderPipelineState } from '@/engine/types/renderPipeline';
 
 export interface LoadedChapter {
     spineIndex: number;
@@ -14,10 +15,13 @@ export interface LoadedChapter {
     mountedAt?: number;
 }
 
-export type PipelineState =
-    | 'idle'
-    | 'pre-fetching'
-    | 'rendering-offscreen';
+export const ScrollPipelineState = {
+    IDLE: RenderPipelineState.IDLE,
+    PRE_FETCHING: RenderPipelineState.PRE_FETCHING,
+    RENDERING_OFFSCREEN: RenderPipelineState.RENDERING_OFFSCREEN,
+} as const;
+
+export type PipelineState = typeof ScrollPipelineState[keyof typeof ScrollPipelineState];
 
 export interface ViewportDerivedMetrics {
     activeSpineIndex: number | null;

@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import type { IdleTaskHandle } from '@/utils/idleScheduler';
 import type { SpineItemInfo } from '@/engine/core/contentProvider';
-import type { LoadedChapter, PipelineState } from './scrollReaderTypes';
+import { ScrollPipelineState, type LoadedChapter, type PipelineState } from './scrollReaderTypes';
 
 interface ScrollReaderRefsInit {
     initialSpineIndex: number;
@@ -22,7 +22,7 @@ export function useScrollReaderRefs(init: ScrollReaderRefsInit) {
 
         // ── pipeline / scroll state ──
         lastScrollTopRef: useRef(0),
-        pipelineRef: useRef<PipelineState>('idle'),
+        pipelineRef: useRef<PipelineState>(ScrollPipelineState.IDLE),
         loadingLockRef: useRef<Set<number>>(new Set()),
         progressTimerRef: useRef<number | null>(null),
         scrollIdleTimerRef: useRef<number | null>(null),

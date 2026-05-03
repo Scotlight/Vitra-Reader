@@ -11,6 +11,13 @@ import {
 } from '../scrollVectorStrategy';
 import { loadPreprocessedChapterContent } from './chapterContentLoader';
 import type { LoadedChapter } from './scrollReaderTypes';
+import {
+    beginChapterLoad,
+    hasActiveChapterLoad,
+    markScrollPipelineIdle,
+    markScrollPipelineRenderingOffscreen,
+    releaseChapterLoadLock,
+} from './scrollPipelineRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 
 interface UseChapterLoaderOptions {
@@ -69,10 +76,8 @@ export function useChapterLoader(
         cancelIdlePrefetch,
     } = options;
     const {
-        loadingLockRef,
         spineItemsRef,
         chaptersRef,
-        pipelineRef,
         readerStylesKeyRef,
         pendingReadyRef,
         isUserScrollingRef,
@@ -84,16 +89,14 @@ export function useChapterLoader(
         direction: 'prev' | 'next' | 'initial',
         forceReload = false,
     ) => {
-        if (loadingLockRef.current.has(spineIndex)) return;
+        if (hasActiveChapterLoad(refs, spineIndex)) return;
         const currentSpineItems = spineItemsRef.current;
         if (spineIndex < 0 || spineIndex >= currentSpineItems.length) return;
 
         const existingChapter = chaptersRef.current.find(ch => ch.spineIndex === spineIndex);
         if (existingChapter && existingChapter.status !== 'placeholder' && !forceReload) return;
         const currentReaderStyleKey = readerStyleKey;
-
-        loadingLockRef.current.add(spineIndex);
-        pipelineRef.current = 'pre-fetching';
+        beginChapterLoad(refs, spineIndex);
 
         const chapterId = `ch-${spineIndex}`;
 
@@ -135,7 +138,7 @@ export function useChapterLoader(
                         height,
                         status: 'ready',
                     } : ch));
-                    pipelineRef.current = 'idle';
+                    markScrollPipelineIdle(refs);
                     return;
                 }
             }
@@ -176,14 +179,14 @@ export function useChapterLoader(
                     } : ch)
                 );
                 setShadowQueue(prev => prev.filter(ch => ch.spineIndex !== spineIndex));
-                pipelineRef.current = 'idle';
+                markScrollPipelineIdle(refs);
             } else {
                 setChapters(prev =>
                     prev.map(ch => ch.spineIndex === spineIndex ? loaded : ch)
                 );
                 setShadowQueue(prev => [...prev.filter(ch => ch.spineIndex !== spineIndex), loaded]);
 
-                pipelineRef.current = 'rendering-offscreen';
+                markScrollPipelineRenderingOffscreen(refs);
             }
         } catch (error) {
             console.error(`[ScrollReader] Failed to load chapter ${spineIndex}:`, error);
@@ -194,9 +197,9 @@ export function useChapterLoader(
                     : ch
                 )
             );
-            pipelineRef.current = 'idle';
+            markScrollPipelineIdle(refs);
         } finally {
-            loadingLockRef.current.delete(spineIndex);
+            releaseChapterLoadLock(refs, spineIndex);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [provider, readerStyles, readerStyleKey]);
@@ -262,7 +265,7 @@ export function useChapterLoader(
         ].filter((index) => index >= 0 && index < totalSpine);
 
         candidateIndexes.forEach((index) => {
-            if (loadingLockRef.current.has(index)) return;
+            if (hasActiveChapterLoad(refs, index)) return;
             const existing = chaptersRef.current.find((chapter) => chapter.spineIndex === index);
             if (existing && existing.status !== 'placeholder') return;
             void loadChapter(index, index < currentSpineIndex ? 'prev' : 'next');
