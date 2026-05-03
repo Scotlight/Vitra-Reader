@@ -1,14 +1,13 @@
 import { useCallback, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import { findTextInDOM } from '@/utils/textFinder';
-import { releaseMediaResources } from '@/utils/mediaResourceCleanup';
-import { segmentPool } from '../ShadowRenderer';
 import type { ChapterMetaVector } from '@/engine/types/vectorRender';
 import type { ContentProvider } from '@/engine/core/contentProvider';
 import type { LoadedChapter } from './scrollReaderTypes';
 import { resetScrollPipelineRuntime } from './scrollPipelineRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { resolveReaderInternalLinkTarget } from '../readerInternalLink';
+import { clearMountedChapterDom } from './tocJumpDomCleanup';
 
 interface UseTocJumpOptions {
     provider: ContentProvider;
@@ -144,19 +143,10 @@ export function useTocJump(
         }
         const listEl = chapterListRef.current;
         if (listEl) {
-            resetResizeObservers();
-            const chapterNodes = listEl.querySelectorAll('[data-chapter-id]');
-            chapterNodes.forEach(node => {
-                const el = node as HTMLElement;
-                const chapterId = el.getAttribute('data-chapter-id');
-                if (chapterId) {
-                    cleanupVirtualChapterRuntime(chapterId);
-                }
-                el.querySelectorAll('[data-shadow-segment-index]').forEach(seg => {
-                    segmentPool.release(seg as HTMLElement);
-                });
-                releaseMediaResources(el);
-                el.remove();
+            clearMountedChapterDom({
+                listEl,
+                cleanupVirtualChapterRuntime,
+                resetResizeObservers,
             });
         }
 
