@@ -71,6 +71,14 @@ function buildLoadingChapter(
     };
 }
 
+function updateChapterBySpineIndex(
+    prev: LoadedChapter[],
+    spineIndex: number,
+    updater: (chapter: LoadedChapter) => LoadedChapter,
+): LoadedChapter[] {
+    return prev.map(ch => ch.spineIndex === spineIndex ? updater(ch) : ch);
+}
+
 function applyLoadingChapter(
     prev: LoadedChapter[],
     loadingChapter: LoadedChapter,
@@ -79,7 +87,7 @@ function applyLoadingChapter(
     existingChapter: LoadedChapter | undefined,
 ): LoadedChapter[] {
     if (existingChapter) {
-        return prev.map(ch => ch.spineIndex === spineIndex ? loadingChapter : ch);
+        return updateChapterBySpineIndex(prev, spineIndex, () => loadingChapter);
     }
     if (direction === 'prev') return [loadingChapter, ...prev];
     return [...prev, loadingChapter];
@@ -183,7 +191,7 @@ export function useChapterLoader(
                         segmentMetas: restoredMetas,
                     });
                     chapterVectorsRef.current.set(chapterId, ready.vector);
-                    setChapters(prev => prev.map(ch => ch.spineIndex === spineIndex ? ready.chapter : ch));
+                    setChapters(prev => updateChapterBySpineIndex(prev, spineIndex, () => ready.chapter));
                     markScrollPipelineIdle(refs);
                     return;
                 }
@@ -219,13 +227,13 @@ export function useChapterLoader(
                 });
                 chapterVectorsRef.current.set(chapterId, ready.vector);
                 setChapters(prev =>
-                    prev.map(ch => ch.spineIndex === spineIndex ? ready.chapter : ch)
+                    updateChapterBySpineIndex(prev, spineIndex, () => ready.chapter)
                 );
                 setShadowQueue(prev => prev.filter(ch => ch.spineIndex !== spineIndex));
                 markScrollPipelineIdle(refs);
             } else {
                 setChapters(prev =>
-                    prev.map(ch => ch.spineIndex === spineIndex ? loaded : ch)
+                    updateChapterBySpineIndex(prev, spineIndex, () => loaded)
                 );
                 setShadowQueue(prev => [...prev.filter(ch => ch.spineIndex !== spineIndex), loaded]);
 
@@ -235,9 +243,8 @@ export function useChapterLoader(
             console.error(`[ScrollReader] Failed to load chapter ${spineIndex}:`, error);
             // 将章节标记为 error 状态，渲染层显示错误占位，避免用户看到空白页
             setChapters(prev =>
-                prev.map(ch => ch.spineIndex === spineIndex
-                    ? { ...ch, status: 'error' as const }
-                    : ch
+                updateChapterBySpineIndex(prev, spineIndex, ch =>
+                    ({ ...ch, status: 'error' as const })
                 )
             );
             markScrollPipelineIdle(refs);
