@@ -1,13 +1,17 @@
 import { useEffect } from 'react';
 import type { ContentProvider } from '@/engine/core/contentProvider';
+import { cancelIdleTask } from '@/utils/idleScheduler';
+import { releaseMediaResources } from '@/utils/mediaResourceCleanup';
+import { shouldLogScrollReaderDebug } from '@/utils/readerDebug';
+import { segmentPool } from '../ShadowRenderer';
+import { UNLOAD_COOLDOWN_MS } from './scrollReaderConstants';
+import { markChapterAsPlaceholder } from './scrollReaderHelpers';
+import {
+    collapseUnloadedChaptersToPlaceholders,
+    resolveChaptersToUnload,
+} from './chapterUnloaderState';
 import type { LoadedChapter } from './scrollReaderTypes';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
-import { markChapterAsPlaceholder, resolveChapterPlaceholderHeight } from './scrollReaderHelpers';
-import { UNLOAD_ABOVE_RADIUS, UNLOAD_BELOW_RADIUS, UNLOAD_COOLDOWN_MS } from './scrollReaderConstants';
-import { segmentPool } from '../ShadowRenderer';
-import { releaseMediaResources } from '@/utils/mediaResourceCleanup';
-import { cancelIdleTask } from '@/utils/idleScheduler';
-import { shouldLogScrollReaderDebug } from '@/utils/readerDebug';
 
 interface UseChapterUnloaderOptions {
     provider: ContentProvider;
@@ -51,19 +55,13 @@ export function useChapterUnloader(
     useEffect(() => {
         const checkUnload = () => {
             const currentChapters = chaptersRef.current;
-            const mountedChapters = currentChapters.filter(ch => ch.status === 'mounted');
             const now = Date.now();
-            const toUnload = mountedChapters
-                .filter(ch => {
-                    if (isUserScrollingRef.current) return false;
-                    const dist = ch.spineIndex - currentSpineIndex;
-                    const radius = dist < 0 ? UNLOAD_ABOVE_RADIUS : UNLOAD_BELOW_RADIUS;
-                    return Math.abs(dist) > radius
-                        && (!ch.mountedAt || now - ch.mountedAt > UNLOAD_COOLDOWN_MS);
-                })
-                .sort((a, b) =>
-                    Math.abs(b.spineIndex - currentSpineIndex) - Math.abs(a.spineIndex - currentSpineIndex)
-                );
+            const toUnload = resolveChaptersToUnload(
+                currentChapters,
+                currentSpineIndex,
+                isUserScrollingRef.current,
+                now,
+            );
 
             if (toUnload.length === 0) return;
 
@@ -92,17 +90,7 @@ export function useChapterUnloader(
             });
 
             const unloadIds = new Set(toUnload.map(ch => ch.spineIndex));
-            setChapters(prev => prev.map(ch => {
-                if (!unloadIds.has(ch.spineIndex)) return ch;
-                return {
-                    ...ch,
-                    htmlContent: '',
-                    htmlFragments: [],
-                    domNode: null,
-                    height: resolveChapterPlaceholderHeight(ch.height),
-                    status: 'placeholder',
-                };
-            }));
+            setChapters(prev => collapseUnloadedChaptersToPlaceholders(prev, unloadIds));
 
             if (shouldLogScrollReaderDebug()) {
                 console.log(`[ScrollReader] Collapsed to placeholders: ${toUnload.map(ch => ch.spineIndex).join(', ')}`);
