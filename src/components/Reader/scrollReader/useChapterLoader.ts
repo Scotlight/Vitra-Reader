@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import type { MutableRefObject } from 'react';
 import type { ContentProvider } from '@/engine/core/contentProvider';
-import { buildChapterMetaVector } from '@/engine/render/metaVectorManager';
 import type { ChapterMetaVector } from '@/engine/types/vectorRender';
-import { createWindowedVectorChapterShell, type ReaderStyleConfig } from '../ShadowRenderer';
+import type { ReaderStyleConfig } from '../ShadowRenderer';
 import {
     canRestoreWindowedVectorPlaceholder,
     partitionStyleChangeTargets,
@@ -23,6 +22,7 @@ import {
     updateChapterBySpineIndex,
     upsertQueuedChapter,
 } from './chapterLoaderState';
+import { buildReadyWindowedVectorChapter } from './chapterLoaderVector';
 import {
     beginChapterLoad,
     getPredictivePrefetchCandidates,
@@ -61,31 +61,6 @@ function buildReaderStyleKey(readerStyles: ReaderStyleConfig): string {
         `bgColor=${readerStyles.bgColor}`,
         `isPdfDarkMode=${readerStyles.isPdfDarkMode ? '1' : '0'}`,
     ].join('|');
-}
-
-function buildReadyWindowedVectorChapter(options: {
-    chapterId: string;
-    spineIndex: number;
-    baseChapter: LoadedChapter;
-    externalStyles: string[];
-    readerStyles: ReaderStyleConfig;
-    segmentMetas: NonNullable<LoadedChapter['segmentMetas']>;
-}): { chapter: LoadedChapter; vector: ChapterMetaVector } {
-    const { node, height } = createWindowedVectorChapterShell({
-        chapterId: options.chapterId,
-        externalStyles: options.externalStyles,
-        readerStyles: options.readerStyles,
-        segmentMetas: options.segmentMetas,
-    });
-    return {
-        chapter: {
-            ...options.baseChapter,
-            domNode: node,
-            height,
-            status: 'ready',
-        },
-        vector: buildChapterMetaVector(options.chapterId, options.spineIndex, options.segmentMetas),
-    };
 }
 
 /**
