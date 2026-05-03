@@ -9,6 +9,11 @@ import { PRELOAD_THRESHOLD_PX } from './scrollReaderConstants';
 import { scheduleScrollIdleResume } from './scrollHandlerTimers';
 import { isScrollPipelineIdle } from './scrollPipelineRuntime';
 import { normalizeScrollDirection, resolveScrollPreloadRequest } from './scrollPreloadTarget';
+import {
+    clearScrollProgressCommitTimer,
+    scheduleScrollProgressCommit,
+} from './scrollProgressTimers';
+import type { ScrollProgressSnapshot } from './useScrollProgressCommit';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 
 interface UseScrollHandlerOptions {
@@ -18,9 +23,7 @@ interface UseScrollHandlerOptions {
     scheduleIdlePrefetch: (task: () => void) => void;
     cancelIdlePrefetch: () => void;
     syncViewportState: (scrollTop: number, viewportHeight: number) => void;
-    commitProgressSnapshot: (
-        snapshot: { spineIndex: number; progress: number; scrollTop: number } | null,
-    ) => void;
+    commitProgressSnapshot: (snapshot: ScrollProgressSnapshot | null) => void;
 }
 
 /**
@@ -95,12 +98,11 @@ export function useScrollHandler(
 
             syncViewportState(scrollTop, viewportHeight);
 
-            if (progressTimerRef.current) {
-                window.clearTimeout(progressTimerRef.current);
-            }
-            progressTimerRef.current = window.setTimeout(() => {
-                commitProgressSnapshot(pendingProgressSnapshotRef.current);
-            }, 200);
+            scheduleScrollProgressCommit({
+                progressTimerRef,
+                pendingProgressSnapshotRef,
+                commitProgressSnapshot,
+            });
         };
 
         viewport.addEventListener('scroll', handleScroll, { passive: true });
@@ -110,9 +112,7 @@ export function useScrollHandler(
                 window.clearTimeout(scrollIdleTimerRef.current);
                 scrollIdleTimerRef.current = null;
             }
-            if (progressTimerRef.current) {
-                window.clearTimeout(progressTimerRef.current);
-            }
+            clearScrollProgressCommitTimer(progressTimerRef);
         };
     }, [
         spineItems,
