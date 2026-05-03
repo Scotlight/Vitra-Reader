@@ -1,5 +1,6 @@
 import type { MutableRefObject } from 'react';
 import type { SpineItemInfo } from '@/engine/core/contentProvider';
+import type { LoadedChapter } from './scrollReaderTypes';
 
 interface PrepareTocJumpRuntimeOptions {
     searchText?: string;
@@ -58,4 +59,12 @@ export function commitTocJumpTarget({
     if (onChapterChange && spineItem) {
         onChapterChange(spineItem.id, spineItem.href);
     }
+}
+export function findMountedTocJumpChapter(
+    chapters: LoadedChapter[],
+    targetSpineIndex: number,
+): LoadedChapter | undefined {
+    return chapters.find(ch =>
+        ch.spineIndex === targetSpineIndex && ch.status === 'mounted'
+    );
 }

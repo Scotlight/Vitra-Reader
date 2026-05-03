@@ -7,7 +7,7 @@ import { resetScrollPipelineRuntime } from './scrollPipelineRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { clearMountedChapterDom } from './tocJumpDomCleanup';
 import { scrollMountedChapterIntoView } from './tocJumpMountedChapter';
-import { commitTocJumpTarget, prepareTocJumpRuntime } from './tocJumpRuntime';
+import { commitTocJumpTarget, findMountedTocJumpChapter, prepareTocJumpRuntime } from './tocJumpRuntime';
 import { createTocJumpInternalLinkHandler } from './tocJumpInternalLinks';
 
 interface UseTocJumpOptions {
@@ -93,9 +93,7 @@ export function useTocJump(
             onChapterChange,
         });
 
-        const existing = chaptersRef.current.find(ch =>
-            ch.spineIndex === targetSpineIndex && ch.status === 'mounted'
-        );
+        const existing = findMountedTocJumpChapter(chaptersRef.current, targetSpineIndex);
 
         if (existing) {
             const listEl = chapterListRef.current;
