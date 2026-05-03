@@ -1,6 +1,5 @@
 import { useCallback, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
-import { findTextInDOM } from '@/utils/textFinder';
 import type { ChapterMetaVector } from '@/engine/types/vectorRender';
 import type { ContentProvider } from '@/engine/core/contentProvider';
 import type { LoadedChapter } from './scrollReaderTypes';
@@ -8,6 +7,7 @@ import { resetScrollPipelineRuntime } from './scrollPipelineRuntime';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { resolveReaderInternalLinkTarget } from '../readerInternalLink';
 import { clearMountedChapterDom } from './tocJumpDomCleanup';
+import { scrollMountedChapterIntoView } from './tocJumpMountedChapter';
 
 interface UseTocJumpOptions {
     provider: ContentProvider;
@@ -104,34 +104,20 @@ export function useTocJump(
             const listEl = chapterListRef.current;
             const viewport = viewportRef.current;
             if (listEl && viewport) {
-                const domEl = listEl.querySelector(`[data-chapter-id="ch-${targetSpineIndex}"]`) as HTMLElement | null;
-                if (domEl) {
-                    viewport.scrollTop = domEl.offsetTop;
-                    lastScrollTopRef.current = viewport.scrollTop;
-                    syncViewportState(viewport.scrollTop, viewport.clientHeight, { commitProgress: true });
-
-                    requestAnimationFrame(() => {
-                        if (jumpGenerationRef.current !== generation) return;
-                        viewport.scrollTop = domEl.offsetTop;
-                        lastScrollTopRef.current = viewport.scrollTop;
-                        syncViewportState(viewport.scrollTop, viewport.clientHeight, { commitProgress: true });
-                    });
-
-                    if (searchText) {
-                        pendingSearchTextRef.current = null;
-                        materializeAllVirtualSegments(existing.id);
-                        domEl.querySelectorAll('[data-shadow-segment-state="placeholder"]').forEach(seg => {
-                            forceHydrateSegment(seg as HTMLElement);
-                        });
-                        const range = findTextInDOM(domEl, searchText);
-                        if (range) {
-                            const rect = range.getBoundingClientRect();
-                            const vpRect = viewport.getBoundingClientRect();
-                            viewport.scrollTop += rect.top - vpRect.top;
-                            lastScrollTopRef.current = viewport.scrollTop;
-                        }
-                    }
-                }
+                scrollMountedChapterIntoView({
+                    listEl,
+                    viewport,
+                    targetSpineIndex,
+                    existing,
+                    searchText,
+                    generation,
+                    jumpGenerationRef,
+                    pendingSearchTextRef,
+                    lastScrollTopRef,
+                    syncViewportState,
+                    materializeAllVirtualSegments,
+                    forceHydrateSegment,
+                });
             }
             return;
         }
