@@ -126,6 +126,17 @@ function upsertQueuedChapter(prev: LoadedChapter[], chapter: LoadedChapter): Loa
     return [...removeChapterFromQueue(prev, chapter.spineIndex), chapter];
 }
 
+function replaceQueuedChapters(
+    prev: LoadedChapter[],
+    replacementIndexes: ReadonlySet<number>,
+    replacements: LoadedChapter[],
+): LoadedChapter[] {
+    return [
+        ...prev.filter((chapter) => !replacementIndexes.has(chapter.spineIndex)),
+        ...replacements,
+    ];
+}
+
 function isStyleRefreshTarget(chapter: LoadedChapter): boolean {
     return chapter.status === 'mounted' || chapter.status === 'ready';
 }
@@ -296,10 +307,7 @@ export function useChapterLoader(
         renderedHighlightsRef.current.clear();
         if (rerenderIndexes.size > 0) {
             pendingReadyRef.current = pendingReadyRef.current.filter((item) => !rerenderIndexes.has(item.spineIndex));
-            setShadowQueue((prev) => [
-                ...prev.filter((chapter) => !rerenderIndexes.has(chapter.spineIndex)),
-                ...rerenderQueue,
-            ]);
+            setShadowQueue((prev) => replaceQueuedChapters(prev, rerenderIndexes, rerenderQueue));
             setChapters((prev) => prev.map((chapter) =>
                 rerenderIndexes.has(chapter.spineIndex)
                     ? buildShadowRerenderChapter(chapter, nextKey)
