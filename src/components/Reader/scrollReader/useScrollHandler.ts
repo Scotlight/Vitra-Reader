@@ -4,7 +4,7 @@ import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { PRELOAD_THRESHOLD_PX, SCROLL_IDLE_RESUME_MS } from './scrollReaderConstants';
 import { detectScrollDirection, shouldPreloadChapter, ScrollDirection } from '@/utils/scrollDetection';
 import { isScrollPipelineIdle } from './scrollPipelineRuntime';
-import { resolveScrollPreloadRequest } from './scrollPreloadTarget';
+import { normalizeScrollDirection, resolveScrollPreloadRequest } from './scrollPreloadTarget';
 
 interface UseScrollHandlerOptions {
     spineItems: SpineItemInfo[];
@@ -70,7 +70,7 @@ export function useScrollHandler(
             const contentHeight = viewport.scrollHeight;
             const previousScrollTop = lastScrollTopRef.current;
             const rawDirection = detectScrollDirection(scrollTop, previousScrollTop);
-            const direction: ScrollDirection = Math.abs(scrollTop - previousScrollTop) < 0.5 ? 'none' : rawDirection;
+            const direction: ScrollDirection = normalizeScrollDirection(rawDirection, scrollTop, previousScrollTop);
             lastScrollTopRef.current = scrollTop;
 
             const needsPreload = shouldPreloadChapter(

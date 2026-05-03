@@ -1,6 +1,14 @@
 import type { ScrollDirection } from '@/utils/scrollDetection';
 import type { LoadedChapter } from './scrollReaderTypes';
 
+export function normalizeScrollDirection(
+    rawDirection: ScrollDirection,
+    scrollTop: number,
+    previousScrollTop: number,
+): ScrollDirection {
+    return Math.abs(scrollTop - previousScrollTop) < 0.5 ? 'none' : rawDirection;
+}
+
 export type ScrollPreloadRequest =
     | { kind: 'predictive' }
     | { kind: 'chapter'; spineIndex: number; loadKind: 'prev' | 'next' };
