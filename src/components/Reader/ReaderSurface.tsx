@@ -153,6 +153,7 @@ export function ReaderSurface({
             bookFormat={bookFormat}
             isOpen={settingsOpen}
             onPageTurnModeChange={onPageTurnModeChange}
+            placement={isFullscreen ? 'bottom' : 'side'}
         />
     )
 
