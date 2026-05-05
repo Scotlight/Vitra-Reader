@@ -17,12 +17,14 @@ interface UseScrollProgressCommitOptions {
     onProgressChange?: (progress: number) => void;
 }
 
+type CommitProgressSnapshot = (snapshot: ScrollProgressSnapshot | null) => void;
+
 export function useScrollProgressCommit({
     bookId,
     spineItems,
     lastReportedProgressRef,
     onProgressChange,
-}: UseScrollProgressCommitOptions) {
+}: UseScrollProgressCommitOptions): CommitProgressSnapshot {
     return useCallback((snapshot: ScrollProgressSnapshot | null) => {
         if (!snapshot || spineItems.length === 0) return;
 

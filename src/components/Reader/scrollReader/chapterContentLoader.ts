@@ -1,13 +1,13 @@
-import type { ContentProvider } from '@/engine/core/contentProvider'
-import { preprocessChapterContent } from '@/engine/render/chapterPreprocessService'
-import type { ReaderStyleConfig } from '../ShadowRenderer'
+import type { ContentProvider } from '@/engine/core/contentProvider';
+import { preprocessChapterContent } from '@/engine/render/chapterPreprocessService';
+import type { ReaderStyleConfig } from '../ShadowRenderer';
 
 interface LoadPreprocessedChapterContentOptions {
-    provider: ContentProvider
-    chapterId: string
-    spineIndex: number
-    chapterHref?: string
-    readerStyles: ReaderStyleConfig
+    provider: ContentProvider;
+    chapterId: string;
+    spineIndex: number;
+    chapterHref?: string;
+    readerStyles: ReaderStyleConfig;
 }
 
 export async function loadPreprocessedChapterContent({
@@ -17,10 +17,10 @@ export async function loadPreprocessedChapterContent({
     chapterHref,
     readerStyles,
 }: LoadPreprocessedChapterContentOptions) {
-    const html = await provider.extractChapterHtml(spineIndex)
-    let chapterStyles: string[] = []
+    const html = await provider.extractChapterHtml(spineIndex);
+    let chapterStyles: string[] = [];
     try {
-        chapterStyles = await provider.extractChapterStyles(spineIndex)
+        chapterStyles = await provider.extractChapterStyles(spineIndex);
     } catch {
         // Styles are optional
     }
@@ -39,5 +39,5 @@ export async function loadPreprocessedChapterContent({
             lineHeight: readerStyles.lineHeight,
             paragraphSpacing: readerStyles.paragraphSpacing,
         },
-    })
+    });
 }

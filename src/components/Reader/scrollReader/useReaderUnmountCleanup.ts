@@ -4,13 +4,15 @@ import { cancelIdleTask } from '@/utils/idleScheduler';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 
+interface ReaderUnmountCleanupDeps {
+    cancelIdlePrefetch: () => void;
+    virtualChaptersRef: MutableRefObject<Map<string, VirtualChapterRuntime>>;
+    cleanupVirtualChapterRuntime: (chapterId: string) => void;
+}
+
 export function useReaderUnmountCleanup(
     refs: ScrollReaderRefs,
-    deps: {
-        cancelIdlePrefetch: () => void;
-        virtualChaptersRef: MutableRefObject<Map<string, VirtualChapterRuntime>>;
-        cleanupVirtualChapterRuntime: (chapterId: string) => void;
-    },
+    deps: ReaderUnmountCleanupDeps,
 ) {
     const { scrollIdleTimerRef, highlightIdleHandlesRef, virtualSyncRafRef } = refs;
     const { cancelIdlePrefetch, virtualChaptersRef, cleanupVirtualChapterRuntime } = deps;
