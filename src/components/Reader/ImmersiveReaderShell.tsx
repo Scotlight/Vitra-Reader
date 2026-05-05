@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
+import type { TocItem } from '@/engine/core/contentProvider'
+import { isTocHrefActive } from './readerToc'
 import styles from './ImmersiveReaderShell.module.css'
 
 interface ImmersiveReaderShellProps {
@@ -8,13 +10,18 @@ interface ImmersiveReaderShellProps {
     readonly clockText: string
     readonly closePanels: () => void
     readonly content: ReactNode
+    readonly currentSectionHref: string
+    readonly handleTocClick: (href: string) => Promise<void>
     readonly leftPanel: ReactNode
     readonly leftPanelOpen: boolean
     readonly onBack: () => void
+    readonly openSearchPanel: () => void
+    readonly openTocPanel: () => void
     readonly onToggleFullscreen: () => void
     readonly progressLabel: string
     readonly settingsOpen: boolean
     readonly settingsPanel: ReactNode
+    readonly toc: readonly TocItem[]
     readonly toggleLeftPanel: () => void
     readonly toggleSettingsPanel: () => void
 }
@@ -29,19 +36,49 @@ function hasSelectedText(): boolean {
     return (window.getSelection()?.toString().trim().length ?? 0) > 0
 }
 
+function renderImmersiveTocItems(
+    items: readonly TocItem[],
+    currentSectionHref: string,
+    handleTocClick: (href: string) => Promise<void>,
+    level = 0,
+): JSX.Element[] {
+    return items.flatMap((item, index) => {
+        const key = `${level}-${index}-${item.href}`
+        const active = isTocHrefActive(item.href, currentSectionHref)
+        const children = item.subitems ? renderImmersiveTocItems(item.subitems, currentSectionHref, handleTocClick, level + 1) : []
+        return [
+            <button
+                key={key}
+                className={`${styles.tocPreviewItem} ${active ? styles.tocPreviewItemActive : ''}`}
+                data-toc-active={active ? 'true' : 'false'}
+                onClick={() => void handleTocClick(item.href)}
+                style={{ paddingLeft: `${12 + level * 12}px` }}
+            >
+                <span className={styles.tocPreviewLabel} title={item.label}>{item.label}</span>
+            </button>,
+            ...children,
+        ]
+    })
+}
+
 export function ImmersiveReaderShell({
     bookTitleText,
     chapterLabel,
     clockText,
     closePanels,
     content,
+    currentSectionHref,
+    handleTocClick,
     leftPanel,
     leftPanelOpen,
     onBack,
+    openSearchPanel,
+    openTocPanel,
     onToggleFullscreen,
     progressLabel,
     settingsOpen,
     settingsPanel,
+    toc,
     toggleLeftPanel,
     toggleSettingsPanel,
 }: ImmersiveReaderShellProps) {
@@ -84,10 +121,21 @@ export function ImmersiveReaderShell({
             </div>
 
             <div className={`${styles.glassCapsule} ${styles.tocCapsule} ${activeChromeClass}`} data-immersive-reader-chrome="true">
-                <div className={styles.capsuleTitle}>目录</div>
-                <button className={styles.capsuleAction} onClick={toggleLeftPanel}>
-                    {leftPanelOpen ? '收起目录/搜索' : '打开目录/搜索'}
-                </button>
+                <div className={styles.tocCapsuleHeader}>
+                    <button className={`${styles.tocCapsuleTab} ${styles.tocCapsuleTabActive}`} onClick={openTocPanel}>
+                        目录
+                    </button>
+                    <button className={styles.tocCapsuleTab} onClick={openSearchPanel}>
+                        搜索
+                    </button>
+                </div>
+                <div className={styles.tocPreviewList}>
+                    {toc.length === 0 ? (
+                        <div className={styles.tocPreviewEmpty}>无目录信息</div>
+                    ) : (
+                        renderImmersiveTocItems(toc, currentSectionHref, handleTocClick)
+                    )}
+                </div>
             </div>
 
             <div className={`${styles.glassCapsule} ${styles.statusCapsule} ${activeChromeClass}`} data-immersive-reader-chrome="true">

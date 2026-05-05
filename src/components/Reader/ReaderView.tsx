@@ -169,6 +169,16 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         setSearchQuery(keyword)
         openSearchPanelWithKeyword(keyword)
     }, [openSearchPanelWithKeyword])
+    const openTocPanel = useCallback(() => {
+        setActiveTab('toc')
+        setLeftPanelOpen(true)
+        setSettingsOpen(false)
+    }, [])
+    const openSearchPanel = useCallback(() => {
+        setActiveTab('search')
+        setLeftPanelOpen(true)
+        setSettingsOpen(false)
+    }, [])
     const getFallbackModePositionSnapshot = useCallback(() => {
         const fallbackSpineIndex = isScrollMode
             ? scrollParams.initialSpineIndex
@@ -258,6 +268,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             clockText={clockText}
             closePanels={closePanels}
             content={content}
+            currentSectionHref={currentSectionHref}
             leftPanel={(
                 <ReaderLeftPanel
                     activeTab={activeTab}
@@ -282,15 +293,19 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                 />
             )}
             footerHeight={Math.max(0, Math.min(96, Number(settings.footerHeight) || 32))}
+            handleTocClick={handleTocClick}
             headerHeight={Math.max(36, Math.min(96, Number(settings.headerHeight) || 48))}
             leftPanelOpen={leftPanelOpen}
             onBack={onBack}
             onPageTurnModeChange={handlePageTurnModeChange}
+            openSearchPanel={openSearchPanel}
+            openTocPanel={openTocPanel}
             progressLabel={`${Math.round(Math.max(0, Math.min(1, currentProgress)) * 100)}%`}
             readerColors={readerColors}
             resolvedReaderFontFamily={resolvedReaderFontFamily}
             settings={settings}
             settingsOpen={settingsOpen}
+            toc={toc}
             toggleLeftPanel={toggleLeftPanel}
             toggleSettingsPanel={toggleSettingsPanel}
         />

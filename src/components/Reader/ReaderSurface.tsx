@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import type { TocItem } from '@/engine/core/contentProvider'
 import type { PageTurnMode } from '@/stores/useSettingsStore'
 import { ImmersiveReaderShell } from './ImmersiveReaderShell'
 import { ReaderFooter } from './ReaderFooter'
@@ -27,17 +28,22 @@ interface ReaderSurfaceProps {
     clockText: string
     closePanels: () => void
     content: ReactNode
+    currentSectionHref: string
     footerHeight: number
+    handleTocClick: (href: string) => Promise<void>
     headerHeight: number
     leftPanel: ReactNode
     leftPanelOpen: boolean
     onBack: () => void
     onPageTurnModeChange: (nextMode: PageTurnMode) => void
+    openSearchPanel: () => void
+    openTocPanel: () => void
     progressLabel: string
     readerColors: ReaderColors
     resolvedReaderFontFamily: string
     settings: ReaderSurfaceSettings
     settingsOpen: boolean
+    toc: readonly TocItem[]
     toggleLeftPanel: () => void
     toggleSettingsPanel: () => void
 }
@@ -68,17 +74,22 @@ export function ReaderSurface({
     clockText,
     closePanels,
     content,
+    currentSectionHref,
     footerHeight,
+    handleTocClick,
     headerHeight,
     leftPanel,
     leftPanelOpen,
     onBack,
     onPageTurnModeChange,
+    openSearchPanel,
+    openTocPanel,
     progressLabel,
     readerColors,
     resolvedReaderFontFamily,
     settings,
     settingsOpen,
+    toc,
     toggleLeftPanel,
     toggleSettingsPanel,
 }: ReaderSurfaceProps) {
@@ -158,13 +169,18 @@ export function ReaderSurface({
                     clockText={clockText}
                     closePanels={closePanels}
                     content={content}
+                    currentSectionHref={currentSectionHref}
+                    handleTocClick={handleTocClick}
                     leftPanel={leftPanel}
                     leftPanelOpen={leftPanelOpen}
                     onBack={onBack}
+                    openSearchPanel={openSearchPanel}
+                    openTocPanel={openTocPanel}
                     onToggleFullscreen={toggleFullscreen}
                     progressLabel={progressLabel}
                     settingsOpen={settingsOpen}
                     settingsPanel={settingsPanel}
+                    toc={toc}
                     toggleLeftPanel={toggleLeftPanel}
                     toggleSettingsPanel={toggleSettingsPanel}
                 />
