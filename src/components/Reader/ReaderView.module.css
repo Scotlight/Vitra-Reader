@@ -11,6 +11,14 @@
     position: relative;
 }
 
+.readerContainerFullscreen,
+.readerContainer:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    background: var(--reader-bg-color, var(--reader-bg));
+    color: var(--reader-text-color, var(--reader-text));
+}
+
 .toolbar {
     height: 48px;
     display: flex;

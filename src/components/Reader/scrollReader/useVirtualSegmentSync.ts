@@ -91,9 +91,13 @@ export function useVirtualSegmentSync(
 
         scheduleVirtualSync();
         viewport.addEventListener('scroll', scheduleVirtualSync, { passive: true });
+        window.addEventListener('resize', scheduleVirtualSync);
+        document.addEventListener('fullscreenchange', scheduleVirtualSync);
 
         return () => {
             viewport.removeEventListener('scroll', scheduleVirtualSync);
+            window.removeEventListener('resize', scheduleVirtualSync);
+            document.removeEventListener('fullscreenchange', scheduleVirtualSync);
             if (virtualSyncRafRef.current !== null) {
                 cancelAnimationFrame(virtualSyncRafRef.current);
                 virtualSyncRafRef.current = null;

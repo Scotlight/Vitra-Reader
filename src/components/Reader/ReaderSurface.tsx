@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import type { PageTurnMode } from '@/stores/useSettingsStore'
 import { ReaderFooter } from './ReaderFooter'
@@ -81,17 +82,50 @@ export function ReaderSurface({
     toggleSettingsPanel,
 }: ReaderSurfaceProps) {
     const footerEnabled = footerHeight > 0
+    const readerContainerRef = useRef<HTMLDivElement | null>(null)
+    const [isFullscreen, setIsFullscreen] = useState(false)
+
+    const syncFullscreenState = useCallback(() => {
+        setIsFullscreen(document.fullscreenElement === readerContainerRef.current)
+    }, [])
+
+    useEffect(() => {
+        document.addEventListener('fullscreenchange', syncFullscreenState)
+        syncFullscreenState()
+        return () => {
+            document.removeEventListener('fullscreenchange', syncFullscreenState)
+        }
+    }, [syncFullscreenState])
+
+    const toggleFullscreen = useCallback(() => {
+        const container = readerContainerRef.current
+        if (!container) return
+
+        if (document.fullscreenElement === container) {
+            void document.exitFullscreen().catch((error) => {
+                console.warn('[Reader] Exit fullscreen failed:', error)
+            })
+            return
+        }
+
+        void container.requestFullscreen().catch((error) => {
+            console.warn('[Reader] Enter fullscreen failed:', error)
+        })
+    }, [])
 
     return (
         <div
-            className={styles.readerContainer}
+            ref={readerContainerRef}
+            className={`${styles.readerContainer} ${isFullscreen ? styles.readerContainerFullscreen : ''}`}
             style={buildReaderContainerStyle(readerColors, resolvedReaderFontFamily, settings)}
         >
             <ReaderToolbar
                 bookTitleText={bookTitleText}
                 headerHeight={headerHeight}
+                isFullscreen={isFullscreen}
                 leftPanelOpen={leftPanelOpen}
                 onBack={onBack}
+                onToggleFullscreen={toggleFullscreen}
                 settingsOpen={settingsOpen}
                 toggleLeftPanel={toggleLeftPanel}
                 toggleSettingsPanel={toggleSettingsPanel}

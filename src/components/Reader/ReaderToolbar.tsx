@@ -4,8 +4,10 @@ import styles from './ReaderView.module.css'
 interface ReaderToolbarProps {
     readonly bookTitleText: string
     readonly headerHeight: number
+    readonly isFullscreen: boolean
     readonly leftPanelOpen: boolean
     readonly onBack: () => void
+    readonly onToggleFullscreen: () => void
     readonly settingsOpen: boolean
     readonly toggleLeftPanel: () => void
     readonly toggleSettingsPanel: () => void
@@ -14,8 +16,10 @@ interface ReaderToolbarProps {
 export function ReaderToolbar({
     bookTitleText,
     headerHeight,
+    isFullscreen,
     leftPanelOpen,
     onBack,
+    onToggleFullscreen,
     settingsOpen,
     toggleLeftPanel,
     toggleSettingsPanel,
@@ -37,6 +41,14 @@ export function ReaderToolbar({
                 </button>
                 <button className={`${styles.iconBtn} ${settingsOpen ? styles.active : ''}`} onClick={toggleSettingsPanel}>
                     ⚙ 设置
+                </button>
+                <button
+                    aria-pressed={isFullscreen}
+                    className={`${styles.iconBtn} ${isFullscreen ? styles.active : ''}`}
+                    onClick={onToggleFullscreen}
+                    title={isFullscreen ? '退出全屏' : '全屏阅读'}
+                >
+                    {isFullscreen ? '⤢ 退出全屏' : '⛶ 全屏'}
                 </button>
             </div>
         </motion.div>
