@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import type { PageTurnMode } from '@/stores/useSettingsStore'
+import { ImmersiveReaderShell } from './ImmersiveReaderShell'
 import { ReaderFooter } from './ReaderFooter'
 import { ReaderSettingsPanel } from './ReaderSettingsPanel'
 import { ReaderToolbar } from './ReaderToolbar'
@@ -113,10 +114,45 @@ export function ReaderSurface({
         })
     }, [])
 
+    const settingsPanel = (
+        <ReaderSettingsPanel
+            bookFormat={bookFormat}
+            isOpen={settingsOpen}
+            onPageTurnModeChange={onPageTurnModeChange}
+        />
+    )
+
+    if (isFullscreen) {
+        return (
+            <div
+                ref={readerContainerRef}
+                className={`${styles.readerContainer} ${styles.readerContainerFullscreen}`}
+                style={buildReaderContainerStyle(readerColors, resolvedReaderFontFamily, settings)}
+            >
+                <ImmersiveReaderShell
+                    bookTitleText={bookTitleText}
+                    chapterLabel={chapterLabel}
+                    clockText={clockText}
+                    closePanels={closePanels}
+                    content={content}
+                    leftPanel={leftPanel}
+                    leftPanelOpen={leftPanelOpen}
+                    onBack={onBack}
+                    onToggleFullscreen={toggleFullscreen}
+                    progressLabel={progressLabel}
+                    settingsOpen={settingsOpen}
+                    settingsPanel={settingsPanel}
+                    toggleLeftPanel={toggleLeftPanel}
+                    toggleSettingsPanel={toggleSettingsPanel}
+                />
+            </div>
+        )
+    }
+
     return (
         <div
             ref={readerContainerRef}
-            className={`${styles.readerContainer} ${isFullscreen ? styles.readerContainerFullscreen : ''}`}
+            className={styles.readerContainer}
             style={buildReaderContainerStyle(readerColors, resolvedReaderFontFamily, settings)}
         >
             <ReaderToolbar
@@ -152,11 +188,7 @@ export function ReaderSurface({
                     />
                 )}
 
-                <ReaderSettingsPanel
-                    bookFormat={bookFormat}
-                    isOpen={settingsOpen}
-                    onPageTurnModeChange={onPageTurnModeChange}
-                />
+                {settingsPanel}
             </div>
         </div>
     )
