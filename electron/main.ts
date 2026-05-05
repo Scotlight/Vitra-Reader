@@ -8,7 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 process.env.APP_ROOT = path.join(__dirname, '..')
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
-const OPEN_DEVTOOLS = process.env['VITRA_OPEN_DEVTOOLS'] === '1'
+const OPEN_DEVTOOLS = process.env['VITRA_OPEN_DEVTOOLS'] !== '0'
 const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 
 let win: BrowserWindow | null
@@ -183,7 +183,7 @@ function createWindow() {
         win?.show()
     })
 
-    // 开发模式默认不打开 DevTools，避免 detached 窗口增加进程与 CPU 波动。
+    // 开发模式默认打开 DevTools，便于排查渲染与阅读器问题；设置 VITRA_OPEN_DEVTOOLS=0 可关闭。
     if (VITE_DEV_SERVER_URL) {
         win.loadURL(VITE_DEV_SERVER_URL)
         if (OPEN_DEVTOOLS) {
