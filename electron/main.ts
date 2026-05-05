@@ -148,6 +148,13 @@ function createWindow() {
             nodeIntegration: false,
         },
     })
+    const currentWindow = win
+    const emitWindowFullscreenState = () => {
+        if (currentWindow.isDestroyed()) return
+        currentWindow.webContents.send('window:fullscreen-changed', currentWindow.isFullScreen())
+    }
+    currentWindow.on('enter-full-screen', emitWindowFullscreenState)
+    currentWindow.on('leave-full-screen', emitWindowFullscreenState)
 
     // ─── Security: Content Security Policy ────────────────
     // 阻止 inline script 执行（XSS 纵深防御），允许 EPUB 所需的 inline style / blob / data 图片
@@ -280,6 +287,21 @@ ipcMain.on('window:setTheme', (_event, payload: { themeId?: string; customBgColo
     const normalized = typeof payload === 'string' ? { themeId: payload } : payload
     const backgroundColor = resolveWindowBackground(normalized?.themeId, normalized?.customBgColor)
     win.setBackgroundColor(backgroundColor)
+})
+
+ipcMain.handle('window:getFullscreen', (event) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender) ?? win
+    return Boolean(targetWindow && !targetWindow.isDestroyed() && targetWindow.isFullScreen())
+})
+
+ipcMain.handle('window:setFullscreen', (event, enabled: boolean) => {
+    if (typeof enabled !== 'boolean') {
+        throw new Error('window:setFullscreen expects boolean payload')
+    }
+    const targetWindow = BrowserWindow.fromWebContents(event.sender) ?? win
+    if (!targetWindow || targetWindow.isDestroyed()) return false
+    targetWindow.setFullScreen(enabled)
+    return enabled
 })
 
 ipcMain.handle('system:listFonts', async () => {

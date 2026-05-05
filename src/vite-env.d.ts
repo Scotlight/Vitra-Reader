@@ -55,6 +55,9 @@ interface Window {
         getAutoStartOnLogin: () => Promise<{ supported: boolean; enabled: boolean }>
         setAutoStartOnLogin: (enabled: boolean) => Promise<{ supported: boolean; enabled: boolean }>
         setWindowTheme: (payload: { themeId: string; customBgColor?: string | null; customTextColor?: string | null }) => void
+        getWindowFullscreen: () => Promise<boolean>
+        setWindowFullscreen: (enabled: boolean) => Promise<boolean>
+        onWindowFullscreenChange: (callback: (fullscreen: boolean) => void) => () => void
         openExternal: (url: string) => Promise<void>
         webdavSync: (
             method: 'upload' | 'download' | 'test' | 'head',

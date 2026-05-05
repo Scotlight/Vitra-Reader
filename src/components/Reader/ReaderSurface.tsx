@@ -87,13 +87,26 @@ export function ReaderSurface({
     const [isFullscreen, setIsFullscreen] = useState(false)
 
     const syncFullscreenState = useCallback(() => {
+        const electronApi = window.electronAPI
+        if (electronApi?.getWindowFullscreen) {
+            void electronApi.getWindowFullscreen()
+                .then(setIsFullscreen)
+                .catch((error) => {
+                    console.warn('[Reader] Get window fullscreen state failed:', error)
+                    setIsFullscreen(document.fullscreenElement === readerContainerRef.current)
+                })
+            return
+        }
+
         setIsFullscreen(document.fullscreenElement === readerContainerRef.current)
     }, [])
 
     useEffect(() => {
+        const removeWindowFullscreenListener = window.electronAPI?.onWindowFullscreenChange?.(setIsFullscreen)
         document.addEventListener('fullscreenchange', syncFullscreenState)
         syncFullscreenState()
         return () => {
+            removeWindowFullscreenListener?.()
             document.removeEventListener('fullscreenchange', syncFullscreenState)
         }
     }, [syncFullscreenState])
@@ -101,6 +114,16 @@ export function ReaderSurface({
     const toggleFullscreen = useCallback(() => {
         const container = readerContainerRef.current
         if (!container) return
+
+        const electronApi = window.electronAPI
+        if (electronApi?.setWindowFullscreen) {
+            void electronApi.setWindowFullscreen(!isFullscreen)
+                .then(setIsFullscreen)
+                .catch((error) => {
+                    console.warn('[Reader] Toggle window fullscreen failed:', error)
+                })
+            return
+        }
 
         if (document.fullscreenElement === container) {
             void document.exitFullscreen().catch((error) => {
@@ -112,7 +135,7 @@ export function ReaderSurface({
         void container.requestFullscreen().catch((error) => {
             console.warn('[Reader] Enter fullscreen failed:', error)
         })
-    }, [])
+    }, [isFullscreen])
 
     const settingsPanel = (
         <ReaderSettingsPanel
