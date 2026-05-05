@@ -2,13 +2,13 @@ import { useCallback, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import type { ChapterMetaVector } from '@/engine/types/vectorRender';
 import type { ContentProvider } from '@/engine/core/contentProvider';
-import type { LoadedChapter } from './scrollReaderTypes';
 import { resetScrollPipelineRuntime } from './scrollPipelineRuntime';
-import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import { clearMountedChapterDom } from './tocJumpDomCleanup';
+import { createTocJumpInternalLinkHandler } from './tocJumpInternalLinks';
 import { scrollMountedChapterIntoView } from './tocJumpMountedChapter';
 import { commitTocJumpTarget, findMountedTocJumpChapter, prepareTocJumpRuntime } from './tocJumpRuntime';
-import { createTocJumpInternalLinkHandler } from './tocJumpInternalLinks';
+import type { LoadedChapter } from './scrollReaderTypes';
+import type { ScrollReaderRefs } from './useScrollReaderRefs';
 
 interface UseTocJumpOptions {
     provider: ContentProvider;

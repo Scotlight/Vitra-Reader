@@ -1,10 +1,10 @@
-import type { ViewportDerivedMetrics } from './scrollReaderTypes';
 import {
-    CHAPTER_PLACEHOLDER_MIN_HEIGHT_PX,
-    CHAPTER_PLACEHOLDER_DEFAULT_HEIGHT_PX,
-    CHAPTER_DETECTION_ANCHOR_RATIO,
     CHAPTER_DETECTION_ANCHOR_MAX_PX,
+    CHAPTER_DETECTION_ANCHOR_RATIO,
+    CHAPTER_PLACEHOLDER_DEFAULT_HEIGHT_PX,
+    CHAPTER_PLACEHOLDER_MIN_HEIGHT_PX,
 } from './scrollReaderConstants';
+import type { ViewportDerivedMetrics } from './scrollReaderTypes';
 
 export function resolveChapterPlaceholderHeight(height: number): number {
     // 已被 ResizeObserver 实测过的高度：原值直接用，保留亚像素精度，杜绝舍入漂移

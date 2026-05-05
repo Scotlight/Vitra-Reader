@@ -2,8 +2,8 @@ import { useCallback, useEffect, useLayoutEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import { findTextInDOM, highlightRange } from '@/utils/textFinder';
 import { scheduleIdleTask } from '@/utils/idleScheduler';
-import { HIGHLIGHT_IDLE_TIMEOUT_MS } from './scrollReaderConstants';
 import type { Highlight } from '@/services/storageService';
+import { HIGHLIGHT_IDLE_TIMEOUT_MS } from './scrollReaderConstants';
 import type { LoadedChapter } from './scrollReaderTypes';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 

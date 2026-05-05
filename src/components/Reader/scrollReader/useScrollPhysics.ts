@@ -7,8 +7,8 @@ import {
     normalizeSmoothScrollConfig,
     resolveInertiaTuning,
     resolveScrollPhysicsConfig,
+    type SmoothScrollConfig,
 } from './scrollPhysicsConfig';
-import type { SmoothScrollConfig } from './scrollPhysicsConfig';
 
 export { DEFAULT_SMOOTH_CONFIG, type SmoothScrollConfig } from './scrollPhysicsConfig';
 

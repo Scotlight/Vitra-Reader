@@ -37,6 +37,20 @@ export interface SmoothScrollConfig {
     reverseWheelDirection: boolean;
 }
 
+interface ScrollPhysicsConfig {
+    friction: number;
+    stopThreshold: number;
+    springStiffness: number;
+    springDamping: number;
+}
+
+interface InertiaTuning {
+    impulseBlend: number;
+    impulseGain: number;
+    maxAbsVelocity: number;
+    frameCapMs: number;
+}
+
 export const DEFAULT_SMOOTH_CONFIG: SmoothScrollConfig = {
     enabled: true,
     stepSizePx: 120,
@@ -61,7 +75,7 @@ export function normalizeSmoothScrollConfig(smoothConfig: SmoothScrollConfig): S
     };
 }
 
-export function resolveScrollPhysicsConfig(normalizedSmoothConfig: SmoothScrollConfig) {
+export function resolveScrollPhysicsConfig(normalizedSmoothConfig: SmoothScrollConfig): ScrollPhysicsConfig {
     const friction = clampNumber(
         PHYSICS_FRICTION_NUMERATOR / normalizedSmoothConfig.animationTimeMs +
         (normalizedSmoothConfig.easing ? 0 : PHYSICS_FRICTION_NO_EASING_OFFSET),
@@ -82,7 +96,7 @@ export function resolveScrollPhysicsConfig(normalizedSmoothConfig: SmoothScrollC
     };
 }
 
-export function resolveInertiaTuning(normalizedSmoothConfig: SmoothScrollConfig) {
+export function resolveInertiaTuning(normalizedSmoothConfig: SmoothScrollConfig): InertiaTuning {
     const ratio = normalizedSmoothConfig.tailToHeadRatio;
     const impulseBlend = clampNumber(
         INERTIA_IMPULSE_BLEND_BASE + (ratio - 1) * INERTIA_IMPULSE_BLEND_RATIO_SCALE,
