@@ -80,12 +80,28 @@
 
 ---
 
-## 6. codex 协作 [硬性]
+## 6. CC 与 codex 分工 [硬性]
 
-- **职责分工**：CC 做**规划 / 审阅 / 拒绝**（想清楚要做什么），codex 做**实现**（动手写代码）。主对话原则上不直接写大段实现代码——超过 ~50 行的实现工作先 plan 再派给 `/codex`
-- 派发任务**只许**走 `codex-coder` subagent 或 `/codex` slash command；**不允许**主对话直接 `codex exec ...`
-- codex 产物**只许**落 `outputs/runtime/codex-handoff/`，越界 = 立即停手 + 报告
-- codex 改完 working tree 后**必须** `git diff --stat` 审计；动了 §1 禁区文件必须 `git stash push -m "codex-out-of-scope-<ts>"` 留人工
+| 角色 | 职责 |
+|---|---|
+| **Claude Code** | 产品决策、架构设计、**前端实现**（React 组件 / UI / 状态层 / 路由）、规划、审阅 |
+| **codex** | **后端 / 接口实现**、代码审查、bug 修复、单测编写 |
+
+调用入口（按用途选）：
+
+| Slash | 走法 | 用途 |
+|---|---|---|
+| `/codex <task>` | `codex-coder` subagent → `codex exec` | 中小实现（后端 / 接口） |
+| `/codex-review <target>` | `codex-coder` subagent → `codex review` | 专项代码审查 |
+| `/codex-fix <bug>` | `codex-coder` subagent → `codex exec` + 复现优先 | bug 修复（先复现再修） |
+| `/goal <objective>`（人工进 codex TUI） | codex 内部 slash，**不经 CC**（详见 §10） | 大任务自主推进 |
+
+硬性约束：
+
+- **不允许**主对话直接 `codex exec ...`——必须走 subagent / slash
+- 派发**前**：`Get-Process codex` 检测 ≥1 拒发，`git status` 必须 clean
+- 产物**只许**落 `outputs/runtime/codex-handoff/`，越界 = 立即停手 + 报告
+- codex 改完 working tree **必须** `git diff --stat` 审计；动了 §1 禁区文件**必须** `git stash push -m "codex-out-of-scope-<ts>"` 留人工
 - codex 跑完不得自行 `git commit` / `git push`
 - 详见 [doc/codex-collaboration.md](doc/codex-collaboration.md)
 
@@ -137,3 +153,46 @@
 ### Plan 优先
 
 任何 ≥50 行实现 / 跨 ≥3 文件 / 涉及上述 §5 高敏区的工作，**先写 plan**（落在 `outputs/runtime/` 或主对话），用户确认方向后再动手。直接写代码的本能 → 改成"先 plan 再 codex"。
+
+---
+
+## 10. codex `/goal` 模式 [人工触发，CC 不插手]
+
+codex CLI 0.128 起的实验性 slash（feature-gated `goals`），把"目标"提升为**持久 thread state**：模型有 `get_goal / create_goal / update_goal` 工具，runtime 在 idle 时自动注入 continuation 推进任务。**这是 codex CLI TUI 内部 slash，不通过 CC 派发，也不通过 `codex mcp-server` 暴露**。
+
+### 适用场景
+
+- 修一整套 flaky 测试到全绿
+- 实现一个 named spec phase
+- bounded PR 评审与回复
+- 单个新工具 + 配套验证
+
+### 不适用
+
+- 模糊清理（"improve the repo"）
+- 开放研究无终止条件
+- Codex Desktop 端 / 团队共享流程
+
+### 启用
+
+```bash
+codex features list             # 查 goals 是否可用
+codex features enable goals     # 持久启用
+codex --enable goals            # 仅本次启动启用
+```
+
+### 用法（在 codex TUI 内）
+
+```
+/goal <objective>      # 设目标
+/goal pause            # 暂停
+/goal resume           # 继续
+/goal clear            # 清除
+/goal                  # 打开 goal UI
+```
+
+### CC 的判定职责
+
+接到任务时若识别为 "/goal 适用"（大 + 有清晰终点 + 可量化完成），CC **必须**建议人工进 codex TUI 走 `/goal`，**不要**自己派 `codex exec` 拆细——后者会失去 `/goal` 的 budget / continuation 能力。
+
+详见 [doc/codex-collaboration.md](doc/codex-collaboration.md) §9。
