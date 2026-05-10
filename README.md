@@ -173,6 +173,27 @@ npm run build
 
 ---
 
+## AI 协作实践（Harness Engineering）
+
+本仓库的开发协作采用 harness engineering 方法：通过规则文件、子代理、slash command 与 MCP 协议把 LLM 改造成可控的工程平台，而非自由发挥。
+
+**职责分工**：
+
+- Claude Code 负责规划、审阅、拒绝（director）
+- codex CLI 负责具体实现（coder），通过 `codex mcp-server` 受 CC 调度
+
+**入库的规约**：
+
+- [`CLAUDE.md`](./CLAUDE.md) —— 项目级 Claude Code 硬约束
+- [`doc/codex-collaboration.md`](./doc/codex-collaboration.md) —— CC 与 codex 协作约定
+- [`doc/multi-session-conflict-handling.md`](./doc/multi-session-conflict-handling.md) —— 多会话冲突处置 SOP
+
+**本机本地配置**（位于 `.claude/`，已 gitignore）：subagent 定义、`/codex` slash command、MCP server 注册。
+
+方法论参考：[《驾驭工程 — 从 Claude Code 源码到 AI 编码最佳实践》](https://github.com/ZhangHanDong/harness-engineering-from-cc-to-aicoding)。
+
+---
+
 ## 反馈与贡献
 
 欢迎提交 Issue 和 PR。
