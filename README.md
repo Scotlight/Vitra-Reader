@@ -179,8 +179,9 @@ npm run build
 
 **职责分工**：
 
-- Claude Code 负责规划、审阅、拒绝（director）
-- codex CLI 负责具体实现（coder），通过 `codex mcp-server` 受 CC 调度
+- **Claude Code**：产品决策、架构设计、前端实现（React 组件 / UI / 状态层）、规划与审阅
+- **codex CLI**：后端 / 接口实现、代码审查、bug 修复、单测编写，通过 `codex mcp-server` 受 CC 调度
+- **codex `/goal` 模式**（CLI TUI only）：处理大且终点明确的长任务（修整套测试、实现 spec phase、bounded review），由人工触发，CC 不插手
 
 **入库的规约**：
 
@@ -188,7 +189,7 @@ npm run build
 - [`doc/codex-collaboration.md`](./doc/codex-collaboration.md) —— CC 与 codex 协作约定
 - [`doc/multi-session-conflict-handling.md`](./doc/multi-session-conflict-handling.md) —— 多会话冲突处置 SOP
 
-**本机本地配置**（位于 `.claude/`，已 gitignore）：subagent 定义、`/codex` slash command、MCP server 注册。
+**本机本地配置**（位于 `.claude/`，已 gitignore）：subagent 定义、`/codex` `/codex-review` `/codex-fix` slash commands、MCP server 注册。
 
 方法论参考：[《驾驭工程 — 从 Claude Code 源码到 AI 编码最佳实践》](https://github.com/ZhangHanDong/harness-engineering-from-cc-to-aicoding)。
 
