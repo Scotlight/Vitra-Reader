@@ -1,0 +1,222 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '只构建产物，不发布 Release（手动触发时强制不发布）'
+        required: false
+        default: 'true'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+  ELECTRON_BUILDER_VERSION: '^25.1.8'
+  WIN7_ELECTRON_VERSION: '22.3.27'
+
+jobs:
+  prepare-icons:
+    name: Prepare icons (svg → ico/png)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install icon toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends librsvg2-bin imagemagick icoutils
+
+      - name: Generate build/icon.png (1024) and build/icon.ico
+        run: |
+          set -eux
+          mkdir -p build tmp-icons
+          SRC="src/assets/icons/vitra-logo.svg"
+          test -f "$SRC" || { echo "missing $SRC"; exit 1; }
+
+          rsvg-convert -w 1024 -h 1024 "$SRC" -o build/icon.png
+
+          for size in 16 24 32 48 64 128 256; do
+            rsvg-convert -w $size -h $size "$SRC" -o "tmp-icons/icon-${size}.png"
+          done
+          convert \
+            tmp-icons/icon-16.png \
+            tmp-icons/icon-24.png \
+            tmp-icons/icon-32.png \
+            tmp-icons/icon-48.png \
+            tmp-icons/icon-64.png \
+            tmp-icons/icon-128.png \
+            tmp-icons/icon-256.png \
+            build/icon.ico
+
+          ls -la build/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: icons
+          path: build/
+          retention-days: 1
+          if-no-files-found: error
+
+  build:
+    name: Build ${{ matrix.label }}
+    needs: prepare-icons
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Modern Windows (Electron 33, Win10+)
+          - os: windows-latest
+            label: win-x64
+            args: --win --x64
+          - os: windows-latest
+            label: win-arm64
+            args: --win --arm64
+          # Windows 7 / 8 / 8.1 兼容（Electron 22 是最后支持 Win7 的主版本）
+          - os: windows-latest
+            label: win7-x64
+            args: --win --x64 --config.productName="Vitra Reader (Legacy)" --config.extraMetadata.name=vitra-reader-legacy --config.win.target=portable --config.portable.artifactName="Vitra-Reader-${version}-win7-x64-portable.${ext}"
+            downgrade_electron: 'true'
+          # macOS（未签名，下载后需 xattr -d com.apple.quarantine）
+          - os: macos-latest
+            label: mac-x64
+            args: --mac --x64
+          - os: macos-latest
+            label: mac-arm64
+            args: --mac --arm64
+          # Linux
+          - os: ubuntu-latest
+            label: linux-x64
+            args: --linux --x64
+          - os: ubuntu-latest
+            label: linux-arm64
+            args: --linux --arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Download icons artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: icons
+          path: build/
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Ensure electron-builder is installed
+        shell: bash
+        run: |
+          if ! npm ls electron-builder >/dev/null 2>&1; then
+            echo "electron-builder not in lockfile, installing transient copy"
+            npm install --no-save --no-package-lock "electron-builder@${ELECTRON_BUILDER_VERSION}"
+          fi
+
+      - name: Downgrade Electron for Win7 build
+        if: matrix.downgrade_electron == 'true'
+        shell: bash
+        run: |
+          echo "Installing Electron ${WIN7_ELECTRON_VERSION} for Win7 compatibility"
+          npm install --no-save --no-package-lock "electron@${WIN7_ELECTRON_VERSION}"
+          npx electron --version
+
+      - name: Build renderer + main
+        run: npm run build
+
+      - name: Package with electron-builder
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS：禁用代码签名（无 Apple Developer 证书）
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # Linux ARM64 在 x64 runner 上交叉打包
+          USE_HARD_LINKS: 'false'
+        run: npx electron-builder ${{ matrix.args }} --publish=never
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          set -eux
+          mkdir -p out
+          find release -type f \( \
+            -name "*.exe" -o \
+            -name "*.dmg" -o \
+            -name "*.zip" -o \
+            -name "*.AppImage" -o \
+            -name "*.deb" -o \
+            -name "*.snap" -o \
+            -name "*.rpm" \
+          \) -exec cp {} out/ \;
+          ls -la out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vitra-reader-${{ matrix.label }}
+          path: out/*
+          retention-days: 14
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          set -eux
+          mkdir -p release-assets
+          find artifacts -type f \
+            \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" \
+               -o -name "*.AppImage" -o -name "*.deb" \) \
+            -exec cp {} release-assets/ \;
+          ls -la release-assets/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          draft: true
+          generate_release_notes: true
+          name: ${{ github.ref_name }}
+          body: |
+            ## 平台下载
+
+            | 平台 | 文件 |
+            |---|---|
+            | Windows 10/11 x64 | `*-x64-setup.exe` (安装版) / `*-x64-portable.exe` (绿色版) |
+            | Windows 10/11 ARM64 | `*-arm64-setup.exe` / `*-arm64-portable.exe` |
+            | **Windows 7 / 8 / 8.1 x64** | `Vitra-Reader-*-win7-x64-portable.exe` (Electron 22 兼容版) |
+            | macOS Intel | `*-x64.dmg` / `*-x64.zip` |
+            | macOS Apple Silicon | `*-arm64.dmg` / `*-arm64.zip` |
+            | Linux x64 | `*-x64.AppImage` / `*-x64.deb` |
+            | Linux ARM64 | `*-arm64.AppImage` / `*-arm64.deb` |
+
+            ### macOS 安装提示
+
+            未做 Apple 代码签名。首次打开若被 Gatekeeper 拦截，请在终端执行：
+            ```bash
+            xattr -d com.apple.quarantine "/Applications/Vitra Reader.app"
+            ```
+
+            ### Windows 7 用户
+
+            请下载标有 `win7` 的 portable 版本，无需安装直接运行。
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
