@@ -83,7 +83,7 @@ jobs:
           # Windows 7 / 8 / 8.1 兼容（Electron 22）
           - os: windows-latest
             label: win7-x64
-            args: --win --x64 --config.productName="Vitra Reader (Legacy)" --config.extraMetadata.name=vitra-reader-legacy --config.win.target=portable --config.portable.artifactName="Vitra-Reader-${version}-win7-x64-portable.${ext}"
+            args: --win --x64 --config.productName="Vitra Reader (Legacy)" --config.extraMetadata.name=vitra-reader-legacy --config.win.target=portable --config.portable.artifactName="Vitra-Reader-\${version}-win7-x64-portable.\${ext}"
             downgrade_electron: 'true'
           # macOS
           - os: macos-latest
@@ -162,7 +162,7 @@ jobs:
             -name "*.deb" -o \
             -name "*.snap" -o \
             -name "*.rpm" \
-          \) ! -name "elevate.exe" ! -name "__uninstaller*" -exec cp {} out/ \;
+          \) ! -name "elevate.exe" ! -name "__uninstaller*" ! -path "*-unpacked/*" -exec cp {} out/ \;
           ls -la out/
 
       - uses: actions/upload-artifact@v4
