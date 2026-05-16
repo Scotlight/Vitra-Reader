@@ -77,7 +77,7 @@ jobs:
           # NOTE: 暂时只跑这一条，linux/mac/现代 win 后续单独处理
           - os: windows-latest
             label: win7-x64
-            args: --win --x64 --config.productName="Vitra Reader (Legacy)" --config.extraMetadata.name=vitra-reader-legacy --config.win.target.0.target=portable --config.win.target.0.arch=x64 --config.portable.artifactName="Vitra-Reader-${version}-win7-x64-portable.${ext}"
+            args: --win --x64 --config.productName="Vitra Reader (Legacy)" --config.extraMetadata.name=vitra-reader-legacy --config.win.target=portable --config.portable.artifactName="Vitra-Reader-${version}-win7-x64-portable.${ext}"
             downgrade_electron: 'true'
 
     steps:
