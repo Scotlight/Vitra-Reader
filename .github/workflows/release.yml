@@ -73,12 +73,32 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Windows 7 / 8 / 8.1 兼容（Electron 22 是最后支持 Win7 的主版本）
-          # NOTE: 暂时只跑这一条，linux/mac/现代 win 后续单独处理
+          # Modern Windows (Electron 33, Win10+)
+          - os: windows-latest
+            label: win-x64
+            args: --win --x64
+          - os: windows-latest
+            label: win-arm64
+            args: --win --arm64
+          # Windows 7 / 8 / 8.1 兼容（Electron 22）
           - os: windows-latest
             label: win7-x64
             args: --win --x64 --config.productName="Vitra Reader (Legacy)" --config.extraMetadata.name=vitra-reader-legacy --config.win.target=portable --config.portable.artifactName="Vitra-Reader-${version}-win7-x64-portable.${ext}"
             downgrade_electron: 'true'
+          # macOS
+          - os: macos-latest
+            label: mac-x64
+            args: --mac --x64
+          - os: macos-latest
+            label: mac-arm64
+            args: --mac --arm64
+          # Linux
+          - os: ubuntu-latest
+            label: linux-x64
+            args: --linux --x64
+          - os: ubuntu-latest
+            label: linux-arm64
+            args: --linux --arm64
 
     steps:
       - uses: actions/checkout@v4
