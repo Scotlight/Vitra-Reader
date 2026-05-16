@@ -168,3 +168,22 @@ codex --enable goals            # 仅本次启动启用
 ### 来源
 
 OpenAI Codex CLI 0.128.0 (rust) 源码 `slash_dispatch.rs` / `goal_tool.rs` / `goals.rs` / `0029_thread_goals.sql`，feature flag `goals`。
+
+## 10. 本机 hook 防御层（PreToolUse，不入库）
+
+`.claude/hooks/` 下挂三个 PreToolUse 兜底脚本（PowerShell），在 §1-§9 提示词层之外做硬隔离。已在 `.claude/settings.local.json` 注册（本机配置，未推送）。
+
+| matcher | 脚本 | 拦截范围 |
+|---|---|---|
+| `Bash` | `guard-bash.ps1` | `rm -rf` / `Remove-Item -Recurse[-Force]` / `rd /s` / `del /s` / 磁盘级 cmdlet（`Format-Volume` / `Clear-Disk` / `diskpart` / `cipher /w`）/ Unix 擦盘（`shred` / `dd of=/dev/*` / `mkfs.*`）/ 盘根删除（`X:\`）/ 用户主目录删除（`~` / `$HOME` / `%USERPROFILE%`）/ `.NET Delete API` / `Node fs.rmSync(...recursive)` / `Get-ChildItem -Recurse \| Remove-Item` 等枚举删组合 / `git push --force[-with-lease]` / `git reset --hard` / `git clean -f*` / `--no-verify` / `git checkout HEAD -- <file>` / `git commit --amend` / `git rebase -i` / `pnpm` / `yarn` / `codex exec` 带 `danger-full-access` / `--dangerously-bypass-approvals-and-sandbox` / `-s read-only` |
+| `Write\|Edit\|MultiEdit` | `guard-write.ps1` | 向 `docs/plans/` / `AGENTS.md` / `.gitignore` / `package.json` / `electron/main.ts` / `electron/preload.ts` 写入 |
+| `mcp__playwright__browser_run_code_unsafe\|mcp__playwright__browser_evaluate\|mcp__js-reverse__evaluate_script\|mcp__chrome-devtools__evaluate_script` | `guard-mcp.ps1` | 任意 JS 工具脚本里出现：fs 删除 API / `require('fs'\|'child_process'\|'os')` / `child_process spawn execSync` / 调 `powershell.exe \| cmd /c` / 字符串里 `rm -rf` / `Remove-Item -Recurse` / 读 `document.cookie \| localStorage \| sessionStorage \| indexedDB` / fetch 非本地 POST/PUT/DELETE / `sendBeacon` 外传 / `eval()` / `new Function()` / `window.location` 跳 `file:\|javascript:\|data:` |
+
+命中 → `exit 2` + stderr 回流给模型，主对话能看到拦截原因。
+
+### 关键点
+
+- **hook 配置不热重载**：改 `.claude/settings.local.json` 或 `.ps1` 脚本必须**新开 CC 会话**才生效
+- **测试脚本**：`outputs/runtime/test-hooks.ps1`（原 56 规则）+ `outputs/runtime/test-hooks-extra.ps1`（循环删 + MCP 共 16 规则），改 hook 后必跑一遍回归
+- **盲点**：codex 子进程不走 CC 工具层（靠 codex Windows Sandbox `elevated` OS 级隔离）；CC 写脚本到磁盘让用户手动跑，hook 不看脚本内容
+- **首次踩坑教训**：guard-bash 早期版本曾拦死所有 `codex exec`，导致 subagent 派发链路被自己拦死——修复后只拦 sandbox flag 改写，不拦裸命令
