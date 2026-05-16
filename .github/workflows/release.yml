@@ -77,7 +77,7 @@ jobs:
           # NOTE: 暂时只跑这一条，linux/mac/现代 win 后续单独处理
           - os: windows-latest
             label: win7-x64
-            args: --win --x64 --config.productName="Vitra Reader (Legacy)" --config.extraMetadata.name=vitra-reader-legacy --config.win.target=portable --config.portable.artifactName="Vitra-Reader-${version}-win7-x64-portable.${ext}"
+            args: --win --x64 --config.productName="Vitra Reader (Legacy)" --config.extraMetadata.name=vitra-reader-legacy --config.win.target.0.target=portable --config.win.target.0.arch=x64 --config.portable.artifactName="Vitra-Reader-${version}-win7-x64-portable.${ext}"
             downgrade_electron: 'true'
 
     steps:
@@ -142,7 +142,7 @@ jobs:
             -name "*.deb" -o \
             -name "*.snap" -o \
             -name "*.rpm" \
-          \) -exec cp {} out/ \;
+          \) ! -name "elevate.exe" ! -name "__uninstaller*" -exec cp {} out/ \;
           ls -la out/
 
       - uses: actions/upload-artifact@v4
@@ -169,6 +169,7 @@ jobs:
           find artifacts -type f \
             \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" \
                -o -name "*.AppImage" -o -name "*.deb" \) \
+            ! -name "elevate.exe" ! -name "__uninstaller*" \
             -exec cp {} release-assets/ \;
           ls -la release-assets/
 
