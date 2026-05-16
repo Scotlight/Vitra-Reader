@@ -11,12 +11,19 @@
 全局已禁的（`rm -rf` / `git reset --hard` / `push --force` / `clean -fd` / `commit --no-verify` 等）默认遵守。本项目**额外硬禁**：
 
 - **`git checkout HEAD -- <file>` 单文件回滚**——除非主对话明确确认这是 §3 多会话冲突的整理步骤
-- **修改 `.gitignore`**——影响推送策略，必须人工确认
-- **修改 `package.json` 的 `dependencies` / `devDependencies`**——版本变化牵连构建与安装链
-- **修改 `electron/main.ts` / `electron/preload.ts`**——IPC 表面，错改导致渲染进程崩
 - **清空 IndexedDB / `localStorage.clear()`**——本应用书库、高亮、设置都在客户端持久化
 - **`git rm` 任何 `docs/plans/` 历史文件**——已 tracked 推送过远程，强行删会让远程历史不一致
 - **`pnpm`/`yarn` 切换包管理器**——本仓库锁定 `npm`，混用会破 lockfile
+
+### 高敏文件（可写但有自动验证）
+
+以下文件 AI 可以直接 Write/Edit，但 PostToolUse hook 会自动跑 `npx tsc -b --pretty false` 校验。改完必须**主动报告改了什么 + 验证结果**给用户：
+
+- `package.json` / `package-lock.json`（依赖链）
+- `.gitignore`（推送策略）
+- `electron/main.ts` / `electron/preload.ts`（IPC 表面）
+
+类型检查不过 → 立即修复，不留烂摊子。
 
 ---
 
@@ -31,6 +38,19 @@
   - 参考：`git log --oneline -10`
 - 禁用的 message：`WIP` / `tmp` / `update` / `fix bug` / `change` / 任何无信息量空话
 - 不 squash 已有 commit；不 amend 已 push 的 commit
+
+### 自动 commit 行为
+
+用户给一个完整任务（如"接入 electron-builder"）后，AI **应该全自动**：
+
+1. 改全部所需文件（不要每改一个就停下问）
+2. PostToolUse hook 自动跑 tsc，错就立即修
+3. `git diff --stat` + `git diff` 自审
+4. 按 message 规范**自 commit**（不需要用户授权）
+5. 报告完成 + commit hash + 改动摘要
+6. **等用户说"推"** 才 `git push`（远程不可逆，保留二次确认）
+
+**不要**把任务拆成"我做 X，你做 Y"让用户接手——除非确实需要用户人工干预（比如外部凭证、UAC 提权窗口）。
 
 ---
 
