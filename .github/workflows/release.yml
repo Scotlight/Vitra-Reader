@@ -73,32 +73,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Modern Windows (Electron 33, Win10+)
-          - os: windows-latest
-            label: win-x64
-            args: --win --x64
-          - os: windows-latest
-            label: win-arm64
-            args: --win --arm64
           # Windows 7 / 8 / 8.1 兼容（Electron 22 是最后支持 Win7 的主版本）
+          # NOTE: 暂时只跑这一条，linux/mac/现代 win 后续单独处理
           - os: windows-latest
             label: win7-x64
             args: --win --x64 --config.productName="Vitra Reader (Legacy)" --config.extraMetadata.name=vitra-reader-legacy --config.win.target=portable --config.portable.artifactName="Vitra-Reader-${version}-win7-x64-portable.${ext}"
             downgrade_electron: 'true'
-          # macOS（未签名，下载后需 xattr -d com.apple.quarantine）
-          - os: macos-latest
-            label: mac-x64
-            args: --mac --x64
-          - os: macos-latest
-            label: mac-arm64
-            args: --mac --arm64
-          # Linux
-          - os: ubuntu-latest
-            label: linux-x64
-            args: --linux --x64
-          - os: ubuntu-latest
-            label: linux-arm64
-            args: --linux --arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -125,6 +105,12 @@ jobs:
             npm install --no-save --no-package-lock "electron-builder@${ELECTRON_BUILDER_VERSION}"
           fi
 
+      # 关键：build 在降级 Electron 之前完成。
+      # dist/ 与 dist-electron/ 是平台无关 JS bundle，与 Electron runtime 版本无关。
+      # 降级 Electron 仅用于改变 electron-builder 嵌入到产物里的 runtime 版本。
+      - name: Build renderer + main
+        run: npm run build
+
       - name: Downgrade Electron for Win7 build
         if: matrix.downgrade_electron == 'true'
         shell: bash
@@ -132,9 +118,6 @@ jobs:
           echo "Installing Electron ${WIN7_ELECTRON_VERSION} for Win7 compatibility"
           npm install --no-save --no-package-lock "electron@${WIN7_ELECTRON_VERSION}"
           npx electron --version
-
-      - name: Build renderer + main
-        run: npm run build
 
       - name: Package with electron-builder
         shell: bash
