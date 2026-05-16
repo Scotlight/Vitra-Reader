@@ -96,6 +96,20 @@ outputs/runtime/codex-handoff/<YYYYMMDD-HHMMSS>.{task,log,diff,repro,review}.md
 - model：跟随 codex 全局 `~/.codex/config.toml`（当前是 gpt-5.5 + xhigh reasoning）；如需快速便宜的任务可在调用时加 `-m gpt-4o-mini` 临时覆盖
 - `~/.codex/AGENTS.md` 已配 Superpowers 与轻量任务策略，不在本指南覆盖范围
 
+### Windows 平台特别注意：`[windows] sandbox` 字段命名陷阱
+
+`~/.codex/config.toml` 里 `[windows] sandbox = "elevated"` **看起来像"以管理员身份运行命令"**，实际不是。源码（`codex-rs/core/src/windows_sandbox.rs`）确认：
+
+| 值 | 实际含义 | 隔离强度 |
+|---|---|---|
+| `"elevated"` | 启用 Windows OS 自带的 Windows Sandbox feature（VM-like 容器），**首次** setup 弹一次 UAC，之后运行**不再提权** | 最强 |
+| `"unelevated"` | Restricted Token + private desktop | 弱（同会话内） |
+| 不写 | Sandbox 关闭，Windows 上 workspace-write **强制降级为 read-only**，codex 几乎残废 | — |
+
+结论：本仓库的 codex-coder subagent 钉死 `-s workspace-write`，要让它真生效必须启用 sandbox，**`"elevated"` 是最优档**。看到这行不要"为了安全"删掉或改 unelevated——会反向降级。
+
+完整源码考据见 `outputs/runtime/codex-handoff/20260516-175441.codex-windows-sandbox-investigation.md`。
+
 ## 8. 与 multi-session-conflict-handling.md 的关系
 
 那份文档讲"已经发生的多会话冲突如何小步整理回退"。本指南讲"如何从根上避免再发生"。
