@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { startTransition, useCallback, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import { buildChapterMetaVector } from '@/engine/render/metaVectorManager';
 import type { ChapterMetaVector } from '@/engine/types/vectorRender';
@@ -89,7 +89,9 @@ export function useShadowRenderComplete(
 
                 const batchIndices = new Set(batch.map(b => b.spineIndex));
                 setShadowQueue(prev => removeReadyChaptersFromShadowQueue(prev, batchIndices));
-                setChapters(prev => applyShadowReadyBatch(prev, batch));
+                startTransition(() => {
+                    setChapters(prev => applyShadowReadyBatch(prev, batch));
+                });
             });
         }
 

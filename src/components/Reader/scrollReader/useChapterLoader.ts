@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { startTransition, useCallback, useEffect, useMemo } from 'react';
 import type { MutableRefObject } from 'react';
 import type { ContentProvider } from '@/engine/core/contentProvider';
 import type { ChapterMetaVector } from '@/engine/types/vectorRender';
@@ -121,7 +121,9 @@ export function useChapterLoader(
                         segmentMetas: restoredMetas,
                     });
                     chapterVectorsRef.current.set(chapterId, ready.vector);
-                    setChapters(prev => updateChapterBySpineIndex(prev, spineIndex, () => ready.chapter));
+                    startTransition(() => {
+                        setChapters(prev => updateChapterBySpineIndex(prev, spineIndex, () => ready.chapter));
+                    });
                     markScrollPipelineIdle(refs);
                     return;
                 }
@@ -156,15 +158,19 @@ export function useChapterLoader(
                     segmentMetas: vectorMetas,
                 });
                 chapterVectorsRef.current.set(chapterId, ready.vector);
-                setChapters(prev =>
-                    updateChapterBySpineIndex(prev, spineIndex, () => ready.chapter)
-                );
+                startTransition(() => {
+                    setChapters(prev =>
+                        updateChapterBySpineIndex(prev, spineIndex, () => ready.chapter)
+                    );
+                });
                 setShadowQueue(prev => removeChapterFromQueue(prev, spineIndex));
                 markScrollPipelineIdle(refs);
             } else {
-                setChapters(prev =>
-                    updateChapterBySpineIndex(prev, spineIndex, () => loaded)
-                );
+                startTransition(() => {
+                    setChapters(prev =>
+                        updateChapterBySpineIndex(prev, spineIndex, () => loaded)
+                    );
+                });
                 setShadowQueue(prev => upsertQueuedChapter(prev, loaded));
 
                 markScrollPipelineRenderingOffscreen(refs);
@@ -206,7 +212,9 @@ export function useChapterLoader(
         if (rerenderIndexes.size > 0) {
             pendingReadyRef.current = removePendingReadyEntries(pendingReadyRef.current, rerenderIndexes);
             setShadowQueue((prev) => replaceQueuedChapters(prev, rerenderIndexes, rerenderQueue));
-            setChapters((prev) => applyShadowRerenderChapters(prev, rerenderIndexes, nextKey));
+            startTransition(() => {
+                setChapters((prev) => applyShadowRerenderChapters(prev, rerenderIndexes, nextKey));
+            });
         }
 
         vectorTargets.forEach((chapter) => {
