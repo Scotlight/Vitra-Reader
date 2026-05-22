@@ -76,7 +76,7 @@ describe('useVirtualChapterRuntime content visibility', () => {
         const segmentEl = runtime.activeSegmentEls.get(0);
         expect(segmentEl).toBeInstanceOf(HTMLElement);
         expect(segmentEl?.style.contentVisibility).toBe('auto');
-        expect(segmentEl?.style.containIntrinsicSize).toBe('0 240px');
+        expect(segmentEl?.style.containIntrinsicSize).toBe('auto 0 240px');
         expect(segmentEl?.style.contain).toBe('layout style paint');
         expect(observeResizeNode).toHaveBeenCalledWith(segmentEl);
     });
@@ -122,7 +122,7 @@ describe('useVirtualChapterRuntime content visibility', () => {
             view.getByRole('button').click();
         });
 
-        expect(runtime.activeSegmentEls.get(0)?.style.containIntrinsicSize).toBe('0 360px');
+        expect(runtime.activeSegmentEls.get(0)?.style.containIntrinsicSize).toBe('auto 0 360px');
         expect(observeResizeNode).toHaveBeenCalledTimes(1);
     });
 });

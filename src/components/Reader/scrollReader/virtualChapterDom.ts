@@ -27,7 +27,7 @@ export function updateVirtualSegmentLayout(segmentEl: HTMLElement, segment: Segm
     segmentEl.style.right = '0';
     segmentEl.style.width = '100%';
     segmentEl.style.transform = `translateY(${Math.max(0, segment.offsetY)}px)`;
-    segmentEl.style.containIntrinsicSize = `0 ${height}px`;
+    segmentEl.style.containIntrinsicSize = `auto 0 ${height}px`;
 }
 
 export function insertVirtualSegmentInOrder(
