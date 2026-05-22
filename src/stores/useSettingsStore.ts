@@ -23,8 +23,6 @@ export interface ReaderSettings {
     pageWidth: number
     brightness: number
     textAlign: 'left' | 'justify' | 'center'
-    headerHeight: number
-    footerHeight: number
     showFooterProgress: boolean
     showFooterChapter: boolean
     showFooterTime: boolean
@@ -87,8 +85,6 @@ const DEFAULT_SETTINGS: ReaderSettings = {
     pageWidth: 3,
     brightness: 1,
     textAlign: 'left',
-    headerHeight: 48,
-    footerHeight: 32,
     showFooterProgress: true,
     showFooterChapter: true,
     showFooterTime: true,

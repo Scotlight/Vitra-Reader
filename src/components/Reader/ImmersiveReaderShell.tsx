@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { Fragment, useCallback, useState } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 import type { TocItem } from '@/engine/core/contentProvider'
 import { isTocHrefActive } from './readerToc'
@@ -19,6 +19,9 @@ interface ImmersiveReaderShellProps {
     readonly openTocPanel: () => void
     readonly onToggleFullscreen: () => void
     readonly progressLabel: string
+    readonly showFooterChapter: boolean
+    readonly showFooterProgress: boolean
+    readonly showFooterTime: boolean
     readonly settingsOpen: boolean
     readonly settingsPanel: ReactNode
     readonly toc: readonly TocItem[]
@@ -34,6 +37,56 @@ function resolveProgressWidth(progressLabel: string): string {
 
 function hasSelectedText(): boolean {
     return (window.getSelection()?.toString().trim().length ?? 0) > 0
+}
+
+interface StatusItemConfig {
+    readonly key: string
+    readonly node: ReactNode
+}
+
+function buildStatusItems(
+    progressLabel: string,
+    chapterLabel: string,
+    clockText: string,
+    showFooterProgress: boolean,
+    showFooterChapter: boolean,
+    showFooterTime: boolean,
+): StatusItemConfig[] {
+    const items: StatusItemConfig[] = []
+    if (showFooterProgress) {
+        items.push({
+            key: 'progress',
+            node: (
+                <div className={styles.statusItem}>
+                    <span className={styles.highlightText}>{progressLabel}</span>
+                    <span className={styles.subText}>进度</span>
+                </div>
+            ),
+        })
+    }
+    if (showFooterChapter) {
+        items.push({
+            key: 'chapter',
+            node: (
+                <div className={styles.statusItem}>
+                    <span>{chapterLabel || '章节加载中'}</span>
+                    <span className={styles.subText}>章节</span>
+                </div>
+            ),
+        })
+    }
+    if (showFooterTime) {
+        items.push({
+            key: 'time',
+            node: (
+                <div className={styles.statusItem}>
+                    <span>{clockText}</span>
+                    <span className={styles.subText}>时间</span>
+                </div>
+            ),
+        })
+    }
+    return items
 }
 
 function renderImmersiveTocItems(
@@ -76,6 +129,9 @@ export function ImmersiveReaderShell({
     openTocPanel,
     onToggleFullscreen,
     progressLabel,
+    showFooterChapter,
+    showFooterProgress,
+    showFooterTime,
     settingsOpen,
     settingsPanel,
     toc,
@@ -91,6 +147,14 @@ export function ImmersiveReaderShell({
         if ((event.target as HTMLElement).closest('a,button,input,select,textarea,[role="button"],[contenteditable="true"]')) return
         setChromeActive((current) => !current)
     }, [])
+    const statusItems = buildStatusItems(
+        progressLabel,
+        chapterLabel,
+        clockText,
+        showFooterProgress,
+        showFooterChapter,
+        showFooterTime,
+    )
 
     return (
         <div className={styles.shell}>
@@ -138,22 +202,16 @@ export function ImmersiveReaderShell({
                 </div>
             </div>
 
-            <div className={`${styles.glassCapsule} ${styles.statusCapsule} ${activeChromeClass}`} data-immersive-reader-chrome="true">
-                <div className={styles.statusItem}>
-                    <span className={styles.highlightText}>{progressLabel}</span>
-                    <span className={styles.subText}>进度</span>
+            {statusItems.length > 0 && (
+                <div className={`${styles.glassCapsule} ${styles.statusCapsule} ${activeChromeClass}`} data-immersive-reader-chrome="true">
+                    {statusItems.map((item, index) => (
+                        <Fragment key={item.key}>
+                            {index > 0 && <div className={styles.statusDivider} />}
+                            {item.node}
+                        </Fragment>
+                    ))}
                 </div>
-                <div className={styles.statusDivider} />
-                <div className={styles.statusItem}>
-                    <span>{chapterLabel || '章节加载中'}</span>
-                    <span className={styles.subText}>章节</span>
-                </div>
-                <div className={styles.statusDivider} />
-                <div className={styles.statusItem}>
-                    <span>{clockText}</span>
-                    <span className={styles.subText}>时间</span>
-                </div>
-            </div>
+            )}
 
             <div className={styles.bottomProgressBar} style={{ width: progressWidth }} />
 

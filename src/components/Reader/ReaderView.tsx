@@ -292,9 +292,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                     tocListRef={tocListRef}
                 />
             )}
-            footerHeight={Math.max(0, Math.min(96, Number(settings.footerHeight) || 32))}
             handleTocClick={handleTocClick}
-            headerHeight={Math.max(36, Math.min(96, Number(settings.headerHeight) || 48))}
             leftPanelOpen={leftPanelOpen}
             onBack={onBack}
             onPageTurnModeChange={handlePageTurnModeChange}

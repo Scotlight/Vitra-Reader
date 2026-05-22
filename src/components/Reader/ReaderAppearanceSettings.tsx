@@ -216,11 +216,8 @@ export function ReaderAppearanceSettings() {
                 </div>
             </div>
 
-            <RangeControl label={`顶部栏高度: ${settings.headerHeight}px`} min={0} max={96} step={4} value={settings.headerHeight} onChange={(value) => settings.updateSetting('headerHeight', value)} />
-            <RangeControl label={`底部栏高度: ${settings.footerHeight}px`} min={0} max={96} step={4} value={settings.footerHeight} onChange={(value) => settings.updateSetting('footerHeight', value)} />
-
             <div className={styles.settingsGroup}>
-                <label>底部栏内容</label>
+                <label>状态栏内容</label>
                 <div className={styles.toggleColumn}>
                     <FooterToggle label="显示阅读进度" checked={settings.showFooterProgress} onChange={(checked) => settings.updateSetting('showFooterProgress', checked)} />
                     <FooterToggle label="显示章节名称" checked={settings.showFooterChapter} onChange={(checked) => settings.updateSetting('showFooterChapter', checked)} />

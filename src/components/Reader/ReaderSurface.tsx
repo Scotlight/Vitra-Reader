@@ -3,9 +3,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import type { TocItem } from '@/engine/core/contentProvider'
 import type { PageTurnMode } from '@/stores/useSettingsStore'
 import { ImmersiveReaderShell } from './ImmersiveReaderShell'
-import { ReaderFooter } from './ReaderFooter'
 import { ReaderSettingsPanel } from './ReaderSettingsPanel'
-import { ReaderToolbar } from './ReaderToolbar'
 import type { ReaderColors } from './readerColors'
 import styles from './ReaderView.module.css'
 
@@ -29,9 +27,7 @@ interface ReaderSurfaceProps {
     closePanels: () => void
     content: ReactNode
     currentSectionHref: string
-    footerHeight: number
     handleTocClick: (href: string) => Promise<void>
-    headerHeight: number
     leftPanel: ReactNode
     leftPanelOpen: boolean
     onBack: () => void
@@ -75,9 +71,7 @@ export function ReaderSurface({
     closePanels,
     content,
     currentSectionHref,
-    footerHeight,
     handleTocClick,
-    headerHeight,
     leftPanel,
     leftPanelOpen,
     onBack,
@@ -93,7 +87,6 @@ export function ReaderSurface({
     toggleLeftPanel,
     toggleSettingsPanel,
 }: ReaderSurfaceProps) {
-    const footerEnabled = footerHeight > 0
     const readerContainerRef = useRef<HTMLDivElement | null>(null)
     const [isFullscreen, setIsFullscreen] = useState(false)
 
@@ -153,83 +146,40 @@ export function ReaderSurface({
             bookFormat={bookFormat}
             isOpen={settingsOpen}
             onPageTurnModeChange={onPageTurnModeChange}
-            placement={isFullscreen ? 'bottom' : 'side'}
+            placement="bottom"
         />
     )
-
-    if (isFullscreen) {
-        return (
-            <div
-                ref={readerContainerRef}
-                className={`${styles.readerContainer} ${styles.readerContainerFullscreen}`}
-                style={buildReaderContainerStyle(readerColors, resolvedReaderFontFamily, settings)}
-            >
-                <ImmersiveReaderShell
-                    bookTitleText={bookTitleText}
-                    chapterLabel={chapterLabel}
-                    clockText={clockText}
-                    closePanels={closePanels}
-                    content={content}
-                    currentSectionHref={currentSectionHref}
-                    handleTocClick={handleTocClick}
-                    leftPanel={leftPanel}
-                    leftPanelOpen={leftPanelOpen}
-                    onBack={onBack}
-                    openSearchPanel={openSearchPanel}
-                    openTocPanel={openTocPanel}
-                    onToggleFullscreen={toggleFullscreen}
-                    progressLabel={progressLabel}
-                    settingsOpen={settingsOpen}
-                    settingsPanel={settingsPanel}
-                    toc={toc}
-                    toggleLeftPanel={toggleLeftPanel}
-                    toggleSettingsPanel={toggleSettingsPanel}
-                />
-            </div>
-        )
-    }
 
     return (
         <div
             ref={readerContainerRef}
-            className={styles.readerContainer}
+            className={`${styles.readerContainer} ${styles.readerContainerFullscreen}`}
             style={buildReaderContainerStyle(readerColors, resolvedReaderFontFamily, settings)}
         >
-            <ReaderToolbar
+            <ImmersiveReaderShell
                 bookTitleText={bookTitleText}
-                headerHeight={headerHeight}
-                isFullscreen={isFullscreen}
+                chapterLabel={chapterLabel}
+                clockText={clockText}
+                closePanels={closePanels}
+                content={content}
+                currentSectionHref={currentSectionHref}
+                handleTocClick={handleTocClick}
+                leftPanel={leftPanel}
                 leftPanelOpen={leftPanelOpen}
                 onBack={onBack}
+                openSearchPanel={openSearchPanel}
+                openTocPanel={openTocPanel}
                 onToggleFullscreen={toggleFullscreen}
+                progressLabel={progressLabel}
                 settingsOpen={settingsOpen}
+                settingsPanel={settingsPanel}
+                showFooterChapter={settings.showFooterChapter}
+                showFooterProgress={settings.showFooterProgress}
+                showFooterTime={settings.showFooterTime}
+                toc={toc}
                 toggleLeftPanel={toggleLeftPanel}
                 toggleSettingsPanel={toggleSettingsPanel}
             />
-
-            <div className={styles.contentArea} style={{ paddingTop: `${headerHeight}px`, paddingBottom: `${footerEnabled ? footerHeight : 0}px` }}>
-                {(leftPanelOpen || settingsOpen) && <div className={styles.panelBackdrop} onClick={closePanels} />}
-                {leftPanel}
-
-                <div className={styles.readerWrapper}>{content}</div>
-
-                {footerEnabled && (
-                    <ReaderFooter
-                        bgColor={readerColors.bgColor}
-                        chapterLabel={chapterLabel}
-                        clockText={clockText}
-                        footerHeight={footerHeight}
-                        progressLabel={progressLabel}
-                        showChapter={settings.showFooterChapter}
-                        showProgress={settings.showFooterProgress}
-                        showTime={settings.showFooterTime}
-                        textColor={readerColors.textColor}
-                        themeId={settings.themeId}
-                    />
-                )}
-
-                {settingsPanel}
-            </div>
         </div>
     )
 }
