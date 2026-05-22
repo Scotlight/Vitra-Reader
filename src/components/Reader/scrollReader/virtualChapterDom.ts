@@ -20,14 +20,13 @@ export function updateVirtualContentHeight(contentEl: HTMLElement, vector: Chapt
 }
 
 export function updateVirtualSegmentLayout(segmentEl: HTMLElement, segment: SegmentMeta): void {
-    const height = resolveVirtualSegmentHeight(segment);
     segmentEl.style.position = 'absolute';
     segmentEl.style.top = '0';
     segmentEl.style.left = '0';
     segmentEl.style.right = '0';
     segmentEl.style.width = '100%';
     segmentEl.style.transform = `translateY(${Math.max(0, segment.offsetY)}px)`;
-    segmentEl.style.containIntrinsicSize = `auto 0 ${height}px`;
+    segmentEl.style.containIntrinsicSize = `${resolveVirtualSegmentHeight(segment)}px`;
 }
 
 export function insertVirtualSegmentInOrder(
