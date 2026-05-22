@@ -105,19 +105,30 @@
 4. 完成后必须 `npx tsc -b --pretty false`，无输出 = 通过
 5. **禁止用注释墙拆 hook**。hook 太长是职责未拆的味道，先想 `useXxx` 抽离
 
-### 高敏区双干工作流（CC + codex）
+### 高敏区双干工作流（CC + codex）[硬性]
 
-§6 默认按"前端/后端"分工，但 **`src/components/Reader/` 是例外**——这里走 CC + codex 双干：
+§6 默认按"前端/后端"分工，但 **`src/components/Reader/` 是例外**——这里走 CC + codex 双干。
 
-1. **CC 先出 plan**：列改动文件、敏感符号影响面、新增/调整的 hook 拆分意图，拿到用户确认（或自判信心充分时直接进 2）
-2. **派 codex 实施**：通过 `Agent({ subagent_type: "codex-coder" })` 派发，prompt 必须明确禁区符号 + 单测要求
+**底线**：CC **绝对不能** 用 Write/Edit/MultiEdit 修改 `src/components/Reader/` 下任何 `.ts`/`.tsx`/`.css` 文件。**唯一**例外：用户当前会话明确说"这次你自己改 Reader"。否则 CC 直接动手 = 重大违规，立即停下道歉。
+
+工作流：
+
+1. **CC 出 plan**：列改动文件、敏感符号影响面、新增/调整的 hook 拆分意图。plan 写完**直接进 2**，不需要用户确认——用户没说停就当默认前进
+2. **派 codex 实施**：通过 `Agent({ subagent_type: "codex-coder" })` 派发，prompt 必须明确禁区符号 + 单测要求。**这一步不可跳过**
 3. **CC 接 diff 审**：codex 回报后 CC 主动 `git diff` 自审；命中以下任一情况立即 `git stash` 留待人工：
    - 改动文件超出 plan 范围
    - §3 多会话冲突 6 条信号命中 ≥3
    - hook 被内联回组件 / interface 被改回内联类型 / `@/xxx` 退回 `../../../xxx`
 4. **CC 跑回归**：tsc + 涉及到的 vitest 子集，错就让 codex 再修一轮（最多 2 轮，3 轮以上停下重 plan）
 
-撒手不管 = 违反本节。CC 主控的本质是审阅，不是甩活。
+**反模式（不允许）**：
+
+- ❌ "我已经想清楚了，直接开干"——开干 = 派 codex 不是 CC 自己改
+- ❌ "改动小，我顺手改了"——再小也派
+- ❌ "codex 排队等不及，我先改"——等不及就告诉用户，不自己上
+- ❌ "plan 完成 → 直接 Edit Reader 文件" = 跳过 codex 这一步，违规
+
+撒手不管 = 违反本节。CC 主控的本质是**审阅 + 派活**，不是甩活也不是亲自动手。
 
 ---
 
