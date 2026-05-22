@@ -39,18 +39,25 @@
 - 禁用的 message：`WIP` / `tmp` / `update` / `fix bug` / `change` / 任何无信息量空话
 - 不 squash 已有 commit；不 amend 已 push 的 commit
 
-### 自动 commit 行为
+### 自动 commit + push 行为
 
-用户给一个完整任务（如"接入 electron-builder"）后，AI **应该全自动**：
+用户给一个完整任务（如"接入 electron-builder"）后，AI **应该全自动闭环**：
 
 1. 改全部所需文件（不要每改一个就停下问）
 2. PostToolUse hook 自动跑 tsc，错就立即修
 3. `git diff --stat` + `git diff` 自审
-4. 按 message 规范**自 commit**（不需要用户授权）
-5. 报告完成 + commit hash + 改动摘要
-6. **等用户说"推"** 才 `git push`（远程不可逆，保留二次确认）
+4. 按 message 规范**自 commit**
+5. **自 push** 到当前分支的 origin（普通 `git push` 走 hook 放行，force-push / reset / amend 仍被 hook 拦死）
+6. 报告完成 + commit hash + push 结果
 
 **不要**把任务拆成"我做 X，你做 Y"让用户接手——除非确实需要用户人工干预（比如外部凭证、UAC 提权窗口）。
+
+例外（push 前必须停下确认）：
+- 改动跨越 ≥ 10 个文件且涉及 §5 Reader 高敏区
+- 改动包含 `package.json` 的 `dependencies` 字段（新增/删除/升级依赖）
+- commit message 涉及破坏性变更（`feat!:` 或 message 含 `BREAKING CHANGE`）
+
+这三种情况 commit 后停下，列出 commit hash + diff 摘要，等用户说"推"。
 
 ---
 
