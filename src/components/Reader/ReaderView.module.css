@@ -458,10 +458,12 @@
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 12px;
+    justify-items: start;
 }
 
 .themeBtn {
     width: 100%;
+    max-width: 56px;
     aspect-ratio: 1;
     border-radius: 50%;
     border: 2px solid transparent;
