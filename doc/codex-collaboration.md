@@ -25,17 +25,20 @@
 
 ## 2. 调用方式
 
-四种 slash + 一种自主模式：
+五种入口 + 一种自主模式：
 
 | 入口 | 走法 | 用途 |
 |---|---|---|
-| `/codex <task>` | `codex-coder` subagent → `codex exec` | 中小实现（后端 / 接口） |
+| `/codex <task>` | `codex-coder` subagent → `codex exec` + wt 窗口 + 哨兵 | 中等实现（后端 / 接口、多文件 refactor） |
 | `/codex-review <target>` | `codex-coder` subagent → `codex review` | 专项代码审查 |
-| `/codex-fix <bug>` | `codex-coder` subagent → `codex exec` + 复现优先 | bug 修复 |
-| `Agent({ subagent_type: "codex-coder" })` | 直接 subagent，无 prompt 模板 | 编程化派发 |
+| `/codex-fix <bug>` | `codex-coder` subagent → `codex exec` + 复现优先 | bug 修复（先复现再修） |
+| `Agent({ subagent_type: "codex-coder" })` | 直接 subagent，无 prompt 模板 | 编程化派发大任务 |
+| **`mcp__codex__codex` 工具** | 主对话直接调，同步 await response | 小型 read-only 审计 / 5 分钟内单查询（无 wt 窗口、零哨兵） |
 | **`/goal <objective>`**（在 codex TUI 内） | codex 内部 slash，**不经 CC** | 大任务自主推进，详见 §9 |
 
-**禁止**主对话直接 `codex exec` —— 必须走 subagent / slash 才受 §4 冲突护栏与 §6 禁区约束保护。
+**禁止**主对话直接 `codex exec` —— 必须走 subagent / slash 才受 §4 冲突护栏与 §6 禁区约束保护。`mcp__codex__codex` 工具不受同样护栏，但它走 mcp-server 通道，由 MCP 协议层做基本隔离。
+
+**选哪个通道**详见 §12 决策矩阵。
 
 ## 3. MCP 模式说明
 
@@ -291,3 +294,55 @@ outputs/runtime/codex-handoff/
 - ❌ task.md 没有「范围」「敏感符号」「验收标准」三段（codex 无锚点 → 输出不可预测）
 - ❌ 派发完不审 diff（task.md 是事前约束，diff 是事后核对，两步都做）
 - ❌ 短任务硬要写 task.md（≤ 2 文件改动直接英文 prompt 更快）
+
+## 12. 通道路由决策（exec / MCP / goal 怎么选）
+
+§2 列了 5 个入口，**默认 `codex-coder` subagent → exec**——有 §10 hook 防护 + wt 可见性 + 步骤 4 try/finally 哨兵 + 步骤 5 watchdog 兜底。其他通道只在明确收益时切换。
+
+### 决策矩阵
+
+| 任务特征 | 通道 | 理由 |
+|---|---|---|
+| read-only 审计 / grep 残留验证 | `mcp__codex__codex` | 秒级返回，零哨兵零 wt |
+| 单一咨询（"为啥这样写"、"有没有更好的方案"） | `mcp__codex__codex` | 不需要看进度 |
+| 单文件 ≤50 行小改 + 不涉及 §5 | `mcp__codex__codex` | 同上 |
+| 多文件 refactor（3-5 文件） | `codex-coder` subagent → exec | wt 实时可见、长 log 不爆 CC context |
+| 跨模块改动 / 涉及 §5 Reader 高敏区 | `codex-coder` subagent → exec | 同上 + diff 审计强制 |
+| 任务预估 >5 分钟 | `codex-coder` subagent → exec | MCP 单次调用 ~5 分钟 timeout 风险 |
+| 涉及 §6 禁区 | CC 主对话直接做 | 不让 codex 碰 |
+| 大任务 + 明确终点 + 可量化 | `/goal`（codex TUI） | budget / continuation 自主推进，详见 §9 |
+
+### 两个主要通道对比
+
+| 维度 | `mcp__codex__codex` | `codex-coder` → exec |
+|---|---|---|
+| 派发→拿到结果 | 秒级（同步 await） | 分钟级（哨兵触发或 watchdog 兜底） |
+| 可见性 | 不可见，黑盒 | wt 窗口实时看 codex 在干啥 |
+| log 占用 CC context | response 直接进 context | 落盘 `<ts>.log.md`，CC 只拿摘要 |
+| 长任务支持 | ❌ ~5 分钟 timeout | ✓ 40+ 分钟 OK |
+| 哨兵机制 | 无（不需要） | 有（步骤 4 try/finally + 步骤 5 marker watchdog） |
+| Ceremony 成本 | 0（prompt 直接传） | task.md（§11）+ subagent 链路 + 等哨兵 |
+
+### 选 MCP 的判断信号
+
+- 任务能用一句英文 prompt 写清楚
+- 不需要中途观察 codex 行为
+- 任务输出量小（response 不会撑爆 CC context）
+- 任务时长预估 <5 分钟
+- read-only 或最多动 1-2 个非高敏文件
+
+满足以上 4+ 条 → 走 MCP；否则 fallback 到 exec。
+
+### 实战示例
+
+- ✓ MCP：「grep `src/` 验证 commit `94acb54` 是否还有 `wheelConfig` 残留，PASS/FAIL 一行报告」
+- ✓ MCP：「读 `src/utils/mathUtils.ts` 的 `clampNumber` 实现，告诉我边界条件处理对不对」
+- ✗ MCP：「重构 ScrollReader 把滚轮交回浏览器原生」（多文件 + §5 + 40 分钟 → exec）
+- ✗ MCP：「修这个 bug，需要查 5 个文件的调用链才能定位」（>5 分钟 + response 大 → exec）
+
+### 反模式
+
+- ❌ 大型 refactor 走 MCP → timeout 拿半成品
+- ❌ 简单 grep 走 exec → 40 分钟才出哨兵不值得
+- ❌ §5 高敏区走 MCP → 失去 wt 可见性，diff 审计被弱化
+- ❌ 同时跑 MCP 任务 + exec 任务 → 同机一个 codex 实体的原则被破坏（PID 1472 mcp-server 已经占一个 slot）
