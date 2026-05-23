@@ -4,31 +4,21 @@ import { useScrollInertia } from '@/hooks/useScrollInertia';
 import { useScrollEvents } from '@/hooks/useScrollEvents';
 import styles from '../ScrollReaderView.module.css';
 import {
-    normalizeSmoothScrollConfig,
     resolveInertiaTuning,
     resolveScrollPhysicsConfig,
-    type SmoothScrollConfig,
 } from './scrollPhysicsConfig';
-
-export { DEFAULT_SMOOTH_CONFIG, type SmoothScrollConfig } from './scrollPhysicsConfig';
 
 export function useScrollPhysics(
     viewportRef: MutableRefObject<HTMLElement | null>,
-    smoothConfig: SmoothScrollConfig,
 ) {
-    const normalizedSmoothConfig = useMemo(
-        () => normalizeSmoothScrollConfig(smoothConfig),
-        [smoothConfig],
-    );
-
     const physicsConfig = useMemo(
-        () => resolveScrollPhysicsConfig(normalizedSmoothConfig),
-        [normalizedSmoothConfig],
+        () => resolveScrollPhysicsConfig(),
+        [],
     );
 
     const inertiaTuning = useMemo(
-        () => resolveInertiaTuning(normalizedSmoothConfig),
-        [normalizedSmoothConfig],
+        () => resolveInertiaTuning(),
+        [],
     );
 
     const inertiaCallbacks = useMemo(() => ({
@@ -36,7 +26,7 @@ export function useScrollPhysics(
         onStop: () => { viewportRef.current?.classList.remove(styles.flinging); },
     }), [viewportRef]);
 
-    const { addImpulse, fling, stop, setDragging } = useScrollInertia(
+    const { fling, stop, setDragging } = useScrollInertia(
         viewportRef,
         physicsConfig,
         inertiaCallbacks,
@@ -44,25 +34,10 @@ export function useScrollPhysics(
     );
 
     const scrollCallbacks = useMemo(() => ({
-        onWheelImpulse: (deltaY: number) => { addImpulse(deltaY); },
-        wheelConfig: {
-            enabled: normalizedSmoothConfig.enabled,
-            stepSizePx: normalizedSmoothConfig.stepSizePx,
-            accelerationDeltaMs: normalizedSmoothConfig.accelerationDeltaMs,
-            accelerationMax: normalizedSmoothConfig.accelerationMax,
-            reverseDirection: normalizedSmoothConfig.reverseWheelDirection,
-        },
         onDragStart: () => { stop(); setDragging(true); },
         onTouchFling: (velocity: number) => { setDragging(false); fling(velocity); },
         onDragEnd: () => { setDragging(false); },
-    }), [
-        addImpulse, fling, stop, setDragging,
-        normalizedSmoothConfig.enabled,
-        normalizedSmoothConfig.stepSizePx,
-        normalizedSmoothConfig.accelerationDeltaMs,
-        normalizedSmoothConfig.accelerationMax,
-        normalizedSmoothConfig.reverseWheelDirection,
-    ]);
+    }), [fling, stop, setDragging]);
 
     useScrollEvents(viewportRef, scrollCallbacks);
 

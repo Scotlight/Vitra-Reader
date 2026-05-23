@@ -19,7 +19,7 @@ import { useVirtualHeightCommit } from './scrollReader/useVirtualHeightCommit';
 import { useChapterResizeObserver } from './scrollReader/useChapterResizeObserver';
 import { useIdlePrefetch } from './scrollReader/useIdlePrefetch';
 import { useBookHighlights } from './scrollReader/useBookHighlights';
-import { useScrollPhysics, DEFAULT_SMOOTH_CONFIG, type SmoothScrollConfig } from './scrollReader/useScrollPhysics';
+import { useScrollPhysics } from './scrollReader/useScrollPhysics';
 import { useSpineItems } from './scrollReader/useSpineItems';
 import { useReaderUnmountCleanup } from './scrollReader/useReaderUnmountCleanup';
 import {
@@ -40,7 +40,6 @@ interface ScrollReaderViewProps {
     initialSpineIndex?: number;
     initialScrollOffset?: number;
     initialChapterProgress?: number;
-    smoothConfig?: SmoothScrollConfig;
     readerStyles: ReaderStyleConfig;
     onProgressChange?: (progress: number) => void;
     onChapterChange?: (label: string, href: string) => void;
@@ -56,7 +55,6 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
     initialSpineIndex = 0,
     initialScrollOffset = 0,
     initialChapterProgress,
-    smoothConfig = DEFAULT_SMOOTH_CONFIG,
     readerStyles,
     onProgressChange,
     onChapterChange,
@@ -100,7 +98,7 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         return provider.isAssetUrlAvailable?.(url) ?? true;
     }, [provider]);
     chaptersRef.current = chapters;
-    const { stop } = useScrollPhysics(viewportRef, smoothConfig);
+    const { stop } = useScrollPhysics(viewportRef);
     const { scheduleIdlePrefetch, cancelIdlePrefetch } = useIdlePrefetch(refs);
     const {
         observeResizeNode,

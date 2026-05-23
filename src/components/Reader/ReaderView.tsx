@@ -16,7 +16,7 @@ import { useReaderClock } from './useReaderClock'
 import { useReaderNavigation } from './useReaderNavigation'
 import { useReadingActivityTracker } from './useReadingActivityTracker'
 import { resolveReaderColors } from './readerColors'
-import { buildReaderStyleConfig, buildScrollSmoothConfig } from './readerStyleConfig'
+import { buildReaderStyleConfig } from './readerStyleConfig'
 import {
     createFallbackModePositionSnapshot,
     type ReaderModePositionSnapshot,
@@ -91,16 +91,6 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         settings.textAlign,
         settings.pageWidth,
         settings.themeId,
-    ])
-    const scrollSmoothConfig = useMemo(() => buildScrollSmoothConfig(settings), [
-        settings.smoothScrollEnabled,
-        settings.smoothStepSizePx,
-        settings.smoothAnimationTimeMs,
-        settings.smoothAccelerationDeltaMs,
-        settings.smoothAccelerationMax,
-        settings.smoothTailToHeadRatio,
-        settings.smoothAnimationEasing,
-        settings.smoothReverseWheelDirection,
     ])
     useEffect(() => {
         providerRef.current = provider
@@ -233,7 +223,6 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                         ? modeSwitchAnchor.snapshot.position
                         : scrollParams.initialScrollOffset}
                     initialChapterProgress={modeSwitchAnchor?.snapshot?.chapterProgress}
-                    smoothConfig={scrollSmoothConfig}
                     readerStyles={readerStyleConfig}
                     onProgressChange={handleProgressChange}
                     onChapterChange={handleChapterChange}

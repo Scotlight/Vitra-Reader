@@ -13,17 +13,6 @@ interface ReaderStyleSettings {
     themeId: string
 }
 
-interface ScrollSmoothSettings {
-    smoothAccelerationDeltaMs: number
-    smoothAccelerationMax: number
-    smoothAnimationEasing: boolean
-    smoothAnimationTimeMs: number
-    smoothReverseWheelDirection: boolean
-    smoothScrollEnabled: boolean
-    smoothStepSizePx: number
-    smoothTailToHeadRatio: number
-}
-
 export function buildReaderStyleConfig(
     settings: ReaderStyleSettings,
     readerColors: ReaderColors,
@@ -42,18 +31,5 @@ export function buildReaderStyleConfig(
         textAlign: settings.textAlign,
         pageWidth: settings.pageWidth,
         isPdfDarkMode: bookFormat === 'pdf' && settings.themeId === 'dark',
-    }
-}
-
-export function buildScrollSmoothConfig(settings: ScrollSmoothSettings) {
-    return {
-        enabled: settings.smoothScrollEnabled,
-        stepSizePx: settings.smoothStepSizePx,
-        animationTimeMs: settings.smoothAnimationTimeMs,
-        accelerationDeltaMs: settings.smoothAccelerationDeltaMs,
-        accelerationMax: settings.smoothAccelerationMax,
-        tailToHeadRatio: settings.smoothTailToHeadRatio,
-        easing: settings.smoothAnimationEasing,
-        reverseWheelDirection: settings.smoothReverseWheelDirection,
     }
 }

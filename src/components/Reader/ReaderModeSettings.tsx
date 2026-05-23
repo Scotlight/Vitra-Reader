@@ -1,17 +1,6 @@
-import { clampDecimal, clampInt } from '@/utils/mathUtils'
 import { resolveReaderRenderMode } from '@/engine/core/readerRenderMode'
 import { useSettingsStore, type PageTurnMode } from '@/stores/useSettingsStore'
 import styles from './ReaderView.module.css'
-
-const SMOOTH_DEFAULTS = Object.freeze({
-    stepSizePx: 120,
-    animationTimeMs: 360,
-    accelerationDeltaMs: 70,
-    accelerationMax: 7,
-    tailToHeadRatio: 3,
-    easing: true,
-    reverseWheelDirection: false,
-})
 
 interface ReaderModeSettingsProps {
     readonly bookFormat: string
@@ -22,16 +11,6 @@ export function ReaderModeSettings({ bookFormat, onPageTurnModeChange }: ReaderM
     const settings = useSettingsStore()
     const modeDecision = resolveReaderRenderMode(bookFormat, settings.pageTurnMode)
     const effectivePageTurnMode = modeDecision.effectiveMode
-
-    const resetSmoothSettings = () => {
-        settings.updateSetting('smoothStepSizePx', SMOOTH_DEFAULTS.stepSizePx)
-        settings.updateSetting('smoothAnimationTimeMs', SMOOTH_DEFAULTS.animationTimeMs)
-        settings.updateSetting('smoothAccelerationDeltaMs', SMOOTH_DEFAULTS.accelerationDeltaMs)
-        settings.updateSetting('smoothAccelerationMax', SMOOTH_DEFAULTS.accelerationMax)
-        settings.updateSetting('smoothTailToHeadRatio', SMOOTH_DEFAULTS.tailToHeadRatio)
-        settings.updateSetting('smoothAnimationEasing', SMOOTH_DEFAULTS.easing)
-        settings.updateSetting('smoothReverseWheelDirection', SMOOTH_DEFAULTS.reverseWheelDirection)
-    }
 
     return (
         <>
@@ -44,40 +23,6 @@ export function ReaderModeSettings({ bookFormat, onPageTurnModeChange }: ReaderM
                 </div>
                 {modeDecision.forced && <div className={styles.modeHint}>{modeDecision.reason}</div>}
             </div>
-
-            {effectivePageTurnMode === 'scrolled-continuous' && (
-                <>
-                    <div className={styles.divider} />
-                    <div className={styles.settingsGroup}>
-                        <div className={styles.smoothHeader}>
-                            <span className={styles.smoothTitle}>平滑滚动</span>
-                            <label className={styles.smoothToggle}>
-                                <input type="checkbox" checked={settings.smoothScrollEnabled} onChange={(event) => settings.updateSetting('smoothScrollEnabled', event.target.checked)} />
-                                <span className={styles.smoothToggleTrack} />
-                            </label>
-                        </div>
-                    </div>
-
-                    <SmoothRange label={`步长: ${settings.smoothStepSizePx}px`} value={settings.smoothStepSizePx} min={20} max={300} step={1} enabled={settings.smoothScrollEnabled} onChange={(value) => settings.updateSetting('smoothStepSizePx', clampInt(value, 20, 300))} />
-                    <SmoothRange label={`动画时长: ${settings.smoothAnimationTimeMs}ms`} value={settings.smoothAnimationTimeMs} min={120} max={1200} step={10} enabled={settings.smoothScrollEnabled} onChange={(value) => settings.updateSetting('smoothAnimationTimeMs', clampInt(value, 120, 1200))} />
-                    <SmoothRange label={`加速间隔: ${settings.smoothAccelerationDeltaMs}ms`} value={settings.smoothAccelerationDeltaMs} min={10} max={400} step={5} enabled={settings.smoothScrollEnabled} onChange={(value) => settings.updateSetting('smoothAccelerationDeltaMs', clampInt(value, 10, 400))} />
-                    <SmoothRange label={`加速上限: ${settings.smoothAccelerationMax}x`} value={settings.smoothAccelerationMax} min={1} max={12} step={0.1} enabled={settings.smoothScrollEnabled} onChange={(value) => settings.updateSetting('smoothAccelerationMax', clampDecimal(value, 1, 12, 1))} />
-                    <SmoothRange label={`尾首比值: ${settings.smoothTailToHeadRatio}x`} value={settings.smoothTailToHeadRatio} min={1} max={8} step={0.1} enabled={settings.smoothScrollEnabled} onChange={(value) => settings.updateSetting('smoothTailToHeadRatio', clampDecimal(value, 1, 8, 1))} />
-
-                    <div className={styles.smoothCheckList}>
-                        <label className={styles.smoothCheckItem}>
-                            <input type="checkbox" checked={settings.smoothAnimationEasing} disabled={!settings.smoothScrollEnabled} onChange={(event) => settings.updateSetting('smoothAnimationEasing', event.target.checked)} />
-                            缓动曲线
-                        </label>
-                        <label className={styles.smoothCheckItem}>
-                            <input type="checkbox" checked={settings.smoothReverseWheelDirection} disabled={!settings.smoothScrollEnabled} onChange={(event) => settings.updateSetting('smoothReverseWheelDirection', event.target.checked)} />
-                            反转滚轮方向
-                        </label>
-                    </div>
-
-                    <button className={styles.smallActionBtn} onClick={resetSmoothSettings} disabled={!settings.smoothScrollEnabled}>重置为推荐值</button>
-                </>
-            )}
 
             <div className={styles.divider} />
             <div className={styles.settingsGroup}>
@@ -101,23 +46,4 @@ interface ModeButtonProps {
 
 function ModeButton({ active, available, label, onClick }: ModeButtonProps) {
     return <button className={`${styles.toggleBtn} ${active ? styles.active : ''}`} disabled={!available} onClick={onClick}>{label}</button>
-}
-
-interface SmoothRangeProps {
-    readonly enabled: boolean
-    readonly label: string
-    readonly max: number
-    readonly min: number
-    readonly onChange: (value: number) => void
-    readonly step: number
-    readonly value: number
-}
-
-function SmoothRange({ enabled, label, max, min, onChange, step, value }: SmoothRangeProps) {
-    return (
-        <div className={styles.settingsGroup}>
-            <label>{label}</label>
-            <input type="range" min={min} max={max} step={step} value={value} disabled={!enabled} onChange={(event) => onChange(Number(event.target.value))} />
-        </div>
-    )
 }
