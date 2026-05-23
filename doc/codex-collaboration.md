@@ -203,3 +203,91 @@ OpenAI Codex CLI 0.128.0 (rust) 源码 `slash_dispatch.rs` / `goal_tool.rs` / `g
 - **盲点**：codex 子进程不走 CC 工具层（靠 codex Windows Sandbox `elevated` OS 级隔离）；CC 写脚本到磁盘让用户手动跑，hook 不看脚本内容
 - **首次踩坑教训**：guard-bash 早期版本曾拦死所有 `codex exec`，导致 subagent 派发链路被自己拦死——修复后只拦 sandbox flag 改写，不拦裸命令
 - **`package.json` 放开教训**：早期把 `package.json` 也拦了，导致接入 electron-builder 这类任务必须让用户手动 Copy-Item 覆盖。后改为"PreToolUse 放开 + PostToolUse tsc 兜底"，AI 才能真正全自动
+
+## 11. task.md 模式（CC 写任务书 → codex 自读自干）
+
+针对"任务已经想清楚，不要 CC 再 plan 一遍"的场景。CC 把任务写成 md 落盘，派发时 prompt 只丢路径——绕开命令行中文编码 + 给 codex 高确定性的英文指令。
+
+### 适用 vs 不适用
+
+| 适用 | 不适用 |
+|---|---|
+| 改动 ≥ 3 文件、需事前钉死边界 | 单文件单函数小改（直接英文 prompt 更快） |
+| 涉及 §5 高敏区敏感符号清单 | 探索性任务（边界没法事前列） |
+| 跨模块 refactor 有明确产出 | `/goal` 适用场景（直接走 codex TUI，不经 CC） |
+
+### 流程
+
+1. **CC 写任务书**，落到 `outputs/runtime/codex-handoff/<YYYYMMDD-HHMMSS>.task.md`（已 gitignore，不入库）
+2. **派 codex 时 prompt 用英文 + 只丢路径**：
+
+   ```
+   Read and execute the task specified in `outputs/runtime/codex-handoff/<ts>.task.md`.
+   Stay strictly within the file scope listed there. Do not touch files outside the allowlist.
+   Report back with a diff summary and any deviations.
+   ```
+
+3. **CC 接 diff 审**：`git diff --stat` + `git diff`，越界即 `git stash push -m "codex-out-of-scope-<ts>"`
+4. **CC 跑回归**：`npx tsc -b --pretty false` + 相关 `npx vitest run <pattern>`
+
+### 为什么中文 md + 英文 prompt
+
+- **中文走 UTF-8 文件**：PowerShell 管道 / 命令行参数传中文经常掉字符（chcp / 控制台代码页 / BOM 各种坑）。文件读取走 fs API，UTF-8 透明
+- **英文走 prompt**：OpenAI 模型英文训练语料占大头，工具调用 / 路径解析 / 边界遵守的确定性比中文 prompt 更高
+- **任务书留底**：codex 偶尔越界时，能立刻翻 task.md 核对当初写的边界，diff 出问题不靠脑补
+
+### task.md 内容骨架
+
+```markdown
+# <一句话目标>
+
+## 背景
+为什么做、上游事故 / 需求来源（≤3 句）
+
+## 范围（必读，越界即 stash 撤回）
+允许修改：
+- src/xxx/yyy.ts
+- src/xxx/zzz.ts
+
+禁止触碰（§6 禁区 + 本任务额外锁定）：
+- src/components/Reader/ 任何文件（如不涉及 §5）
+- package.json / .gitignore / electron/**
+
+## 敏感符号（如涉及 §5 高敏区）
+- `getPosition` / `ScrollPipelineState` / `useChapterResizeObserver`
+- 不允许内联 hook、不允许 `@/xxx` 退回相对路径
+
+## 验收标准
+- npx tsc -b --pretty false 通过
+- 涉及的 vitest 子集全绿
+- 不引入新依赖
+- diff 总行数预算：±N 行（超出停下汇报）
+
+## 实施提示（可选）
+具体实现交给 codex，不写死细节；只标注必须遵守的约定
+```
+
+### 三件套时间戳约定
+
+延续 §5 产物隔离规则，同一时间戳串联三个文件：
+
+```
+outputs/runtime/codex-handoff/
+  20260523-143055.task.md     ← CC 写的任务（输入）
+  20260523-143055.log.md      ← codex 自留日志
+  20260523-143055.diff.md     ← CC 审完留底
+```
+
+### 与既有约定的关系
+
+- **§5 高敏区双干工作流**：task.md 不替代 plan，**就是 plan 的载体**——`§5` 第 1 步「CC 出 plan」实际产物就是这份 task.md
+- **§6 禁区清单**：task.md 的「禁止触碰」段必须显式列出 §6 禁区，给 codex 双保险
+- **§4 多会话冲突防御**：派发前 `Get-Process codex` + `git status` clean 仍由 codex-coder subagent 第 1 步自动执行，task.md 不绕过
+
+### 反模式
+
+- ❌ task.md 写到 `docs/plans/`（命中 guard-write 拦截 + 历史污染区）
+- ❌ 同时中文 task.md + 中文 prompt（双重编码风险，没必要）
+- ❌ task.md 没有「范围」「敏感符号」「验收标准」三段（codex 无锚点 → 输出不可预测）
+- ❌ 派发完不审 diff（task.md 是事前约束，diff 是事后核对，两步都做）
+- ❌ 短任务硬要写 task.md（≤ 2 文件改动直接英文 prompt 更快）
