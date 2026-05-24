@@ -346,3 +346,167 @@ outputs/runtime/codex-handoff/
 - ❌ 简单 grep 走 exec → 40 分钟才出哨兵不值得
 - ❌ §5 高敏区走 MCP → 失去 wt 可见性，diff 审计被弱化
 - ❌ 同时跑 MCP 任务 + exec 任务 → 同机一个 codex 实体的原则被破坏（PID 1472 mcp-server 已经占一个 slot）
+
+## 13. plan 往返审查模式（CC 出 plan ↔ codex 反审循环 → 派发 → codex 验收）
+
+§11 task.md 是「CC 单方面想清楚 → 派 codex 干」。本模式是「CC 出 plan → codex 反审 → CC 修订 → 循环到双方对齐 → 再派发 → codex 验收」。
+
+核心痛点：plan 阶段单方面 = plan 自身的 bug 要等实施完才暴露。这模式提前把 cx 拉进来当二审，避免实施完才发现 plan 本身漏 edge case / 低估影响面。
+
+### 适用 vs 不适用
+
+| 适用 | 不适用 |
+|---|---|
+| §5 高敏区 plan（Reader 模块跨模块改动） | 单文件 bug 修复（直接 §11 派发） |
+| 跨模块 refactor ≥5 文件 + 不可逆架构决策 | 已有详细 spec / 已有用户钉死的实现路径 |
+| API 改名、状态层重构、数据结构调整 | 探索性任务（边界没法事前列） |
+| 实现路径有 2+ 候选 | `/goal` 适用场景（直接走 codex TUI） |
+
+判定门槛：「实施一次出错回滚成本 ≥ 30 分钟」 = 值得走本模式预防。
+
+### 流程
+
+```
+┌──────────────┐
+│ CC 出 plan v1 │
+└──────┬───────┘
+       ▼
+  ┌─────────────────────────┐
+  │ mcp__codex__codex review │ ◄────┐
+  └────────┬────────────────┘      │
+           ▼                       │
+        APPROVED?                  │
+       ┌───┴───┐                   │
+       ▼       ▼                   │
+     YES      NO ──► CC 修订 plan ─┘
+       │              （≤3 轮）
+       ▼
+  CC 派 codex-coder → exec（§11 task.md 模式）
+       │
+       ▼
+  mcp__codex__codex 验收（diff vs plan）
+       │
+       ▼
+   PASS / FAIL
+```
+
+#### 步骤 1：CC 写 plan v1
+
+落到 `outputs/runtime/codex-handoff/<ts>.plan.md`，骨架同 §11 task.md（背景 / 范围 / 敏感符号 / 验收标准 / 实施提示）。
+
+#### 步骤 2：mcp__codex__codex review plan
+
+通道选 MCP 不选 exec：read-only 审计、秒级返回、零哨兵——完美匹配 §12 决策矩阵。
+
+prompt 模板（英文，要求 cx 严格区分 BLOCKER vs SUGGESTION）：
+
+```
+Review the plan at `outputs/runtime/codex-handoff/<ts>.plan.md`.
+
+Audit checklist:
+1. Technical correctness — does the proposed approach actually work?
+2. Edge cases — what does the plan miss?
+3. Scope — is the file allowlist complete? any forbidden zones touched?
+4. Simpler alternatives — is there a less invasive path that achieves the same goal?
+5. Project constraints — conflicts with §5 high-sensitivity zone, §6 forbidden zone, or any constraint in CLAUDE.md?
+
+Output format (strict):
+- VERDICT: APPROVED | REVISE
+- BLOCKERS: [list, each with file/symbol reference]. These MUST be fixed before execution.
+- SUGGESTIONS: [list]. Optional improvements, do not block execution.
+- ALTERNATIVE: [if any]. A different approach worth considering.
+
+Return APPROVED only when there are zero BLOCKERS.
+```
+
+cx 返回 APPROVED → 进步骤 4。返回 REVISE → 进步骤 3。
+
+#### 步骤 3：CC 修订 plan
+
+对 BLOCKERS **必须**逐条响应，二选一：
+- 吸收：改 plan，落新版 `<ts>.plan.v2.md`
+- 驳回：在 plan 里加一段「Rebuttal to review v1」说明为什么 cx 这条意见不成立（技术理由，不是嘴硬）
+
+SUGGESTIONS 看心情吸收，不阻塞。
+
+修订完回步骤 2，让 cx 看 v2。
+
+**循环上限 3 轮**。第 3 轮仍 REVISE → 停下让用户裁决。多轮分歧 = 方向问题 / 边界问题，不是局部技术问题，不该靠堆轮次解决。
+
+#### 步骤 4：派 codex-coder subagent → exec
+
+定稿 plan 重命名为 `<ts>.task.md`，走 §11 流程：英文 prompt + 任务书路径 + codex-coder subagent。
+
+#### 步骤 5：mcp__codex__codex 验收
+
+实施完成、CC 审完 diff 之后，再开一次 MCP 调用让 cx 对照 plan 验收：
+
+```
+Compare the implementation diff with the plan.
+
+Plan: `outputs/runtime/codex-handoff/<ts>.task.md`
+Diff: `outputs/runtime/codex-handoff/<ts>.diff.md` (or run `git diff <commit>~1..<commit>`)
+
+Check:
+1. Coverage — did implementation address every item in the plan?
+2. Drift — did implementation touch files outside the allowlist?
+3. Sensitive symbols — were the §5 sensitive symbols handled per plan?
+4. Hidden regressions — any subtle behavioral change not called out in plan?
+
+Output:
+- VERDICT: PASS | FAIL
+- COVERAGE_GAPS: [items in plan not implemented]
+- SCOPE_DRIFT: [files touched but not in allowlist]
+- HIDDEN_RISKS: [behaviors changed beyond plan intent]
+```
+
+PASS → CC 跑 tsc + vitest 收尾。FAIL → CC 决定改实施还是改 plan：
+- 实施漏了 plan 里的项 → 派 codex 补做（小改用 MCP，大改用 exec）
+- plan 没考虑到的副作用 → 回步骤 2 重审 plan
+
+### 文件命名（延续 §5 / §11 时间戳约定）
+
+```
+outputs/runtime/codex-handoff/
+  20260524-HHMMSS.plan.md         ← CC v1
+  20260524-HHMMSS.review.v1.md    ← cx 反审 v1（落 mcp 返回）
+  20260524-HHMMSS.plan.v2.md      ← CC 修订
+  20260524-HHMMSS.review.v2.md    ← cx 反审 v2
+  ...                              （最多 3 轮）
+  20260524-HHMMSS.task.md         ← 定稿 = 派发任务书
+  20260524-HHMMSS.log.md          ← codex 实施日志（exec 落）
+  20260524-HHMMSS.diff.md         ← CC 审完留底
+  20260524-HHMMSS.verify.md       ← cx 验收报告
+```
+
+### 与既有约定的关系
+
+- **§5 高敏区双干工作流**：§5 第 1 步「CC 出 plan」升级为本模式的步骤 1-3，其他步骤不变
+- **§11 task.md 模式**：本模式步骤 4 完全等同 §11，定稿 plan 就是 §11 的 task.md
+- **§12 通道路由**：plan review / 验收走 MCP（read-only），实施走 exec（多文件 refactor）
+
+### 成本与收益
+
+| 项 | 成本 | 收益 |
+|---|---|---|
+| 单轮 plan review | ~1-2 分钟 mcp 调用 | 提前消灭 plan bug |
+| 3 轮循环上限 | 最坏 ~6 分钟 | 避免一次错误实施返工（实测 ≥30 分钟） |
+| cx 验收 | ~1-2 分钟 mcp 调用 | 把「实施 vs plan 偏差」量化 |
+
+### 反模式
+
+- ❌ Plan 循环 >3 轮强行继续：方向问题，停下让用户裁决
+- ❌ CC 每轮全盘接受 cx 反馈：失去主控判断（cx 反馈也可能错），主控本质是审阅不是当传声筒
+- ❌ CC 每轮驳回所有 cx 反馈：这循环就是装样子，要么方向错要么 cx 用错（plan 太模糊导致 cx 找不到锚点）
+- ❌ 验收 FAIL 立即改 plan 不改实施：plan 是事前共识，验收发现的多数问题应先尝试修实施
+- ❌ 不走 §11 直接把 plan 内容当 prompt 传给 codex：中文编码风险（CLAUDE.md / §11 明文禁）
+- ❌ 简单 bug 修复硬要走本模式：复现优先 + 直接修更快，引入 plan 循环是反生产力
+- ❌ Plan v1 写得太抽象（「重构 ScrollReader」），cx review 给不出 BLOCKER 只能给 SUGGESTION：plan 必须钉到文件级 + 符号级才能有效审
+
+### 实战触发场景
+
+- ✓ 「ScrollReader 滚轮交回浏览器原生」：§5 高敏区 + 影响 ≥5 文件 + 涉及物理引擎 API 变更 → 适合
+- ✓ 「`useChapterResizeObserver` 拆成两个独立 hook」：高敏 hook 拆分 + 多 consumer 影响 → 适合
+- ✓ 「`getPosition` 返回值结构改 ReaderModePositionSnapshot v2」：API 改名 + 跨模块消费 → 适合
+- ✗ 「`useScrollEvents.ts` 里某 typo」：单文件单符号小改 → 直接修
+- ✗ 「修这个 flaky 测试到全绿」：bounded 终点明确 → `/goal` 模式更合适
