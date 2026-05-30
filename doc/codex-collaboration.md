@@ -63,11 +63,15 @@ CC 启动时拉起 `codex mcp-server`（stdio 模式），暴露的工具以 `mc
 
 ## 4. 多会话冲突的硬护栏
 
-`codex-coder` 子代理的工作流第 1 步是 `Get-Process codex`。只要返回 ≥ 1（即用户已开 codex CLI 交互会话），**派发立即拒绝**，输出"用户正在使用 codex，本次派发取消"。
+`codex-coder` 子代理的工作流第 1 步做**目录级冲突检测**（不是进程级）：
 
-这是 2026-05-10 事故后加上的强制护栏 —— 那次事故里 CC 派发的 codex 子进程被 codex 单实例锁卡死 27 分钟，CPU 0%。
+- 无窗口标题的 codex 进程（mcp-server）→ 放行
+- 窗口标题含 `CC-codex-` marker → CC 自己派的，放行
+- 有窗口标题但不含 marker → 用户 TUI，**仅当其 cwd 指向本项目时**才拒发
 
-**注意**：MCP server 模式下，CC 也会拉起一个 codex 子进程（mcp-server）。如果用户**同时**开 codex CLI，两边会抢锁。任意时刻只跑一个 codex 实体。
+这是 2026-05-10 事故后加上的护栏 —— 那次事故里 CC 派发的 codex 子进程被 codex 单实例锁卡死 27 分钟。2026-05-30 从进程级放宽到目录级：用户在其他项目跑 codex TUI 不再误拦本项目的派发。
+
+**注意**：MCP server 模式下，CC 也会拉起一个 codex 子进程（mcp-server）。mcp-server 无窗口标题，检测脚本自动放行。
 
 ## 5. 产物隔离
 

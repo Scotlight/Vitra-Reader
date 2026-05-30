@@ -73,7 +73,10 @@
    - enum 常量改裸字符串字面量
    - 已分离的子组件 JSX 搬回父组件
    - 大段 `// ── XXX ──` 目录性注释墙凭空冒出
-3. **codex CLI 与 CC 不得同时运行本项目**。`codex-coder` subagent 工作流第 1 步会 `Get-Process codex` 检测，≥1 即拒发——绕过这层护栏 = 直接违反本约束
+3. **codex CLI 与 CC 不得同时操作本项目 working tree**。检测粒度是**目录级**不是进程级：
+   - 无窗口标题的 codex 进程（mcp-server）→ 放行
+   - 窗口标题含 `CC-codex-` marker → CC 自己派的，放行
+   - 有窗口标题但不含 marker → 用户 TUI，**仅当其 cwd 指向本项目时**才拒发
 
 ---
 
@@ -109,7 +112,17 @@
 
 §6 默认按"前端/后端"分工，但 **`src/components/Reader/` 是例外**——这里走 CC + codex 双干。
 
-**底线**：CC **绝对不能** 用 Write/Edit/MultiEdit 修改 `src/components/Reader/` 下任何 `.ts`/`.tsx`/`.css` 文件。**唯一**例外：用户当前会话明确说"这次你自己改 Reader"。否则 CC 直接动手 = 重大违规，立即停下道歉。
+**底线**：CC **绝对不能** 用 Write/Edit/MultiEdit 修改 `src/components/Reader/` 下任何 `.ts`/`.tsx`/`.css` 文件。例外（满足任一即可）：
+
+1. 用户当前会话明确说"这次你自己改 Reader"
+2. **小改豁免**：同时满足以下全部条件时 CC 可直接改，不走 codex：
+   - ≤1 个文件
+   - ≤10 行变更（含增删）
+   - 不涉及 §5 敏感符号列表中的任何符号
+   - 改动性质为：死代码删除 / 常量值调整 / import 清理（非结构性改动）
+   - 改完立即 `npx tsc -b --pretty false` + 相关 vitest 子集
+
+不满足以上任一例外 → CC 直接动手 = 重大违规，立即停下道歉。
 
 工作流：
 
