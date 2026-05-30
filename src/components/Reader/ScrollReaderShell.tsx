@@ -59,7 +59,6 @@ export function ScrollReaderShell({
         <div
             className={styles.scrollViewport}
             ref={viewportRef}
-            style={{ overflow: 'hidden' }}
         >
             <div className={styles.shadowArea}>
                 {shadowQueue.map(ch => (
