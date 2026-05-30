@@ -164,7 +164,7 @@
 硬性约束：
 
 - **不允许**主对话直接 `codex exec ...`——必须走 subagent / slash
-- 派发**前**：`Get-Process codex` 检测 ≥1 拒发，`git status` 必须 clean
+- 派发**前**：目录级冲突检测（见 §3 第 3 条），`git status` 必须 clean
 - 产物**只许**落 `outputs/runtime/codex-handoff/`，越界 = 立即停手 + 报告
 - codex 改完 working tree **必须** `git diff --stat` 审计；动了 §1 禁区文件**必须** `git stash push -m "codex-out-of-scope-<ts>"` 留人工
 - codex 跑完不得自行 `git commit` / `git push`
