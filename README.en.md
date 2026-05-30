@@ -7,15 +7,10 @@ Built with Electron + React + TypeScript, it aims to be a practical long-term re
 
 ## License Notice
 
-- This project is licensed under `PolyForm Noncommercial 1.0.0`.
-- Non-commercial use, modification, and redistribution are allowed.
-- Any commercial use requires prior written permission from the author.
-- This project is `source-available`, not an OSI open source license.
-
-See:
-- [LICENSE](./LICENSE)
-- [COMMERCIAL_USE.md](./COMMERCIAL_USE.md)
-- [LICENSE-FAQ.md](./LICENSE-FAQ.md)
+- This project is licensed under the `GNU AGPL-3.0-only`, an OSI-approved free and open source license.
+- You are free to use, modify, and redistribute it, including for commercial purposes.
+- However, any derivative work, and any deployment that offers it over a network, must make the complete corresponding source code available under AGPL-3.0.
+- See [LICENSE](./LICENSE).
 
 ---
 

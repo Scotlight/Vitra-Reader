@@ -2,6 +2,7 @@
   "name": "epub-reader",
   "private": true,
   "version": "0.1.0",
+  "license": "AGPL-3.0-only",
   "description": "A highly customizable offline EPUB reader for Windows",
   "author": "Vitra Reader <vitrareader@users.noreply.github.com>",
   "main": "dist-electron/main.js",
