@@ -82,3 +82,29 @@ Efficiency: No await on the entire 50MB file; use chunked processing.
 
 Documentation: Every complex binary offset or regex must be commented with its logical purpose.
 
+
+---
+
+## 8. Collaboration Protocol (codex executes; Claude Code orchestrates)
+
+You (codex) are the executor. Claude Code orchestrates, reviews, and owns ALL git operations. These rules OVERRIDE any Superpowers / global skill default (per ~/.codex/AGENTS.md precedence: repo rules > AGENTS.md > skills).
+
+### Iron rules
+
+1. Never run git write commands — no `commit`, `add`, `push`, `reset`, `checkout`, `stash`, `--amend`. Modify files only; leave 100% of git to the caller. Skills that commit by default (`commit-with-reflection`, `brainstorming`, `writing-plans`) must NOT commit here.
+2. Never write under `docs/` — especially `docs/plans/`, `docs/requirements/`, `docs/workflows/`, `docs/reflections/`. Any skill (`vibe`, `brainstorming`, `writing-plans`) that defaults to `docs/plans/` is OVERRIDDEN: write all plans / designs / requirements / reports to `outputs/runtime/codex-handoff/<timestamp>.<kind>.md` instead.
+3. Never modify: `AGENTS.md`, `CLAUDE.md`, `.claude/**`, `package.json`, `package-lock.json`, `.gitignore`, `electron/main.ts`, `electron/preload.ts`. If a task needs them, STOP and report.
+4. Stay within the task's file allowlist. Out-of-scope edits get stashed and discarded. Package manager is npm only — never pnpm/yarn.
+
+### Reader high-sensitivity zone — `src/components/Reader/`
+
+Top refactor-conflict hotspot. Before changing any related API, grep its consumers. Sensitive symbols:
+`getPosition` / `ReaderModePositionSnapshot` / `initialChapterProgress` / `ScrollPipelineState` / `ScrollReaderShell` / `ScrollReaderHandle` / `virtualHeightCommitState` / `chapterResizeObserverTargets` / `scrollChapterLoad` / `scrollPipelineRuntime` / `useChapterResizeObserver` / `useVirtualHeightCommit` / `useReaderUnmountCleanup`
+
+Never regress the architecture (each is a conflict signal = reverting someone's refactor): inlining an extracted hook back into a component; reverting `@/xxx` imports to `../../../xxx`; changing a named `interface` back to an inline type; changing enum constants to bare string literals; moving a separated child component's JSX back into the parent; adding walls of `// ── XXX ──` directory comments. Extracting a helper REQUIRES adding a unit test.
+
+### Before reporting done
+
+- If you changed `.ts`/`.tsx`: run `npx tsc -b --pretty false` (no output = pass) + the relevant `npx vitest run <pattern>` subset.
+- Report: files changed, tsc result, any deviation from the allowlist.
+
