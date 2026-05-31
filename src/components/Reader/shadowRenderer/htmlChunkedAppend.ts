@@ -42,7 +42,7 @@ export async function appendHtmlContentChunked(
         const fragment = document.createDocumentFragment();
         const chunk = nodes.slice(offset, offset + limit);
         chunk.forEach((node) => {
-            fragment.appendChild(node.cloneNode(true));
+            fragment.appendChild(node);
         });
         container.appendChild(fragment);
         if (offset + limit < nodes.length) {
