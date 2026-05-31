@@ -1,7 +1,8 @@
-import { Fragment, useCallback, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 import type { TocItem } from '@/engine/core/contentProvider'
 import { isTocHrefActive } from './readerToc'
+import { scheduleCenterActiveToc } from './tocAutoScroll'
 import styles from './ImmersiveReaderShell.module.css'
 
 interface ImmersiveReaderShellProps {
@@ -140,6 +141,13 @@ export function ImmersiveReaderShell({
 }: ImmersiveReaderShellProps) {
     const [chromeActive, setChromeActive] = useState(true)
     const activeChromeClass = chromeActive ? styles.activeChrome : ''
+    const tocPreviewListRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (!chromeActive) return
+        const cancel = scheduleCenterActiveToc(() => tocPreviewListRef.current)
+        return () => cancel()
+    }, [chromeActive, currentSectionHref, toc.length])
     const progressWidth = resolveProgressWidth(progressLabel)
 
     const handleContentClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
@@ -193,7 +201,7 @@ export function ImmersiveReaderShell({
                         搜索
                     </button>
                 </div>
-                <div className={styles.tocPreviewList}>
+                <div ref={tocPreviewListRef} className={styles.tocPreviewList}>
                     {toc.length === 0 ? (
                         <div className={styles.tocPreviewEmpty}>无目录信息</div>
                     ) : (
