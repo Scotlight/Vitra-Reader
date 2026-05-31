@@ -157,8 +157,6 @@
 | Slash | 走法 | 用途 |
 |---|---|---|
 | `/codex <task>` | `codex-coder` subagent → `codex exec` | 中小实现（后端 / 接口） |
-| `/codex-review <target>` | `codex-coder` subagent → `codex review` | 专项代码审查 |
-| `/codex-fix <bug>` | `codex-coder` subagent → `codex exec` + 复现优先 | bug 修复（先复现再修） |
 | `/goal <objective>`（人工进 codex TUI） | codex 内部 slash，**不经 CC**（详见 §10） | 大任务自主推进 |
 
 硬性约束：

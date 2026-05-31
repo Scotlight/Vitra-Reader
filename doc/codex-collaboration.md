@@ -20,18 +20,14 @@
 | `~/.claude.json`（project 段） | codex MCP server 注册（通过 `claude mcp add` 写入，详见 §3） |
 | `.claude/agents/codex-coder.md` | 派发任务时使用的子代理定义 |
 | `.claude/commands/codex.md` | `/codex <task>` slash command |
-| `.claude/commands/codex-review.md` | `/codex-review <target>` 专项审查 |
-| `.claude/commands/codex-fix.md` | `/codex-fix <bug>` bug 修复（先复现再修） |
 
 ## 2. 调用方式
 
-五种入口 + 一种自主模式：
+三种入口 + 一种自主模式：
 
 | 入口 | 走法 | 用途 |
 |---|---|---|
 | `/codex <task>` | `codex-coder` subagent → `codex exec` + wt 窗口 + 哨兵 | 中等实现（后端 / 接口、多文件 refactor） |
-| `/codex-review <target>` | `codex-coder` subagent → `codex review` | 专项代码审查 |
-| `/codex-fix <bug>` | `codex-coder` subagent → `codex exec` + 复现优先 | bug 修复（先复现再修） |
 | `Agent({ subagent_type: "codex-coder" })` | 直接 subagent，无 prompt 模板 | 编程化派发大任务 |
 | **`mcp__codex__codex` 工具** | 主对话直接调，同步 await response | 小型 read-only 审计 / 5 分钟内单查询（无 wt 窗口、零哨兵） |
 | **`/goal <objective>`**（在 codex TUI 内） | codex 内部 slash，**不经 CC** | 大任务自主推进，详见 §9 |

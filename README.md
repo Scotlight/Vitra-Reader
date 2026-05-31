@@ -184,7 +184,7 @@ npm run build
 - [`doc/codex-collaboration.md`](./doc/codex-collaboration.md) —— CC 与 codex 协作约定
 - [`doc/multi-session-conflict-handling.md`](./doc/multi-session-conflict-handling.md) —— 多会话冲突处置 SOP
 
-**本机本地配置**（位于 `.claude/`，已 gitignore）：subagent 定义、`/codex` `/codex-review` `/codex-fix` slash commands、MCP server 注册。
+**本机本地配置**（位于 `.claude/`，已 gitignore）：subagent 定义、`/codex` slash command、MCP server 注册。
 
 方法论参考：[《驾驭工程 — 从 Claude Code 源码到 AI 编码最佳实践》](https://github.com/ZhangHanDong/harness-engineering-from-cc-to-aicoding)。
 
