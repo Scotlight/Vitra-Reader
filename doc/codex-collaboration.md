@@ -297,7 +297,7 @@ outputs/runtime/codex-handoff/
 
 ## 12. 通道路由决策（exec / MCP / goal 怎么选）
 
-§2 列了 5 个入口，**默认 `codex-coder` subagent → exec**——有 §10 hook 防护 + wt 可见性 + 步骤 4 try/finally 哨兵 + 步骤 5 watchdog 兜底。其他通道只在明确收益时切换。
+§2 列了 3 个入口，**默认 `codex-coder` subagent → exec**——有 §10 hook 防护 + wt 可见性 + 步骤 4 try/finally 哨兵 + 步骤 5 watchdog 兜底。其他通道只在明确收益时切换。
 
 ### 决策矩阵
 
@@ -305,7 +305,7 @@ outputs/runtime/codex-handoff/
 |---|---|---|
 | read-only 审计 / grep 残留验证 | `mcp__codex__codex` | 秒级返回，零哨兵零 wt |
 | 单一咨询（"为啥这样写"、"有没有更好的方案"） | `mcp__codex__codex` | 不需要看进度 |
-| 单文件 ≤50 行小改 + 不涉及 §5 | `mcp__codex__codex` | 同上 |
+| 单文件 ≤50 行小改 + 不涉及 §5 | `mcp__codex__codex`（需 MCP write 三条件，见下） | 同上 |
 | 多文件 refactor（3-5 文件） | `codex-coder` subagent → exec | wt 实时可见、长 log 不爆 CC context |
 | 跨模块改动 / 涉及 §5 Reader 高敏区 | `codex-coder` subagent → exec | 同上 + diff 审计强制 |
 | 任务预估 >5 分钟 | `codex-coder` subagent → exec | MCP 单次调用 ~5 分钟 timeout 风险 |
@@ -323,13 +323,33 @@ outputs/runtime/codex-handoff/
 | 哨兵机制 | 无（不需要） | 有（步骤 4 try/finally + 步骤 5 marker watchdog） |
 | Ceremony 成本 | 0（prompt 直接传） | task.md（§11）+ subagent 链路 + 等哨兵 |
 
+### MCP write 三条件（同时满足才允许写）
+
+MCP 通道**默认 read-only**（不传 `sandbox` 参数 = read-only）。仅当以下三条件**同时满足**时，CC 可传 `sandbox: "workspace-write"` 让 codex 通过 MCP 写文件：
+
+1. **调用方显式传 `sandbox: "workspace-write"`** —— 不传 = read-only，codex 只能读不能写。CC 主对话负责判断是否传。
+2. **目标文件不在 §5 敏感符号所在文件列表**（静态名单，不靠运行时判断）：
+   - `src/components/Reader/scrollReader/useScrollPhysics.ts`
+   - `src/components/Reader/scrollReader/scrollPhysicsConfig.ts`
+   - `src/components/Reader/scrollReader/scrollReaderConstants.ts`
+   - `src/hooks/useScrollInertia.ts`
+   - `src/components/Reader/scrollReader/useScrollEvents.ts`
+   - `src/components/Reader/ScrollReaderView.tsx`
+   - `src/components/Reader/scrollReader/useScrollPipeline.ts`
+   - `src/components/Reader/scrollReader/useChapterResizeObserver.ts`
+   - `src/components/Reader/scrollReader/useVirtualHeightCommit.ts`
+   - 以及任何包含 §5 敏感符号定义/主消费的文件
+3. **`write-guard.js` 二次拦截**（兜底） —— 即便前两条误判放行，codex 进程内的 PreToolUse hook 仍会拦截 §6 禁区文件（`exit(2)` 硬拦）。
+
+**不满足任一条 → fallback 到 `codex-coder` subagent → exec**（有 wt 可见性 + diff 审计）。
+
 ### 选 MCP 的判断信号
 
 - 任务能用一句英文 prompt 写清楚
 - 不需要中途观察 codex 行为
 - 任务输出量小（response 不会撑爆 CC context）
 - 任务时长预估 <5 分钟
-- read-only 或最多动 1-2 个非高敏文件
+- read-only 或最多动 1 个非高敏文件（需满足 MCP write 三条件）
 
 满足以上 4+ 条 → 走 MCP；否则 fallback 到 exec。
 
@@ -346,6 +366,7 @@ outputs/runtime/codex-handoff/
 - ❌ 简单 grep 走 exec → 40 分钟才出哨兵不值得
 - ❌ §5 高敏区走 MCP → 失去 wt 可见性，diff 审计被弱化
 - ❌ 同时跑 MCP 任务 + exec 任务 → 同机一个 codex 实体的原则被破坏（PID 1472 mcp-server 已经占一个 slot）
+- ❌ MCP write 未满足三条件（未传 sandbox / 目标在 §5 名单 / 跳过 write-guard 验证）→ 静默写入高敏文件无 diff 审计
 
 ## 13. plan 往返审查模式（CC 出 plan ↔ codex 反审循环 → 派发 → codex 验收）
 
