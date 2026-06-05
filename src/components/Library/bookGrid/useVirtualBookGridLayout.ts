@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { buildVirtualGridMetrics, chunkItemsIntoRows, resolveVisibleVirtualRows } from '../libraryVirtualGrid'
+import { buildVirtualGridMetrics, chunkItemsIntoRows, parseGridTemplateColumnCount, resolveVisibleVirtualRows } from '../libraryVirtualGrid'
 import type { LibraryGridItem } from '../BookGrid'
 
 const PROBE_CARD_LIMIT = 24
@@ -46,7 +46,8 @@ function collectVirtualGridProbeLayout(
     })
 
     rows.sort((left, right) => left.top - right.top)
-    const columnCount = Math.max(1, rows[0]?.count ?? 1)
+    const measuredColumnCount = parseGridTemplateColumnCount(computedStyle.gridTemplateColumns)
+    const columnCount = measuredColumnCount ?? Math.max(1, rows[0]?.count ?? 1)
     const initialRowHeights = new Map<number, number>()
     rows.forEach((row, rowIndex) => {
         initialRowHeights.set(rowIndex, row.height)

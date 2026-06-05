@@ -183,4 +183,49 @@ describe('BookGrid virtual flow', () => {
             .map((row) => Number.parseInt(row.dataset.rowIndex || '-1', 10))
         expect(scrolledRows[0]).toBeGreaterThan(0)
     })
+
+    it('单本书时按真实网格列数布局，不退化为单列（防闪屏回归）', async () => {
+        const realGetComputedStyle = window.getComputedStyle.bind(window)
+        vi.stubGlobal('getComputedStyle', ((element: Element, pseudoElt?: string | null) => {
+            if (element instanceof HTMLElement && element.dataset.testid === 'book-grid-probe') {
+                return {
+                    gridTemplateColumns: '150px 150px 150px 150px 150px 150px',
+                    rowGap: '18px',
+                    columnGap: '18px',
+                    paddingTop: '8px',
+                } as unknown as CSSStyleDeclaration
+            }
+            return realGetComputedStyle(element, pseudoElt ?? undefined)
+        }) as typeof window.getComputedStyle)
+
+        const items: LibraryGridItem[] = [{ key: 'book-0', type: 'book', book: createBook(0) }]
+        const scrollContainer = document.createElement('div')
+        scrollContainer.dataset.scrollContainer = 'true'
+        Object.defineProperty(scrollContainer, 'clientWidth', { configurable: true, value: 900 })
+        Object.defineProperty(scrollContainer, 'clientHeight', { configurable: true, value: 240 })
+
+        const view = render(
+            <BookGrid
+                items={items}
+                emptyMessage="empty"
+                progressMap={{}}
+                onOpenBook={vi.fn()}
+                onOpenGroup={vi.fn()}
+                onContextMenu={vi.fn()}
+                scrollContainer={scrollContainer}
+                sortable={false}
+                sortContextKey={null}
+            />
+        )
+
+        await flushUi()
+
+        await waitFor(() => {
+            expect(view.container.querySelector('[data-testid="book-grid-virtual"]')).not.toBeNull()
+        })
+
+        const row = view.container.querySelector<HTMLElement>('[data-row-index="0"]')
+        expect(row).not.toBeNull()
+        expect(row?.style.gridTemplateColumns).toBe('repeat(6, minmax(0, 1fr))')
+    })
 })

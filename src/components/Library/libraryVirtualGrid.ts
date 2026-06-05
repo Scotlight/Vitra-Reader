@@ -79,3 +79,11 @@ export function resolveVisibleVirtualRows(
 
     return { startRow, endRow }
 }
+
+export function parseGridTemplateColumnCount(template: string | null | undefined): number | null {
+    if (!template) return null
+    const trimmed = template.trim()
+    if (!trimmed || trimmed === 'none') return null
+    const tracks = trimmed.split(/\s+/).filter((track) => Number.parseFloat(track) > 0)
+    return tracks.length > 0 ? tracks.length : null
+}
