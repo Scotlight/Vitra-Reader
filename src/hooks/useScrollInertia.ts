@@ -9,15 +9,11 @@ interface InertiaCallbacks {
 
 export interface InertiaTuning {
   maxAbsVelocity: number;
-  impulseGain: number;
-  impulseBlend: number;
   frameCapMs: number;
 }
 
 const DEFAULT_INERTIA_TUNING: InertiaTuning = {
   maxAbsVelocity: 96,
-  impulseGain: 0.24,
-  impulseBlend: 0.82,
   frameCapMs: 32,
 };
 
@@ -29,10 +25,9 @@ function clampVelocity(value: number, maxAbsVelocity: number): number {
 
 /**
  * useScrollInertia Hook
- * 统一物理引擎：滚轮冲量 + 触摸惯性 + 阻尼衰减
+ * 统一物理引擎：触摸惯性 + 阻尼衰减
  *
- * 核心思路：所有输入（wheel / touch fling）都转化为速度，
- * 由 rAF 循环以恒定摩擦衰减驱动 scrollTop，消除"卡顿→丝滑"的割裂感。
+ * 核心思路：触摸释放时注入速度，由 rAF 循环以恒定摩擦衰减驱动 scrollTop。
  */
 export function useScrollInertia(
   viewportRef: RefObject<HTMLElement>,
@@ -51,8 +46,6 @@ export function useScrollInertia(
   const tuningRef = useRef<InertiaTuning>(DEFAULT_INERTIA_TUNING);
   tuningRef.current = {
     maxAbsVelocity: clampNumber(Number(tuning.maxAbsVelocity ?? DEFAULT_INERTIA_TUNING.maxAbsVelocity), 32, 256),
-    impulseGain: clampNumber(Number(tuning.impulseGain ?? DEFAULT_INERTIA_TUNING.impulseGain), 0.05, 0.6),
-    impulseBlend: clampNumber(Number(tuning.impulseBlend ?? DEFAULT_INERTIA_TUNING.impulseBlend), 0.2, 0.98),
     frameCapMs: clampNumber(Number(tuning.frameCapMs ?? DEFAULT_INERTIA_TUNING.frameCapMs), 8, 64),
   };
 
@@ -117,20 +110,6 @@ export function useScrollInertia(
     }
   }, [physicsLoop]);
 
-  /**
-   * addImpulse — 滚轮 / 程序化输入的入口
-   * delta 单位: px（与 event.deltaY 一致）
-   * 内部转换为 px/frame 速度后注入
-   */
-  const addImpulse = useCallback((delta: number) => {
-    const tune = tuningRef.current;
-    velocity.current = clampVelocity(
-      velocity.current * tune.impulseBlend + delta * tune.impulseGain,
-      tune.maxAbsVelocity,
-    );
-    ensureRunning();
-  }, [ensureRunning]);
-
   /** fling — 触摸释放时注入速度 */
   const fling = useCallback((initialVelocity: number) => {
     const tune = tuningRef.current;
@@ -154,5 +133,5 @@ export function useScrollInertia(
     };
   }, []);
 
-  return { velocity: velocity.current, addImpulse, fling, stop, setDragging };
+  return { fling, stop, setDragging };
 }

@@ -17,8 +17,6 @@ vi.mock('@/engine/render/chapterPreprocessService', () => ({
 
 vi.mock('@/hooks/useScrollInertia', () => ({
     useScrollInertia: () => ({
-        velocity: 0,
-        addImpulse: vi.fn(),
         fling: vi.fn(),
         stop: vi.fn(),
         setDragging: vi.fn(),
