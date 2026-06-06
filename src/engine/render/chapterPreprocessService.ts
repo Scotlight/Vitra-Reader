@@ -9,6 +9,7 @@ import {
 } from './chapterPreprocessWorkerClient'
 
 const DEFAULT_TIMEOUT_MS = 2500
+export const MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH = 1_000_000
 
 /** 根据 HTML 大小动态计算超时（避免大章节误超时） */
 export function resolveChapterPreprocessTimeout(htmlLength: number, baseTimeout: number): number {
@@ -39,10 +40,31 @@ export async function preprocessChapterContent(
         return await preprocessChapterByWorker(normalizedPayload, effectiveTimeout)
     } catch (error) {
         resetChapterPreprocessWorker()
+        if ((normalizedPayload.htmlContent?.length || 0) > MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH) {
+            console.warn(
+                '[ChapterPreprocess] Worker unavailable for large chapter; skipped main-thread sanitize:',
+                error instanceof Error ? error.message : String(error),
+            )
+            return createRecoverablePreprocessFailure()
+        }
+
         console.warn(
             '[ChapterPreprocess] Worker unavailable, fallback to async core:',
             error instanceof Error ? error.message : String(error),
         )
         return preprocessChapterCoreAsync(normalizedPayload)
+    }
+}
+
+function createRecoverablePreprocessFailure(): ChapterPreprocessResult {
+    return {
+        htmlContent: '',
+        htmlFragments: [],
+        externalStyles: [],
+        removedTagCount: 0,
+        removedAttributeCount: 0,
+        usedFallback: true,
+        stylesScoped: false,
+        hasRenderableContent: false,
     }
 }

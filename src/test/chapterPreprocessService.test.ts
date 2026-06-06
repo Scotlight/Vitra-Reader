@@ -116,6 +116,38 @@ describe('chapterPreprocessService', () => {
         expect(warnSpy).toHaveBeenCalled()
     })
 
+    it('Worker 初始化失败且章节超阈值时不进入主线程 fallback', async () => {
+        class FailingWorker {
+            constructor() {
+                throw new Error('init failed')
+            }
+        }
+
+        globalThis.Worker = FailingWorker as unknown as typeof Worker
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const { MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH, preprocessChapterContent } = await importServiceModule()
+
+        const result = await preprocessChapterContent({
+            ...basePayload,
+            htmlContent: `<p>${'x'.repeat(MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH + 1)}</p>`,
+        })
+
+        expect(result).toEqual({
+            htmlContent: '',
+            htmlFragments: [],
+            externalStyles: [],
+            removedTagCount: 0,
+            removedAttributeCount: 0,
+            usedFallback: true,
+            stylesScoped: false,
+            hasRenderableContent: false,
+        })
+        expect(warnSpy).toHaveBeenCalledWith(
+            '[ChapterPreprocess] Worker unavailable for large chapter; skipped main-thread sanitize:',
+            '[ChapterPreprocess] Worker init failed: init failed',
+        )
+    })
+
     it('Worker 超时后同步降级到 preprocessChapterCore', async () => {
         vi.useFakeTimers()
 
@@ -136,6 +168,39 @@ describe('chapterPreprocessService', () => {
 
         await expect(promise).resolves.toEqual(preprocessChapterCore(basePayload))
         expect(warnSpy).toHaveBeenCalled()
+    })
+
+    it('Worker 超时且章节超阈值时不进入主线程 fallback', async () => {
+        vi.useFakeTimers()
+
+        class HangingWorker {
+            onmessage: ((event: MessageEvent) => void) | null = null
+            onerror: ((event: ErrorEvent) => void) | null = null
+            postMessage() {}
+            terminate() {}
+        }
+
+        globalThis.Worker = HangingWorker as unknown as typeof Worker
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        const { MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH, preprocessChapterContent } = await importServiceModule()
+
+        const promise = preprocessChapterContent({
+            ...basePayload,
+            htmlContent: `<p>${'x'.repeat(MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH + 1)}</p>`,
+        }, 1)
+        await vi.advanceTimersByTimeAsync(1500)
+        await vi.runAllTimersAsync()
+
+        await expect(promise).resolves.toMatchObject({
+            htmlContent: '',
+            htmlFragments: [],
+            usedFallback: true,
+            hasRenderableContent: false,
+        })
+        expect(warnSpy).toHaveBeenCalledWith(
+            '[ChapterPreprocess] Worker unavailable for large chapter; skipped main-thread sanitize:',
+            'Worker timeout after 20000ms',
+        )
     })
 
     it('大章节动态超时最高提升到 60 秒', async () => {
