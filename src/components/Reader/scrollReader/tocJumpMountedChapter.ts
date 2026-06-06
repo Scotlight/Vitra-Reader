@@ -17,6 +17,15 @@ interface ScrollMountedChapterIntoViewOptions {
     forceHydrateSegment: (segmentEl: HTMLElement) => void;
 }
 
+export function shouldSmoothJump(
+    currentScrollTop: number,
+    targetTop: number,
+    viewportHeight: number,
+    hasSearchText: boolean,
+): boolean {
+    return !hasSearchText && Math.abs(targetTop - currentScrollTop) <= viewportHeight * 3;
+}
+
 export function scrollMountedChapterIntoView({
     listEl,
     viewport,
@@ -33,6 +42,17 @@ export function scrollMountedChapterIntoView({
 }: ScrollMountedChapterIntoViewOptions): void {
     const domEl = listEl.querySelector(`[data-chapter-id="ch-${targetSpineIndex}"]`) as HTMLElement | null;
     if (!domEl) return;
+
+    const targetTop = domEl.offsetTop;
+    if (
+        typeof viewport.scrollTo === 'function'
+        && shouldSmoothJump(viewport.scrollTop, targetTop, viewport.clientHeight, !!searchText)
+    ) {
+        viewport.scrollTo({ top: targetTop, behavior: 'smooth' });
+        lastScrollTopRef.current = targetTop;
+        syncViewportState(targetTop, viewport.clientHeight, { commitProgress: true });
+        return;
+    }
 
     viewport.scrollTop = domEl.offsetTop;
     lastScrollTopRef.current = viewport.scrollTop;
