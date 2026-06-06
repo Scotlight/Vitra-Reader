@@ -19,7 +19,6 @@ concurrency:
 
 env:
   NODE_VERSION: '20'
-  ELECTRON_BUILDER_VERSION: '^25.1.8'
   WIN7_ELECTRON_VERSION: '22.3.27'
 
 jobs:
@@ -117,13 +116,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Ensure electron-builder is installed
+      - name: Verify locked electron-builder
         shell: bash
         run: |
-          if ! npm ls electron-builder >/dev/null 2>&1; then
-            echo "electron-builder not in lockfile, installing transient copy"
-            npm install --no-save --no-package-lock "electron-builder@${ELECTRON_BUILDER_VERSION}"
-          fi
+          npm ls electron-builder --depth=0
+          npx electron-builder --version
 
       # 关键：build 在降级 Electron 之前完成。
       # dist/ 与 dist-electron/ 是平台无关 JS bundle，与 Electron runtime 版本无关。
@@ -135,9 +132,23 @@ jobs:
         if: matrix.downgrade_electron == 'true'
         shell: bash
         run: |
-          echo "Installing Electron ${WIN7_ELECTRON_VERSION} for Win7 compatibility"
-          npm install --no-save --no-package-lock "electron@${WIN7_ELECTRON_VERSION}"
+          echo "Installing Electron ${WIN7_ELECTRON_VERSION} for Win7 compatibility from a generated lockfile"
+          npm pkg set "devDependencies.electron=${WIN7_ELECTRON_VERSION}"
+          npm install --package-lock-only --ignore-scripts
+          npm ci
           npx electron --version
+
+      - name: Record build tool versions
+        shell: bash
+        run: |
+          electron_version="$(node -p "require('electron/package.json').version")"
+          {
+            echo "label=${{ matrix.label }}"
+            echo "node=$(node --version)"
+            echo "npm=$(npm --version)"
+            echo "electron-builder=$(npx electron-builder --version)"
+            echo "electron=${electron_version}"
+          } | tee "build-toolchain-${{ matrix.label }}.txt"
 
       - name: Package with electron-builder
         shell: bash
@@ -163,6 +174,7 @@ jobs:
             -name "*.snap" -o \
             -name "*.rpm" \
           \) ! -name "elevate.exe" ! -name "__uninstaller*" ! -path "*-unpacked/*" -exec cp {} out/ \;
+          cp "build-toolchain-${{ matrix.label }}.txt" out/
           ls -la out/
 
       - uses: actions/upload-artifact@v4
@@ -188,7 +200,8 @@ jobs:
           mkdir -p release-assets
           find artifacts -type f \
             \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" \
-               -o -name "*.AppImage" -o -name "*.deb" \) \
+               -o -name "*.AppImage" -o -name "*.deb" \
+               -o -name "build-toolchain-*.txt" \) \
             ! -name "elevate.exe" ! -name "__uninstaller*" \
             -exec cp {} release-assets/ \;
           ls -la release-assets/
@@ -211,6 +224,10 @@ jobs:
             | macOS Apple Silicon | `*-arm64.dmg` / `*-arm64.zip` |
             | Linux x64 | `*-x64.AppImage` / `*-x64.deb` |
             | Linux ARM64 | `*-arm64.AppImage` / `*-arm64.deb` |
+
+            ### 构建版本信息
+
+            每个平台的实际 Node、npm、electron-builder 与 Electron 版本记录在 `build-toolchain-*.txt`。
 
             ### macOS 安装提示
 
