@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
     DEFAULT_TRANSLATE_CONFIG,
     clearTranslationCache,
@@ -16,20 +16,43 @@ export function TranslateSettingsTab() {
     const [translateSaving, setTranslateSaving] = useState(false)
     const [translateTesting, setTranslateTesting] = useState(false)
     const [translateStatus, setTranslateStatus] = useState('')
-    const [configLoaded, setConfigLoaded] = useState(false)
+    const [safeStorageAvailable, setSafeStorageAvailable] = useState<boolean | null>(null)
+    const [allowInsecureKeyStorage, setAllowInsecureKeyStorage] = useState(false)
 
-    if (!configLoaded) {
-        setConfigLoaded(true)
-        void loadTranslateConfig().then(setTranslateConfig)
-    }
+    useEffect(() => {
+        let active = true
+        const api = window.electronAPI
+        void loadTranslateConfig().then((config) => {
+            if (active) setTranslateConfig(config)
+        })
+        if (api?.safeStorageIsAvailable) {
+            void api.safeStorageIsAvailable()
+                .then((available) => {
+                    if (active) setSafeStorageAvailable(available)
+                })
+                .catch(() => {
+                    if (active) setSafeStorageAvailable(false)
+                })
+        } else {
+            setSafeStorageAvailable(false)
+        }
+        return () => { active = false }
+    }, [])
+
+    const hasTranslateApiKey = translateConfig.deeplApiKey.trim().length > 0 || translateConfig.openaiApiKey.trim().length > 0
+    const shouldShowKeyStorageWarning = safeStorageAvailable === false && hasTranslateApiKey
 
     const handleSaveTranslateConfig = async () => {
         setTranslateSaving(true)
         setTranslateStatus('保存翻译配置中...')
         try {
-            const saved = await saveTranslateConfig(translateConfig)
+            const saved = await saveTranslateConfig(translateConfig, { allowInsecureKeyStorage })
             setTranslateConfig(saved)
-            setTranslateStatus('翻译配置已保存')
+            if (safeStorageAvailable === false && hasTranslateApiKey && !allowInsecureKeyStorage) {
+                setTranslateStatus('翻译配置已保存，API Key 未写入本地')
+            } else {
+                setTranslateStatus('翻译配置已保存')
+            }
         } catch (error: unknown) {
             setTranslateStatus(`保存失败: ${error instanceof Error ? error.message : String(error)}`)
         } finally {
@@ -191,6 +214,23 @@ export function TranslateSettingsTab() {
                         />
                     </label>
                 </>
+            )}
+
+            {shouldShowKeyStorageWarning && (
+                <div className={styles.settingRow}>
+                    <span>密钥保存</span>
+                    <div>
+                        <div className={styles.syncStatus}>当前系统无法安全保存 API Key，默认不写入本地。</div>
+                        <label className={styles.checkboxRow}>
+                            <input
+                                type="checkbox"
+                                checked={allowInsecureKeyStorage}
+                                onChange={(event) => setAllowInsecureKeyStorage(event.target.checked)}
+                            />
+                            我了解风险，仍在本地保存
+                        </label>
+                    </div>
+                </div>
             )}
 
             <label className={styles.settingRow}>

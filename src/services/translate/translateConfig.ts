@@ -6,6 +6,10 @@ const TRANSLATE_CONFIG_KEY = 'translate:config'
 const TRANSLATE_CONFIG_LEGACY_KEY = 'translateConfig'
 const API_KEY_FIELDS = ['deeplApiKey', 'openaiApiKey'] as const
 
+interface SaveTranslateConfigOptions {
+    allowInsecureKeyStorage?: boolean
+}
+
 async function transformApiKeys(
     config: Record<string, unknown>,
     transform: (value: string) => Promise<string>,
@@ -24,6 +28,38 @@ async function encryptApiKeys(config: Record<string, unknown>): Promise<Record<s
     const api = window.electronAPI
     if (!api?.safeStorageEncrypt) return config
     return transformApiKeys(config, api.safeStorageEncrypt.bind(api))
+}
+
+function removePersistedApiKeys(config: Record<string, unknown>): Record<string, unknown> {
+    const copy = { ...config }
+    for (const field of API_KEY_FIELDS) {
+        if (typeof copy[field] === 'string' && copy[field].length > 0) {
+            delete copy[field]
+        }
+    }
+    return copy
+}
+
+async function isSafeStorageAvailable(): Promise<boolean> {
+    const api = window.electronAPI
+    if (!api?.safeStorageEncrypt || !api.safeStorageIsAvailable) return false
+    try {
+        return await api.safeStorageIsAvailable()
+    } catch {
+        return false
+    }
+}
+
+async function prepareApiKeysForStorage(
+    config: Record<string, unknown>,
+    options: SaveTranslateConfigOptions,
+): Promise<Record<string, unknown>> {
+    const safeStorageAvailable = await isSafeStorageAvailable()
+    const canTransformApiKeys = typeof window.electronAPI?.safeStorageEncrypt === 'function'
+    if (safeStorageAvailable || (options.allowInsecureKeyStorage && canTransformApiKeys)) {
+        return encryptApiKeys(config)
+    }
+    return removePersistedApiKeys(config)
 }
 
 async function decryptApiKeys(config: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -52,10 +88,13 @@ export async function loadTranslateConfig(): Promise<TranslateConfig> {
     return normalizeConfig(decrypted as Partial<TranslateConfig>)
 }
 
-export async function saveTranslateConfig(config: Partial<TranslateConfig>): Promise<TranslateConfig> {
+export async function saveTranslateConfig(
+    config: Partial<TranslateConfig>,
+    options: SaveTranslateConfigOptions = {},
+): Promise<TranslateConfig> {
     const current = await loadTranslateConfig()
     const next = normalizeConfig({ ...current, ...config })
-    const encrypted = await encryptApiKeys(next as unknown as Record<string, unknown>)
-    await db.settings.put({ key: TRANSLATE_CONFIG_KEY, value: encrypted })
+    const stored = await prepareApiKeysForStorage(next as unknown as Record<string, unknown>, options)
+    await db.settings.put({ key: TRANSLATE_CONFIG_KEY, value: stored })
     return next
 }
