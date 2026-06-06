@@ -30,8 +30,12 @@ export async function dbGet(key: string): Promise<{ key: string; value: unknown 
     if (!legacyKey) return undefined
     const legacy = await db.settings.get(legacyKey)
     if (legacy === undefined) return undefined
-    await db.settings.put({ key, value: legacy.value })
-    await db.settings.delete(legacyKey)
+    try {
+        await db.settings.put({ key, value: legacy.value })
+        await db.settings.delete(legacyKey)
+    } catch (error) {
+        console.warn('Failed to migrate legacy WebDAV setting', error)
+    }
     return { key, value: legacy.value }
 }
 
