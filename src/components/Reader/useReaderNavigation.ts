@@ -5,7 +5,6 @@ import type { ScrollReaderHandle } from './ScrollReaderView'
 import { normalizeTocHref } from './readerToc'
 
 const JUMP_TARGET_DELAY_MS = 500
-const MOBILE_BREAKPOINT_PX = 768
 
 type ReaderTab = 'toc' | 'search' | 'annotations'
 
@@ -25,7 +24,6 @@ interface UseReaderNavigationOptions {
     readonly setActiveTab: Dispatch<SetStateAction<ReaderTab>>
     readonly setCurrentSectionHref: Dispatch<SetStateAction<string>>
     readonly setIsSearching: Dispatch<SetStateAction<boolean>>
-    readonly setLeftPanelOpen: Dispatch<SetStateAction<boolean>>
     readonly setSearchResults: Dispatch<SetStateAction<SearchResult[]>>
     readonly setSettingsOpen: Dispatch<SetStateAction<boolean>>
 }
@@ -41,7 +39,6 @@ export function useReaderNavigation({
     setActiveTab,
     setCurrentSectionHref,
     setIsSearching,
-    setLeftPanelOpen,
     setSearchResults,
     setSettingsOpen,
 }: UseReaderNavigationOptions) {
@@ -51,8 +48,7 @@ export function useReaderNavigation({
         const spineIndex = resolveSpineIndex(location)
         if (spineIndex === null) return
         await jumpToReaderSpine(isScrollMode, scrollReaderRef, paginatedReaderRef, spineIndex, searchText)
-        closeLeftPanelOnMobile(setLeftPanelOpen)
-    }, [isScrollMode, paginatedReaderRef, scrollReaderRef, setLeftPanelOpen])
+    }, [isScrollMode, paginatedReaderRef, scrollReaderRef])
 
     const handleTocClick = useCallback(async (href: string) => {
         setCurrentSectionHref(normalizeTocHref(href))
@@ -62,8 +58,7 @@ export function useReaderNavigation({
         if (spineIndex >= 0) {
             await jumpToReaderSpine(isScrollMode, scrollReaderRef, paginatedReaderRef, spineIndex)
         }
-        closeLeftPanelOnMobile(setLeftPanelOpen)
-    }, [isScrollMode, paginatedReaderRef, providerRef, scrollReaderRef, setCurrentSectionHref, setLeftPanelOpen])
+    }, [isScrollMode, paginatedReaderRef, providerRef, scrollReaderRef, setCurrentSectionHref])
 
     const handleSearchWithKeyword = useCallback(async (keyword: string) => {
         if (!keyword.trim() || !providerRef.current) return
@@ -83,33 +78,19 @@ export function useReaderNavigation({
         await handleSearchWithKeyword(searchQuery)
     }, [handleSearchWithKeyword, searchQuery])
 
-    const toggleLeftPanel = useCallback(() => {
-        setLeftPanelOpen((current) => {
-            const next = !current
-            if (next) setSettingsOpen(false)
-            return next
-        })
-    }, [setLeftPanelOpen, setSettingsOpen])
-
     const toggleSettingsPanel = useCallback(() => {
-        setSettingsOpen((current) => {
-            const next = !current
-            if (next) setLeftPanelOpen(false)
-            return next
-        })
-    }, [setLeftPanelOpen, setSettingsOpen])
+        setSettingsOpen((current) => !current)
+    }, [setSettingsOpen])
 
     const closePanels = useCallback(() => {
-        setLeftPanelOpen(false)
         setSettingsOpen(false)
-    }, [setLeftPanelOpen, setSettingsOpen])
+    }, [setSettingsOpen])
 
     const openSearchPanelWithKeyword = useCallback((keyword: string) => {
         setActiveTab('search')
-        setLeftPanelOpen(true)
         setSettingsOpen(false)
         void handleSearchWithKeyword(keyword)
-    }, [handleSearchWithKeyword, setActiveTab, setLeftPanelOpen, setSettingsOpen])
+    }, [handleSearchWithKeyword, setActiveTab, setSettingsOpen])
 
     useEffect(() => {
         jumpTargetDoneRef.current = false
@@ -133,7 +114,6 @@ export function useReaderNavigation({
         handleTocClick,
         jumpToAnnotation,
         openSearchPanelWithKeyword,
-        toggleLeftPanel,
         toggleSettingsPanel,
     }
 }
@@ -160,9 +140,4 @@ async function jumpToReaderSpine(
         return
     }
     await paginatedReaderRef.current?.jumpToSpine(spineIndex, searchText)
-}
-
-function closeLeftPanelOnMobile(setLeftPanelOpen: Dispatch<SetStateAction<boolean>>) {
-    if (window.innerWidth >= MOBILE_BREAKPOINT_PX) return
-    setLeftPanelOpen(false)
 }

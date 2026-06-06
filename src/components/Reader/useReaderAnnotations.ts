@@ -1,20 +1,19 @@
 import { useEffect, useState } from 'react'
 import { db, type Bookmark, type Highlight } from '@/services/storageService'
-import type { ReaderPanelTab } from './ReaderLeftPanel'
+import type { ReaderPanelTab } from './readerPanelTypes'
 
 interface UseReaderAnnotationsArgs {
     readonly activeTab: ReaderPanelTab
     readonly bookId: string
-    readonly leftPanelOpen: boolean
 }
 
-export function useReaderAnnotations({ activeTab, bookId, leftPanelOpen }: UseReaderAnnotationsArgs) {
+export function useReaderAnnotations({ activeTab, bookId }: UseReaderAnnotationsArgs) {
     const [highlights, setHighlights] = useState<Highlight[]>([])
     const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
     const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null)
 
     useEffect(() => {
-        if (!leftPanelOpen || activeTab !== 'annotations') return
+        if (activeTab !== 'annotations') return
 
         const loadAnnotations = async () => {
             const [loadedHighlights, loadedBookmarks] = await Promise.all([
@@ -27,7 +26,7 @@ export function useReaderAnnotations({ activeTab, bookId, leftPanelOpen }: UseRe
         }
 
         void loadAnnotations()
-    }, [leftPanelOpen, activeTab, bookId])
+    }, [activeTab, bookId])
 
     const deleteHighlight = async (id: string) => {
         await db.highlights.delete(id)

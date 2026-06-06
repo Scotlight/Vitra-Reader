@@ -5,6 +5,7 @@ import type { PageTurnMode } from '@/stores/useSettingsStore'
 import { ImmersiveReaderShell } from './ImmersiveReaderShell'
 import { ReaderSettingsPanel } from './ReaderSettingsPanel'
 import type { ReaderColors } from './readerColors'
+import type { ReaderPanelTab } from './readerPanelTypes'
 import styles from './ReaderView.module.css'
 
 interface ReaderSurfaceSettings {
@@ -20,6 +21,7 @@ interface ReaderSurfaceSettings {
 }
 
 interface ReaderSurfaceProps {
+    activeTab: ReaderPanelTab
     bookFormat: string
     bookTitleText: string
     chapterLabel: string
@@ -27,20 +29,16 @@ interface ReaderSurfaceProps {
     closePanels: () => void
     content: ReactNode
     currentSectionHref: string
-    handleTocClick: (href: string) => Promise<void>
-    leftPanel: ReactNode
-    leftPanelOpen: boolean
     onBack: () => void
     onPageTurnModeChange: (nextMode: PageTurnMode) => void
-    openSearchPanel: () => void
-    openTocPanel: () => void
+    onTabChange: (tab: ReaderPanelTab) => void
+    panelContent: ReactNode
     progressLabel: string
     readerColors: ReaderColors
     resolvedReaderFontFamily: string
     settings: ReaderSurfaceSettings
     settingsOpen: boolean
     toc: readonly TocItem[]
-    toggleLeftPanel: () => void
     toggleSettingsPanel: () => void
 }
 
@@ -64,6 +62,7 @@ function buildReaderContainerStyle(
 }
 
 export function ReaderSurface({
+    activeTab,
     bookFormat,
     bookTitleText,
     chapterLabel,
@@ -71,20 +70,16 @@ export function ReaderSurface({
     closePanels,
     content,
     currentSectionHref,
-    handleTocClick,
-    leftPanel,
-    leftPanelOpen,
     onBack,
     onPageTurnModeChange,
-    openSearchPanel,
-    openTocPanel,
+    onTabChange,
+    panelContent,
     progressLabel,
     readerColors,
     resolvedReaderFontFamily,
     settings,
     settingsOpen,
     toc,
-    toggleLeftPanel,
     toggleSettingsPanel,
 }: ReaderSurfaceProps) {
     const readerContainerRef = useRef<HTMLDivElement | null>(null)
@@ -157,19 +152,17 @@ export function ReaderSurface({
             style={buildReaderContainerStyle(readerColors, resolvedReaderFontFamily, settings)}
         >
             <ImmersiveReaderShell
+                activeTab={activeTab}
                 bookTitleText={bookTitleText}
                 chapterLabel={chapterLabel}
                 clockText={clockText}
                 closePanels={closePanels}
                 content={content}
                 currentSectionHref={currentSectionHref}
-                handleTocClick={handleTocClick}
-                leftPanel={leftPanel}
-                leftPanelOpen={leftPanelOpen}
                 onBack={onBack}
-                openSearchPanel={openSearchPanel}
-                openTocPanel={openTocPanel}
+                onTabChange={onTabChange}
                 onToggleFullscreen={toggleFullscreen}
+                panelContent={panelContent}
                 progressLabel={progressLabel}
                 settingsOpen={settingsOpen}
                 settingsPanel={settingsPanel}
@@ -177,7 +170,6 @@ export function ReaderSurface({
                 showFooterProgress={settings.showFooterProgress}
                 showFooterTime={settings.showFooterTime}
                 toc={toc}
-                toggleLeftPanel={toggleLeftPanel}
                 toggleSettingsPanel={toggleSettingsPanel}
             />
         </div>

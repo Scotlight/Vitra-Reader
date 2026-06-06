@@ -1,5 +1,5 @@
 // 目录自动居中：把当前阅读章（data-toc-active）滚到滚动容器垂直中部，
-// 常规 ReaderLeftPanel 与全屏沉浸 ImmersiveReaderShell 两套目录共用。
+// 沉浸式胶囊内的 ReaderPanelContent 目录 tab 使用。
 
 export function centerActiveTocItem(container: HTMLElement): boolean {
     const activeItem = container.querySelector<HTMLElement>('button[data-toc-active="true"]')

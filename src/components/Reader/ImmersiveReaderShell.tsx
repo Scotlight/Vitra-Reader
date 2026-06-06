@@ -1,24 +1,23 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 import type { TocItem } from '@/engine/core/contentProvider'
-import { isTocHrefActive } from './readerToc'
+import type { ReaderPanelTab } from './readerPanelTypes'
 import { scheduleCenterActiveToc } from './tocAutoScroll'
+import { useReaderTabShortcut } from './useReaderTabShortcut'
 import styles from './ImmersiveReaderShell.module.css'
 
 interface ImmersiveReaderShellProps {
+    readonly activeTab: ReaderPanelTab
     readonly bookTitleText: string
     readonly chapterLabel: string
     readonly clockText: string
     readonly closePanels: () => void
     readonly content: ReactNode
     readonly currentSectionHref: string
-    readonly handleTocClick: (href: string) => Promise<void>
-    readonly leftPanel: ReactNode
-    readonly leftPanelOpen: boolean
     readonly onBack: () => void
-    readonly openSearchPanel: () => void
-    readonly openTocPanel: () => void
+    readonly onTabChange: (tab: ReaderPanelTab) => void
     readonly onToggleFullscreen: () => void
+    readonly panelContent: ReactNode
     readonly progressLabel: string
     readonly showFooterChapter: boolean
     readonly showFooterProgress: boolean
@@ -26,7 +25,6 @@ interface ImmersiveReaderShellProps {
     readonly settingsOpen: boolean
     readonly settingsPanel: ReactNode
     readonly toc: readonly TocItem[]
-    readonly toggleLeftPanel: () => void
     readonly toggleSettingsPanel: () => void
 }
 
@@ -90,45 +88,18 @@ function buildStatusItems(
     return items
 }
 
-function renderImmersiveTocItems(
-    items: readonly TocItem[],
-    currentSectionHref: string,
-    handleTocClick: (href: string) => Promise<void>,
-    level = 0,
-): JSX.Element[] {
-    return items.flatMap((item, index) => {
-        const key = `${level}-${index}-${item.href}`
-        const active = isTocHrefActive(item.href, currentSectionHref)
-        const children = item.subitems ? renderImmersiveTocItems(item.subitems, currentSectionHref, handleTocClick, level + 1) : []
-        return [
-            <button
-                key={key}
-                className={`${styles.tocPreviewItem} ${active ? styles.tocPreviewItemActive : ''}`}
-                data-toc-active={active ? 'true' : 'false'}
-                onClick={() => void handleTocClick(item.href)}
-                style={{ paddingLeft: `${12 + level * 12}px` }}
-            >
-                <span className={styles.tocPreviewLabel} title={item.label}>{item.label}</span>
-            </button>,
-            ...children,
-        ]
-    })
-}
-
 export function ImmersiveReaderShell({
+    activeTab,
     bookTitleText,
     chapterLabel,
     clockText,
     closePanels,
     content,
     currentSectionHref,
-    handleTocClick,
-    leftPanel,
-    leftPanelOpen,
     onBack,
-    openSearchPanel,
-    openTocPanel,
+    onTabChange,
     onToggleFullscreen,
+    panelContent,
     progressLabel,
     showFooterChapter,
     showFooterProgress,
@@ -136,18 +107,19 @@ export function ImmersiveReaderShell({
     settingsOpen,
     settingsPanel,
     toc,
-    toggleLeftPanel,
     toggleSettingsPanel,
 }: ImmersiveReaderShellProps) {
     const [chromeActive, setChromeActive] = useState(true)
     const activeChromeClass = chromeActive ? styles.activeChrome : ''
-    const tocPreviewListRef = useRef<HTMLDivElement>(null)
+    const tocListRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
-        if (!chromeActive) return
-        const cancel = scheduleCenterActiveToc(() => tocPreviewListRef.current)
+        if (!chromeActive || activeTab !== 'toc') return
+        const cancel = scheduleCenterActiveToc(() => tocListRef.current)
         return () => cancel()
-    }, [chromeActive, currentSectionHref, toc.length])
+    }, [chromeActive, activeTab, currentSectionHref, toc.length])
+
+    useReaderTabShortcut({ enabled: chromeActive, activeTab, onTabChange })
     const progressWidth = resolveProgressWidth(progressLabel)
 
     const handleContentClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
@@ -180,9 +152,6 @@ export function ImmersiveReaderShell({
                     <span className={styles.bookTitle}>{bookTitleText}</span>
                 </div>
                 <div className={styles.headerRight}>
-                    <button className={`${styles.iconButton} ${leftPanelOpen ? styles.activeButton : ''}`} onClick={toggleLeftPanel}>
-                        ≡ 目录
-                    </button>
                     <button className={`${styles.iconButton} ${settingsOpen ? styles.activeButton : ''}`} onClick={toggleSettingsPanel}>
                         ⚙ 设置
                     </button>
@@ -192,22 +161,8 @@ export function ImmersiveReaderShell({
                 </div>
             </div>
 
-            <div className={`${styles.glassCapsule} ${styles.tocCapsule} ${activeChromeClass}`} data-immersive-reader-chrome="true">
-                <div className={styles.tocCapsuleHeader}>
-                    <button className={`${styles.tocCapsuleTab} ${styles.tocCapsuleTabActive}`} onClick={openTocPanel}>
-                        目录
-                    </button>
-                    <button className={styles.tocCapsuleTab} onClick={openSearchPanel}>
-                        搜索
-                    </button>
-                </div>
-                <div ref={tocPreviewListRef} className={styles.tocPreviewList}>
-                    {toc.length === 0 ? (
-                        <div className={styles.tocPreviewEmpty}>无目录信息</div>
-                    ) : (
-                        renderImmersiveTocItems(toc, currentSectionHref, handleTocClick)
-                    )}
-                </div>
+            <div ref={tocListRef} className={`${styles.glassCapsule} ${styles.tocCapsule} ${activeChromeClass}`} data-immersive-reader-chrome="true" data-active-tab={activeTab}>
+                {panelContent}
             </div>
 
             {statusItems.length > 0 && (
@@ -223,10 +178,9 @@ export function ImmersiveReaderShell({
 
             <div className={styles.bottomProgressBar} style={{ width: progressWidth }} />
 
-            {(leftPanelOpen || settingsOpen) && (
+            {settingsOpen && (
                 <div className={styles.panelLayer} data-immersive-reader-chrome="true">
                     <div className={styles.panelBackdrop} onClick={closePanels} />
-                    {leftPanel}
                     {settingsPanel}
                 </div>
             )}

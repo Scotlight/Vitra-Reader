@@ -130,6 +130,14 @@
     padding: 12px;
     border-radius: 24px;
     transform: translateY(-50%) translateX(-20px);
+    transition: width 0.28s ease, max-height 0.28s ease;
+}
+
+/* 目录=现尺寸；搜索/标注内容更宽更高，胶囊随 activeTab 变大 */
+.tocCapsule[data-active-tab='search'],
+.tocCapsule[data-active-tab='annotations'] {
+    width: 360px;
+    max-height: min(680px, calc(100vh - 120px));
 }
 
 .statusCapsule {

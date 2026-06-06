@@ -6,7 +6,8 @@ import { resolveReaderRenderMode } from '@/engine/core/readerRenderMode'
 import { ScrollReaderView, ScrollReaderHandle } from './ScrollReaderView'
 import { PaginatedReaderView, PaginatedReaderHandle } from './PaginatedReaderView'
 import { useAutoScrollActiveToc } from './useAutoScrollActiveToc'
-import { ReaderLeftPanel, type ReaderPanelTab } from './ReaderLeftPanel'
+import { ReaderPanelContent } from './ReaderPanelContent'
+import type { ReaderPanelTab } from './readerPanelTypes'
 import { ReaderSurface } from './ReaderSurface'
 import { buildFontFamilyWithFallback } from '@/utils/fontFallback'
 import { findCurrentChapterLabel, normalizeTocHref } from './readerToc'
@@ -30,7 +31,6 @@ interface ReaderViewProps {
 export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const tocListRef = useRef<HTMLDivElement>(null)
     const providerRef = useRef<ContentProvider | null>(null)
-    const [leftPanelOpen, setLeftPanelOpen] = useState(false)
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [activeTab, setActiveTab] = useState<ReaderPanelTab>('toc')
     const [currentSectionHref, setCurrentSectionHref] = useState<string>('')
@@ -66,7 +66,6 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const annotationState = useReaderAnnotations({
         activeTab,
         bookId,
-        leftPanelOpen,
     })
     const modeDecision = resolveReaderRenderMode(bookFormat, settings.pageTurnMode)
     const effectivePageTurnMode = modeDecision.effectiveMode
@@ -109,7 +108,6 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         handleTocClick,
         jumpToAnnotation,
         openSearchPanelWithKeyword,
-        toggleLeftPanel,
         toggleSettingsPanel,
     } = useReaderNavigation({
         isReady,
@@ -122,14 +120,12 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         setActiveTab,
         setCurrentSectionHref,
         setIsSearching,
-        setLeftPanelOpen,
         setSearchResults,
         setSettingsOpen,
     })
     useAutoScrollActiveToc({
         activeTab,
         currentSectionHref,
-        leftPanelOpen,
         tocLength: toc.length,
         tocListRef,
     })
@@ -159,16 +155,6 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         setSearchQuery(keyword)
         openSearchPanelWithKeyword(keyword)
     }, [openSearchPanelWithKeyword])
-    const openTocPanel = useCallback(() => {
-        setActiveTab('toc')
-        setLeftPanelOpen(true)
-        setSettingsOpen(false)
-    }, [])
-    const openSearchPanel = useCallback(() => {
-        setActiveTab('search')
-        setLeftPanelOpen(true)
-        setSettingsOpen(false)
-    }, [])
     const getFallbackModePositionSnapshot = useCallback(() => {
         const fallbackSpineIndex = isScrollMode
             ? scrollParams.initialSpineIndex
@@ -251,6 +237,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     )
     return (
         <ReaderSurface
+            activeTab={activeTab}
             bookFormat={bookFormat}
             bookTitleText={bookTitleText}
             chapterLabel={findCurrentChapterLabel(toc, currentSectionHref)}
@@ -258,8 +245,8 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             closePanels={closePanels}
             content={content}
             currentSectionHref={currentSectionHref}
-            leftPanel={(
-                <ReaderLeftPanel
+            panelContent={(
+                <ReaderPanelContent
                     activeTab={activeTab}
                     bookmarks={annotationState.bookmarks}
                     currentSectionHref={currentSectionHref}
@@ -269,7 +256,6 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                     handleSearch={handleSearch}
                     handleTocClick={handleTocClick}
                     highlights={annotationState.highlights}
-                    isOpen={leftPanelOpen}
                     isSearching={isSearching}
                     jumpToAnnotation={jumpToAnnotation}
                     onExpandedNoteChange={annotationState.setExpandedNoteId}
@@ -281,19 +267,15 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                     tocListRef={tocListRef}
                 />
             )}
-            handleTocClick={handleTocClick}
-            leftPanelOpen={leftPanelOpen}
             onBack={onBack}
             onPageTurnModeChange={handlePageTurnModeChange}
-            openSearchPanel={openSearchPanel}
-            openTocPanel={openTocPanel}
+            onTabChange={setActiveTab}
             progressLabel={`${Math.round(Math.max(0, Math.min(1, currentProgress)) * 100)}%`}
             readerColors={readerColors}
             resolvedReaderFontFamily={resolvedReaderFontFamily}
             settings={settings}
             settingsOpen={settingsOpen}
             toc={toc}
-            toggleLeftPanel={toggleLeftPanel}
             toggleSettingsPanel={toggleSettingsPanel}
         />
     )
