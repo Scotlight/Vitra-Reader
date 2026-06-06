@@ -24,13 +24,13 @@ Built with Electron + React + TypeScript, it aims to be a practical long-term re
 ## Why Vitra Reader
 
 ### Local-first, fully offline-capable
-- EPUB files, progress, highlights/notes, and settings are stored locally.
+- Book files (multiple formats), progress, highlights/notes, and settings are stored locally.
 - No account dependency for core reading workflows.
 
 ### Highly customizable reading experience
 - Themes: Light / Dark / Sepia / Green + custom colors.
 - Typography: font, size, line-height, letter-spacing, paragraph spacing, alignment.
-- Reading modes: Paginated / Scrolled / Scrolled Continuous.
+- Reading modes: single-page / double-page / continuous scroll, in an immersive fullscreen UI.
 
 ### Sync and backup under your control
 - WebDAV support for private cloud / self-hosted servers.
@@ -39,25 +39,26 @@ Built with Electron + React + TypeScript, it aims to be a practical long-term re
 
 ### Practical library management
 - Category views: All books, Favorites, Notes, Highlights, Trash.
-- Shelf system: create, rename, dissolve, and move books between shelves.
-- Grouped browsing in main content area via shelf cards.
+- Group system: create, rename, dissolve, and move books between groups.
+- Grouped browsing in main content area via group cards.
 
 ---
 
 ## Core Features
 
 ### 1) Library & Import
-- EPUB import with metadata parsing (title, author, cover)
-- Search and sorting
+- Multi-format import with metadata parsing (title, author, cover)
+- Search, sorting, and group management
 - Reading progress visualization
-- Context menu actions (favorite, add to shelf, trash, restore, permanent delete)
+- Context menu actions (favorite, add to group, trash, restore, permanent delete)
 
 ### 2) Reader
-- EPUB chapter, TOC, and resource extraction via epub.js; body rendering is handled by ShadowRenderer
+- Multi-format content unified behind a ContentProvider interface via Vitra Pipeline (EPUB internally based on epub.js), rendered by ShadowRenderer
+- Immersive fullscreen UI; three reading modes: single-page / double-page / continuous scroll
 - TOC navigation
 - Full-text search and result jump
 - Keyboard navigation (Arrow keys / PageUp / PageDown)
-- Text selection menu (copy, highlight, note, search, web search, read-aloud entry)
+- Text selection menu (copy, highlight, note, search, web search, read-aloud, translate)
 
 ### 3) Reading Styles
 - System font selection
@@ -65,12 +66,29 @@ Built with Electron + React + TypeScript, it aims to be a practical long-term re
 - Text alignment (left / justify / center)
 - Custom foreground/background colors
 
-### 4) Sync & Restore
+### 4) Translation & Read-aloud
+- Inline translation with multiple engines: OpenAI-compatible (incl. Gemini / Ollama compatible endpoints), DeepL, DeepLX
+- Translation requests proxied through the main process; API keys and endpoints configured locally
+- Read-aloud via system speech synthesis (Web Speech), one click from the selection menu
+
+### 5) Reading Stats
+- Tracks reading time and activity, aggregated by book / period
+- Dedicated reading statistics panel
+
+### 6) Sync & Restore
 - WebDAV connection testing
 - Upload sync and download restore
 - Sync modes (full/data/files)
 - Restore modes (auto/full/data/files)
 - Auto sync flow (startup pull + interval sync + pre-exit sync)
+
+---
+
+## Supported Formats
+
+- Text / documents: `EPUB` `PDF` `TXT` `MOBI` `AZW` `AZW3` `MD` `HTML` `HTM` `XHTML` `XML` `FB2` `DOCX`
+- Comics / archives: `CBZ` `CBT` `CBR` `CB7` (detected by content magic bytes and extension)
+- Note: `DJVU` is recognized, but parsing relies on an optional GPL-3.0 component and is not enabled by default.
 
 ---
 
@@ -128,6 +146,10 @@ npm run build
 - Dexie.js (IndexedDB)
 - epub.js (EPUB parsing and resource extraction)
 - @lingo-reader/mobi-parser
+- pdfjs-dist
+- Mammoth (DOCX)
+- Marked (Markdown)
+- fflate
 - Framer Motion
 
 ---
@@ -137,10 +159,10 @@ npm run build
 Current stage: **Alpha (active iteration)**
 
 Next:
-- Translation service UX refinement (OpenAI-compatible / Gemini-compatible / Claude-compatible / Ollama-compatible / DeepL / DeepLX, with local cache)
-- TTS read-aloud (voice/rate configurable)
+- Read-aloud enhancements (voice/rate config, offline / online engines)
 - Dictionary support (offline or online)
-- Performance optimization for large EPUBs (Worker-based)
+- Performance optimization for large documents (Worker-based, scroll smoothing)
+- Translation engine and caching improvements
 - Automated testing for critical paths (parsing, sync, reading state)
 
 ---
