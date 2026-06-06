@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
+    findNormalizedWhitespaceMatch,
     findTextInDOM,
     findTextAcrossSegments,
     highlightRange,
@@ -17,6 +18,26 @@ function makeContainer(html: string): HTMLElement {
 
 beforeEach(() => {
     document.body.innerHTML = ''
+})
+
+describe('findNormalizedWhitespaceMatch', () => {
+    it('多个连续空白折叠后命中并映射回原始范围', () => {
+        expect(findNormalizedWhitespaceMatch('foo   bar', 'foo bar')).toEqual({ start: 0, end: 9 })
+    })
+
+    it('normEnd 越界时 end 使用原始串长度', () => {
+        const text = 'prefix foo   bar'
+        expect(findNormalizedWhitespaceMatch(text, 'foo bar')).toEqual({ start: 7, end: text.length })
+    })
+
+    it('归一化后仍找不到时返回 null', () => {
+        expect(findNormalizedWhitespaceMatch('foo   bar', 'baz qux')).toBeNull()
+    })
+
+    it('支持命中在串尾', () => {
+        const text = 'prefix tail'
+        expect(findNormalizedWhitespaceMatch(text, 'tail')).toEqual({ start: 7, end: text.length })
+    })
 })
 
 describe('findTextInDOM', () => {

@@ -7,6 +7,32 @@
  * Walk all text nodes inside `container` and locate the first occurrence of
  * `searchText`. Returns a Range spanning that text, or null if not found.
  */
+export function findNormalizedWhitespaceMatch(
+    accumulated: string,
+    searchText: string,
+): { start: number; end: number } | null {
+    const origIndices: number[] = []
+    let prevWasSpace = false
+    for (let i = 0; i < accumulated.length; i++) {
+        const isSpace = /\s/.test(accumulated[i])
+        if (isSpace && prevWasSpace) continue
+        origIndices.push(i)
+        prevWasSpace = isSpace
+    }
+    const normalizedAccum = accumulated.replace(/\s+/g, ' ')
+    const normalizedSearch = searchText.replace(/\s+/g, ' ')
+    const normIdx = normalizedAccum.indexOf(normalizedSearch)
+    if (normIdx === -1) return null
+
+    const start = origIndices[normIdx] ?? 0
+    const normEnd = normIdx + normalizedSearch.length
+    const end = normEnd < origIndices.length
+        ? origIndices[normEnd] ?? accumulated.length
+        : accumulated.length
+
+    return { start, end }
+}
+
 export function findTextInDOM(
     container: HTMLElement,
     searchText: string,
@@ -34,26 +60,10 @@ export function findTextInDOM(
 
     // Fallback: normalized whitespace match
     if (idx === -1) {
-        // Build mapping from normalized index -> original index
-        const origIndices: number[] = []
-        let prevWasSpace = false
-        for (let i = 0; i < accumulated.length; i++) {
-            const isSpace = /\s/.test(accumulated[i])
-            if (isSpace && prevWasSpace) continue
-            origIndices.push(i)
-            prevWasSpace = isSpace
-        }
-        const normalizedAccum = accumulated.replace(/\s+/g, ' ')
-        const normalizedSearch = searchText.replace(/\s+/g, ' ')
-        const normIdx = normalizedAccum.indexOf(normalizedSearch)
-        if (normIdx === -1) return null
-
-        idx = origIndices[normIdx] ?? 0
-        const normEnd = normIdx + normalizedSearch.length
-        // endIdx: if normEnd is past the mapping, use accumulated.length
-        endIdx = normEnd < origIndices.length
-            ? origIndices[normEnd] ?? accumulated.length
-            : accumulated.length
+        const match = findNormalizedWhitespaceMatch(accumulated, searchText)
+        if (!match) return null
+        idx = match.start
+        endIdx = match.end
     }
 
     // Find start node/offset
@@ -126,26 +136,10 @@ export function findTextAcrossSegments(
     let matchLength = searchText.length
 
     if (matchStart === -1) {
-        const origIndices: number[] = []
-        let prevWasSpace = false
-        for (let i = 0; i < accumulated.length; i++) {
-            const isSpace = /\s/.test(accumulated[i])
-            if (isSpace && prevWasSpace) continue
-            origIndices.push(i)
-            prevWasSpace = isSpace
-        }
-
-        const normalizedAccum = accumulated.replace(/\s+/g, ' ')
-        const normalizedSearch = searchText.replace(/\s+/g, ' ')
-        const normIdx = normalizedAccum.indexOf(normalizedSearch)
-        if (normIdx === -1) return null
-
-        matchStart = origIndices[normIdx] ?? 0
-        const normEnd = normIdx + normalizedSearch.length
-        const mappedEnd = normEnd < origIndices.length
-            ? (origIndices[normEnd] ?? accumulated.length)
-            : accumulated.length
-        matchLength = Math.max(0, mappedEnd - matchStart)
+        const match = findNormalizedWhitespaceMatch(accumulated, searchText)
+        if (!match) return null
+        matchStart = match.start
+        matchLength = Math.max(0, match.end - matchStart)
     }
 
     const matchEnd = matchStart + matchLength
