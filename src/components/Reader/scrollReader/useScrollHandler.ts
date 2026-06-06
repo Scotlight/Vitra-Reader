@@ -54,6 +54,7 @@ export function useScrollHandler(
         chaptersRef,
         progressTimerRef,
         pendingProgressSnapshotRef,
+        pipelineRef,
     } = refs;
 
     useEffect(() => {
@@ -83,7 +84,7 @@ export function useScrollHandler(
                 { threshold: PRELOAD_THRESHOLD_PX }
             );
 
-            if (needsPreload && isScrollPipelineIdle(refs)) {
+            if (needsPreload && isScrollPipelineIdle({ pipelineRef })) {
                 const preloadRequest = resolveScrollPreloadRequest(
                     chaptersRef.current,
                     direction,
@@ -115,13 +116,20 @@ export function useScrollHandler(
             clearScrollProgressCommitTimer(progressTimerRef);
         };
     }, [
-        spineItems,
+        cancelIdlePrefetch,
+        chaptersRef,
+        commitProgressSnapshot,
+        isUserScrollingRef,
+        lastScrollTopRef,
         loadChapter,
+        pendingProgressSnapshotRef,
+        pipelineRef,
+        progressTimerRef,
         runPredictivePrefetch,
         scheduleIdlePrefetch,
-        cancelIdlePrefetch,
+        scrollIdleTimerRef,
+        spineItems,
         syncViewportState,
-        commitProgressSnapshot,
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        viewportRef,
     ]);
 }

@@ -66,8 +66,14 @@ export function useVirtualHeightCommit(
             pendingDeltaRef.current += aboveAnchorDelta;
             requestFlush();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [refreshVirtualChapterLayout, requestFlush]);
+    }, [
+        chapterVectorsRef,
+        lastKnownAnchorIndexRef,
+        pendingDeltaRef,
+        refreshVirtualChapterLayout,
+        requestFlush,
+        virtualChaptersRef,
+    ]);
 
     const commitSegmentResize = useCallback((target: HTMLElement, height: number) => {
         const resizeTarget = resolveSegmentResizeTarget(target);
@@ -85,8 +91,7 @@ export function useVirtualHeightCommit(
         if (flushRafRef.current === null) {
             flushRafRef.current = requestAnimationFrame(flushPendingHeightUpdates);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [flushPendingHeightUpdates]);
+    }, [chapterVectorsRef, flushPendingHeightUpdates]);
 
     useEffect(() => {
         segmentResizeCallbackRef.current = commitSegmentResize;
@@ -95,8 +100,7 @@ export function useVirtualHeightCommit(
                 segmentResizeCallbackRef.current = null;
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [commitSegmentResize]);
+    }, [commitSegmentResize, segmentResizeCallbackRef]);
 
     useEffect(() => {
         return () => {

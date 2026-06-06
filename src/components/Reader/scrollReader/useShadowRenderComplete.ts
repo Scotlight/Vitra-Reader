@@ -99,8 +99,17 @@ export function useShadowRenderComplete(
             pendingDeltaRef.current += delta;
             requestFlush();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [requestFlush]);
+    }, [
+        chapterVectorsRef,
+        chaptersRef,
+        lastKnownAnchorIndexRef,
+        pendingDeltaRef,
+        pendingReadyRafRef,
+        pendingReadyRef,
+        requestFlush,
+        setChapters,
+        setShadowQueue,
+    ]);
 
     useEffect(() => {
         return () => {
@@ -120,8 +129,7 @@ export function useShadowRenderComplete(
             pendingDeltaRef.current = 0;
             ignoreScrollEventRef.current = false;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [flushRafRef, ignoreScrollEventRef, pendingDeltaRef, pendingReadyRafRef, pendingReadyRef, unlockAdjustingRafRef]);
 
     const forceHydrateSegment = useCallback((segmentEl: HTMLElement) => {
         const state = segmentEl.getAttribute('data-shadow-segment-state');
@@ -143,8 +151,7 @@ export function useShadowRenderComplete(
         segmentEl.innerHTML = meta.htmlContent;
         segmentEl.setAttribute('data-shadow-segment-state', 'hydrated');
         segmentEl.style.minHeight = '0px';
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [chapterVectorsRef]);
 
     const materializeAllVirtualSegments = useCallback((chapterId: string) => {
         const runtime = virtualChaptersRef.current.get(chapterId);

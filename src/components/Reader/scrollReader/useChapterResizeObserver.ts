@@ -16,26 +16,6 @@ export function useChapterResizeObserver(refs: ScrollReaderRefs) {
         segmentResizeCallbackRef,
     } = refs;
 
-    useEffect(() => {
-        const observer = new ResizeObserver((entries) => {
-            handleResizeObserverEntries({
-                entries,
-                observedResizeHeightsRef,
-                segmentResizeCallbackRef,
-            });
-        });
-
-        resizeObserverRef.current = observer;
-        return () => {
-            resetResizeObservers();
-            observer.disconnect();
-            if (resizeObserverRef.current === observer) {
-                resizeObserverRef.current = null;
-            }
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     const observeResizeNode = useCallback((node: HTMLElement | null) => {
         observeResizeTarget({
             node,
@@ -43,7 +23,7 @@ export function useChapterResizeObserver(refs: ScrollReaderRefs) {
             observedResizeNodesRef,
             observedResizeHeightsRef,
         });
-    }, []);
+    }, [observedResizeHeightsRef, observedResizeNodesRef, resizeObserverRef]);
 
     const unobserveResizeNode = useCallback((node: HTMLElement | null) => {
         unobserveResizeTarget({
@@ -51,7 +31,7 @@ export function useChapterResizeObserver(refs: ScrollReaderRefs) {
             resizeObserver: resizeObserverRef.current,
             observedResizeNodesRef,
         });
-    }, []);
+    }, [observedResizeNodesRef, resizeObserverRef]);
 
     const observeChapterResizeNodes = useCallback((chapterEl: HTMLElement | null) => {
         if (!chapterEl) return;
@@ -78,7 +58,31 @@ export function useChapterResizeObserver(refs: ScrollReaderRefs) {
             observedResizeNodesRef,
             observedResizeHeightsRef,
         });
-    }, []);
+    }, [observedResizeHeightsRef, observedResizeNodesRef, resizeObserverRef]);
+
+    useEffect(() => {
+        const observer = new ResizeObserver((entries) => {
+            handleResizeObserverEntries({
+                entries,
+                observedResizeHeightsRef,
+                segmentResizeCallbackRef,
+            });
+        });
+
+        resizeObserverRef.current = observer;
+        return () => {
+            resetResizeObservers();
+            observer.disconnect();
+            if (resizeObserverRef.current === observer) {
+                resizeObserverRef.current = null;
+            }
+        };
+    }, [
+        observedResizeHeightsRef,
+        resizeObserverRef,
+        resetResizeObservers,
+        segmentResizeCallbackRef,
+    ]);
 
     return {
         observeResizeNode,

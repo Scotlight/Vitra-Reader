@@ -101,8 +101,7 @@ export function useHighlightAndSelection(
             viewport.removeEventListener('mouseup', handleMouseUp);
             viewport.removeEventListener('contextmenu', handleContextMenu);
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [setSelectionMenu, viewportRef]);
 
     useEffect(() => {
         const viewport = viewportRef.current;
@@ -111,8 +110,7 @@ export function useHighlightAndSelection(
         const dismiss = () => setSelectionMenu(prev => ({ ...prev, visible: false }));
         viewport.addEventListener('scroll', dismiss, { passive: true, once: true });
         return () => viewport.removeEventListener('scroll', dismiss);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectionMenu.visible]);
+    }, [selectionMenu.visible, setSelectionMenu, viewportRef]);
 
     const applyHighlightsToChapter = useCallback((
         chapterEl: HTMLElement,
@@ -142,8 +140,7 @@ export function useHighlightAndSelection(
             applyHighlightsToChapter(chapterEl, spineIndex);
         }, { timeoutMs: HIGHLIGHT_IDLE_TIMEOUT_MS });
         highlightIdleHandlesRef.current.set(spineIndex, handle);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [applyHighlightsToChapter, highlightsBySpineIndex]);
+    }, [applyHighlightsToChapter, highlightDirtyChaptersRef, highlightIdleHandlesRef, highlightsBySpineIndex]);
 
     useLayoutEffect(() => {
         const listEl = chapterListRef.current;
@@ -158,8 +155,7 @@ export function useHighlightAndSelection(
                 scheduleHighlightInjection(el, ch.spineIndex);
             }
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [chapters, highlightsBySpineIndex, scheduleHighlightInjection]);
+    }, [chapterListRef, chapters, highlightDirtyChaptersRef, highlightsBySpineIndex, scheduleHighlightInjection]);
 
     return { scheduleHighlightInjection };
 }

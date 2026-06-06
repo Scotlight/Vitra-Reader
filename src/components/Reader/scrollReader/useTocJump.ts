@@ -67,6 +67,8 @@ export function useTocJump(
         isUserScrollingRef,
         lastScrollTopRef,
         lastKnownAnchorIndexRef,
+        loadingLockRef,
+        pipelineRef,
     } = refs;
 
     const jumpToSpine = useCallback(async (targetSpineIndex: number, searchText?: string) => {
@@ -134,7 +136,7 @@ export function useTocJump(
         chaptersRef.current = [];
         setChapters([]);
         setShadowQueue([]);
-        resetScrollPipelineRuntime(refs);
+        resetScrollPipelineRuntime({ loadingLockRef, pipelineRef });
         commitTocJumpTarget({
             targetSpineIndex,
             spineItemsRef,
@@ -145,8 +147,34 @@ export function useTocJump(
         if (jumpGenerationRef.current !== generation) return;
 
         loadChapter(targetSpineIndex, 'initial');
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [cancelIdlePrefetch, cleanupVirtualChapterRuntime, forceHydrateSegment, loadChapter, materializeAllVirtualSegments, onChapterChange, resetResizeObservers, stop, syncViewportState]);
+    }, [
+        cancelIdlePrefetch,
+        chapterListRef,
+        chaptersRef,
+        cleanupVirtualChapterRuntime,
+        forceHydrateSegment,
+        initialScrollDone,
+        isUserScrollingRef,
+        jumpGenerationRef,
+        lastKnownAnchorIndexRef,
+        lastScrollTopRef,
+        loadChapter,
+        loadingLockRef,
+        materializeAllVirtualSegments,
+        onChapterChange,
+        pendingSearchTextRef,
+        pipelineRef,
+        progressTimerRef,
+        resetResizeObservers,
+        scrollIdleTimerRef,
+        setChapters,
+        setCurrentSpineIndex,
+        setShadowQueue,
+        spineItemsRef,
+        stop,
+        syncViewportState,
+        viewportRef,
+    ]);
 
     useEffect(() => {
         const listEl = chapterListRef.current;
@@ -162,8 +190,7 @@ export function useTocJump(
         return () => {
             listEl.removeEventListener('click', handleInternalLink);
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [jumpToSpine, provider]);
+    }, [chapterListRef, jumpToSpine, provider, spineItemsRef]);
 
     return { jumpToSpine };
 }

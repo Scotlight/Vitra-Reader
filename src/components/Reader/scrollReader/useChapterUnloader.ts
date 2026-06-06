@@ -91,6 +91,17 @@ export function useChapterUnloader(
 
         const timer = setTimeout(checkUnload, UNLOAD_COOLDOWN_MS);
         return () => clearTimeout(timer);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [cleanupVirtualChapterRuntime, currentSpineIndex, provider, unobserveChapterResizeNodes]);
+    }, [
+        chapterListRef,
+        chapterVectorsRef,
+        chaptersRef,
+        cleanupVirtualChapterRuntime,
+        currentSpineIndex,
+        highlightDirtyChaptersRef,
+        highlightIdleHandlesRef,
+        isUserScrollingRef,
+        provider,
+        setChapters,
+        unobserveChapterResizeNodes,
+    ]);
 }

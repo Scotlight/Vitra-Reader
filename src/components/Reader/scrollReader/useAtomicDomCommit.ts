@@ -78,6 +78,7 @@ export function useAtomicDomCommit(
     const {
         viewportRef,
         chapterListRef,
+        pipelineRef,
         flushRafRef,
         pendingDeltaRef,
         ignoreScrollEventRef,
@@ -110,8 +111,7 @@ export function useAtomicDomCommit(
             ignoreScrollEventRef,
             unlockAdjustingRafRef,
         });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [flushRafRef, ignoreScrollEventRef, pendingDeltaRef, unlockAdjustingRafRef, viewportRef]);
 
     useLayoutEffect(() => {
         const viewport = viewportRef.current;
@@ -143,7 +143,7 @@ export function useAtomicDomCommit(
             }
         });
 
-        markScrollPipelineIdle(refs);
+        markScrollPipelineIdle({ pipelineRef });
 
         setChapters(markReadyChaptersMounted);
 
@@ -175,8 +175,26 @@ export function useAtomicDomCommit(
             setIsInitialized(true);
         }
         scheduleInitialVirtualSegmentSync();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [chapters, cleanupVirtualChapterRuntime, currentSpineIndex, initialChapterProgress, initialScrollOffset, isInitialized, observeChapterResizeNodes, registerVirtualChapterRuntime, scheduleInitialVirtualSegmentSync, unobserveChapterResizeNodes]);
+    }, [
+        chapterListRef,
+        chapters,
+        cleanupVirtualChapterRuntime,
+        currentSpineIndex,
+        initialChapterProgress,
+        initialScrollDone,
+        initialScrollOffset,
+        isInitialized,
+        lastScrollTopRef,
+        observeChapterResizeNodes,
+        pendingSearchTextRef,
+        pipelineRef,
+        registerVirtualChapterRuntime,
+        scheduleInitialVirtualSegmentSync,
+        setChapters,
+        setIsInitialized,
+        unobserveChapterResizeNodes,
+        viewportRef,
+    ]);
 
     const syncViewportState = useCallback((
         scrollTop: number,
@@ -210,8 +228,16 @@ export function useAtomicDomCommit(
                 commitProgressSnapshot(snapshot);
             }
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [spineItems, currentSpineIndex, onChapterChange, commitProgressSnapshot, setCurrentSpineIndex]);
+    }, [
+        chapterListRef,
+        commitProgressSnapshot,
+        currentSpineIndex,
+        lastKnownAnchorIndexRef,
+        onChapterChange,
+        pendingProgressSnapshotRef,
+        setCurrentSpineIndex,
+        spineItems,
+    ]);
 
     return { requestFlush, commitProgressSnapshot, syncViewportState };
 }

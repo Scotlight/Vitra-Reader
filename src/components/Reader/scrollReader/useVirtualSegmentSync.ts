@@ -73,8 +73,7 @@ export function useVirtualSegmentSync(
                 scheduleHighlightInjection(runtime.chapterEl, runtime.spineIndex);
             }
         });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mountVirtualSegment, refreshVirtualChapterLayout, releaseVirtualSegment, highlightsBySpineIndex, scheduleHighlightInjection]);
+    }, [highlightDirtyChaptersRef, highlightsBySpineIndex, mountVirtualSegment, refreshVirtualChapterLayout, releaseVirtualSegment, scheduleHighlightInjection, virtualChaptersRef]);
 
     useEffect(() => {
         const viewport = viewportRef.current;
@@ -103,6 +102,5 @@ export function useVirtualSegmentSync(
                 virtualSyncRafRef.current = null;
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [chapters, syncVirtualizedSegmentsByRange]);
+    }, [chapters, ignoreScrollEventRef, syncVirtualizedSegmentsByRange, viewportRef, virtualSyncRafRef]);
 }
