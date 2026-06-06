@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell, session, safeStorage } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, shell, session, safeStorage, net } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -27,14 +27,125 @@ function isValidHexColor(value: string): boolean {
 
 // ─── Security Validators ────────────────────────────────────
 
-/** Only allow http/https — blocks file://, ftp://, data: etc. Used by translate + webdav. */
-function isAllowedHttpUrl(url: string): boolean {
+const NETWORK_REQUEST_TIMEOUT_MS = 15_000
+const ALLOW_INSECURE_WEBDAV = process.env['VITRA_ALLOW_INSECURE_WEBDAV'] === '1'
+const TRANSLATE_ALLOWED_ORIGINS = new Set([
+    'https://api.openai.com',
+    'https://api-free.deepl.com',
+    'https://api.deepl.com',
+    'http://127.0.0.1:11434',
+    'http://localhost:11434',
+    'http://[::1]:11434',
+    'http://127.0.0.1:1188',
+    'http://localhost:1188',
+    'http://[::1]:1188',
+])
+const TRANSLATE_HEADER_NAMES = new Set([
+    'accept',
+    'authorization',
+    'content-type',
+    'openai-organization',
+    'openai-project',
+    'api-key',
+    'x-api-key',
+])
+const HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/
+
+function parseHttpUrl(url: string): URL | null {
     try {
         const parsed = new URL(url)
-        return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null
+        return parsed
     } catch {
-        return false
+        return null
     }
+}
+
+function normalizeOrigin(value: string): string | null {
+    const parsed = parseHttpUrl(value.trim())
+    return parsed?.origin ?? null
+}
+
+function getConfiguredTranslateAllowedOrigins(): Set<string> {
+    const origins = new Set(TRANSLATE_ALLOWED_ORIGINS)
+    const raw = process.env['VITRA_TRANSLATE_ALLOWED_ORIGINS'] || ''
+    raw.split(',').map(normalizeOrigin).forEach((origin) => {
+        if (origin) origins.add(origin)
+    })
+    return origins
+}
+
+function isLoopbackHost(hostname: string): boolean {
+    const normalized = hostname.toLowerCase()
+    return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1' || normalized === '[::1]'
+}
+
+function isAllowedTranslateUrl(parsed: URL): boolean {
+    if (parsed.protocol === 'https:') return true
+    if (parsed.protocol === 'http:' && isLoopbackHost(parsed.hostname)) return true
+    return getConfiguredTranslateAllowedOrigins().has(parsed.origin)
+}
+
+export function assertAllowedUrl(url: unknown, scope: 'translate' | 'webdav'): { ok: true; parsed: URL } | { ok: false; error: string } {
+    if (!url || typeof url !== 'string') {
+        return { ok: false, error: `${scope} blocked: missing request url` }
+    }
+
+    const parsed = parseHttpUrl(url)
+    if (!parsed) {
+        return { ok: false, error: `${scope} blocked: disallowed url protocol "${url}"` }
+    }
+
+    if (scope === 'translate') {
+        if (!isAllowedTranslateUrl(parsed)) {
+            return { ok: false, error: `translate blocked: disallowed origin "${parsed.origin}"` }
+        }
+        return { ok: true, parsed }
+    }
+
+    if (parsed.protocol === 'https:') return { ok: true, parsed }
+    if (ALLOW_INSECURE_WEBDAV) {
+        console.warn(`[webdav] insecure HTTP WebDAV request allowed by VITRA_ALLOW_INSECURE_WEBDAV=1: ${parsed.origin}`)
+        return { ok: true, parsed }
+    }
+    return { ok: false, error: `webdav blocked: insecure http url "${url}"` }
+}
+
+export function filterTranslateHeaders(headers: unknown): { ok: true; headers: Record<string, string> } | { ok: false; error: string } {
+    if (!headers || typeof headers !== 'object') return { ok: true, headers: {} }
+    const filtered: Record<string, string> = {}
+    for (const [rawKey, rawValue] of Object.entries(headers as Record<string, unknown>)) {
+        const key = rawKey.trim()
+        const normalizedKey = key.toLowerCase()
+        if (!HEADER_NAME_PATTERN.test(key) || !TRANSLATE_HEADER_NAMES.has(normalizedKey)) {
+            return { ok: false, error: `translate blocked: disallowed header "${rawKey}"` }
+        }
+        if (typeof rawValue !== 'string' || /[\r\n]/.test(rawValue)) {
+            return { ok: false, error: `translate blocked: invalid header value for "${rawKey}"` }
+        }
+        filtered[key] = rawValue
+    }
+    return { ok: true, headers: filtered }
+}
+
+function bindNetworkRequestTimeout(
+    request: ReturnType<typeof net.request>,
+    resolve: (value: unknown) => void,
+    scope: string,
+): (value: unknown) => void {
+    let settled = false
+    const timeoutId = globalThis.setTimeout(() => {
+        finish({ success: false, error: `${scope} timeout after ${NETWORK_REQUEST_TIMEOUT_MS}ms` })
+        request.abort()
+    }, NETWORK_REQUEST_TIMEOUT_MS)
+    const finish = (value: unknown) => {
+        if (settled) return
+        settled = true
+        globalThis.clearTimeout(timeoutId)
+        resolve(value)
+    }
+    request.on('error', (error) => finish({ success: false, error: error.message }))
+    return finish
 }
 
 const ALLOWED_BOOK_EXTENSIONS = new Set([
@@ -455,7 +566,6 @@ ipcMain.handle('system:setAutoStartOnLogin', async (_event, enabled: boolean) =>
 
 // ─── WebDAV Sync ────────────────────────────────────────────
 
-import { net } from 'electron'
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {
     if (Array.isArray(value)) return value[0]
@@ -463,20 +573,22 @@ function firstHeaderValue(value: string | string[] | undefined): string | undefi
 }
 
 ipcMain.handle('webdav:upload', async (_, { url, username, password, data, ifMatch, ifNoneMatch }) => {
-    if (!url || typeof url !== 'string' || !isAllowedHttpUrl(url)) {
-        return { success: false, error: `webdav:upload blocked: disallowed url "${url}"` }
+    const allowed = assertAllowedUrl(url, 'webdav')
+    if (!allowed.ok) {
+        return { success: false, error: `webdav:upload ${allowed.error}` }
     }
     return new Promise((resolve) => {
         const request = net.request({
             method: 'PUT',
-            url: url,
+            url: allowed.parsed.toString(),
         })
-        request.setHeader('Authorization', 'Basic ' + Buffer.from(username + ':' + password).toString('base64'))
+        const finish = bindNetworkRequestTimeout(request, resolve, 'webdav:upload')
+        request.setHeader('Authorization', 'Basic ' + Buffer.from(String(username || '') + ':' + String(password || '')).toString('base64'))
         request.setHeader('Content-Type', 'application/json')
-        if (ifMatch) {
+        if (typeof ifMatch === 'string' && ifMatch) {
             request.setHeader('If-Match', ifMatch)
         }
-        if (ifNoneMatch) {
+        if (typeof ifNoneMatch === 'string' && ifNoneMatch) {
             request.setHeader('If-None-Match', ifNoneMatch)
         }
 
@@ -486,24 +598,25 @@ ipcMain.handle('webdav:upload', async (_, { url, username, password, data, ifMat
             const lastModified = firstHeaderValue(response.headers['last-modified'])
 
             if (statusCode >= 200 && statusCode < 300) {
-                resolve({ success: true, statusCode, etag, lastModified })
+                finish({ success: true, statusCode, etag, lastModified })
             } else {
-                resolve({ success: false, statusCode, etag, lastModified, error: `Status ${statusCode}` })
+                finish({ success: false, statusCode, etag, lastModified, error: `Status ${statusCode}` })
             }
         })
-        request.on('error', (error) => resolve({ success: false, error: error.message }))
-        request.write(data)
+        request.write(typeof data === 'string' ? data : String(data ?? ''))
         request.end()
     })
 })
 
 ipcMain.handle('webdav:download', async (_, { url, username, password }) => {
-    if (!url || typeof url !== 'string' || !isAllowedHttpUrl(url)) {
-        return { success: false, error: `webdav:download blocked: disallowed url "${url}"` }
+    const allowed = assertAllowedUrl(url, 'webdav')
+    if (!allowed.ok) {
+        return { success: false, error: `webdav:download ${allowed.error}` }
     }
     return new Promise((resolve) => {
-        const request = net.request({ method: 'GET', url })
-        request.setHeader('Authorization', 'Basic ' + Buffer.from(username + ':' + password).toString('base64'))
+        const request = net.request({ method: 'GET', url: allowed.parsed.toString() })
+        const finish = bindNetworkRequestTimeout(request, resolve, 'webdav:download')
+        request.setHeader('Authorization', 'Basic ' + Buffer.from(String(username || '') + ':' + String(password || '')).toString('base64'))
 
         request.on('response', (response) => {
             const statusCode = response.statusCode || 0
@@ -511,25 +624,26 @@ ipcMain.handle('webdav:download', async (_, { url, username, password }) => {
             const lastModified = firstHeaderValue(response.headers['last-modified'])
 
             if (statusCode !== 200) {
-                resolve({ success: false, statusCode, etag, lastModified, error: `Status ${statusCode}` })
+                finish({ success: false, statusCode, etag, lastModified, error: `Status ${statusCode}` })
                 return
             }
             let body = ''
             response.on('data', (chunk) => body += chunk.toString())
-            response.on('end', () => resolve({ success: true, statusCode, data: body, etag, lastModified }))
+            response.on('end', () => finish({ success: true, statusCode, data: body, etag, lastModified }))
         })
-        request.on('error', (error) => resolve({ success: false, error: error.message }))
         request.end()
     })
 })
 
 ipcMain.handle('webdav:head', async (_, { url, username, password }) => {
-    if (!url || typeof url !== 'string' || !isAllowedHttpUrl(url)) {
-        return { success: false, error: `webdav:head blocked: disallowed url "${url}"` }
+    const allowed = assertAllowedUrl(url, 'webdav')
+    if (!allowed.ok) {
+        return { success: false, error: `webdav:head ${allowed.error}` }
     }
     return new Promise((resolve) => {
-        const request = net.request({ method: 'HEAD', url })
-        request.setHeader('Authorization', 'Basic ' + Buffer.from(username + ':' + password).toString('base64'))
+        const request = net.request({ method: 'HEAD', url: allowed.parsed.toString() })
+        const finish = bindNetworkRequestTimeout(request, resolve, 'webdav:head')
+        request.setHeader('Authorization', 'Basic ' + Buffer.from(String(username || '') + ':' + String(password || '')).toString('base64'))
 
         request.on('response', (response) => {
             const statusCode = response.statusCode || 0
@@ -537,40 +651,40 @@ ipcMain.handle('webdav:head', async (_, { url, username, password }) => {
             const lastModified = firstHeaderValue(response.headers['last-modified'])
 
             if (statusCode === 404) {
-                resolve({ success: true, statusCode, exists: false, etag, lastModified })
+                finish({ success: true, statusCode, exists: false, etag, lastModified })
                 return
             }
 
             if (statusCode >= 200 && statusCode < 400) {
-                resolve({ success: true, statusCode, exists: true, etag, lastModified })
+                finish({ success: true, statusCode, exists: true, etag, lastModified })
                 return
             }
 
-            resolve({ success: false, statusCode, etag, lastModified, error: `Status ${statusCode}` })
+            finish({ success: false, statusCode, etag, lastModified, error: `Status ${statusCode}` })
         })
 
-        request.on('error', (error) => resolve({ success: false, error: error.message }))
         request.end()
     })
 })
 
 ipcMain.handle('webdav:test', async (_, { url, username, password }) => {
-    if (!url || typeof url !== 'string' || !isAllowedHttpUrl(url)) {
-        return { success: false, error: `webdav:test blocked: disallowed url "${url}"` }
+    const allowed = assertAllowedUrl(url, 'webdav')
+    if (!allowed.ok) {
+        return { success: false, error: `webdav:test ${allowed.error}` }
     }
     return new Promise((resolve) => {
-        const request = net.request({ method: 'OPTIONS', url })
-        request.setHeader('Authorization', 'Basic ' + Buffer.from(username + ':' + password).toString('base64'))
+        const request = net.request({ method: 'OPTIONS', url: allowed.parsed.toString() })
+        const finish = bindNetworkRequestTimeout(request, resolve, 'webdav:test')
+        request.setHeader('Authorization', 'Basic ' + Buffer.from(String(username || '') + ':' + String(password || '')).toString('base64'))
 
         request.on('response', (response) => {
-            const code = response.statusCode
+            const code = response.statusCode || 0
             if ((code >= 200 && code < 400) || code === 401 || code === 403) {
-                resolve({ success: true })
+                finish({ success: true })
             } else {
-                resolve({ success: false, error: `Status ${code}` })
+                finish({ success: false, error: `Status ${code}` })
             }
         })
-        request.on('error', (error) => resolve({ success: false, error: error.message }))
         request.end()
     })
 })
@@ -583,22 +697,22 @@ ipcMain.handle('translate:request', async (_, payload: {
 }) => {
     return new Promise((resolve) => {
         try {
-            const method = payload?.method || 'POST'
-            const url = payload?.url
-            if (!url || typeof url !== 'string') {
-                resolve({ success: false, error: 'Missing request url' })
+            const method = payload?.method === 'GET' ? 'GET' : 'POST'
+            const allowed = assertAllowedUrl(payload?.url, 'translate')
+            if (!allowed.ok) {
+                resolve({ success: false, error: `translate:request ${allowed.error}` })
                 return
             }
 
-            if (!isAllowedHttpUrl(url)) {
-                resolve({ success: false, error: `translate:request blocked: disallowed url protocol "${url}"` })
+            const headers = filterTranslateHeaders(payload?.headers)
+            if (!headers.ok) {
+                resolve({ success: false, error: headers.error })
                 return
             }
 
-            const request = net.request({ method, url })
-            const headers = payload?.headers || {}
-            Object.entries(headers).forEach(([key, value]) => {
-                if (!key) return
+            const request = net.request({ method, url: allowed.parsed.toString() })
+            const finish = bindNetworkRequestTimeout(request, resolve, 'translate:request')
+            Object.entries(headers.headers).forEach(([key, value]) => {
                 request.setHeader(key, value)
             })
 
@@ -610,9 +724,9 @@ ipcMain.handle('translate:request', async (_, payload: {
                 response.on('end', () => {
                     const status = response.statusCode || 0
                     if (status >= 200 && status < 300) {
-                        resolve({ success: true, status, data: body })
+                        finish({ success: true, status, data: body })
                     } else {
-                        resolve({
+                        finish({
                             success: false,
                             status,
                             data: body,
@@ -620,10 +734,6 @@ ipcMain.handle('translate:request', async (_, payload: {
                         })
                     }
                 })
-            })
-
-            request.on('error', (error) => {
-                resolve({ success: false, error: error.message })
             })
 
             if (payload?.body && method !== 'GET') {
@@ -635,7 +745,6 @@ ipcMain.handle('translate:request', async (_, payload: {
         }
     })
 })
-
 ipcMain.handle('shell:openExternal', async (_event, url: string) => {
     if (!url || typeof url !== 'string' || !isAllowedExternalUrl(url)) {
         throw new Error(`shell:openExternal blocked: disallowed url "${url}"`)
