@@ -26,7 +26,7 @@ export class HtmlContentProvider implements ContentProvider {
 
         // 取 <body> 内容，fallback 为全文
         const bodyMatch = text.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
-        const body = bodyMatch ? bodyMatch[1] : text
+        const body = bodyMatch?.[1] ?? text
 
         const chunks = SectionSplitter.split(body)
         this.chapters = chunks.map((chunk, index) => ({
@@ -62,13 +62,13 @@ export class HtmlContentProvider implements ContentProvider {
     unloadChapter() {}
 
     async search(keyword: string): Promise<SearchResult[]> {
-        return searchPlainChapterTexts(keyword, this.chapters.length, (index) => this.chapters[index].plain)
+        return searchPlainChapterTexts(keyword, this.chapters.length, (index) => this.chapters[index]?.plain ?? '')
     }
 }
 
 export async function parseHtmlMetadata(data: ArrayBuffer, filename: string) {
     const text = decodeTextBuffer(data, 'html').text
     const titleMatch = text.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
-    const title = titleMatch ? stripHtmlTags(titleMatch[1]).trim() : stripBookExtension(filename)
+    const title = titleMatch?.[1] ? stripHtmlTags(titleMatch[1]).trim() : stripBookExtension(filename)
     return { title: title || filename, author: '未知作者' }
 }

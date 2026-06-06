@@ -102,7 +102,7 @@ function readTrailingEntrySize(data: Uint8Array): number {
     let size = 0
     const maxBytes = Math.min(4, data.length)
     for (let i = 1; i <= maxBytes; i += 1) {
-        const value = data[data.length - i]
+        const value = data[data.length - i] ?? 0
         size = (size << 7) | (value & 0x7F)
         if ((value & 0x80) !== 0) return size
     }
@@ -119,6 +119,7 @@ function parseRecordOffsets(view: DataView): number[] {
 function parseMobiHeader(view: DataView, records: readonly number[]): MobiHeader {
     if (records.length === 0) throw new Error('MOBI parse failed: no PDB records')
     const record0Offset = records[0]
+    if (record0Offset === undefined) throw new Error('MOBI parse failed: no PDB record 0')
     const magic = readString(view, record0Offset + 0x10, 4)
     if (magic !== MOBI_MAGIC) throw new Error(`MOBI parse failed: invalid header magic "${magic}"`)
 
@@ -179,7 +180,9 @@ function palmDocDecompress(data: Uint8Array): Uint8Array {
     }
 
     while (i < data.length) {
-        const byte = data[i++]
+        const byte = data[i]
+        i += 1
+        if (byte === undefined) break
         if (byte === 0) {
             ensureCapacity(1)
             buf[pos++] = 0
@@ -187,7 +190,12 @@ function palmDocDecompress(data: Uint8Array): Uint8Array {
         }
         if (byte <= 0x08) {
             ensureCapacity(byte)
-            for (let j = 0; j < byte && i < data.length; j += 1) buf[pos++] = data[i++]
+            for (let j = 0; j < byte && i < data.length; j += 1) {
+                const literal = data[i]
+                i += 1
+                if (literal === undefined) break
+                buf[pos++] = literal
+            }
             continue
         }
         if (byte <= 0x7F) {
@@ -197,7 +205,9 @@ function palmDocDecompress(data: Uint8Array): Uint8Array {
         }
         if (byte <= 0xBF) {
             if (i >= data.length) break
-            const next = data[i++]
+            const next = data[i]
+            i += 1
+            if (next === undefined) break
             const distance = (((byte << 8) | next) >> 3) & 0x07FF
             const length = (next & 0x07) + 3
             if (distance <= 0 || distance > pos) continue
@@ -221,7 +231,7 @@ function trimTrailingEntries(data: Uint8Array, flags: number): Uint8Array {
         result = result.slice(0, result.length - size)
     }
     if ((flags & 1) !== 0 && result.length > 0) {
-        const extra = (result[result.length - 1] & 0x03) + 1
+        const extra = ((result[result.length - 1] ?? 0) & 0x03) + 1
         if (extra > 0 && extra <= result.length) result = result.slice(0, result.length - extra)
     }
     return result
@@ -230,7 +240,10 @@ function trimTrailingEntries(data: Uint8Array, flags: number): Uint8Array {
 function getRecordBytes(buffer: Uint8Array, recordOffsets: readonly number[], index: number): Uint8Array {
     if (index < 0 || index >= recordOffsets.length) return new Uint8Array(0)
     const start = recordOffsets[index]
-    const end = index + 1 < recordOffsets.length ? recordOffsets[index + 1] : buffer.byteLength
+    if (start === undefined) return new Uint8Array(0)
+    const end = index + 1 < recordOffsets.length
+        ? recordOffsets[index + 1] ?? buffer.byteLength
+        : buffer.byteLength
     return sliceSafe(buffer, start, end)
 }
 

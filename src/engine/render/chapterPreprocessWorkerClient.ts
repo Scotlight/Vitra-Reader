@@ -38,7 +38,10 @@ function hydrateTransferredSegmentHtml(payload: ChapterPreprocessResponse & { _h
     const joined = decoder.decode(payload._htmlBuffer)
     const parts = joined.split('\0')
     for (let index = 0; index < payload.result.segmentMetas.length && index < parts.length; index += 1) {
-        payload.result.segmentMetas[index].htmlContent = parts[index]
+        const segment = payload.result.segmentMetas[index]
+        const htmlContent = parts[index]
+        if (!segment || htmlContent === undefined) continue
+        segment.htmlContent = htmlContent
     }
 }
 

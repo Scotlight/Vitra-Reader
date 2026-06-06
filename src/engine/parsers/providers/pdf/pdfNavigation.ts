@@ -39,7 +39,9 @@ async function mapPdfOutlineItems(
 ): Promise<TocItem[]> {
     const mapped: TocItem[] = []
     for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
-        const entry = await mapPdfOutlineItem(doc, items[itemIndex], [...path, itemIndex])
+        const item = items[itemIndex]
+        if (!item) continue
+        const entry = await mapPdfOutlineItem(doc, item, [...path, itemIndex])
         if (entry) mapped.push(entry)
     }
     return mapped
@@ -144,6 +146,7 @@ function normalizePdfRect(
         ? viewport.convertToViewportRectangle(rectNumbers)
         : rectNumbers
     const [x1, y1, x2, y2] = viewportRect
+    if (x1 === undefined || y1 === undefined || x2 === undefined || y2 === undefined) return null
     const leftPx = Math.min(x1, x2)
     const rightPx = Math.max(x1, x2)
     const topPx = Math.min(y1, y2)

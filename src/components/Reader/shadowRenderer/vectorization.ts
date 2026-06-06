@@ -117,7 +117,10 @@ export async function calibrateSegmentIntrinsicSizeBatch(targets: readonly HTMLE
 
     // Write in a dedicated pass to avoid interleaving reads/writes.
     for (let index = 0; index < targets.length; index += 1) {
-        targets[index].style.containIntrinsicSize = `${measuredHeights[index]}px`;
+        const target = targets[index];
+        const measuredHeight = measuredHeights[index];
+        if (!target || measuredHeight === undefined) continue;
+        target.style.containIntrinsicSize = `${measuredHeight}px`;
     }
 }
 

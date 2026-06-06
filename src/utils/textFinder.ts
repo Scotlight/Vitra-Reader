@@ -14,7 +14,7 @@ export function findNormalizedWhitespaceMatch(
     const origIndices: number[] = []
     let prevWasSpace = false
     for (let i = 0; i < accumulated.length; i++) {
-        const isSpace = /\s/.test(accumulated[i])
+        const isSpace = /\s/.test(accumulated[i] ?? '')
         if (isSpace && prevWasSpace) continue
         origIndices.push(i)
         prevWasSpace = isSpace
@@ -74,6 +74,7 @@ export function findTextInDOM(
 
     for (let i = 0; i < nodeMap.length; i++) {
         const entry = nodeMap[i]
+        if (!entry) continue
         const nodeEnd = entry.start + (entry.node.textContent?.length ?? 0)
 
         if (!startNode && idx < nodeEnd) {
@@ -120,7 +121,9 @@ export function findTextAcrossSegments(
     let accumulated = ''
 
     for (let segIdx = 0; segIdx < segments.length; segIdx++) {
-        const walker = document.createTreeWalker(segments[segIdx], NodeFilter.SHOW_TEXT)
+        const segment = segments[segIdx]
+        if (!segment) continue
+        const walker = document.createTreeWalker(segment, NodeFilter.SHOW_TEXT)
         let textNode: Text | null
         while ((textNode = walker.nextNode() as Text | null)) {
             allTextNodes.push({
@@ -186,20 +189,21 @@ export function findTextAcrossSegments(
         if (segTextNodes.length === 0) continue
 
         const range = document.createRange()
+        const firstNode = segTextNodes[0]?.node
+        const lastNode = segTextNodes[segTextNodes.length - 1]?.node
+        if (!firstNode || !lastNode) continue
 
         if (segIdx === startSegmentIdx) {
             // 起始段：从 startNode 到段末
             range.setStart(startNode, startOffset)
-            const lastNode = segTextNodes[segTextNodes.length - 1].node
             range.setEnd(lastNode, lastNode.textContent?.length ?? 0)
         } else if (segIdx === endSegmentIdx) {
             // 终止段：从段首到 endNode
-            range.setStart(segTextNodes[0].node, 0)
+            range.setStart(firstNode, 0)
             range.setEnd(endNode, endOffset)
         } else {
             // 中间段：全选
-            range.setStart(segTextNodes[0].node, 0)
-            const lastNode = segTextNodes[segTextNodes.length - 1].node
+            range.setStart(firstNode, 0)
             range.setEnd(lastNode, lastNode.textContent?.length ?? 0)
         }
 

@@ -63,7 +63,7 @@ export class Fb2ContentProvider implements ContentProvider {
     unloadChapter() {}
 
     async search(keyword: string): Promise<SearchResult[]> {
-        return searchPlainChapterTexts(keyword, this.chapters.length, (index) => this.chapters[index].plain)
+        return searchPlainChapterTexts(keyword, this.chapters.length, (index) => this.chapters[index]?.plain ?? '')
     }
 }
 

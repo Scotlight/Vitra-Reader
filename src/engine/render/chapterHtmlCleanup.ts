@@ -81,7 +81,8 @@ function trimEmptyEdgeNodes(parent: ParentNode): void {
 function trimEmptyEdgesDeep(root: Element): void {
     const descendants = Array.from(root.querySelectorAll('*'))
     for (let index = descendants.length - 1; index >= 0; index -= 1) {
-        trimEmptyEdgeNodes(descendants[index])
+        const descendant = descendants[index]
+        if (descendant) trimEmptyEdgeNodes(descendant)
     }
     trimEmptyEdgeNodes(root)
 }

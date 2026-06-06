@@ -200,12 +200,16 @@ export function consumeMediaOffsetInRange(
   cursorRef: { value: number },
 ): boolean {
   let cursor = cursorRef.value;
-  while (cursor < mediaOffsets.length && mediaOffsets[cursor] < start) {
+  while (cursor < mediaOffsets.length) {
+    const offset = mediaOffsets[cursor];
+    if (offset === undefined || offset >= start) break;
     cursor += 1;
   }
 
   let hasMedia = false;
-  while (cursor < mediaOffsets.length && mediaOffsets[cursor] < end) {
+  while (cursor < mediaOffsets.length) {
+    const offset = mediaOffsets[cursor];
+    if (offset === undefined || offset >= end) break;
     hasMedia = true;
     cursor += 1;
   }

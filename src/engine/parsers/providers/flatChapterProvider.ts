@@ -13,7 +13,8 @@ export function buildFlatChapterHref(index: number): string {
 
 export function parseFlatChapterHrefIndex(href: string): number {
     const match = href.match(FLAT_CHAPTER_HREF_RE)
-    return match ? Number.parseInt(match[1], 10) : -1
+    const rawIndex = match?.[1]
+    return rawIndex ? Number.parseInt(rawIndex, 10) : -1
 }
 
 export function buildFlatChapterToc(chapters: readonly FlatChapterLike[]): TocItem[] {

@@ -83,7 +83,8 @@ export class MobiContentProvider implements ContentProvider {
         }))
         this.resolveHrefToIndex = (href: string) => {
             const match = href.match(/ch-(\d+)/)
-            return match ? parseInt(match[1], 10) : -1
+            const rawIndex = match?.[1]
+            return rawIndex ? parseInt(rawIndex, 10) : -1
         }
         this.releaseAssets = () => {
             this.activeAssetUrls.forEach((url) => URL.revokeObjectURL(url))
@@ -131,7 +132,7 @@ export class MobiContentProvider implements ContentProvider {
     unloadChapter() {}
 
     async search(keyword: string): Promise<SearchResult[]> {
-        return searchPlainChapterTexts(keyword, this.chapters.length, (index) => this.chapters[index].plainText)
+        return searchPlainChapterTexts(keyword, this.chapters.length, (index) => this.chapters[index]?.plainText ?? '')
     }
 }
 

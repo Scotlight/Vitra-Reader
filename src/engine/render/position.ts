@@ -159,7 +159,9 @@ function walkDomPath(root: Node, path: string[]): Node | null {
         const children = current.childNodes
         if (childIndex >= children.length) return null
 
-        current = children[childIndex]
+        const next = children[childIndex]
+        if (!next) return null
+        current = next
     }
 
     return current
@@ -222,6 +224,7 @@ function resolveNodeAtOffset(
 ): PositionResult | null {
     for (let i = nodeStarts.length - 1; i >= 0; i--) {
         const entry = nodeStarts[i]
+        if (!entry) continue
         if (absoluteOffset >= entry.start) {
             const nodeOffset = Math.min(
                 absoluteOffset - entry.start,

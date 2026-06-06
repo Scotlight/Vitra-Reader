@@ -40,11 +40,11 @@ function extractWeightAndFamily(font: string): { weight: string; family: string 
     // font shorthand 格式：[style] [variant] [weight] [stretch] size[/line-height] family
     // weight 关键字：normal bold bolder lighter 100-900
     const weightMatch = font.match(/\b(bold|bolder|lighter|[1-9]00)\b/)
-    const weight = weightMatch ? weightMatch[1] : 'normal'
+    const weight = weightMatch?.[1] ?? 'normal'
     const familyMatch = font.match(
         /(?:(?:normal|bold|bolder|lighter|italic|oblique|small-caps|\d+(?:\.\d+)?(?:px|em|rem|%|pt)(?:\/[\d.]+(?:px|em|rem|%)?)?|[\d.]+)\s+)*(.+)$/,
     )
-    const family = familyMatch ? familyMatch[1].trim() : font
+    const family = familyMatch?.[1]?.trim() ?? font
     return { weight, family }
 }
 

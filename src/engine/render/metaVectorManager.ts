@@ -13,7 +13,12 @@ export function findSegmentByOffset(segments: readonly SegmentMeta[], offset: nu
 
   while (lo < hi) {
     const mid = (lo + hi + 1) >>> 1;
-    if (segments[mid].offsetY <= offset) {
+    const segment = segments[mid];
+    if (!segment) {
+      hi = mid - 1;
+      continue;
+    }
+    if (segment.offsetY <= offset) {
       lo = mid;
     } else {
       hi = mid - 1;

@@ -162,5 +162,6 @@ export function filterRenderableMobiChapters(
 ): MobiRenderedChapter[] {
     const filtered = chapters.filter(isRenderableMobiChapter)
     if (filtered.length > 0) return filtered
-    return chapters.length > 0 ? [chapters[0]] : []
+    const firstChapter = chapters[0]
+    return firstChapter ? [firstChapter] : []
 }

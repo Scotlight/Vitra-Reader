@@ -1,0 +1,40 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "noUncheckedIndexedAccess": true
+    },
+    "include": [
+        "src/vite-env.d.ts",
+        "src/types/**/*.d.ts",
+        "src/engine/parsers/comicArchiveAdapters.ts",
+        "src/engine/parsers/comicMetadata.ts",
+        "src/engine/parsers/comicParser.ts",
+        "src/engine/parsers/docxParser.ts",
+        "src/engine/parsers/providerSectionFactory.ts",
+        "src/engine/parsers/providers/chapterSearch.ts",
+        "src/engine/parsers/providers/flatChapterProvider.ts",
+        "src/engine/parsers/providers/epubContentExtractor.ts",
+        "src/engine/parsers/providers/epubResourceLoader.ts",
+        "src/engine/parsers/providers/htmlProvider.ts",
+        "src/engine/parsers/providers/lingoMobiAdapter.ts",
+        "src/engine/parsers/providers/mdProvider.ts",
+        "src/engine/parsers/providers/mobiHtmlRenderer.ts",
+        "src/engine/parsers/providers/mobiParser.ts",
+        "src/engine/parsers/providers/mobiTextDecoding.ts",
+        "src/engine/parsers/providers/mobiProvider.ts",
+        "src/engine/parsers/providers/textDecoding.ts",
+        "src/engine/parsers/providers/pdf/pdfNavigation.ts",
+        "src/engine/render/chapterHtmlCleanup.ts",
+        "src/engine/render/metaVectorManager.ts",
+        "src/engine/render/vectorPlanner.ts",
+        "src/engine/render/chapterPreprocessWorkerClient.ts",
+        "src/engine/render/charWidthTable.ts",
+        "src/engine/render/htmlSaxStream.ts",
+        "src/engine/render/paginator.ts",
+        "src/engine/render/position.ts",
+        "src/engine/render/segmentDomPool.ts",
+        "src/utils/textFinder.ts",
+        "src/components/Reader/scrollVectorStrategy.ts",
+        "src/components/Reader/shadowRenderer/vectorization.ts"
+    ]
+}

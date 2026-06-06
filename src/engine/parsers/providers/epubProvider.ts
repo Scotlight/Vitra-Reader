@@ -95,6 +95,7 @@ async function buildFallbackTocFromSpine(
     const tocItems: TocItem[] = []
     for (let index = 0; index < spineItems.length; index += 1) {
         const spine = spineItems[index]
+        if (!spine) continue
         const heading = await safeExtractHeading(book, spine.index)
         tocItems.push({
             id: spine.id || `spine-${index}`,

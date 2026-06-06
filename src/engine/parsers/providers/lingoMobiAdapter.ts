@@ -125,7 +125,16 @@ function buildRenderedParts(
 }
 
 function createFallbackChapter(spineId: string, index: number): MobiRenderedChapter {
-    const [chapter] = renderMobiChapters({ content: '' })
+    const chapter = renderMobiChapters({ content: '' })[0]
+    if (!chapter) {
+        return {
+            href: spineId,
+            label: `第 ${index + 1} 章`,
+            html: '',
+            plainText: '',
+            styles: [],
+        }
+    }
     return {
         ...chapter,
         href: spineId,
@@ -141,6 +150,7 @@ async function buildChapters(
     const spine = parser.getSpine()
     for (let index = 0; index < spine.length; index += 1) {
         const spineItem = spine[index]
+        if (!spineItem) continue
         const processed = parser.loadChapter(spineItem.id)
         if (!processed) {
             chapters.push(createFallbackChapter(spineItem.id, chapters.length))
@@ -220,7 +230,7 @@ function buildHrefIndex(
     const hrefToIndex = new Map<string, number>()
     chapters.forEach((chapter, index) => {
         hrefToIndex.set(chapter.href, index)
-        const baseHref = chapter.href.split('#', 1)[0]
+        const baseHref = chapter.href.split('#', 1)[0] ?? ''
         if (!hrefToIndex.has(baseHref)) hrefToIndex.set(baseHref, index)
     })
     return hrefToIndex
@@ -238,7 +248,7 @@ function buildResolveHref(
     hrefToIndex: Map<string, number>,
 ): (href: string) => number {
     return (href: string) => {
-        const baseHref = href.split('#', 1)[0]
+        const baseHref = href.split('#', 1)[0] ?? ''
         const exact = hrefToIndex.get(href) ?? hrefToIndex.get(baseHref)
         if (exact !== undefined) return exact
         const resolved = parser.resolveHref(href)
@@ -307,7 +317,7 @@ export async function parseLingoMobiMetadata(
         const cover = coverUrl ? await blobUrlToDataUrl(coverUrl) : ''
         return {
             title: metadata.title || 'Untitled',
-            author: metadata.author.join(', ') || '未知作者',
+            author: metadata.author?.join(', ') || '未知作者',
             description: metadata.description || '',
             publisher: metadata.publisher || '',
             language: metadata.language || '',

@@ -64,7 +64,8 @@ export class PdfContentProvider implements ContentProvider {
 
     getSpineIndexByHref(href: string): number {
         const match = href.match(/page-(\d+)/)
-        return match ? parseInt(match[1], 10) : -1
+        const pageIndexText = match?.[1]
+        return pageIndexText === undefined ? -1 : parseInt(pageIndexText, 10)
     }
 
     async extractChapterHtml(pageIndex: number): Promise<string> {

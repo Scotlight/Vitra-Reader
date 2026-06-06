@@ -37,7 +37,8 @@ export class SegmentDomPool {
     // 2. 暴力移除所有属性（id / data-* / aria-* / lang / dir / 任何注入属性）
     const attrNames = el.getAttributeNames();
     for (let i = 0; i < attrNames.length; i++) {
-      el.removeAttribute(attrNames[i]);
+      const attrName = attrNames[i];
+      if (attrName) el.removeAttribute(attrName);
     }
     // 3. 清空 inline style 和 className（removeAttribute 已覆盖，双保险）
     el.style.cssText = '';

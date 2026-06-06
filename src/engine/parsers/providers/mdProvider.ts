@@ -62,13 +62,13 @@ export class MdContentProvider implements ContentProvider {
     unloadChapter() {}
 
     async search(keyword: string): Promise<SearchResult[]> {
-        return searchPlainChapterTexts(keyword, this.chapters.length, (index) => this.chapters[index].plain)
+        return searchPlainChapterTexts(keyword, this.chapters.length, (index) => this.chapters[index]?.plain ?? '')
     }
 }
 
 export async function parseMdMetadata(data: ArrayBuffer, filename: string) {
     const text = decodeTextBuffer(data, 'md').text
     const m = text.match(/^#\s+(.+)/m)
-    const title = m ? m[1].trim() : stripBookExtension(filename)
+    const title = m?.[1] ? m[1].trim() : stripBookExtension(filename)
     return { title: title || filename, author: '未知作者' }
 }

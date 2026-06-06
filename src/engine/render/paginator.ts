@@ -241,6 +241,7 @@ export async function collectBlockMetricsIdle(
     }> = new Array(nodes.length)
     for (let i = 0; i < nodes.length; i++) {
         const el = nodes[i]
+        if (!el) continue
         const style = window.getComputedStyle(el)
         const visible = style.display !== 'none'
             && style.visibility !== 'hidden'
@@ -270,6 +271,7 @@ export async function collectBlockMetricsIdle(
         const end = Math.min(snapshots.length, offset + batchSize)
         for (let i = offset; i < end; i++) {
             const snap = snapshots[i]
+            if (!snap) continue
             if (!snap.visible) continue
             if (snap.rect.width <= 1 || snap.rect.height <= 1) continue
             blocks.push({

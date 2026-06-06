@@ -215,8 +215,9 @@ img{display:block;max-width:100%;max-height:100%;margin:auto;object-fit:contain}
   ): { index: number; anchor?: string } | null {
     // href 格式：page-N
     const match = href.match(/^page-(\d+)$/);
-    if (match) {
-      const index = parseInt(match[1], 10);
+    const pageIndexText = match?.[1];
+    if (pageIndexText !== undefined) {
+      const index = parseInt(pageIndexText, 10);
       if (index >= 0 && index < imageEntries.length) return { index };
     }
     return null;

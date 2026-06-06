@@ -40,11 +40,15 @@ function lookupSpineItem(book: Book, spineIndex: number): SpineLookupResult {
     if (!Array.isArray(spineItems) || spineIndex < 0 || spineIndex >= spineItems.length) {
         throw new Error(`[ContentExtractor] Invalid spine index: ${spineIndex}`);
     }
+    const spineItem = spineItems[spineIndex];
+    if (!spineItem) {
+        throw new Error(`[ContentExtractor] Invalid spine item: ${spineIndex}`);
+    }
 
     return {
         bookInternal,
         spineItems,
-        spineItem: spineItems[spineIndex],
+        spineItem,
     };
 }
 
@@ -149,6 +153,7 @@ export function unloadChapter(book: Book, spineIndex: number): void {
     }
     try {
         const spineItem = spineItems[spineIndex];
+        if (!spineItem) return;
         if (typeof spineItem.unload === 'function') {
             spineItem.unload();
         }

@@ -153,13 +153,14 @@ function findExplicitTitleIndexes(paragraphs: string[]): number[] {
 function buildExplicitChapters(paragraphs: string[], titleIndexes: number[]): TxtChapter[] {
     const chapters: TxtChapter[] = []
     const firstTitle = titleIndexes[0]
-    if (firstTitle > 0) {
+    if (firstTitle !== undefined && firstTitle > 0) {
         chapters.push({ title: '序章', start: 0, end: firstTitle })
     }
 
     for (let i = 0; i < titleIndexes.length; i += 1) {
         const start = titleIndexes[i]
         const end = i + 1 < titleIndexes.length ? titleIndexes[i + 1] : paragraphs.length
+        if (start === undefined || end === undefined) continue
         if (end <= start) continue
         chapters.push({
             title: trimLabel((paragraphs[start] || '').trim()) || `第 ${chapters.length + 1} 节`,
