@@ -66,7 +66,7 @@ export function TranslateSettingsTab() {
     return (
         <div className={styles.syncPanel}>
             <div className={styles.syncStatus} style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-                翻译服务配置（OpenAI/Gemini/Claude/Ollama/DeepL/DeepLX 兼容）
+                翻译服务配置（OpenAI/Ollama/DeepL/DeepLX 兼容）
             </div>
             <label className={styles.settingRow}>
                 <span>翻译 Provider</span>
@@ -75,8 +75,6 @@ export function TranslateSettingsTab() {
                     onChange={(event) => setTranslateConfig((prev) => ({ ...prev, provider: event.target.value as TranslateProvider }))}
                 >
                     <option value="openai">OpenAI兼容</option>
-                    <option value="gemini">Gemini兼容</option>
-                    <option value="claude">Claude兼容</option>
                     <option value="ollama">Ollama兼容</option>
                     <option value="deepl">DeepL 官方</option>
                     <option value="deeplx">DeepLX兼容</option>
@@ -153,70 +151,6 @@ export function TranslateSettingsTab() {
                             type="text"
                             value={translateConfig.openaiModel}
                             onChange={(event) => setTranslateConfig((prev) => ({ ...prev, openaiModel: event.target.value }))}
-                        />
-                    </label>
-                </>
-            )}
-
-            {translateConfig.provider === 'gemini' && (
-                <>
-                    <label className={styles.settingRow}>
-                        <span>Gemini API Key</span>
-                        <input
-                            className={styles.textInput}
-                            type="password"
-                            value={translateConfig.geminiApiKey}
-                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, geminiApiKey: event.target.value }))}
-                        />
-                    </label>
-                    <label className={styles.settingRow}>
-                        <span>Gemini Endpoint</span>
-                        <input
-                            className={styles.textInput}
-                            type="text"
-                            value={translateConfig.geminiEndpoint}
-                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, geminiEndpoint: event.target.value }))}
-                        />
-                    </label>
-                    <label className={styles.settingRow}>
-                        <span>Gemini Model</span>
-                        <input
-                            className={styles.textInput}
-                            type="text"
-                            value={translateConfig.geminiModel}
-                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, geminiModel: event.target.value }))}
-                        />
-                    </label>
-                </>
-            )}
-
-            {translateConfig.provider === 'claude' && (
-                <>
-                    <label className={styles.settingRow}>
-                        <span>Claude API Key</span>
-                        <input
-                            className={styles.textInput}
-                            type="password"
-                            value={translateConfig.claudeApiKey}
-                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, claudeApiKey: event.target.value }))}
-                        />
-                    </label>
-                    <label className={styles.settingRow}>
-                        <span>Claude Endpoint</span>
-                        <input
-                            className={styles.textInput}
-                            type="text"
-                            value={translateConfig.claudeEndpoint}
-                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, claudeEndpoint: event.target.value }))}
-                        />
-                    </label>
-                    <label className={styles.settingRow}>
-                        <span>Claude Model</span>
-                        <input
-                            className={styles.textInput}
-                            type="text"
-                            value={translateConfig.claudeModel}
-                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, claudeModel: event.target.value }))}
                         />
                     </label>
                 </>

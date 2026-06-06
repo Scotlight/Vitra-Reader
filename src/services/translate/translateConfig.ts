@@ -4,7 +4,7 @@ import { DEFAULT_TRANSLATE_CONFIG, normalizeConfig } from './translateTypes'
 
 const TRANSLATE_CONFIG_KEY = 'translate:config'
 const TRANSLATE_CONFIG_LEGACY_KEY = 'translateConfig'
-const API_KEY_FIELDS = ['deeplApiKey', 'openaiApiKey', 'geminiApiKey', 'claudeApiKey'] as const
+const API_KEY_FIELDS = ['deeplApiKey', 'openaiApiKey'] as const
 
 async function encryptApiKeys(config: Record<string, unknown>): Promise<Record<string, unknown>> {
     const api = window.electronAPI

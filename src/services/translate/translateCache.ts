@@ -15,9 +15,9 @@ function hashString(input: string): number {
 export function buildCacheKey(text: string, config: TranslateConfig): string {
     const fingerprint = [
         config.provider, config.sourceLang, config.targetLang,
-        config.openaiModel, config.geminiModel, config.claudeModel, config.ollamaModel,
-        config.openaiEndpoint, config.geminiEndpoint, config.claudeEndpoint,
-        config.ollamaEndpoint, config.deeplEndpoint, config.deeplxEndpoint,
+        config.openaiModel, config.ollamaModel,
+        config.openaiEndpoint, config.ollamaEndpoint,
+        config.deeplEndpoint, config.deeplxEndpoint,
         text.trim(),
     ].join('|')
     return `${CACHE_KEY_PREFIX}${hashString(fingerprint).toString(16)}`

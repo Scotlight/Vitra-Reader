@@ -4,14 +4,12 @@ export { loadTranslateConfig, saveTranslateConfig } from './translate/translateC
 export { clearTranslationCache } from './translate/translateCache'
 import { loadTranslateConfig } from './translate/translateConfig'
 import { buildCacheKey, getCached, setCached } from './translate/translateCache'
-import { callOpenAICompatible, callDeepL, callClaude, callDeepLX } from './translate/translateEngines'
+import { callOpenAICompatible, callDeepL, callDeepLX } from './translate/translateEngines'
 import { normalizeConfig, ensureProvider } from './translate/translateTypes'
 import type { TranslateConfig, TranslateResult, TranslateProvider } from './translate/translateTypes'
 
 export function getProviderLabel(provider: TranslateProvider): string {
     if (provider === 'openai') return 'OpenAI兼容'
-    if (provider === 'gemini') return 'Gemini兼容'
-    if (provider === 'claude') return 'Claude兼容'
     if (provider === 'ollama') return 'Ollama兼容'
     if (provider === 'deepl') return 'DeepL'
     return 'DeepLX兼容'
@@ -37,12 +35,6 @@ export async function translateText(text: string, customConfig?: Partial<Transla
 
     if (config.provider === 'openai') {
         const r = await callOpenAICompatible({ text: input, sourceLang: config.sourceLang, targetLang: config.targetLang, endpoint: config.openaiEndpoint, apiKey: config.openaiApiKey, model: config.openaiModel, providerName: 'OpenAI兼容', requireApiKey: true })
-        translated = r.text; error = r.error || ''
-    } else if (config.provider === 'gemini') {
-        const r = await callOpenAICompatible({ text: input, sourceLang: config.sourceLang, targetLang: config.targetLang, endpoint: config.geminiEndpoint, apiKey: config.geminiApiKey, model: config.geminiModel, providerName: 'Gemini兼容', requireApiKey: true })
-        translated = r.text; error = r.error || ''
-    } else if (config.provider === 'claude') {
-        const r = await callClaude(input, config)
         translated = r.text; error = r.error || ''
     } else if (config.provider === 'ollama') {
         const r = await callOpenAICompatible({ text: input, sourceLang: config.sourceLang, targetLang: config.targetLang, endpoint: config.ollamaEndpoint, model: config.ollamaModel, providerName: 'Ollama兼容', requireApiKey: false })

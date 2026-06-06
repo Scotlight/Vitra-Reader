@@ -28,9 +28,6 @@ interface OpenAIMessage { content?: string | OpenAIContentBlock[] }
 interface OpenAIChoice { message?: OpenAIMessage }
 interface OpenAIResponse { choices?: OpenAIChoice[] }
 
-interface ClaudeContentBlock { type: string; text?: string }
-interface ClaudeResponse { content?: ClaudeContentBlock[] }
-
 interface DeepLTranslation { text?: string }
 interface DeepLResponse { translations?: DeepLTranslation[] }
 
@@ -38,10 +35,6 @@ interface DeepLResponse { translations?: DeepLTranslation[] }
 
 function isOpenAIResponse(v: unknown): v is OpenAIResponse {
     return !!v && typeof v === 'object' && 'choices' in v
-}
-
-function isClaudeResponse(v: unknown): v is ClaudeResponse {
-    return !!v && typeof v === 'object' && 'content' in v
 }
 
 function isDeepLResponse(v: unknown): v is DeepLResponse {
@@ -63,16 +56,6 @@ function extractOpenAIText(payload: unknown): string {
     if (Array.isArray(content)) {
         const block = content.find((b) => b.type === 'text' && typeof b.text === 'string')
         if (block?.text) return block.text.trim()
-    }
-    return ''
-}
-
-function extractClaudeText(payload: unknown): string {
-    if (!isClaudeResponse(payload)) return ''
-    for (const block of payload.content ?? []) {
-        if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
-            return block.text.trim()
-        }
     }
     return ''
 }
@@ -165,26 +148,6 @@ export async function callDeepL(text: string, config: TranslateConfig): Promise<
     if (!response.success) return { text: '', error: response.error || `DeepL 请求失败 (${response.status ?? 'unknown'})` }
     const translated = extractDeepLText(parseJsonOrRaw(response.data))
     return translated ? { text: translated } : { text: '', error: 'DeepL 返回中没有可识别翻译结果' }
-}
-
-export async function callClaude(text: string, config: TranslateConfig): Promise<EngineResult> {
-    if (!config.claudeApiKey.trim()) return { text: '', error: 'Claude API Key 未配置' }
-    return callEngine({
-        url: config.claudeEndpoint,
-        headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': config.claudeApiKey.trim(),
-            'anthropic-version': '2023-06-01',
-        },
-        body: {
-            model: config.claudeModel,
-            max_tokens: 1024,
-            system: `Translate user input from ${config.sourceLang} to ${config.targetLang}. Return translation only.`,
-            messages: [{ role: 'user', content: text }],
-        },
-        extract: extractClaudeText,
-        errorPrefix: 'Claude',
-    })
 }
 
 function normalizeDeepLXLang(lang: string, sourceSide: boolean): string {

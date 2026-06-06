@@ -1,7 +1,5 @@
 export type TranslateProvider =
     | 'openai'
-    | 'gemini'
-    | 'claude'
     | 'ollama'
     | 'deepl'
     | 'deeplx'
@@ -21,14 +19,6 @@ export interface TranslateConfig {
     openaiEndpoint: string
     openaiModel: string
 
-    geminiApiKey: string
-    geminiEndpoint: string
-    geminiModel: string
-
-    claudeApiKey: string
-    claudeEndpoint: string
-    claudeModel: string
-
     ollamaEndpoint: string
     ollamaModel: string
 
@@ -43,7 +33,7 @@ export interface TranslateResult {
     error?: string
 }
 
-export const VALID_PROVIDERS: TranslateProvider[] = ['openai', 'gemini', 'claude', 'ollama', 'deepl', 'deeplx']
+export const VALID_PROVIDERS: TranslateProvider[] = ['openai', 'ollama', 'deepl', 'deeplx']
 
 export const DEFAULT_TRANSLATE_CONFIG: TranslateConfig = {
     provider: 'openai',
@@ -59,14 +49,6 @@ export const DEFAULT_TRANSLATE_CONFIG: TranslateConfig = {
     openaiApiKey: '',
     openaiEndpoint: 'https://api.openai.com/v1/chat/completions',
     openaiModel: 'gpt-4o-mini',
-
-    geminiApiKey: '',
-    geminiEndpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-    geminiModel: 'gemini-2.0-flash',
-
-    claudeApiKey: '',
-    claudeEndpoint: 'https://api.anthropic.com/v1/messages',
-    claudeModel: 'claude-3-5-sonnet-latest',
 
     ollamaEndpoint: 'http://127.0.0.1:11434/v1/chat/completions',
     ollamaModel: 'qwen2.5:7b',
@@ -98,14 +80,6 @@ export function normalizeConfig(partial?: Partial<TranslateConfig>): TranslateCo
         openaiApiKey: partial?.openaiApiKey || '',
         openaiEndpoint: (partial?.openaiEndpoint || DEFAULT_TRANSLATE_CONFIG.openaiEndpoint).trim(),
         openaiModel: (partial?.openaiModel || DEFAULT_TRANSLATE_CONFIG.openaiModel).trim() || DEFAULT_TRANSLATE_CONFIG.openaiModel,
-
-        geminiApiKey: partial?.geminiApiKey || '',
-        geminiEndpoint: (partial?.geminiEndpoint || DEFAULT_TRANSLATE_CONFIG.geminiEndpoint).trim(),
-        geminiModel: (partial?.geminiModel || DEFAULT_TRANSLATE_CONFIG.geminiModel).trim() || DEFAULT_TRANSLATE_CONFIG.geminiModel,
-
-        claudeApiKey: partial?.claudeApiKey || '',
-        claudeEndpoint: (partial?.claudeEndpoint || DEFAULT_TRANSLATE_CONFIG.claudeEndpoint).trim(),
-        claudeModel: (partial?.claudeModel || DEFAULT_TRANSLATE_CONFIG.claudeModel).trim() || DEFAULT_TRANSLATE_CONFIG.claudeModel,
 
         ollamaEndpoint: (partial?.ollamaEndpoint || DEFAULT_TRANSLATE_CONFIG.ollamaEndpoint).trim(),
         ollamaModel: (partial?.ollamaModel || DEFAULT_TRANSLATE_CONFIG.ollamaModel).trim() || DEFAULT_TRANSLATE_CONFIG.ollamaModel,
