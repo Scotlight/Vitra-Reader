@@ -108,7 +108,9 @@ export class BookContentAdapter implements ContentProvider {
 
     // 异步写入磁盘缓存（fire-and-forget，写入失败不影响当前会话）
     if (payload) {
-      this.bookCache.put(this.buffer, payload).catch(() => {})
+      this.bookCache.put(this.buffer, payload).catch((error: unknown) => {
+        console.warn('[bookCache] 写入失败', error)
+      })
     }
   }
 
