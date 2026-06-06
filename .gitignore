@@ -46,6 +46,9 @@ npm_install_log.txt
 *.tsbuildinfo
 outputs/runtime/
 
+# MCP tool debug artifacts (screenshots / console logs)
+.playwright-mcp/
+
 # Local generated docs / chat exports
 docs/chat_export/
 docs/virtual-render/
