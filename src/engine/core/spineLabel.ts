@@ -3,7 +3,7 @@ export function buildSpineFallbackLabel(href: string, index: number): string {
     if (!href) return fallback
 
     const [pathPart] = href.split('#', 2)
-    const fileName = pathPart.split('/').pop() || ''
+    const fileName = (pathPart ?? '').split('/').pop() || ''
     const decoded = decodeUriComponentSafe(fileName)
     const withoutExtension = decoded.replace(/\.[^.]+$/, '')
     const cleaned = withoutExtension

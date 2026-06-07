@@ -161,7 +161,8 @@ function normalizeDeepLXLang(lang: string, sourceSide: boolean): string {
         'ja': 'JA', 'ko': 'KO', 'fr': 'FR', 'de': 'DE',
         'ru': 'RU', 'es': 'ES', 'pt': 'PT', 'it': 'IT',
     }
-    return map[lower] ?? map[lower.split('-')[0]] ?? lower.split('-')[0].toUpperCase()
+    const baseLang = lower.split('-')[0] ?? lower
+    return map[lower] ?? map[baseLang] ?? baseLang.toUpperCase()
 }
 
 export async function callDeepLX(text: string, config: TranslateConfig): Promise<EngineResult> {
@@ -177,8 +178,10 @@ export async function callDeepLX(text: string, config: TranslateConfig): Promise
     const add = (a: Attempt) => { const k = `${a.contentType}:${a.body}`; if (!seen.has(k)) { seen.add(k); attempts.push(a) } }
 
     // 穷举参数名和编码格式组合，兼容各种 DeepLX 实现
-    for (const [s, t] of [[rawSrc, rawTgt], [normSrc, normTgt]]) {
-        for (const [sk, tk] of [['source_lang', 'target_lang'], ['source', 'target'], ['from', 'to']]) {
+    const languagePairs: readonly (readonly [string, string])[] = [[rawSrc, rawTgt], [normSrc, normTgt]]
+    const parameterKeyPairs: readonly (readonly [string, string])[] = [['source_lang', 'target_lang'], ['source', 'target'], ['from', 'to']]
+    for (const [s, t] of languagePairs) {
+        for (const [sk, tk] of parameterKeyPairs) {
             add({ contentType: 'application/json', body: JSON.stringify({ text, [sk]: s, [tk]: t }), name: 'json' })
             const p = new URLSearchParams({ text, [sk]: s, [tk]: t })
             add({ contentType: 'application/x-www-form-urlencoded', body: p.toString(), name: 'form' })

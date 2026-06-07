@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     batchUpdateSegmentHeights,
     buildChapterMetaVector,
+    findSegmentByOffset,
 } from '@/engine/render/metaVectorManager';
 import type { SegmentMeta } from '@/engine/types/vectorRender';
 
@@ -24,6 +25,10 @@ function createSegment(
 }
 
 describe('metaVectorManager', () => {
+    it('空 segments 查找返回 -1', () => {
+        expect(findSegmentByOffset([], 100)).toBe(-1);
+    });
+
     it('从已测量段恢复 metaVector 时保留 offsetY 与 fullyMeasured', () => {
         const vector = buildChapterMetaVector('chapter-1', 0, [
             createSegment(0, 120, 140, true),

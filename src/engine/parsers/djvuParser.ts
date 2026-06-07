@@ -55,8 +55,9 @@ export class DjvuParser extends BaseParser {
       direction: 'ltr',
       resolveHref: (href: string) => {
         const match = href.match(/^djvu-page-(\d+)$/);
-        if (match) {
-          const index = parseInt(match[1], 10);
+        const pageIndexText = match?.[1];
+        if (pageIndexText !== undefined) {
+          const index = parseInt(pageIndexText, 10);
           if (index >= 0 && index < pageCount) return { index };
         }
         return null;

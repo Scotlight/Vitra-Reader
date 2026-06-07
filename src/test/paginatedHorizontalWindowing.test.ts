@@ -44,7 +44,7 @@ describe('paginatedHorizontalWindowing', () => {
     it('会根据元素水平位置收集页窗候选', () => {
         const container = document.createElement('div')
         container.innerHTML = '<p>one</p><p>two</p><p>three</p>'
-        const elements = Array.from(container.querySelectorAll('p'))
+        const elements = Array.from(container.querySelectorAll('p')) as [HTMLParagraphElement, HTMLParagraphElement, HTMLParagraphElement]
 
         mockRect(container, rect(0, 1800, 800))
         mockRect(elements[0], rect(10, 100))
@@ -63,7 +63,7 @@ describe('paginatedHorizontalWindowing', () => {
     it('会隐藏页窗外元素并可恢复原始样式', () => {
         const container = document.createElement('div')
         container.innerHTML = '<p>one</p><p>two</p><p>three</p>'
-        const elements = Array.from(container.querySelectorAll('p')) as HTMLElement[]
+        const elements = Array.from(container.querySelectorAll('p')) as unknown as [HTMLElement, HTMLElement, HTMLElement]
         elements[0].style.pointerEvents = 'auto'
 
         mockRect(container, rect(0, 1800, 800))

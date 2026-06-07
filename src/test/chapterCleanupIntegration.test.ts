@@ -41,7 +41,7 @@ describe('章节清洗集成', () => {
         const parser = new TxtParser(toArrayBuffer('\n\n第一章\n正文\n\n'), 'blank.txt')
         const book = await parser.parse()
 
-        const html = await book.sections[0].load()
+        const html = await book.sections[0]!.load()
 
         expect(html).toMatch(/^<p>第一章<\/p>/)
         expect(html).toContain('<p>正文</p>')

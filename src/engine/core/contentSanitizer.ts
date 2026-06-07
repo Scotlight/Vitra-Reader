@@ -84,7 +84,9 @@ function sanitizeSrcSetValue(srcSet: string): string {
         .map((entry) => {
             const tokens = entry.split(/\s+/).filter(Boolean)
             if (tokens.length === 0) return ''
-            const cleanUrl = sanitizeUrlValue(tokens[0])
+            const rawUrl = tokens[0]
+            if (!rawUrl) return ''
+            const cleanUrl = sanitizeUrlValue(rawUrl)
             if (!cleanUrl) return ''
             return [cleanUrl, ...tokens.slice(1)].join(' ')
         })
@@ -271,7 +273,9 @@ function sanitizeWithRegexFallback(html: string): {
         let attrMatch: RegExpExecArray | null
 
         while ((attrMatch = attrPattern.exec(attrsStr)) !== null) {
-            const attrName = attrMatch[1].toLowerCase()
+            const rawAttrName = attrMatch[1]
+            if (!rawAttrName) continue
+            const attrName = rawAttrName.toLowerCase()
             const attrValue = attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? ''
 
             // 拒绝 event handler 属性

@@ -33,7 +33,7 @@ function resolveAvailableModes(profile: ReaderRenderProfile): readonly PageTurnM
 
 function pickEffectiveMode(availableModes: readonly PageTurnMode[], requestedMode: PageTurnMode): PageTurnMode {
     if (availableModes.includes(requestedMode)) return requestedMode
-    return availableModes[0]
+    return availableModes[0] ?? 'scrolled-continuous'
 }
 
 function buildReason(profile: ReaderRenderProfile, forced: boolean): string {

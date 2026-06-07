@@ -61,7 +61,7 @@ describe('paginatedMeasureCache', () => {
         expect(cached).not.toBe(cache.get(key))
 
         const mutated = cached as PageBoundary[]
-        mutated[0].endOffset = 999
+        mutated[0]!.endOffset = 999
 
         expect(readPaginatedMeasureCache(cache, key)).toEqual(createBoundaries())
     })

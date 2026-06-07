@@ -11,10 +11,10 @@ describe('renderMobiChapters', () => {
         })
 
         expect(chapters).toHaveLength(2)
-        expect(chapters[0].label).toBe('第一章')
-        expect(chapters[0].html).toContain('<h1>第一章</h1>')
-        expect(chapters[1].label).toBe('第二章')
-        expect(chapters[1].plainText).toBe('第二章 乙')
+        expect(chapters[0]!.label).toBe('第一章')
+        expect(chapters[0]!.html).toContain('<h1>第一章</h1>')
+        expect(chapters[1]!.label).toBe('第二章')
+        expect(chapters[1]!.plainText).toBe('第二章 乙')
     })
 
     it('按 MOBI pagebreak 切分并移除原始 pagebreak 标签', () => {
@@ -23,8 +23,8 @@ describe('renderMobiChapters', () => {
         })
 
         expect(chapters).toHaveLength(2)
-        expect(chapters[0].plainText).toBe('第一页')
-        expect(chapters[1].plainText).toBe('第二页')
+        expect(chapters[0]!.plainText).toBe('第一页')
+        expect(chapters[1]!.plainText).toBe('第二页')
         expect(chapters.map((chapter) => chapter.html).join('')).not.toContain('mbp:pagebreak')
     })
 
@@ -52,17 +52,17 @@ describe('renderMobiChapters', () => {
         })
 
         expect(chapters).toHaveLength(1)
-        expect(chapters[0].styles).toEqual(['.cover{width:100%}'])
-        expect(chapters[0].html).toContain('src="blob:mobi-image"')
-        expect(chapters[0].html).not.toContain('recindex')
+        expect(chapters[0]!.styles).toEqual(['.cover{width:100%}'])
+        expect(chapters[0]!.html).toContain('src="blob:mobi-image"')
+        expect(chapters[0]!.html).not.toContain('recindex')
     })
 
     it('空内容返回占位章节', () => {
         const chapters = renderMobiChapters({ content: '' })
 
         expect(chapters).toHaveLength(1)
-        expect(chapters[0].label).toBe('正文')
-        expect(chapters[0].plainText).toContain('空章节')
+        expect(chapters[0]!.label).toBe('正文')
+        expect(chapters[0]!.plainText).toContain('空章节')
     })
 
     it('过滤不可阅读空章节但保留图片章节', () => {
@@ -75,8 +75,8 @@ describe('renderMobiChapters', () => {
         const filtered = filterRenderableMobiChapters(chapters)
 
         expect(filtered).toHaveLength(2)
-        expect(filtered[0].html).toContain('<img')
-        expect(filtered[1].label).toBe('第一章')
+        expect(filtered[0]!.html).toContain('<img')
+        expect(filtered[1]!.label).toBe('第一章')
     })
 
     it('清理章节首尾空段落，保留正文中间空行', () => {
@@ -95,9 +95,9 @@ describe('renderMobiChapters', () => {
         })
 
         expect(chapters).toHaveLength(1)
-        expect(chapters[0].html).toMatch(/^<h1>第一章<\/h1>/)
-        expect(chapters[0].html).toContain('<p></p>')
-        expect(chapters[0].html).toContain('<p>第二段</p>')
-        expect(chapters[0].html).not.toMatch(/(<p>(&nbsp;|\s)*<\/p>|<div>\s*<\/div>|<br>)$/)
+        expect(chapters[0]!.html).toMatch(/^<h1>第一章<\/h1>/)
+        expect(chapters[0]!.html).toContain('<p></p>')
+        expect(chapters[0]!.html).toContain('<p>第二段</p>')
+        expect(chapters[0]!.html).not.toMatch(/(<p>(&nbsp;|\s)*<\/p>|<div>\s*<\/div>|<br>)$/)
     })
 })

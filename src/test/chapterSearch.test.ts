@@ -8,7 +8,7 @@ describe('chapterSearch', () => {
 
     it('按章节纯文本生成搜索结果', () => {
         const chapters = ['第一章 开头内容', '第二章 命中关键字 以及更多内容']
-        const results = searchPlainChapterTexts('关键字', chapters.length, (index) => chapters[index])
+        const results = searchPlainChapterTexts('关键字', chapters.length, (index) => chapters[index] ?? '')
 
         expect(results).toHaveLength(1)
         expect(results[0]).toEqual({

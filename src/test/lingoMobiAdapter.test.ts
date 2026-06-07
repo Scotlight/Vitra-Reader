@@ -51,7 +51,7 @@ describe('loadLingoMobiBook', () => {
         const book = await loadLingoMobiBook(new ArrayBuffer(8), 'mobi')
 
         expect(book.chapters).toHaveLength(1)
-        expect(book.chapters[0].href).toBe('2')
+        expect(book.chapters[0]!.href).toBe('2')
         expect(book.spineItems).toEqual([{ index: 0, href: '2', id: '2', linear: true }])
         expect(book.tocItems).toEqual([{
             id: '2',

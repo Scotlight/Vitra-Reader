@@ -14,8 +14,8 @@ describe('paginateBlocks', () => {
     it('单个小于视口高度的块占一页', () => {
         const pages = paginateBlocks([block(0, 100)], 800)
         expect(pages).toHaveLength(1)
-        expect(pages[0].startBlock).toBe(0)
-        expect(pages[0].endBlock).toBe(0)
+        expect(pages[0]!.startBlock).toBe(0)
+        expect(pages[0]!.endBlock).toBe(0)
     })
 
     it('多个块恰好填满一页', () => {
@@ -38,8 +38,8 @@ describe('paginateBlocks', () => {
         const pages = paginateBlocks(blocks, 800)
         // img 不可拆，应放到新页
         expect(pages.length).toBeGreaterThanOrEqual(2)
-        const imgInPage1 = pages[0].endBlock === 1 && pages[0].startBlock === 1
-        const imgInPage2 = pages.length >= 2 && pages[1].startBlock === 1
+        const imgInPage1 = pages[0]!.endBlock === 1 && pages[0]!.startBlock === 1
+        const imgInPage2 = pages.length >= 2 && pages[1]!.startBlock === 1
         expect(imgInPage1 || imgInPage2).toBe(true)
     })
 
@@ -47,10 +47,10 @@ describe('paginateBlocks', () => {
         const pages = paginateBlocks([block(0, 2400)], 800)
         // 可分割块：先取满一页(0-800)，剩余(800-2400)作为第二页
         expect(pages).toHaveLength(2)
-        expect(pages[0].startBlock).toBe(0)
-        expect(pages[0].endOffset).toBe(800)
-        expect(pages[1].startOffset).toBe(800)
-        expect(pages[1].endOffset).toBe(2400)
+        expect(pages[0]!.startBlock).toBe(0)
+        expect(pages[0]!.endOffset).toBe(800)
+        expect(pages[1]!.startOffset).toBe(800)
+        expect(pages[1]!.endOffset).toBe(2400)
     })
 
     it('视口高度为1时不崩溃', () => {

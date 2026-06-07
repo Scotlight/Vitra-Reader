@@ -153,6 +153,9 @@ export class BookPipeline {
 
     const targetCount = Math.max(1, count);
     const firstSection = book.sections[0];
+    if (!firstSection) {
+      return [];
+    }
     const immediate = await readPreviewSections([firstSection], signal);
     const warmupSections = book.sections.slice(1, targetCount);
     schedulePreviewWarmup(warmupSections, signal);

@@ -48,10 +48,10 @@ describe('shadow renderContent', () => {
 
         expect(segmentEls).toHaveLength(2)
         expect(content.querySelectorAll('[data-shadow-segment-index]')).toHaveLength(2)
-        expect(segmentEls[0].getAttribute('data-shadow-segment-state')).toBe('hydrated')
-        expect(segmentEls[0].innerHTML).toContain('segment-0')
-        expect(segmentEls[1].getAttribute('data-shadow-segment-state')).toBe('placeholder')
-        expect(segmentEls[1].innerHTML).toBe('')
+        expect(segmentEls[0]!.getAttribute('data-shadow-segment-state')).toBe('hydrated')
+        expect(segmentEls[0]!.innerHTML).toContain('segment-0')
+        expect(segmentEls[1]!.getAttribute('data-shadow-segment-state')).toBe('placeholder')
+        expect(segmentEls[1]!.innerHTML).toBe('')
     })
 
     it('普通小章节直接写入已消毒 HTML', async () => {

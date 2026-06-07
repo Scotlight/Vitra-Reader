@@ -44,7 +44,7 @@ function createMockDoc(pageCount: number) {
 
 function mockPerformanceNow(values: number[]): void {
     let index = 0
-    vi.spyOn(performance, 'now').mockImplementation(() => values[Math.min(index++, values.length - 1)])
+    vi.spyOn(performance, 'now').mockImplementation(() => values[Math.min(index++, values.length - 1)] ?? 0)
 }
 
 describe('PdfContentProvider prerender backpressure', () => {

@@ -136,11 +136,13 @@ export class BookContentAdapter implements ContentProvider {
     if (resolved) return resolved.index
 
     // 回退：去 anchor 后逐一匹配
-    const [rawHref] = href.split('#', 2)
+    const [rawHref = ''] = href.split('#', 2)
     const sections = this.book.sections
     for (let i = 0; i < sections.length; i++) {
-      if (sections[i].href === rawHref) return i
-      if (sections[i].href.endsWith(rawHref) || rawHref.endsWith(sections[i].href)) return i
+      const section = sections[i]
+      if (!section) continue
+      if (section.href === rawHref) return i
+      if (section.href.endsWith(rawHref) || rawHref.endsWith(section.href)) return i
     }
     return -1
   }

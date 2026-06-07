@@ -188,7 +188,7 @@ describe('shadow renderPlanning', () => {
         })
 
         expect(segments.length).toBeGreaterThan(0)
-        expect(segments[0].charCount).toBeGreaterThan(0)
-        expect(segments[0].nodes.length).toBeGreaterThan(0)
+        expect(segments[0]!.charCount).toBeGreaterThan(0)
+        expect(segments[0]!.nodes.length).toBeGreaterThan(0)
     })
 })

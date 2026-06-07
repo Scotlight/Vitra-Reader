@@ -52,7 +52,7 @@ function setToScopeCache(css: string, chapterId: string, result: string): void {
   // LRU: 超过容量时删除最旧的
   if (scopeCssCache.size >= SCOPE_CSS_CACHE_SIZE) {
     const firstKey = scopeCssCache.keys().next().value;
-    if (firstKey) scopeCssCache.delete(firstKey);
+    if (typeof firstKey === 'string') scopeCssCache.delete(firstKey);
   }
   scopeCssCache.set(key, result);
 }
@@ -131,7 +131,7 @@ const GLOBAL_SELECTOR_REPLACEMENTS: ReadonlyMap<string, string> = new Map([
  */
 function extractAtRuleName(atRule: string): string {
   const match = atRule.match(/^@(?:-[\w]+-)?(\S+)/);
-  return match ? match[1].toLowerCase() : '';
+  return match ? (match[1] ?? '').toLowerCase() : '';
 }
 
 /**
@@ -263,7 +263,7 @@ function scopeCssBlock(css: string, scopePrefix: string): string {
       const afterAt = css.slice(cursor);
       const atRuleHeaderMatch = afterAt.match(/^@[\w-]+[^{;]*/);
       if (!atRuleHeaderMatch) {
-        result.push(css[cursor]);
+        result.push(css[cursor] ?? '');
         cursor += 1;
         continue;
       }
@@ -273,7 +273,7 @@ function scopeCssBlock(css: string, scopePrefix: string): string {
 
       // 跳过空白找到 { 或 ;
       let seekIdx = headerEnd;
-      while (seekIdx < css.length && /\s/.test(css[seekIdx])) seekIdx += 1;
+      while (seekIdx < css.length && /\s/.test(css[seekIdx] ?? '')) seekIdx += 1;
 
       if (seekIdx >= css.length || css[seekIdx] === ';') {
         // 无块体的 at-rule（@import, @charset 等）
