@@ -1,10 +1,34 @@
 import { create } from 'zustand'
 import { db, type BookMeta } from '@/services/storageService'
-import { detectFormat, stripBookExtension } from '@/engine/core/contentProvider'
+import { stripBookExtension, type BookFormat } from '@/engine/core/contentProvider'
+import { detectFormat as detectEngineFormat } from '@/engine/core/formatDetector'
 import { parseBookMetadata } from '@/engine/core/contentProviderFactory'
+import type { EngineBookFormat } from '@/engine/types/book'
 
 type BinaryPayload = ArrayBuffer | Uint8Array
 type ImportedFile = { name: string; path: string; data: BinaryPayload }
+
+const ENGINE_FORMAT_TO_BOOK_FORMAT: Record<EngineBookFormat, BookFormat> = {
+    EPUB: 'epub',
+    MOBI: 'mobi',
+    AZW3: 'azw3',
+    AZW: 'azw',
+    PDF: 'pdf',
+    DJVU: 'djvu',
+    TXT: 'txt',
+    FB2: 'fb2',
+    DOCX: 'docx',
+    MD: 'md',
+    HTML: 'html',
+    HTM: 'html',
+    XML: 'xml',
+    XHTML: 'html',
+    MHTML: 'html',
+    CBZ: 'cbz',
+    CBT: 'cbt',
+    CBR: 'cbr',
+    CB7: 'cb7',
+}
 
 interface LibraryStore {
     books: BookMeta[]
@@ -17,6 +41,11 @@ interface LibraryStore {
 function toArrayBuffer(data: BinaryPayload): ArrayBuffer {
     if (data instanceof ArrayBuffer) return data
     return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+}
+
+async function detectBookFormat(data: ArrayBuffer, filename: string): Promise<BookFormat> {
+    const engineFormat = await detectEngineFormat(data, filename)
+    return ENGINE_FORMAT_TO_BOOK_FORMAT[engineFormat]
 }
 
 export const useLibraryStore = create<LibraryStore>((set, get) => ({
@@ -48,7 +77,7 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
         // 2. Parse metadata
         let meta: BookMeta
         try {
-            const format = detectFormat(file.name, fileData)
+            const format = await detectBookFormat(fileData, file.name)
             const parsed = await parseBookMetadata(format, fileData, file.name)
             const metaRecord = parsed as Record<string, unknown>
             const title = parsed.title || stripBookExtension(file.name)
@@ -75,7 +104,7 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
             }
         } catch (e) {
             console.error('Failed to parse book:', e)
-            const format = detectFormat(file.name, fileData)
+            const format = await detectBookFormat(fileData, file.name)
             meta = {
                 id,
                 title: stripBookExtension(file.name),
