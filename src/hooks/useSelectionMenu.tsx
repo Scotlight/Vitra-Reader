@@ -189,7 +189,7 @@ export function useSelectionMenu({ bookId, onSelectionSearch, getHighlightContai
     const renderSelectionUI = () => (
         <>
             <SelectionMenu
-                visible={selectionMenu.visible}
+                visible={selectionMenu.visible && !translateDialog.visible}
                 x={selectionMenu.x}
                 y={selectionMenu.y}
                 onCopy={handleCopy}
