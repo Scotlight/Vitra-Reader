@@ -68,7 +68,7 @@ describe('scrollChapterRerender', () => {
         expect(Array.from(plan.vectorReloadIndexes)).toEqual([0])
         expect(Array.from(plan.shadowRerenderIndexes)).toEqual([1])
         expect(plan.rerenderQueue).toHaveLength(1)
-        expect(plan.rerenderQueue[0].status).toBe('shadow-rendering')
+        expect(plan.rerenderQueue[0]!.status).toBe('shadow-rendering')
     })
 
     it('按 plan 更新章节状态并重排 shadowQueue', () => {

@@ -334,8 +334,8 @@ describe('PaginatedReaderView flow', () => {
             expect(mocks.preprocessChapterContentMock).toHaveBeenCalledTimes(2)
         })
 
-        expect(mocks.preprocessChapterContentMock.mock.calls[0][0]).toMatchObject({ spineIndex: 0 })
-        expect(mocks.preprocessChapterContentMock.mock.calls[1][0]).toMatchObject({ spineIndex: 1 })
+        expect(mocks.preprocessChapterContentMock.mock.calls[0]![0]).toMatchObject({ spineIndex: 0 })
+        expect(mocks.preprocessChapterContentMock.mock.calls[1]![0]).toMatchObject({ spineIndex: 1 })
     })
 
     it('文本选择后通过统一 helper 设置选择菜单状态', async () => {

@@ -51,14 +51,20 @@ export function useVirtualChapterRuntime(options: UseVirtualChapterRuntimeOption
         updateVirtualContentHeight(runtime.contentEl, runtime.vector);
         runtime.activeSegmentEls.forEach((segmentEl, segmentIndex) => {
             const segment = runtime.vector.segments[segmentIndex];
-            if (!segment) return;
+            if (!segment) {
+                console.warn(`[VirtualChapterRuntime] segmentIndex=${segmentIndex} 越界，segments.length=${runtime.vector.segments.length}`);
+                return;
+            }
             updateVirtualSegmentLayout(segmentEl, segment);
         });
     }, []);
 
     const mountVirtualSegment = useCallback((runtime: VirtualChapterRuntime, segmentIndex: number) => {
         const segment = runtime.vector.segments[segmentIndex];
-        if (!segment) return;
+        if (!segment) {
+            console.warn(`[VirtualChapterRuntime] segmentIndex=${segmentIndex} 越界，segments.length=${runtime.vector.segments.length}`);
+            return;
+        }
 
         const existing = runtime.activeSegmentEls.get(segmentIndex);
         if (existing) {

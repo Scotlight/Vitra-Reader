@@ -41,8 +41,8 @@ describe('useScrollEvents wheel smoothing', () => {
 
         expect(event.defaultPrevented).toBe(true)
         expect(onWheelImpulse).toHaveBeenCalledTimes(1)
-        expect(onWheelImpulse.mock.calls[0][0]).toBeGreaterThan(90)
-        expect(onWheelImpulse.mock.calls[0][0]).toBeLessThan(92)
+        expect(onWheelImpulse.mock.calls[0]![0]).toBeGreaterThan(90)
+        expect(onWheelImpulse.mock.calls[0]![0]).toBeLessThan(92)
     })
 
     it('连续的小幅像素 wheel 不叠加滚轮加速，保留触摸板细粒度输入', () => {
@@ -54,7 +54,7 @@ describe('useScrollEvents wheel smoothing', () => {
         dispatchWheel(viewport, { deltaY: 4, deltaX: 0, deltaMode: 0 })
 
         expect(onWheelImpulse).toHaveBeenCalledTimes(2)
-        expect(onWheelImpulse.mock.calls[1][0]).toBeCloseTo(onWheelImpulse.mock.calls[0][0], 3)
+        expect(onWheelImpulse.mock.calls[1]![0]).toBeCloseTo(onWheelImpulse.mock.calls[0]![0], 3)
     })
 
     it('保留横向 wheel 与缩放手势的浏览器默认处理', () => {

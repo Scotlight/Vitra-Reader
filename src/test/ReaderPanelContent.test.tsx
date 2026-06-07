@@ -94,9 +94,9 @@ describe('ReaderPanelContent', () => {
         expect(getByText('高亮文本')).toBeTruthy()
         expect(getByText(/笔记引用/)).toBeTruthy()
         const deletes = getAllByTitle('删除')
-        fireEvent.click(deletes[0]) // 高亮删除
+        fireEvent.click(deletes[0]!) // 高亮删除
         expect(deleteHighlight).toHaveBeenCalledWith('h1')
-        fireEvent.click(deletes[1]) // 笔记删除
+        fireEvent.click(deletes[1]!) // 笔记删除
         expect(deleteBookmark).toHaveBeenCalledWith('m1')
     })
 

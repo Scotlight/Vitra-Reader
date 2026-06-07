@@ -19,7 +19,7 @@ describe('useReaderTabShortcut', () => {
         tabs.forEach((activeTab, i) => {
             const { unmount } = renderHook(() => useReaderTabShortcut({ enabled: true, activeTab, onTabChange }))
             dispatchTab()
-            const expected: ReaderPanelTab = (['search', 'annotations', 'toc'] as ReaderPanelTab[])[i]
+            const expected = (['search', 'annotations', 'toc'] as const)[i]!
             expect(onTabChange).toHaveBeenLastCalledWith(expected)
             unmount()
         })
