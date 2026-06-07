@@ -1,0 +1,112 @@
+.reportSection {
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--panel-bg);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sectionTitle {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.sectionTitle h3 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+.sectionTitle span {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.empty {
+    border: 1px dashed var(--border-color);
+    border-radius: 12px;
+    background: var(--panel-bg);
+    color: var(--text-secondary);
+    padding: 20px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.topBooksList {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.topBookRow {
+    display: grid;
+    grid-template-columns: minmax(160px, 2.2fr) minmax(120px, 3fr) auto;
+    align-items: center;
+    gap: 12px;
+}
+
+.topBookMain {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.topBookMain strong {
+    color: var(--text-primary);
+    font-size: 13px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.topBookMain span {
+    color: var(--text-secondary);
+    font-size: 12px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.topBookBar {
+    height: 12px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.16);
+    overflow: hidden;
+}
+
+.topBookFill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #0b9ba1 0%, #8b5cf6 100%);
+}
+
+.topBookMeta {
+    color: var(--text-primary);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+[data-theme='dark'] .reportSection,
+[data-theme='sepia'] .reportSection,
+[data-theme='green'] .reportSection {
+    background: rgba(10, 18, 42, 0.34);
+}
+
+[data-theme='dark'] .topBookBar,
+[data-theme='sepia'] .topBookBar,
+[data-theme='green'] .topBookBar {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+@media (max-width: 760px) {
+    .topBookRow {
+        grid-template-columns: 1fr;
+        gap: 7px;
+    }
+}

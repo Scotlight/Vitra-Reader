@@ -1,0 +1,102 @@
+.reportSection {
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--panel-bg);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sectionTitle {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.sectionTitle h3 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+.sectionTitle span {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.calendarGrid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(28px, 1fr));
+    gap: 6px;
+}
+
+.calendarWeekday {
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-align: center;
+    padding-bottom: 2px;
+}
+
+.calendarSpacer,
+.calendarDay {
+    min-height: 34px;
+    border-radius: 10px;
+}
+
+.calendarDay {
+    border: 1px solid rgba(11, 155, 161, 0.12);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    background: rgba(11, 155, 161, 0.08);
+}
+
+.calendarDay[data-level='0'] {
+    color: var(--text-secondary);
+    background: rgba(148, 163, 184, 0.12);
+    border-color: rgba(148, 163, 184, 0.12);
+}
+
+.calendarDay[data-level='1'] {
+    background: rgba(11, 155, 161, 0.18);
+}
+
+.calendarDay[data-level='2'] {
+    background: rgba(11, 155, 161, 0.34);
+}
+
+.calendarDay[data-level='3'] {
+    background: rgba(11, 155, 161, 0.55);
+    color: #ffffff;
+}
+
+.calendarDay[data-level='4'] {
+    background: linear-gradient(135deg, #0b9ba1 0%, #10b981 100%);
+    color: #ffffff;
+}
+
+.calendarToday {
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.7);
+}
+
+.calendarFuture {
+    opacity: 0.48;
+}
+
+[data-theme='dark'] .reportSection,
+[data-theme='sepia'] .reportSection,
+[data-theme='green'] .reportSection {
+    background: rgba(10, 18, 42, 0.34);
+}
+
+[data-theme='dark'] .calendarDay[data-level='0'],
+[data-theme='sepia'] .calendarDay[data-level='0'],
+[data-theme='green'] .calendarDay[data-level='0'] {
+    background: rgba(255, 255, 255, 0.1);
+}
