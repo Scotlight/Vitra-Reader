@@ -45,6 +45,7 @@ dev_error_log.txt
 npm_install_log.txt
 *.tsbuildinfo
 outputs/runtime/
+outputs/tasks/
 
 # MCP tool debug artifacts (screenshots / console logs)
 .playwright-mcp/
