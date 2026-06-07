@@ -64,7 +64,10 @@ export function resolveVisibleVirtualRows(
     const upperBound = safeScrollTop + safeViewportHeight + safeOverscanPx
 
     let startRow = 0
-    while (startRow < rowCount && metrics.rowTops[startRow] + metrics.rowHeights[startRow] < lowerBound) {
+    while (startRow < rowCount) {
+        const rowTop = metrics.rowTops[startRow] ?? 0
+        const rowHeight = metrics.rowHeights[startRow] ?? 0
+        if (rowTop + rowHeight >= lowerBound) break
         startRow += 1
     }
     if (startRow >= rowCount) {
@@ -73,7 +76,9 @@ export function resolveVisibleVirtualRows(
     }
 
     let endRow = startRow
-    while (endRow < rowCount - 1 && metrics.rowTops[endRow] < upperBound) {
+    while (endRow < rowCount - 1) {
+        const rowTop = metrics.rowTops[endRow] ?? 0
+        if (rowTop >= upperBound) break
         endRow += 1
     }
 

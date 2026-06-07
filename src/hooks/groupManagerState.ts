@@ -125,6 +125,7 @@ export function reorderKeys(keys: string[], sourceKey: string, targetKey: string
 
     const next = [...keys]
     const [moved] = next.splice(sourceIndex, 1)
+    if (moved === undefined) return [...keys]
     next.splice(targetIndex, 0, moved)
     return next
 }
@@ -215,13 +216,17 @@ export function areGroupStatesEqual(
 ): boolean {
     const arrEq = (a: readonly string[], b: readonly string[]) => {
         if (a.length !== b.length) return false
-        for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+        for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) return false
+        }
         return true
     }
     const groupsEq = (a: readonly GroupItem[], b: readonly GroupItem[]) => {
         if (a.length !== b.length) return false
         for (let i = 0; i < a.length; i++) {
-            if (a[i].id !== b[i].id || a[i].name !== b[i].name) return false
+            const leftGroup = a[i]
+            const rightGroup = b[i]
+            if (!leftGroup || !rightGroup || leftGroup.id !== rightGroup.id || leftGroup.name !== rightGroup.name) return false
         }
         return true
     }

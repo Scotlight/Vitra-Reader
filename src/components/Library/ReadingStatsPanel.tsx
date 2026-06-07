@@ -34,6 +34,7 @@ const PERIOD_LABELS: Record<ReadingStatsPeriod, string> = {
 }
 
 const PIE_COLORS = ['#0b9ba1', '#f59e0b', '#ef4444', '#8b5cf6', '#10b981', '#3b82f6']
+const FALLBACK_PIE_COLOR = '#94a3b8'
 const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
 const MAX_TABLE_ROW_COUNT = 500
 const MAX_MONTHLY_TOP_BOOKS = 6
@@ -57,13 +58,13 @@ function toPieSegments(rows: ReadingStatsPanelRow[]): PieSegment[] {
     const segments: PieSegment[] = topRows.map((row, index) => ({
         label: row.title,
         value: row.activeMs,
-        color: PIE_COLORS[index % PIE_COLORS.length],
+        color: PIE_COLORS[index % PIE_COLORS.length] ?? FALLBACK_PIE_COLOR,
     }))
     if (otherValue > 0) {
         segments.push({
             label: '其他图书',
             value: otherValue,
-            color: '#94a3b8',
+            color: FALLBACK_PIE_COLOR,
         })
     }
     return segments

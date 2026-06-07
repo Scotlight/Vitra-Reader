@@ -180,9 +180,11 @@ export function useGroupManager(options: UseGroupManagerOptions) {
 
     const addBookToGroup = async (bookId: string) => {
         if (groups.length === 0) { showInfoDialog('请先新建分组'); return }
+        const fallbackGroup = groups[0]
+        if (!fallbackGroup) return
         const group = activeGroupId
-            ? groups.find((g) => g.id === activeGroupId) || groups[0]
-            : groups[0]
+            ? groups.find((g) => g.id === activeGroupId) || fallbackGroup
+            : fallbackGroup
         const ids = groupBookMap[group.id] || []
         if (ids.includes(bookId)) return
         await persistGroupState(sanitizeGroupState(

@@ -165,7 +165,7 @@ export function useLibraryDerivedData(options: UseLibraryDerivedDataOptions) {
                 bookTitle: bookById.get(bookId)?.title ?? '未知书籍',
                 items: items.sort((left, right) => right.createdAt - left.createdAt),
             }))
-            .sort((left, right) => right.items[0].createdAt - left.items[0].createdAt)
+            .sort((left, right) => (right.items[0]?.createdAt ?? 0) - (left.items[0]?.createdAt ?? 0))
     }, [allHighlights, bookById])
 
     const groupedBookmarks = useMemo<AnnotationGroup<Bookmark>[]>(() => {
@@ -180,7 +180,7 @@ export function useLibraryDerivedData(options: UseLibraryDerivedDataOptions) {
                 bookTitle: bookById.get(bookId)?.title ?? '未知书籍',
                 items: items.sort((left, right) => right.createdAt - left.createdAt),
             }))
-            .sort((left, right) => right.items[0].createdAt - left.items[0].createdAt)
+            .sort((left, right) => (right.items[0]?.createdAt ?? 0) - (left.items[0]?.createdAt ?? 0))
     }, [allBookmarks, bookById])
 
     const currentGroupName = activeGroupId

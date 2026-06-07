@@ -101,7 +101,8 @@ export function useLibraryViewState() {
     const nextSortMode = () => {
         const order: LibrarySortMode[] = ['lastRead', 'addedAt', 'title', 'author']
         const index = order.indexOf(sortMode)
-        setSortMode(order[(index + 1) % order.length])
+        const nextIndex = index >= 0 ? (index + 1) % order.length : 0
+        setSortMode(order[nextIndex] ?? 'lastRead')
     }
 
     return {

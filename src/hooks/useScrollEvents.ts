@@ -19,6 +19,7 @@ class VelocityTracker {
     if (this.positions.length < 2) return 0;
     const first = this.positions[0];
     const last = this.positions[this.positions.length - 1];
+    if (!first || !last) return 0;
     const deltaTime = last.time - first.time;
     if (deltaTime === 0) return 0;
     return ((last.value - first.value) / deltaTime) * 16.67;
@@ -128,8 +129,10 @@ export function useScrollEvents(
 
   // ── Touch ──
   const handleTouchStart = useCallback((event: TouchEvent) => {
+    const touch = event.touches[0];
+    if (!touch) return;
     isTouching.current = true;
-    lastTouchY.current = event.touches[0].clientY;
+    lastTouchY.current = touch.clientY;
     velocityTracker.current.clear();
     optionsRef.current.onDragStart?.();
   }, []);
@@ -137,9 +140,11 @@ export function useScrollEvents(
   const handleTouchMove = useCallback((event: TouchEvent) => {
     const viewport = viewportRef.current;
     if (!viewport) return;
+    const touch = event.touches[0];
+    if (!touch) return;
     if (event.cancelable) event.preventDefault();
 
-    const currentY = event.touches[0].clientY;
+    const currentY = touch.clientY;
     const deltaY = lastTouchY.current - currentY;
     viewport.scrollTop += deltaY;
 

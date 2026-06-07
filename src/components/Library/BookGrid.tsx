@@ -78,6 +78,8 @@ function VirtualItemGrid({
     for (let rowIndex = visibleRange.startRow; rowIndex <= visibleRange.endRow; rowIndex += 1) {
         const rowItems = rows[rowIndex]
         if (!rowItems || rowItems.length === 0) continue
+        const rowTop = metrics.rowTops[rowIndex]
+        if (rowTop === undefined) continue
         renderedRows.push(
             <div
                 key={`virtual-row-${rowIndex}`}
@@ -91,7 +93,7 @@ function VirtualItemGrid({
                 data-row-index={rowIndex}
                 className={styles.virtualGridRow}
                 style={{
-                    top: layout.topPadding + metrics.rowTops[rowIndex],
+                    top: layout.topPadding + rowTop,
                     gap: `${layout.rowGap}px ${layout.columnGap}px`,
                     gridTemplateColumns: `repeat(${layout.columnCount}, minmax(0, 1fr))`,
                 }}

@@ -16,11 +16,13 @@ export function useGroupModalState({ groups, showInfoDialog }: UseGroupModalStat
     // Sync manage modal group selectors when groups change
     useEffect(() => {
         if (groups.length > 0) {
+            const firstGroup = groups[0]
+            if (!firstGroup) return
             if (!manageSourceGroupId || !groups.some((g) => g.id === manageSourceGroupId)) {
-                setManageSourceGroupId(groups[0].id)
+                setManageSourceGroupId(firstGroup.id)
             }
             if (!manageTargetGroupId || !groups.some((g) => g.id === manageTargetGroupId)) {
-                setManageTargetGroupId(groups[0].id)
+                setManageTargetGroupId(firstGroup.id)
             }
         } else {
             setManageSourceGroupId('')
