@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+    buildMonthlyReadingReportFromRows,
     estimateRemainingMsFromProgress,
     formatDurationLabel,
     resolveReadingStatsCutoffDateKey,
@@ -27,6 +28,40 @@ describe('readingStatsService', () => {
         expect(monthKeys[0]).toBe('2026-04-01')
         expect(monthKeys.at(-1)).toBe('2026-04-19')
         expect(monthKeys).toHaveLength(19)
+    })
+
+
+    it('按月生成报表、热力日历和 Top 图书', () => {
+        const anchorMs = new Date(2026, 3, 19, 12, 0, 0, 0).getTime()
+        const rows = [
+            { id: '2026-03-31::old', dateKey: '2026-03-31', bookId: 'old', activeMs: 9_999_000, updatedAt: anchorMs },
+            { id: '2026-04-01::a', dateKey: '2026-04-01', bookId: 'a', activeMs: 600_000, updatedAt: anchorMs },
+            { id: '2026-04-02::b', dateKey: '2026-04-02', bookId: 'b', activeMs: 1_200_000, updatedAt: anchorMs },
+            { id: '2026-04-04::a', dateKey: '2026-04-04', bookId: 'a', activeMs: 1_800_000, updatedAt: anchorMs },
+            { id: '2026-04-05::a', dateKey: '2026-04-05', bookId: 'a', activeMs: 300_000, updatedAt: anchorMs },
+            { id: '2026-04-19::b', dateKey: '2026-04-19', bookId: 'b', activeMs: 900_000, updatedAt: anchorMs },
+            { id: '2026-04-20::future', dateKey: '2026-04-20', bookId: 'future', activeMs: 9_999_000, updatedAt: anchorMs },
+        ]
+
+        const report = buildMonthlyReadingReportFromRows(rows, anchorMs)
+
+        expect(report.monthKey).toBe('2026-04')
+        expect(report.startDateKey).toBe('2026-04-01')
+        expect(report.endDateKey).toBe('2026-04-19')
+        expect(report.calendarEndDateKey).toBe('2026-04-30')
+        expect(report.totalActiveMs).toBe(4_800_000)
+        expect(report.todayActiveMs).toBe(900_000)
+        expect(report.activeDayCount).toBe(5)
+        expect(report.longestStreakDays).toBe(2)
+        expect(report.byBook).toEqual([
+            { bookId: 'a', activeMs: 2_700_000 },
+            { bookId: 'b', activeMs: 2_100_000 },
+        ])
+        expect(report.dailyTrend).toHaveLength(19)
+        expect(report.calendarDays).toHaveLength(30)
+        expect(report.calendarDays[0]).toMatchObject({ dateKey: '2026-04-01', dayOfMonth: 1, weekday: 3, isFuture: false })
+        expect(report.calendarDays[18]).toMatchObject({ dateKey: '2026-04-19', isToday: true, activeMs: 900_000 })
+        expect(report.calendarDays[19]).toMatchObject({ dateKey: '2026-04-20', isFuture: true, activeMs: 0 })
     })
 
     it('按阅读进度估算剩余时间', () => {

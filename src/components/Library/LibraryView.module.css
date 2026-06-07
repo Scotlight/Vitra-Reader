@@ -1340,3 +1340,225 @@
 [data-theme='green'] .statsTableRow {
     border-bottom-color: rgba(255, 255, 255, 0.08);
 }
+
+.statsMonthlyReport {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.statsReportSection {
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--panel-bg);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.statsSectionTitle {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.statsSectionTitle h3 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+.statsSectionTitle span {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.statsCalendarGrid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(28px, 1fr));
+    gap: 6px;
+}
+
+.statsCalendarWeekday {
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-align: center;
+    padding-bottom: 2px;
+}
+
+.statsCalendarSpacer,
+.statsCalendarDay {
+    min-height: 34px;
+    border-radius: 10px;
+}
+
+.statsCalendarDay {
+    border: 1px solid rgba(11, 155, 161, 0.12);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    background: rgba(11, 155, 161, 0.08);
+}
+
+.statsCalendarDay[data-level='0'] {
+    color: var(--text-secondary);
+    background: rgba(148, 163, 184, 0.12);
+    border-color: rgba(148, 163, 184, 0.12);
+}
+
+.statsCalendarDay[data-level='1'] {
+    background: rgba(11, 155, 161, 0.18);
+}
+
+.statsCalendarDay[data-level='2'] {
+    background: rgba(11, 155, 161, 0.34);
+}
+
+.statsCalendarDay[data-level='3'] {
+    background: rgba(11, 155, 161, 0.55);
+    color: #ffffff;
+}
+
+.statsCalendarDay[data-level='4'] {
+    background: linear-gradient(135deg, #0b9ba1 0%, #10b981 100%);
+    color: #ffffff;
+}
+
+.statsCalendarToday {
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.7);
+}
+
+.statsCalendarFuture {
+    opacity: 0.48;
+}
+
+.statsDailyTrend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(18px, 1fr));
+    align-items: end;
+    gap: 5px;
+    min-height: 150px;
+    padding-top: 4px;
+}
+
+.statsDailyBarItem {
+    min-width: 0;
+    height: 142px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+}
+
+.statsDailyBarTrack {
+    width: 100%;
+    min-width: 12px;
+    height: 118px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.16);
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+}
+
+.statsDailyBarFill {
+    width: 100%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #34d399 0%, #0b9ba1 100%);
+}
+
+.statsDailyBarLabel {
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+.statsTopBooksList {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.statsTopBookRow {
+    display: grid;
+    grid-template-columns: minmax(160px, 2.2fr) minmax(120px, 3fr) auto;
+    align-items: center;
+    gap: 12px;
+}
+
+.statsTopBookMain {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.statsTopBookMain strong {
+    color: var(--text-primary);
+    font-size: 13px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.statsTopBookMain span {
+    color: var(--text-secondary);
+    font-size: 12px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.statsTopBookBar {
+    height: 12px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.16);
+    overflow: hidden;
+}
+
+.statsTopBookFill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #0b9ba1 0%, #8b5cf6 100%);
+}
+
+.statsTopBookMeta {
+    color: var(--text-primary);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+[data-theme='dark'] .statsReportSection,
+[data-theme='sepia'] .statsReportSection,
+[data-theme='green'] .statsReportSection {
+    background: rgba(10, 18, 42, 0.34);
+}
+
+[data-theme='dark'] .statsCalendarDay[data-level='0'],
+[data-theme='sepia'] .statsCalendarDay[data-level='0'],
+[data-theme='green'] .statsCalendarDay[data-level='0'],
+[data-theme='dark'] .statsDailyBarTrack,
+[data-theme='sepia'] .statsDailyBarTrack,
+[data-theme='green'] .statsDailyBarTrack,
+[data-theme='dark'] .statsTopBookBar,
+[data-theme='sepia'] .statsTopBookBar,
+[data-theme='green'] .statsTopBookBar {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+@media (max-width: 760px) {
+    .statsTopBookRow {
+        grid-template-columns: 1fr;
+        gap: 7px;
+    }
+
+    .statsDailyTrend {
+        grid-template-columns: repeat(auto-fit, minmax(14px, 1fr));
+    }
+}
