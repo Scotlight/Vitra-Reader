@@ -73,10 +73,6 @@
    - enum 常量改裸字符串字面量
    - 已分离的子组件 JSX 搬回父组件
    - 大段 `// ── XXX ──` 目录性注释墙凭空冒出
-3. **codex CLI 与 CC 不得同时操作本项目 working tree**。检测粒度是**目录级**不是进程级：
-   - 无窗口标题的 codex 进程（mcp-server）→ 放行
-   - 窗口标题含 `CC-codex-` marker → CC 自己派的，放行
-   - 有窗口标题但不含 marker → 用户 TUI，**仅当其 cwd 指向本项目时**才拒发
 
 ---
 
@@ -86,8 +82,7 @@
 |---|---|
 | `doc/` | 新增规范、指南、协作约定**只许**放这里 |
 | `docs/` | 历史已有，**不主动新增**任何文件 |
-| `docs/plans/` | 历史污染区（已 tracked 60+ 份 codex 产物，部分推送过远程），**绝对禁止**再写入 |
-| `outputs/runtime/codex-handoff/` | codex 任务产物 `<ts>.{task,log,diff}.md`（已 gitignore） |
+| `docs/plans/` | 历史污染区（已 tracked 60+ 份历史产物，部分推送过远程），**绝对禁止**再写入 |
 | `outputs/runtime/` | 一切 AI 工作流副产品兜底（已 gitignore） |
 
 任何"每完成一步写一份计划"风格的产物**绝不**允许落到 `docs/plans/` 或 `docs/`。
@@ -108,66 +103,44 @@
 4. 完成后必须 `npx tsc -b --pretty false`，无输出 = 通过
 5. **禁止用注释墙拆 hook**。hook 太长是职责未拆的味道，先想 `useXxx` 抽离
 
-### 高敏区双干工作流（CC + codex）[硬性]
+### CC 直接改 Reader 的底线 [硬性]
 
-§6 默认按"前端/后端"分工，但 **`src/components/Reader/` 是例外**——这里走 CC + codex 双干。
-
-**底线**：CC **绝对不能** 用 Write/Edit/MultiEdit 修改 `src/components/Reader/` 下任何 `.ts`/`.tsx`/`.css` 文件。例外（满足任一即可）：
+Reader 高敏区 CC **默认不直接 Write/Edit**，走 §6 plan-codex 流程。例外（满足任一即可）：
 
 1. 用户当前会话明确说"这次你自己改 Reader"
-2. **小改豁免**：同时满足以下全部条件时 CC 可直接改，不走 codex：
+2. **小改豁免**：同时满足以下全部条件时 CC 可直接改：
    - ≤1 个文件
    - ≤10 行变更（含增删）
-   - 不涉及 §5 敏感符号列表中的任何符号
-   - 改动性质为**纯减法**：死代码删除 / import 清理。**禁止**常量值调整、属性值修改、任何"改一个值"的操作——改值 = 改行为，必须走 codex
-   - 该文件必须有现存 vitest 测试覆盖（`npx vitest run <pattern>` 能命中 ≥1 个 test file），且改完全绿。**无测试覆盖的文件不准用豁免**
+   - 不涉及上述敏感符号
+   - 改动性质为**纯减法**：死代码删除 / import 清理。**禁止**常量值调整、属性值修改、任何"改一个值"的操作——改值 = 改行为，必须走 §6 流程
+   - 该文件必须有现存 vitest 测试覆盖（`npx vitest run <pattern>` 能命中 ≥1 个 test file），且改完全绿
    - 改完立即 `npx tsc -b --pretty false` + 上述 vitest 子集
 
 不满足以上任一例外 → CC 直接动手 = 重大违规，立即停下道歉。
 
+---
+
+## 6. CC 与 codex 协作 [人工中转]
+
+codex 由**用户手动接入**，CC 不调 codex（无 subagent 派发，无 `codex exec`）。CC 的本质是**出 plan + 复查**。
+
 工作流：
 
-1. **CC 出 plan**：列改动文件、敏感符号影响面、新增/调整的 hook 拆分意图。plan 写完**直接进 2**，不需要用户确认——用户没说停就当默认前进
-2. **派 codex 实施**：通过 `Agent({ subagent_type: "codex-coder" })` 派发，prompt 必须明确禁区符号 + 单测要求。**这一步不可跳过**
-3. **CC 接 diff 审**：codex 回报后 CC 主动 `git diff` 自审；命中以下任一情况立即 `git stash` 留待人工：
+1. **CC 出 plan**：列改动文件、敏感符号影响面、新增/调整的 hook 拆分意图、单测要求。plan 落到 `outputs/runtime/<ts>-<topic>.md`
+2. **用户人工移交 codex**：用户把 plan md 喂给 codex 实施
+3. **CC 接 diff 复查**：用户告知完成后，CC 主动 `git diff` + `git diff --stat` 自审。命中以下任一立即 `git stash push -m "codex-out-of-scope-<ts>"` 留人工：
    - 改动文件超出 plan 范围
    - §3 多会话冲突 6 条信号命中 ≥3
    - hook 被内联回组件 / interface 被改回内联类型 / `@/xxx` 退回 `../../../xxx`
-4. **CC 跑回归**：tsc + 涉及到的 vitest 子集，错就让 codex 再修一轮（最多 2 轮，3 轮以上停下重 plan）
+   - 动了 §1 禁区文件
+4. **CC 跑回归**：`npx tsc -b --pretty false` + 涉及到的 vitest 子集
+5. **CC 报告**：commit 候选 message + diff 摘要 + 验证结果给用户，等用户说"提交"
 
-**反模式（不允许）**：
+复查反模式（不允许）：
 
-- ❌ "我已经想清楚了，直接开干"——开干 = 派 codex 不是 CC 自己改
-- ❌ "改动小，我顺手改了"——再小也派
-- ❌ "codex 排队等不及，我先改"——等不及就告诉用户，不自己上
-- ❌ "plan 完成 → 直接 Edit Reader 文件" = 跳过 codex 这一步，违规
-
-撒手不管 = 违反本节。CC 主控的本质是**审阅 + 派活**，不是甩活也不是亲自动手。
-
----
-
-## 6. CC 与 codex 分工 [硬性]
-
-| 角色 | 职责 |
-|---|---|
-| **Claude Code** | 产品决策、架构设计、**前端实现**（React 组件 / UI / 状态层 / 路由）、规划、审阅 |
-| **codex** | **后端 / 接口实现**、代码审查、bug 修复、单测编写 |
-
-调用入口（按用途选）：
-
-| Slash | 走法 | 用途 |
-|---|---|---|
-| `/codex <task>` | `codex-coder` subagent → `codex exec` | 中小实现（后端 / 接口） |
-| `/goal <objective>`（人工进 codex TUI） | codex 内部 slash，**不经 CC**（详见 §10） | 大任务自主推进 |
-
-硬性约束：
-
-- **不允许**主对话直接 `codex exec ...`——必须走 subagent / slash
-- 派发**前**：目录级冲突检测（见 §3 第 3 条），`git status` 必须 clean
-- 产物**只许**落 `outputs/runtime/codex-handoff/`，越界 = 立即停手 + 报告
-- codex 改完 working tree **必须** `git diff --stat` 审计；动了 §1 禁区文件**必须** `git stash push -m "codex-out-of-scope-<ts>"` 留人工
-- codex 跑完不得自行 `git commit` / `git push`
-- 详见 [doc/codex-collaboration.md](doc/codex-collaboration.md)
+- ❌ "diff 看着还行" = 没认真看。逐文件审
+- ❌ 只跑 tsc 不跑 vitest 子集 = 类型对了行为不一定对
+- ❌ 越界改动不 stash 直接接受 = 把 codex 的越界写进自己的 commit
 
 ---
 
@@ -178,7 +151,6 @@
 | 类型检查（每次提交前） | `npx tsc -b --pretty false` |
 | 单测 | `npx vitest run <pattern>` |
 | dev（Electron + Vite） | `npm run dev` |
-| codex 派发 | `/codex <task>` |
 | MCP 自检 | `claude mcp list` |
 | PDF 提取 | `pdftotext`（poppler 已装，winget 路径） |
 | 代码探索（首选） | `mcp__ace-tool-rs__search_context` |
@@ -216,54 +188,11 @@
 
 ### Plan 优先
 
-任何 ≥50 行实现 / 跨 ≥3 文件 / 涉及上述 §5 高敏区的工作，**先写 plan**（落在 `outputs/runtime/` 或主对话），用户确认方向后再动手。直接写代码的本能 → 改成"先 plan 再 codex"。
+任何 ≥50 行实现 / 跨 ≥3 文件 / 涉及上述 §5 高敏区的工作，**先写 plan**（落在 `outputs/runtime/` 或主对话），用户确认方向后再动手。直接写代码的本能 → 改成"先 plan 再实现"。
 
 ---
 
-## 10. codex `/goal` 模式 [人工触发，CC 不插手]
-
-codex CLI 0.128 起的实验性 slash（feature-gated `goals`），把"目标"提升为**持久 thread state**：模型有 `get_goal / create_goal / update_goal` 工具，runtime 在 idle 时自动注入 continuation 推进任务。**这是 codex CLI TUI 内部 slash，不通过 CC 派发，也不通过 `codex mcp-server` 暴露**。
-
-### 适用场景
-
-- 修一整套 flaky 测试到全绿
-- 实现一个 named spec phase
-- bounded PR 评审与回复
-- 单个新工具 + 配套验证
-
-### 不适用
-
-- 模糊清理（"improve the repo"）
-- 开放研究无终止条件
-- Codex Desktop 端 / 团队共享流程
-
-### 启用
-
-```bash
-codex features list             # 查 goals 是否可用
-codex features enable goals     # 持久启用
-codex --enable goals            # 仅本次启动启用
-```
-
-### 用法（在 codex TUI 内）
-
-```
-/goal <objective>      # 设目标
-/goal pause            # 暂停
-/goal resume           # 继续
-/goal clear            # 清除
-/goal                  # 打开 goal UI
-```
-
-### CC 的判定职责
-
-接到任务时若识别为 "/goal 适用"（大 + 有清晰终点 + 可量化完成），CC **必须**建议人工进 codex TUI 走 `/goal`，**不要**自己派 `codex exec` 拆细——后者会失去 `/goal` 的 budget / continuation 能力。
-
-详见 [doc/codex-collaboration.md](doc/codex-collaboration.md) §9。
-
----
-
-## 11. yolo 自约束 [硬性意识层]
+## 10. yolo 自约束 [硬性意识层]
 
 **用户在 Claude Code `bypassPermissions`（yolo）模式下使用本会话**。意味着：
 
@@ -273,7 +202,7 @@ codex --enable goals            # 仅本次启动启用
 
 因此每个工具调用前，我必须自问：
 
-1. **如果这个操作出问题，用户能在几秒内回滚吗？** 不能 → 停下，主动汇报+等确认（除非操作在 §1 / §5 / §6 已明确允许范围内）
+1. **如果这个操作出问题，用户能在几秒内回滚吗？** 不能 → 停下，主动汇报+等确认（除非操作在 §1 / §5 已明确允许范围内）
 2. **这个操作的副作用边界是什么？** 副作用超出当前任务描述 → 停下
 3. **我是不是在"试一下看看"？** 是 → 不允许。yolo 模式不是探索模式，每步都要有明确预期结果
 
@@ -282,6 +211,5 @@ codex --enable goals            # 仅本次启动启用
 - **看到 hook 拦截后不要换个写法绕过**——拦截理由通常是底层风险，不是语法问题。换姿势再撞 = 主动违规
 - **失败 ≥ 2 次的同类操作**：停下重新理解需求，不要堆补丁
 - **§5 高敏区 + 全自动 push 组合**：远程历史污染最快的路径。这个组合下 push 前必须看完整 `git diff`（不是 `--stat`），有任何疑问就停下
-- **codex 派发回来的 diff 看着"还行"**：不行。"还行"=没认真看。逐文件审。
 
 撒手不管 ≠ 全自动。**全自动 = 全责任**。yolo 模式下我背的责任比有 permission 对话框时更重，不是更轻。
