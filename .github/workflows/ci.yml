@@ -14,6 +14,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
   ci:
     name: Lint, typecheck, test, build
     runs-on: ubuntu-latest
@@ -29,10 +43,13 @@ jobs:
         run: npm ci
 
       - name: Lint
-        run: npm run lint -- --max-warnings=9
+        run: npm run lint -- --max-warnings=0
 
       - name: Typecheck
         run: npx tsc -b --pretty false
+
+      - name: Strict index typecheck
+        run: npx tsc -p tsconfig.strict-index.json --pretty false --noEmit
 
       - name: Test
         run: npx vitest run

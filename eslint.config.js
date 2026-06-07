@@ -66,7 +66,21 @@ module.exports = [
       '@typescript-eslint/no-explicit-any': 'warn',
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'error',
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      'react-refresh/only-export-components': ['warn', {
+        allowConstantExport: true,
+        allowExportNames: [
+          'HIGHLIGHT_PRESETS',
+          'createWindowedVectorChapterShell',
+          'segmentPool',
+        ],
+      }],
+    },
+  },
+  {
+    files: ['src/test/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-this-alias': 'off',
     },
   },
 ];
