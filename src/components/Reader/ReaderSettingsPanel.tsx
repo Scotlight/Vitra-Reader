@@ -8,11 +8,12 @@ import styles from './ReaderView.module.css'
 interface ReaderSettingsPanelProps {
     readonly bookFormat: string
     readonly isOpen: boolean
+    readonly onClose?: () => void
     readonly onPageTurnModeChange: (mode: PageTurnMode) => void
     readonly placement?: 'side' | 'bottom'
 }
 
-export function ReaderSettingsPanel({ bookFormat, isOpen, onPageTurnModeChange, placement = 'side' }: ReaderSettingsPanelProps) {
+export function ReaderSettingsPanel({ bookFormat, isOpen, onClose, onPageTurnModeChange, placement = 'side' }: ReaderSettingsPanelProps) {
     const settings = useSettingsStore()
     const isBottomPlacement = placement === 'bottom'
 
@@ -26,13 +27,18 @@ export function ReaderSettingsPanel({ bookFormat, isOpen, onPageTurnModeChange, 
                     exit={isBottomPlacement ? { y: 300, opacity: 0 } : { x: 300, opacity: 0 }}
                     transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                 >
-                    <div className={`${styles.scrollContent} ${isBottomPlacement ? styles.bottomSettingsContent : ''}`}>
+                    <div className={`${styles.scrollContent} ${styles.settingsGlassContent} ${isBottomPlacement ? styles.bottomSettingsContent : ''}`}>
                         <div className={styles.settingsHeader}>
                             <h3>外观设置</h3>
-                            <button className={styles.resetBtn} onClick={settings.resetToDefaults}>重置</button>
+                            <div className={styles.settingsHeaderActions}>
+                                <button className={styles.resetBtn} onClick={settings.resetToDefaults}>↻ 重置</button>
+                                {onClose && <button className={styles.closeSettingsBtn} onClick={onClose} aria-label="关闭设置">×</button>}
+                            </div>
                         </div>
-                        <ReaderAppearanceSettings />
-                        <ReaderModeSettings bookFormat={bookFormat} onPageTurnModeChange={onPageTurnModeChange} />
+                        <div className={styles.settingsGlassGrid}>
+                            <ReaderAppearanceSettings />
+                            <ReaderModeSettings bookFormat={bookFormat} onPageTurnModeChange={onPageTurnModeChange} />
+                        </div>
                     </div>
                 </motion.div>
             )}

@@ -26,7 +26,7 @@ export function useScrollPhysics(
         onStop: () => { viewportRef.current?.classList.remove(styles.flinging); },
     }), [viewportRef]);
 
-    const { fling, stop, setDragging } = useScrollInertia(
+    const { addImpulse, fling, stop, setDragging } = useScrollInertia(
         viewportRef,
         physicsConfig,
         inertiaCallbacks,
@@ -34,10 +34,18 @@ export function useScrollPhysics(
     );
 
     const scrollCallbacks = useMemo(() => ({
+        onWheelImpulse: (deltaY: number) => { addImpulse(deltaY); },
+        wheelConfig: {
+            enabled: true,
+            stepSizePx: 120,
+            accelerationDeltaMs: 70,
+            accelerationMax: 7,
+            reverseDirection: false,
+        },
         onDragStart: () => { stop(); setDragging(true); },
         onTouchFling: (velocity: number) => { setDragging(false); fling(velocity); },
         onDragEnd: () => { setDragging(false); },
-    }), [fling, stop, setDragging]);
+    }), [addImpulse, fling, stop, setDragging]);
 
     useScrollEvents(viewportRef, scrollCallbacks);
 

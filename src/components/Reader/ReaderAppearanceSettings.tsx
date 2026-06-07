@@ -5,6 +5,12 @@ import { useReaderSystemFonts } from './useReaderSystemFonts'
 import styles from './ReaderView.module.css'
 
 const THEME_IDS = ['light', 'dark', 'sepia', 'green'] as const
+const THEME_LABELS: Record<(typeof THEME_IDS)[number], string> = {
+    light: '亮色',
+    dark: '深色',
+    sepia: '护眼',
+    green: '青绿',
+}
 const TEXT_ALIGN_OPTIONS = [
     { label: '左对齐', value: 'left' as const },
     { label: '两端对齐', value: 'justify' as const },
@@ -31,7 +37,9 @@ export function ReaderAppearanceSettings() {
                             className={`${styles.themeBtn} ${settings.themeId === themeId ? styles.activeTheme : ''}`}
                             onClick={() => settings.updateSetting('themeId', themeId)}
                             data-theme-preview={themeId}
-                        />
+                        >
+                            <span className={styles.themeLabel}>{THEME_LABELS[themeId]}</span>
+                        </button>
                     ))}
                 </div>
             </div>

@@ -140,6 +140,7 @@ export function ReaderSurface({
         <ReaderSettingsPanel
             bookFormat={bookFormat}
             isOpen={settingsOpen}
+            onClose={closePanels}
             onPageTurnModeChange={onPageTurnModeChange}
             placement="bottom"
         />

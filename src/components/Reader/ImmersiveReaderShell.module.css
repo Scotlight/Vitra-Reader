@@ -299,6 +299,9 @@
     position: absolute;
     inset: 0;
     z-index: 45;
+    display: grid;
+    place-items: center;
+    padding: 32px;
     pointer-events: none;
 }
 
@@ -310,9 +313,16 @@
     position: absolute;
     inset: 0;
     z-index: 15;
-    background: rgba(0, 0, 0, 0.2);
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
+    background: color-mix(in srgb, var(--reader-bg-color, #8aa892) 24%, rgba(30, 58, 40, 0.18));
+    backdrop-filter: blur(7px) saturate(108%);
+    -webkit-backdrop-filter: blur(7px) saturate(108%);
+}
+
+@media (max-width: 760px) {
+    .panelLayer {
+        align-items: end;
+        padding: 0;
+    }
 }
 
 @media (max-width: 850px) {
