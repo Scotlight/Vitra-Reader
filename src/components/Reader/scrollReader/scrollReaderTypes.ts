@@ -1,9 +1,11 @@
 import type { SegmentMeta } from '@/engine/types/vectorRender';
+import type { ChapterPreprocessFailure } from '@/engine/types/chapterPreprocess';
 import { RenderPipelineState } from '@/engine/types/renderPipeline';
 
 export interface LoadedChapter {
     spineIndex: number;
     id: string;
+    chapterTitle?: string;
     htmlContent: string;
     htmlFragments: string[];
     externalStyles: string[];
@@ -12,6 +14,7 @@ export interface LoadedChapter {
     domNode: HTMLElement | null;
     height: number;
     status: 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder' | 'error';
+    preprocessError?: ChapterPreprocessFailure;
     mountedAt?: number;
 }
 

@@ -20,6 +20,14 @@ export interface ChapterPreprocessResult {
     stylesScoped: boolean
     hasRenderableContent: boolean
     segmentMetas?: SegmentMeta[]
+    error?: ChapterPreprocessFailure
+}
+
+export interface ChapterPreprocessFailure {
+    type: 'PREPROCESS_FAILURE'
+    reason: string
+    htmlLength: number
+    timestamp: number
 }
 
 export interface ChapterPreprocessRequest {

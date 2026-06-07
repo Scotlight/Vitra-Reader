@@ -15,12 +15,14 @@ export function isStyleRefreshTarget(chapter: LoadedChapter): boolean {
 export function buildLoadingChapter(
     spineIndex: number,
     chapterId: string,
+    chapterTitle: string,
     existingChapter: LoadedChapter | undefined,
     currentReaderStyleKey: string,
 ): LoadedChapter {
     return {
         spineIndex,
         id: chapterId,
+        chapterTitle,
         htmlContent: '',
         htmlFragments: [],
         externalStyles: existingChapter?.externalStyles || [],

@@ -85,7 +85,7 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         const listEl = chapterListRef.current;
         if (!listEl) return null;
         return listEl.querySelector(`[data-chapter-id="ch-${spineIndex}"]`) as HTMLElement | null;
-    }, []);
+    }, [chapterListRef]);
     const {
         selectionMenu, setSelectionMenu,
         renderedHighlightsRef,
@@ -143,6 +143,9 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
         scheduleIdlePrefetch,
         cancelIdlePrefetch,
     });
+    const handleRetryChapter = useCallback((spineIndex: number) => {
+        void loadChapter(spineIndex, 'initial', true);
+    }, [loadChapter]);
     const { requestFlush, commitProgressSnapshot, syncViewportState } = useAtomicDomCommit(refs, {
         chapters,
         spineItems,
@@ -271,6 +274,7 @@ const ScrollReaderViewComponent = forwardRef<ScrollReaderHandle, ScrollReaderVie
             isInitialized={isInitialized}
             readerStyles={readerStyles}
             renderSelectionUI={renderSelectionUI}
+            retryChapter={handleRetryChapter}
             shadowQueue={shadowQueue}
             shadowResourceExists={shadowResourceExists}
             viewportRef={viewportRef}

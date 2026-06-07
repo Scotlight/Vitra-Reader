@@ -132,7 +132,7 @@ describe('chapterPreprocessService', () => {
             htmlContent: `<p>${'x'.repeat(MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH + 1)}</p>`,
         })
 
-        expect(result).toEqual({
+        expect(result).toMatchObject({
             htmlContent: '',
             htmlFragments: [],
             externalStyles: [],
@@ -141,9 +141,15 @@ describe('chapterPreprocessService', () => {
             usedFallback: true,
             stylesScoped: false,
             hasRenderableContent: false,
+            error: {
+                type: 'PREPROCESS_FAILURE',
+                reason: 'Chapter exceeds fallback limit and Worker unavailable',
+                htmlLength: MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH + 8,
+            },
         })
+        expect(result.error?.timestamp).toEqual(expect.any(Number))
         expect(warnSpy).toHaveBeenCalledWith(
-            '[ChapterPreprocess] Worker unavailable for large chapter; skipped main-thread sanitize:',
+            `[ChapterPreprocess] 章节超过主线程降级阈值 ${MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH}，实际大小 ${MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH + 8}，Worker 不可用或失败:`,
             '[ChapterPreprocess] Worker init failed: init failed',
         )
     })
@@ -196,9 +202,14 @@ describe('chapterPreprocessService', () => {
             htmlFragments: [],
             usedFallback: true,
             hasRenderableContent: false,
+            error: {
+                type: 'PREPROCESS_FAILURE',
+                reason: 'Chapter exceeds fallback limit and Worker unavailable',
+                htmlLength: MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH + 8,
+            },
         })
         expect(warnSpy).toHaveBeenCalledWith(
-            '[ChapterPreprocess] Worker unavailable for large chapter; skipped main-thread sanitize:',
+            `[ChapterPreprocess] 章节超过主线程降级阈值 ${MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH}，实际大小 ${MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH + 8}，Worker 不可用或失败:`,
             'Worker timeout after 20000ms',
         )
     })

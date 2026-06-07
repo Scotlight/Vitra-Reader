@@ -40,12 +40,16 @@ export async function preprocessChapterContent(
         return await preprocessChapterByWorker(normalizedPayload, effectiveTimeout)
     } catch (error) {
         resetChapterPreprocessWorker()
-        if ((normalizedPayload.htmlContent?.length || 0) > MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH) {
+        const htmlLength = normalizedPayload.htmlContent?.length || 0
+        if (htmlLength > MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH) {
             console.warn(
-                '[ChapterPreprocess] Worker unavailable for large chapter; skipped main-thread sanitize:',
+                `[ChapterPreprocess] 章节超过主线程降级阈值 ${MAIN_THREAD_FALLBACK_MAX_HTML_LENGTH}，实际大小 ${htmlLength}，Worker 不可用或失败:`,
                 error instanceof Error ? error.message : String(error),
             )
-            return createRecoverablePreprocessFailure()
+            return createRecoverablePreprocessFailure(
+                'Chapter exceeds fallback limit and Worker unavailable',
+                htmlLength,
+            )
         }
 
         console.warn(
@@ -56,7 +60,7 @@ export async function preprocessChapterContent(
     }
 }
 
-function createRecoverablePreprocessFailure(): ChapterPreprocessResult {
+function createRecoverablePreprocessFailure(reason: string, htmlLength: number): ChapterPreprocessResult {
     return {
         htmlContent: '',
         htmlFragments: [],
@@ -66,5 +70,11 @@ function createRecoverablePreprocessFailure(): ChapterPreprocessResult {
         usedFallback: true,
         stylesScoped: false,
         hasRenderableContent: false,
+        error: {
+            type: 'PREPROCESS_FAILURE',
+            reason,
+            htmlLength,
+            timestamp: Date.now(),
+        },
     }
 }

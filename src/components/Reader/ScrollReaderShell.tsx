@@ -11,6 +11,7 @@ interface ScrollReaderShellProps {
     isInitialized: boolean
     readerStyles: ReaderStyleConfig
     renderSelectionUI: () => ReactNode
+    retryChapter: (spineIndex: number) => void
     shadowQueue: LoadedChapter[]
     shadowResourceExists: (url: string) => boolean
     viewportRef: RefObject<HTMLDivElement>
@@ -43,6 +44,40 @@ function LoadingIndicator() {
     )
 }
 
+function formatErrorSize(htmlLength: number): string {
+    return `${(htmlLength / 1024 / 1024).toFixed(1)} MB`
+}
+
+function ChapterErrorPlaceholder({
+    chapter,
+    retryChapter,
+}: {
+    chapter: LoadedChapter
+    retryChapter: (spineIndex: number) => void
+}) {
+    const preprocessError = chapter.preprocessError
+    const chapterTitle = chapter.chapterTitle || `章节 ${chapter.spineIndex + 1}`
+    return (
+        <div className={styles.chapterErrorPlaceholder}>
+            <div className={styles.chapterErrorTitle}>{chapterTitle}</div>
+            {preprocessError ? (
+                <div className={styles.chapterErrorMessage}>
+                    章节内容过大（{formatErrorSize(preprocessError.htmlLength)}），预处理失败。
+                </div>
+            ) : (
+                <div className={styles.chapterErrorMessage}>章节加载失败</div>
+            )}
+            <button
+                className={styles.chapterErrorRetry}
+                type="button"
+                onClick={() => retryChapter(chapter.spineIndex)}
+            >
+                重试
+            </button>
+        </div>
+    )
+}
+
 export function ScrollReaderShell({
     chapters,
     chapterListRef,
@@ -51,6 +86,7 @@ export function ScrollReaderShell({
     isInitialized,
     readerStyles,
     renderSelectionUI,
+    retryChapter,
     shadowQueue,
     shadowResourceExists,
     viewportRef,
@@ -81,9 +117,11 @@ export function ScrollReaderShell({
             <div className={styles.chapterList} ref={chapterListRef}>
                 {shouldShowTopLoading(chapters) && <LoadingIndicator />}
                 {chapters.filter(ch => ch.status === 'error').map(ch => (
-                    <div key={ch.id} className={styles.chapterErrorPlaceholder}>
-                        章节加载失败
-                    </div>
+                    <ChapterErrorPlaceholder
+                        key={ch.id}
+                        chapter={ch}
+                        retryChapter={retryChapter}
+                    />
                 ))}
             </div>
 

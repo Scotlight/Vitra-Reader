@@ -1,4 +1,4 @@
-import type { ChapterPreprocessResult } from '@/engine/types/chapterPreprocess'
+import type { ChapterPreprocessFailure, ChapterPreprocessResult } from '@/engine/types/chapterPreprocess'
 import type { SegmentMeta } from '@/engine/types/vectorRender'
 
 export type LoadedChapterStatus = 'loading' | 'shadow-rendering' | 'ready' | 'mounted' | 'placeholder' | 'error'
@@ -15,6 +15,7 @@ export interface LoadedChapterState {
     domNode: HTMLElement | null
     height: number
     status: LoadedChapterStatus
+    preprocessError?: ChapterPreprocessFailure
     mountedAt?: number
 }
 
@@ -58,7 +59,7 @@ export function createVectorRestoreChapterState(
 
 export function createPreprocessedChapterState(
     loadingChapter: LoadedChapterState,
-    preprocessed: Pick<ChapterPreprocessResult, 'htmlContent' | 'htmlFragments' | 'externalStyles' | 'segmentMetas'>,
+    preprocessed: Pick<ChapterPreprocessResult, 'htmlContent' | 'htmlFragments' | 'externalStyles' | 'segmentMetas' | 'error'>,
     currentReaderStyleKey: string,
 ): LoadedChapterState {
     return {
@@ -67,6 +68,7 @@ export function createPreprocessedChapterState(
         htmlFragments: preprocessed.htmlFragments,
         externalStyles: preprocessed.externalStyles,
         segmentMetas: preprocessed.segmentMetas,
+        preprocessError: preprocessed.error,
         vectorStyleKey: currentReaderStyleKey,
         status: 'shadow-rendering',
     }

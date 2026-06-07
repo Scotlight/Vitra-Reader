@@ -1,6 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo } from 'react';
 import type { MutableRefObject } from 'react';
 import type { ContentProvider } from '@/engine/core/contentProvider';
+import { buildSpineFallbackLabel } from '@/engine/core/spineLabel';
 import type { ChapterMetaVector } from '@/engine/types/vectorRender';
 import type { ReaderStyleConfig } from '../ShadowRenderer';
 import {
@@ -98,10 +99,12 @@ export function useChapterLoader(
         beginChapterLoad(refs, spineIndex);
 
         const chapterId = `ch-${spineIndex}`;
+        const chapterTitle = buildSpineFallbackLabel(currentSpineItems[spineIndex]?.href || '', spineIndex);
 
         const loadingChapter = buildLoadingChapter(
             spineIndex,
             chapterId,
+            chapterTitle,
             existingChapter,
             currentReaderStyleKey,
         );
@@ -137,12 +140,32 @@ export function useChapterLoader(
                 readerStyles,
             });
 
+            if (!preprocessed.hasRenderableContent && preprocessed.error) {
+                const failed: LoadedChapter = {
+                    ...loadingChapter,
+                    htmlContent: preprocessed.htmlContent,
+                    htmlFragments: preprocessed.htmlFragments,
+                    externalStyles: preprocessed.externalStyles,
+                    segmentMetas: preprocessed.segmentMetas,
+                    preprocessError: preprocessed.error,
+                    vectorStyleKey: currentReaderStyleKey,
+                    status: 'error',
+                };
+                setChapters(prev =>
+                    updateChapterBySpineIndex(prev, spineIndex, () => failed)
+                );
+                setShadowQueue(prev => removeChapterFromQueue(prev, spineIndex));
+                markScrollPipelineIdle(refs);
+                return;
+            }
+
             const loaded: LoadedChapter = {
                 ...loadingChapter,
                 htmlContent: preprocessed.htmlContent,
                 htmlFragments: preprocessed.htmlFragments,
                 externalStyles: preprocessed.externalStyles,
                 segmentMetas: preprocessed.segmentMetas,
+                preprocessError: preprocessed.error,
                 vectorStyleKey: currentReaderStyleKey,
                 status: 'shadow-rendering',
             };
@@ -247,7 +270,6 @@ export function useChapterLoader(
         return () => {
             cancelIdlePrefetch();
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isInitialized, currentSpineIndex, runPredictivePrefetch, scheduleIdlePrefetch, cancelIdlePrefetch]);
 
     return { loadChapter, runPredictivePrefetch };

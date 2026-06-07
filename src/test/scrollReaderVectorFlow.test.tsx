@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, render, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import type { ContentProvider, SearchResult, SpineItemInfo, TocItem } from '@/engine/core/contentProvider'
 import type { SegmentMeta } from '@/engine/types/vectorRender'
 import type { ReaderStyleConfig } from '@/components/Reader/ShadowRenderer'
@@ -320,6 +320,52 @@ describe('ScrollReaderView vector flow', () => {
 
         await waitFor(() => {
             expect(view.container.textContent).toContain('章节加载失败')
+        })
+    })
+
+    it('预处理失败时显示错误占位并支持重试', async () => {
+        const provider = createProvider({
+            spineItems: [
+                { index: 0, href: 'OPS/Chapter%2007.xhtml', id: 'chapter-7', linear: true },
+            ],
+        })
+        mocks.preprocessChapterContentMock
+            .mockResolvedValueOnce({
+                htmlContent: '',
+                htmlFragments: [],
+                externalStyles: [],
+                removedTagCount: 0,
+                removedAttributeCount: 0,
+                usedFallback: true,
+                stylesScoped: false,
+                hasRenderableContent: false,
+                error: {
+                    type: 'PREPROCESS_FAILURE',
+                    reason: 'Chapter exceeds fallback limit and Worker unavailable',
+                    htmlLength: 1_500_000,
+                    timestamp: Date.now(),
+                },
+            })
+            .mockResolvedValueOnce(createNonVectorPreprocessResult())
+
+        const view = render(
+            <ScrollReaderView
+                provider={provider}
+                bookId="book-1"
+                readerStyles={DEFAULT_READER_STYLES}
+            />
+        )
+
+        await waitFor(() => {
+            expect(view.container.textContent).toContain('Chapter 07')
+            expect(view.container.textContent).toContain('章节内容过大')
+            expect(view.container.textContent).toContain('1.4 MB')
+        })
+
+        fireEvent.click(view.getByRole('button', { name: '重试' }))
+
+        await waitFor(() => {
+            expect(mocks.preprocessChapterContentMock).toHaveBeenCalledTimes(2)
         })
     })
 
