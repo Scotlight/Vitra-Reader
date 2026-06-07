@@ -54,19 +54,20 @@ function UseSelectionMenuHarness() {
         bookId: 'book-1',
         getHighlightContainer: () => null,
     })
+    const { renderSelectionUI, runTranslate, setSelectionMenu } = selection
 
     useEffect(() => {
-        selection.setSelectionMenu({
+        setSelectionMenu({
             visible: true,
             x: 120,
             y: 120,
             text: 'Hello',
             spineIndex: 0,
         })
-        void selection.runTranslate('Hello')
-    }, [selection.runTranslate, selection.setSelectionMenu])
+        void runTranslate('Hello')
+    }, [runTranslate, setSelectionMenu])
 
-    return <>{selection.renderSelectionUI()}</>
+    return <>{renderSelectionUI()}</>
 }
 
 describe('useSelectionMenu translation dialog', () => {

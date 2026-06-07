@@ -13,7 +13,7 @@ export function useIdlePrefetch(refs: ScrollReaderRefs) {
             window.clearTimeout(idlePrefetchHandleRef.current);
         }
         idlePrefetchHandleRef.current = null;
-    }, []);
+    }, [idlePrefetchHandleRef]);
 
     const scheduleIdlePrefetch = useCallback((task: () => void) => {
         cancelIdlePrefetch();
@@ -31,7 +31,7 @@ export function useIdlePrefetch(refs: ScrollReaderRefs) {
             idlePrefetchHandleRef.current = null;
             task();
         }, 16);
-    }, [cancelIdlePrefetch]);
+    }, [cancelIdlePrefetch, idlePrefetchHandleRef, isUserScrollingRef]);
 
     return { scheduleIdlePrefetch, cancelIdlePrefetch };
 }

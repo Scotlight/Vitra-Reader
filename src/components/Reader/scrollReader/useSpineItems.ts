@@ -13,7 +13,7 @@ export function useSpineItems(
         const items = provider.getSpineItems();
         spineItemsRef.current = items;
         setSpineItems(items);
-    }, [provider]);
+    }, [provider, spineItemsRef]);
 
     return spineItems;
 }

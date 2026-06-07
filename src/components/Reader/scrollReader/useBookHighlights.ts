@@ -45,7 +45,7 @@ export function useBookHighlights({
         return () => {
             disposed = true;
         };
-    }, [bookId]);
+    }, [bookId, highlightDirtyChaptersRef, lastReportedProgressRef, pendingProgressSnapshotRef]);
 
     const highlightsBySpineIndex = useMemo(() => {
         const grouped = new Map<number, Highlight[]>();

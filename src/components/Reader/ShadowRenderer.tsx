@@ -307,7 +307,20 @@ export function ShadowRenderer({
       }
       document.fonts?.removeEventListener?.('loadingdone', handleFontLoaded);
     };
-  }, [htmlContent, htmlFragments, segmentMetas, chapterId, externalStyles, preprocessed, onReady, onError, buildContentCss]);
+  }, [
+    htmlContent,
+    htmlFragments,
+    segmentMetas,
+    chapterId,
+    externalStyles,
+    preprocessed,
+    onReady,
+    onError,
+    buildContentCss,
+    mode,
+    readerStyles,
+    resourceExists,
+  ]);
 
   return (
     <div

@@ -112,7 +112,7 @@ export function usePaginatedChapterLoader({
             setChapterFading(false)
             onLoadError?.(spineIndex)
         }
-    }, [provider, abortPaginationMeasure, pendingLastPageRef, isInitialLoadRef, pageBoundariesRef, pageMapReadyRef, renderedHighlightsRef, currentSpineIndexRef, setCurrentSpineIndex, setIsLoading, setChapterFading, setShadowData])
+    }, [provider, abortPaginationMeasure, pendingLastPageRef, isInitialLoadRef, pageBoundariesRef, pageMapReadyRef, renderedHighlightsRef, currentSpineIndexRef, setCurrentSpineIndex, setIsLoading, setChapterFading, setShadowData, onLoadError])
 
     return { loadChapter, spineItems, spineItemsRef }
 }

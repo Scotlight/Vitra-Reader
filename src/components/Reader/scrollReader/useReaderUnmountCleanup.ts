@@ -18,24 +18,34 @@ export function useReaderUnmountCleanup(
     const { cancelIdlePrefetch, virtualChaptersRef, cleanupVirtualChapterRuntime } = deps;
 
     useEffect(() => {
+        const highlightIdleHandles = highlightIdleHandlesRef.current;
+        const virtualChapters = virtualChaptersRef.current;
+
         return () => {
             cancelIdlePrefetch();
             if (scrollIdleTimerRef.current !== null) {
                 window.clearTimeout(scrollIdleTimerRef.current);
                 scrollIdleTimerRef.current = null;
             }
-            highlightIdleHandlesRef.current.forEach((handle) => {
+            highlightIdleHandles.forEach((handle) => {
                 cancelIdleTask(handle);
             });
-            highlightIdleHandlesRef.current.clear();
-            Array.from(virtualChaptersRef.current.keys()).forEach((chapterId) => {
+            highlightIdleHandles.clear();
+            Array.from(virtualChapters.keys()).forEach((chapterId) => {
                 cleanupVirtualChapterRuntime(chapterId);
             });
-            virtualChaptersRef.current.clear();
+            virtualChapters.clear();
             if (virtualSyncRafRef.current !== null) {
                 cancelAnimationFrame(virtualSyncRafRef.current);
                 virtualSyncRafRef.current = null;
             }
         };
-    }, [cancelIdlePrefetch, cleanupVirtualChapterRuntime, virtualChaptersRef]);
+    }, [
+        cancelIdlePrefetch,
+        cleanupVirtualChapterRuntime,
+        highlightIdleHandlesRef,
+        scrollIdleTimerRef,
+        virtualChaptersRef,
+        virtualSyncRafRef,
+    ]);
 }

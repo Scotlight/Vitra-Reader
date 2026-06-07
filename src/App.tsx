@@ -17,7 +17,8 @@ function App() {
     const [jumpTarget, setJumpTarget] = useState<{ location: string; searchText?: string } | null>(null)
     const settings = useSettingsStore()
     const loadPersistedSettings = useSettingsStore(s => s.loadPersistedSettings)
-    const syncStore = useSyncStore()
+    const loadSyncConfig = useSyncStore(s => s.loadConfig)
+    const autoSync = useSyncStore(s => s.autoSync)
 
     const handleOpenBook = (bookId: string, jump?: { location: string; searchText?: string }) => {
         setCurrentBookId(bookId)
@@ -42,20 +43,20 @@ function App() {
 
         const bootAutoSync = async () => {
             await loadPersistedSettings()
-            await syncStore.loadConfig()
+            await loadSyncConfig()
             if (!mounted) return
 
-            await syncStore.autoSync('startup')
+            await autoSync('startup')
 
             intervalId = window.setInterval(() => {
-                void syncStore.autoSync('interval')
+                void autoSync('interval')
             }, 15 * 60 * 1000)
         }
 
         void bootAutoSync()
 
         const handleBeforeUnload = () => {
-            void syncStore.autoSync('exit')
+            void autoSync('exit')
         }
 
         window.addEventListener('beforeunload', handleBeforeUnload)
@@ -65,7 +66,7 @@ function App() {
             if (intervalId) window.clearInterval(intervalId)
             window.removeEventListener('beforeunload', handleBeforeUnload)
         }
-    }, [])
+    }, [autoSync, loadPersistedSettings, loadSyncConfig])
 
     return (
         <div

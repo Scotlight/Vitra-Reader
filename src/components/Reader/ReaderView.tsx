@@ -71,16 +71,28 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const effectivePageTurnMode = modeDecision.effectiveMode
     const isScrollMode = effectivePageTurnMode === 'scrolled-continuous'
     const resolvedReaderFontFamily = buildFontFamilyWithFallback(settings.fontFamily)
-    const readerColors = resolveReaderColors(settings)
+    const readerColors = useMemo(() => resolveReaderColors({
+        customBgColor: settings.customBgColor,
+        customTextColor: settings.customTextColor,
+        themeId: settings.themeId,
+    }), [settings.customBgColor, settings.customTextColor, settings.themeId])
     const readerStyleConfig = useMemo(() => buildReaderStyleConfig(
-        settings,
+        {
+            fontSize: settings.fontSize,
+            letterSpacing: settings.letterSpacing,
+            lineHeight: settings.lineHeight,
+            pageWidth: settings.pageWidth,
+            paragraphIndentEnabled: settings.paragraphIndentEnabled,
+            paragraphSpacing: settings.paragraphSpacing,
+            textAlign: settings.textAlign,
+            themeId: settings.themeId,
+        },
         readerColors,
         resolvedReaderFontFamily,
         bookFormat,
     ), [
         bookFormat,
-        readerColors.textColor,
-        readerColors.bgColor,
+        readerColors,
         resolvedReaderFontFamily,
         settings.fontSize,
         settings.lineHeight,

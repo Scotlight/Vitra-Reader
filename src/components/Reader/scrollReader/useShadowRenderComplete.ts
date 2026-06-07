@@ -160,7 +160,7 @@ export function useShadowRenderComplete(
             mountVirtualSegment(runtime, index);
         }
         refreshVirtualChapterLayout(runtime);
-    }, [mountVirtualSegment, refreshVirtualChapterLayout]);
+    }, [mountVirtualSegment, refreshVirtualChapterLayout, virtualChaptersRef]);
 
     return { handleShadowReady, forceHydrateSegment, materializeAllVirtualSegments };
 }

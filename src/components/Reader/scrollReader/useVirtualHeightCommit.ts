@@ -103,12 +103,14 @@ export function useVirtualHeightCommit(
     }, [commitSegmentResize, segmentResizeCallbackRef]);
 
     useEffect(() => {
+        const pendingUpdates = pendingUpdatesRef.current;
+
         return () => {
             if (flushRafRef.current !== null) {
                 cancelAnimationFrame(flushRafRef.current);
                 flushRafRef.current = null;
             }
-            pendingUpdatesRef.current.clear();
+            pendingUpdates.clear();
         };
     }, []);
 }
