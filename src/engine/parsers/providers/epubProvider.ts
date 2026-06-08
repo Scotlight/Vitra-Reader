@@ -10,6 +10,7 @@ import {
     extractChapterStyles as epubExtractStyles,
     unloadChapter as epubUnloadChapter,
 } from './epubContentExtractor'
+import { normalizeEpubArchiveBuffer } from './epubZipNormalizer'
 
 export class EpubContentProvider implements ContentProvider {
     private book: Book
@@ -17,7 +18,7 @@ export class EpubContentProvider implements ContentProvider {
     private spineItems: SpineItemInfo[] = []
 
     constructor(data: ArrayBuffer) {
-        this.book = ePub(data)
+        this.book = ePub(normalizeEpubArchiveBuffer(data), { replacements: 'none' })
     }
 
     async init() {
