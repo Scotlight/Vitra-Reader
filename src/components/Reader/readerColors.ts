@@ -17,13 +17,14 @@ const FALLBACK_BY_THEME: Record<string, ReaderColors> = {
     sepia: { textColor: '#5b4636', bgColor: '#f4ecd8' },
     green: { textColor: '#2d4a3e', bgColor: '#c7edcc' },
 }
+const DEFAULT_READER_COLORS: ReaderColors = FALLBACK_BY_THEME.light!
 
 export function resolveReaderColors({
     customBgColor,
     customTextColor,
     themeId,
 }: ReaderColorInput): ReaderColors {
-    const base = FALLBACK_BY_THEME[themeId] || FALLBACK_BY_THEME.light
+    const base = FALLBACK_BY_THEME[themeId] || DEFAULT_READER_COLORS
     const candidateText = customTextColor || base.textColor
     const bgColor = customBgColor || base.bgColor
     const textColor = customTextColor

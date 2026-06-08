@@ -21,10 +21,12 @@ export function applyShadowReadyBatch(
     for (const item of batch) {
         const index = updated.findIndex(chapter => chapter.spineIndex === item.spineIndex);
         if (index < 0) continue;
-        if (updated[index].status === 'mounted') continue;
+        const chapter = updated[index];
+        if (!chapter) continue;
+        if (chapter.status === 'mounted') continue;
         if (updated === chapters) updated = [...chapters];
         updated[index] = {
-            ...updated[index],
+            ...chapter,
             domNode: item.node,
             height: item.height,
             status: 'ready',

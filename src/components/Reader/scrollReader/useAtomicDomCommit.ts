@@ -19,6 +19,8 @@ import { useScrollProgressCommit } from './useScrollProgressCommit';
 import type { ScrollReaderRefs } from './useScrollReaderRefs';
 import type { VirtualChapterRuntime } from './useVirtualChapterRuntime';
 
+const CHAPTER_BLOCK_CLASS = styles.chapterBlock || 'chapterBlock';
+
 interface UseAtomicDomCommitOptions {
     chapters: LoadedChapter[];
     spineItems: SpineItemInfo[];
@@ -122,7 +124,7 @@ export function useAtomicDomCommit(
         if (readyChapters.length === 0) return;
 
         readyChapters.forEach(ch => {
-            const { chapterEl, isInsertion } = getOrCreateChapterElement(listEl, ch.id, styles.chapterBlock);
+            const { chapterEl, isInsertion } = getOrCreateChapterElement(listEl, ch.id, CHAPTER_BLOCK_CLASS);
             unobserveChapterResizeNodes(chapterEl);
             markChapterAsMounted(chapterEl, ch.height);
             chapterEl.replaceChildren();
@@ -211,8 +213,9 @@ export function useAtomicDomCommit(
             lastKnownAnchorIndexRef.current = metrics.activeSpineIndex;
             if (metrics.activeSpineIndex !== currentSpineIndex) {
                 setCurrentSpineIndex(metrics.activeSpineIndex);
-                if (onChapterChange && spineItems[metrics.activeSpineIndex]) {
-                    onChapterChange(spineItems[metrics.activeSpineIndex].id, spineItems[metrics.activeSpineIndex].href);
+                const activeSpine = spineItems[metrics.activeSpineIndex];
+                if (onChapterChange && activeSpine) {
+                    onChapterChange(activeSpine.id, activeSpine.href);
                 }
             }
         }

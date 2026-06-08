@@ -10,7 +10,8 @@ export function buildFallbackTocFromSpine(spineItems: readonly SpineItemInfo[]):
 }
 
 export function normalizeTocHref(href?: string): string {
-    const raw = (href || '').split('#')[0].split('?')[0].trim()
+    const hashBase = (href || '').split('#')[0] || ''
+    const raw = (hashBase.split('?')[0] || '').trim()
     if (!raw) return ''
     return raw
         .replace(/\\/g, '/')

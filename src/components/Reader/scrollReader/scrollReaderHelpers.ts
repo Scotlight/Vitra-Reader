@@ -45,7 +45,7 @@ export function resolveHighlightSpineIndex(cfiRange: string): number | null {
     if (cfiRange.startsWith('epubcfi(')) {
         const match = cfiRange.match(/^epubcfi\(\/\d+\/(\d+)/);
         if (!match) return null;
-        const parsed = Number.parseInt(match[1], 10);
+        const parsed = Number.parseInt(match[1] || '', 10);
         return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed / 2) - 1) : null;
     }
     return null;
@@ -72,7 +72,7 @@ export function resolveViewportDerivedMetrics(
         const match = chapterIdAttr.match(/^ch-(\d+)$/);
         if (!match) continue;
 
-        const spineIndex = Number.parseInt(match[1], 10);
+        const spineIndex = Number.parseInt(match[1] || '', 10);
         const top = el.offsetTop;
         const height = el.offsetHeight;
         const bottom = top + height;

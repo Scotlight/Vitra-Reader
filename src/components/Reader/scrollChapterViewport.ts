@@ -23,7 +23,7 @@ export function parseChapterSpineIndex(chapterIdAttr: string | null): number | n
     if (!chapterIdAttr) return null
     const match = chapterIdAttr.match(/^ch-(\d+)$/)
     if (!match) return null
-    return Number.parseInt(match[1], 10)
+    return Number.parseInt(match[1] || '', 10)
 }
 
 export function findAncestorChapterSpineIndex(startNode: Node | null, stopNode: Node | null): number {

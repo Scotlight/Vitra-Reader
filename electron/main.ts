@@ -171,14 +171,15 @@ function isAllowedExternalUrl(url: string): boolean {
     }
 }
 
+const DEFAULT_WINDOW_BACKGROUND = THEME_BG_COLORS.light || '#ffffff'
+
 function resolveWindowBackground(themeId?: string, customBgColor?: string | null): string {
     if (typeof customBgColor === 'string' && isValidHexColor(customBgColor)) {
         return customBgColor
     }
-    if (typeof themeId === 'string' && THEME_BG_COLORS[themeId]) {
-        return THEME_BG_COLORS[themeId]
-    }
-    return THEME_BG_COLORS.light
+
+    const themeColor = typeof themeId === 'string' ? THEME_BG_COLORS[themeId] : undefined
+    return themeColor || DEFAULT_WINDOW_BACKGROUND
 }
 
 function createFallbackVitraIcon() {

@@ -120,12 +120,12 @@ export function useReaderNavigation({
 
 function resolveSpineIndex(location: string): number | null {
     if (location.startsWith('vitra:') || location.startsWith('bdise:')) {
-        return parseInt(location.split(':')[1], 10)
+        return parseInt(location.split(':')[1] || '', 10)
     }
     if (!location.startsWith('epubcfi(')) return null
     const match = location.match(/^epubcfi\(\/(\d+)\/(\d+)/)
     if (!match) return null
-    return Math.max(0, Math.floor(parseInt(match[2], 10) / 2) - 1)
+    return Math.max(0, Math.floor(parseInt(match[2] || '', 10) / 2) - 1)
 }
 
 async function jumpToReaderSpine(

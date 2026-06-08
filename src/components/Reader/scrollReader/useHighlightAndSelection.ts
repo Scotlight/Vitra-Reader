@@ -71,7 +71,7 @@ export function useHighlightAndSelection(
                     const chId = node.getAttribute('data-chapter-id');
                     if (chId) {
                         const match = chId.match(/^ch-(\d+)$/);
-                        if (match) spineIdx = parseInt(match[1], 10);
+                        if (match) spineIdx = parseInt(match[1] || '', 10);
                         break;
                     }
                 }

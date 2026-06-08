@@ -92,7 +92,7 @@ export const SelectionMenu = ({
                     <button className={styles.menuIconBtn} onClick={onNote} title="笔记">
                         <img className={styles.menuActionIcon} src={noteActionIcon} alt="" />
                     </button>
-                    <button className={styles.menuIconBtn} onClick={() => onHighlight(HIGHLIGHT_PRESETS[0].color)} title="高亮">
+                    <button className={styles.menuIconBtn} onClick={() => onHighlight(HIGHLIGHT_PRESETS[0]?.color ?? '#ffe066')} title="高亮">
                         <img className={styles.menuActionIcon} src={highlightActionIcon} alt="" />
                     </button>
                     <button className={styles.menuIconBtn} onClick={onCopy} title="复制">

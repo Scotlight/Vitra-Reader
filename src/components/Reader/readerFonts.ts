@@ -27,6 +27,7 @@ export function toReaderFontDisplayName(fontFamily: string): string {
     if (fontFamily === 'inherit') return '系统默认'
     const match = fontFamily.match(/^"?([^",]+)"?/)
     if (!match) return '系统默认'
-    const cssName = match[1].trim()
+    const cssName = (match[1] || '').trim()
+    if (!cssName) return '系统默认'
     return CSS_NAME_TO_DISPLAY[cssName as keyof typeof CSS_NAME_TO_DISPLAY] || cssName
 }

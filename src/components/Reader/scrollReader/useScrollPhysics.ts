@@ -21,10 +21,11 @@ export function useScrollPhysics(
         [],
     );
 
+    const flingingClass = styles.flinging || 'flinging';
     const inertiaCallbacks = useMemo(() => ({
-        onStart: () => { viewportRef.current?.classList.add(styles.flinging); },
-        onStop: () => { viewportRef.current?.classList.remove(styles.flinging); },
-    }), [viewportRef]);
+        onStart: () => { viewportRef.current?.classList.add(flingingClass); },
+        onStop: () => { viewportRef.current?.classList.remove(flingingClass); },
+    }), [flingingClass, viewportRef]);
 
     const { addImpulse, fling, stop, setDragging } = useScrollInertia(
         viewportRef,

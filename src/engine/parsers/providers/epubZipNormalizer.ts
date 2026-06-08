@@ -60,7 +60,8 @@ function isEpubArchiveEntries(entries: Record<string, Uint8Array>): boolean {
 
     const mimetypeName = normalizedNames.get('mimetype')
     if (!mimetypeName) return false
-    return strFromU8(entries[mimetypeName]).trim() === EPUB_MIMETYPE
+    const mimetypeEntry = entries[mimetypeName]
+    return Boolean(mimetypeEntry && strFromU8(mimetypeEntry).trim() === EPUB_MIMETYPE)
 }
 
 function startsWithLocalFileHeader(buffer: ArrayBuffer): boolean {

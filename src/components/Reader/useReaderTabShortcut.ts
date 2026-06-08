@@ -30,7 +30,8 @@ export function useReaderTabShortcut({ enabled, activeTab, onTabChange }: UseRea
             const base = currentIndex < 0 ? 0 : currentIndex
             const delta = event.shiftKey ? -1 : 1
             const nextIndex = (base + delta + READER_TABS.length) % READER_TABS.length
-            onTabChange(READER_TABS[nextIndex])
+            const nextTab = READER_TABS[nextIndex]
+            if (nextTab) onTabChange(nextTab)
         }
 
         window.addEventListener('keydown', handleKeyDown)

@@ -110,8 +110,8 @@ function resolveInitialLocation(provider: ContentProvider, location?: string) {
     if (location.startsWith('vitra:') || location.startsWith('bdise:')) {
         const parts = location.split(':')
         return {
-            spineIndex: parseInt(parts[1], 10) || 0,
-            position: parseInt(parts[2], 10) || 0,
+            spineIndex: parseInt(parts[1] || '', 10) || 0,
+            position: parseInt(parts[2] || '', 10) || 0,
         }
     }
     const spineIndex = provider.getSpineIndexByHref(location)

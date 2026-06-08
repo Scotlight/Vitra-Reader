@@ -25,7 +25,8 @@ function hexToRgb(hex: string): RgbColor | null {
 
 function luminance({ r, g, b }: RgbColor): number {
     const linear = [r, g, b].map(toLinear)
-    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    const [red = 0, green = 0, blue = 0] = linear
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 }
 
 function toLinear(value: number): number {

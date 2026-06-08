@@ -14,13 +14,13 @@ interface HighlightCacheEntry {
 
 function resolveHighlightSpineIndex(cfiRange: string): number | null {
     if (cfiRange.startsWith('vitra:') || cfiRange.startsWith('bdise:')) {
-        const parsed = parseInt(cfiRange.split(':')[1], 10);
+        const parsed = parseInt(cfiRange.split(':')[1] || '', 10);
         return Number.isFinite(parsed) ? parsed : null;
     }
     if (cfiRange.startsWith('epubcfi(')) {
         const match = cfiRange.match(/^epubcfi\(\/\d+\/(\d+)/);
         if (!match) return null;
-        const chapterToken = parseInt(match[1], 10);
+        const chapterToken = parseInt(match[1] || '', 10);
         if (!Number.isFinite(chapterToken)) return null;
         return Math.max(0, Math.floor(chapterToken / 2) - 1);
     }
