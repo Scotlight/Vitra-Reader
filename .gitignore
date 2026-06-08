@@ -6,6 +6,7 @@ dist/
 dist-electron/
 release/
 build/
+coverage/
 
 # Environment
 .env

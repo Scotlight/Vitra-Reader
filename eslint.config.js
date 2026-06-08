@@ -33,6 +33,7 @@ module.exports = [
       'extracted/**',
       'bug/**',
       'logs/**',
+      'coverage/**',
       'outputs/**',
       'docs/**',
       '.vscode/**',
