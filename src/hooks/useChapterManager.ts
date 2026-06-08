@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import type { Book } from 'epubjs';
+import type { Book } from '@likecoin/epub-ts';
 import { ChapterState, ChapterStatus } from '@/types/chapter';
 
 /**
@@ -78,17 +78,20 @@ export function useChapterManager(
 
       setChapters(prev => [newChapter, ...prev]);
 
-      // 从 epub.js 获取章节内容
-      // 注意：这里需要根据实际的 epub.js API 调整
+      // 从 EPUB runtime 获取章节内容
+      // 注意：这里需要根据实际的 EPUB runtime API 调整
       const spine = epubBook.spine;
       const spineItem = spine.get(prevIndex);
-      
-      if (!spineItem) {
+
+      if (!spineItem?.href) {
         throw new Error(`Chapter ${prevIndex} not found in spine`);
       }
 
       // 加载章节内容
       const section = epubBook.section(spineItem.href);
+      if (!section) {
+        throw new Error(`Chapter ${prevIndex} section unavailable`);
+      }
       await section.load();
       const htmlContent = await section.render();
 
@@ -162,16 +165,19 @@ export function useChapterManager(
 
       setChapters(prev => [...prev, newChapter]);
 
-      // 从 epub.js 获取章节内容
+      // 从 EPUB runtime 获取章节内容
       const spine = epubBook.spine;
       const spineItem = spine.get(nextIndex);
-      
-      if (!spineItem) {
+
+      if (!spineItem?.href) {
         throw new Error(`Chapter ${nextIndex} not found in spine`);
       }
 
       // 加载章节内容
       const section = epubBook.section(spineItem.href);
+      if (!section) {
+        throw new Error(`Chapter ${nextIndex} section unavailable`);
+      }
       await section.load();
       const htmlContent = await section.render();
 

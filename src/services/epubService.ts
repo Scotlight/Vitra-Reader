@@ -1,4 +1,4 @@
-import ePub from 'epubjs'
+import ePub from '@likecoin/epub-ts'
 import type { EpubBookInternal } from '@/types/epubjs'
 
 export interface ParsedBook {
@@ -28,9 +28,9 @@ export async function parseEpub(data: ArrayBuffer): Promise<ParsedBook> {
     try {
         const coverUrl = await book.coverUrl()
         if (coverUrl) {
-            // If coverUrl is a blob URL (created by epub.js archive), we can use it directly?
+            // If coverUrl is a blob URL (created by the EPUB archive), we can use it directly?
             // No, for IndexedDB storage we need base64 or a persistent Blob.
-            // epub.js `coverUrl()` often returns a blob: url when using ArrayBuffer.
+            // The EPUB runtime `coverUrl()` often returns a blob: url when using ArrayBuffer.
             // We need to fetch it to get the blob/base64.
 
             const response = await fetch(coverUrl)
@@ -41,9 +41,8 @@ export async function parseEpub(data: ArrayBuffer): Promise<ParsedBook> {
         console.warn('Failed to extract cover:', error)
     }
 
-    // Cleanup: destroy the book instance to free memory
-    // book.destroy() // epub.js doesn't have a simple destroy for the main object, but we can clear resources if needed.
-    // Actually, for just parsing, we let it be GC'd.
+    // Cleanup: destroy the book instance to free memory.
+    book.destroy()
 
     return {
         title: title || 'Untitled',

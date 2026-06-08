@@ -1,4 +1,4 @@
-/** epub.js 内部类型的最小声明，供 epub 相关模块使用 */
+/** EPUB runtime 内部类型的最小声明，供 epub 相关模块使用 */
 
 export interface EpubSpineItem {
     index: number
@@ -21,7 +21,7 @@ export interface EpubArchive {
 
 export interface EpubSpine {
     spineItems: EpubSpineItem[]
-    get(target: string | number): EpubSpineItem | undefined
+    get(target: string | number): EpubSpineItem | null
 }
 
 export interface EpubManifestItem {
@@ -42,7 +42,7 @@ export interface EpubPackaging {
 }
 
 /**
- * epub.js Book 的内部扩展接口
+ * EPUB runtime Book 的内部扩展接口
  * Book 公开类型不暴露 spine.spineItems / archive / packaging 等属性，
  * 此接口用于通过 `book as unknown as EpubBookInternal` 安全访问。
  */
@@ -51,7 +51,7 @@ export interface EpubBookInternal {
     spine: EpubSpine
     archive: EpubArchive
     packaging: EpubPackaging
-    /** epub.js 旧版 package 属性（同 packaging） */
+    /** 兼容 epubjs 旧版 package 属性（同 packaging） */
     package: {
         metadata: EpubPackageMetadata
     }

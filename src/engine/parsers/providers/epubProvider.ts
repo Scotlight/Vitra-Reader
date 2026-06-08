@@ -1,4 +1,4 @@
-import ePub, { Book } from 'epubjs'
+import ePub, { type Book } from '@likecoin/epub-ts'
 import type { EpubBookInternal, EpubSpineItem } from '@/types/epubjs'
 import type { ContentProvider, TocItem, SpineItemInfo, SearchResult } from '@/engine/core/contentProvider'
 import { buildSpineFallbackLabel } from '@/engine/core/spineLabel'
@@ -17,7 +17,7 @@ export class EpubContentProvider implements ContentProvider {
     private spineItems: SpineItemInfo[] = []
 
     constructor(data: ArrayBuffer) {
-        this.book = ePub(data as unknown as string)
+        this.book = ePub(data)
     }
 
     async init() {
@@ -50,7 +50,7 @@ export class EpubContentProvider implements ContentProvider {
 
     getSpineIndexByHref(href: string): number {
         const item = this.book.spine?.get(href)
-        return item ? item.index : -1
+        return typeof item?.index === 'number' ? item.index : -1
     }
 
     extractChapterHtml(i: number) { return epubExtractHtml(this.book, i) }

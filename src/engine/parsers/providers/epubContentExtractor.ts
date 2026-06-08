@@ -1,9 +1,9 @@
 /**
  * epubContentExtractor.ts
- * 将 epub.js 仅作为 "解压 + XML 解析" 工具的封装层
+ * 将 EPUB runtime 仅作为 "解压 + XML 解析" 工具的封装层
  * BDISE 引擎通过此模块获取章节原始 HTML
  */
-import { Book } from 'epubjs';
+import type { Book } from '@likecoin/epub-ts';
 import type { EpubBookInternal, EpubSpineItem } from '@/types/epubjs';
 import {
     resolveChapterDocumentResources,
@@ -62,7 +62,7 @@ export async function extractChapterHtml(
 ): Promise<string> {
     const { bookInternal, spineItem } = lookupSpineItem(book, spineIndex);
 
-    // Load the section content via epub.js
+    // Load the section content via the EPUB runtime.
     await spineItem.load(bookInternal.load.bind(bookInternal));
 
     // Extract rendered HTML
@@ -115,7 +115,7 @@ export async function extractChapterStyles(
         }
     });
 
-    // <link rel="stylesheet"> — try to resolve via epub.js resource loader
+    // <link rel="stylesheet"> — try to resolve via the EPUB runtime resource loader.
     const linkTags = doc.querySelectorAll('link[rel="stylesheet"]');
     for (const link of Array.from(linkTags)) {
         const href = link.getAttribute('href');

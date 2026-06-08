@@ -104,7 +104,8 @@ export default defineConfig({
                     }
 
                     if (
-                        normalizedId.includes('/epubjs/')
+                        normalizedId.includes('/epubjs/') ||
+                        normalizedId.includes('/@likecoin/epub-ts/')
                     ) {
                         return 'epub-vendor'
                     }
