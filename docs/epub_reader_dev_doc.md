@@ -13,7 +13,7 @@
 | **桌面框架** | **Electron** | 深度集成 Windows API，支持托盘、快捷方式、原生对话框 |
 | **前端框架** | **React 18 + TypeScript** | 强类型保障配置逻辑准确性 |
 | **构建工具** | **Vite** | 极速 HMR |
-| **EPUB 渲染** | **epub.js** | 核心渲染引擎 |
+| **EPUB 渲染** | **@likecoin/epub-ts** | 核心渲染引擎（epub.js 安全分支） |
 | **本地存储** | **Dexie.js** (IndexedDB) | 离线书库与配置持久化 |
 | **UI 组件库** | **Radix UI + Lucid Icons** | 保证高自定义程度与无障碍支持 |
 
@@ -77,9 +77,8 @@ epub-reader/
 │       └── fontLoader.ts        # 字体加载器
 ├── public/
 │   └── fonts/                   # 内置字体文件
-├── package.json
+├── package.json                 # 打包配置在 build 字段
 ├── vite.config.ts
-├── electron-builder.json        # 打包配置
 └── tsconfig.json
 ```
 
@@ -582,17 +581,28 @@ class TranslateService {
 # 开发模式
 npm run dev          # Vite dev server + Electron
 
+# 开发门禁
+npm run typecheck    # 类型检查（独立于 build）
+npm run lint         # ESLint 检查
+npm test             # 运行测试
+npm run test:coverage # 测试覆盖率
+
 # 构建
 npm run build        # TypeScript 编译 + Vite 构建
-npm run package      # electron-builder 打包
+
+# 打包发布
+npm run dist         # 自动选择当前平台
+npm run dist:win     # Windows
+npm run dist:mac     # macOS
+npm run dist:linux   # Linux
 
 # 目标平台
-# Windows: .exe (NSIS installer) / .msi
+# Windows: .exe (NSIS installer)
 # macOS:   .dmg
 # Linux:   .AppImage / .deb
 ```
 
-**electron-builder 配置要点**：
+**electron-builder 配置要点**（位于 `package.json` 的 `build` 字段）：
 
 ```json
 {
@@ -614,10 +624,58 @@ npm run package      # electron-builder 打包
 |---|---|---|
 | `electron` | ^29.x | 桌面框架 |
 | `react` / `react-dom` | ^18.x | UI 框架 |
-| `epubjs` | ^0.3.x | EPUB 解析与渲染 |
+| `@likecoin/epub-ts` | ^0.6.x | EPUB 解析与渲染（epub.js 安全分支） |
 | `dexie` | ^4.x | IndexedDB 封装 |
 | `zustand` | ^5.x | 状态管理 |
 | `vite` | ^6.x | 构建工具 |
 | `vite-plugin-electron` | latest | Electron + Vite 集成 |
 | `electron-builder` | latest | 打包工具 |
 | `webdav` | ^5.x | WebDAV 客户端 (TODO) |
+
+---
+
+## 12. 测试覆盖率
+
+核心模块设有覆盖率门槛：
+
+| 模块 | statements | branches | functions | lines |
+|---|---|---|---|
+| 全局阈值 | 50% | 40% | 50% | 50% |
+
+运行覆盖率报告：
+```bash
+npm run test:coverage
+```
+
+覆盖范围包括：
+- `src/engine/render/**` — 渲染核心
+- `src/engine/core/**` — 引擎核心
+- `src/components/Reader/**` — 阅读器组件
+- `src/services/**` — 服务层
+- `src/hooks/useSelectionMenu.tsx` — 选区菜单
+
+CI 会自动验证覆盖率，低于阈值将阻断合并。
+
+---
+
+## 13. 依赖审计
+
+CI 自动执行 `npm audit --omit=dev --audit-level=high`，拦截生产依赖中的高危漏洞。
+
+**升级解析库前的安全检查清单**：
+
+项目依赖多个内容解析库（攻击面集中在不可信文档输入）：
+- `@likecoin/epub-ts` — EPUB 解析
+- `pdfjs-dist` — PDF 解析
+- `mammoth` — DOCX 解析
+- `marked` — Markdown 解析
+- `@lingo-reader/mobi-parser` — MOBI 解析
+
+升级这些库时：
+1. 运行 `npm audit --omit=dev` 确认漏洞修复
+2. 使用 `test-assets/samples/` 中的 smoke corpus 回归测试
+3. 验证格式兼容性（目录解析、章节跳转、资源加载）
+
+**已知安全改动**：
+- 2026-06：`epubjs@0.3.93` 替换为 `@likecoin/epub-ts@0.6.6`，消除 xmldom/lodash 传递依赖漏洞
+- 2026-06：`@xmldom/xmldom` 升级到 0.8.13，修复序列化漏洞（mammoth 传递依赖）
