@@ -1,5 +1,20 @@
 import { useSyncStore } from '@/stores/useSyncStore'
-import styles from '../LibraryView.module.css'
+import { SelectControl, type SelectControlOption } from './SelectControl'
+import { ToggleControl } from './ToggleControl'
+import styles from '../SettingsPanelV2.module.css'
+
+const SYNC_MODE_OPTIONS: SelectControlOption[] = [
+    { value: 'full', label: '完整备份（文件+数据+设置）' },
+    { value: 'data', label: '仅数据（进度/笔记/设置）' },
+    { value: 'files', label: '仅文件（书籍实体文件）' },
+]
+
+const RESTORE_MODE_OPTIONS: SelectControlOption[] = [
+    { value: 'auto', label: '自动（跟随备份包）' },
+    { value: 'full', label: '强制完整恢复' },
+    { value: 'data', label: '强制仅数据恢复' },
+    { value: 'files', label: '强制仅文件恢复' },
+]
 
 export function SyncSettingsTab() {
     const syncStore = useSyncStore()
@@ -8,37 +23,29 @@ export function SyncSettingsTab() {
         <div className={styles.syncPanel}>
             <label className={styles.settingRow}>
                 <span>同步模式</span>
-                <select
+                <SelectControl
+                    label="同步模式"
                     value={syncStore.syncMode}
-                    onChange={(event) => void syncStore.setConfig({ syncMode: event.target.value as 'full' | 'data' | 'files' })}
-                >
-                    <option value="full">完整备份（文件+数据+设置）</option>
-                    <option value="data">仅数据（进度/笔记/设置）</option>
-                    <option value="files">仅文件（书籍实体文件）</option>
-                </select>
+                    options={SYNC_MODE_OPTIONS}
+                    onChange={(value) => void syncStore.setConfig({ syncMode: value as 'full' | 'data' | 'files' })}
+                />
             </label>
             <label className={styles.settingRow}>
                 <span>恢复模式</span>
-                <select
+                <SelectControl
+                    label="恢复模式"
                     value={syncStore.restoreMode}
-                    onChange={(event) => void syncStore.setConfig({ restoreMode: event.target.value as 'auto' | 'full' | 'data' | 'files' })}
-                >
-                    <option value="auto">自动（跟随备份包）</option>
-                    <option value="full">强制完整恢复</option>
-                    <option value="data">强制仅数据恢复</option>
-                    <option value="files">强制仅文件恢复</option>
-                </select>
+                    options={RESTORE_MODE_OPTIONS}
+                    onChange={(value) => void syncStore.setConfig({ restoreMode: value as 'auto' | 'full' | 'data' | 'files' })}
+                />
             </label>
             <label className={styles.settingRow}>
                 <span>恢复前处理</span>
-                <label className={styles.checkboxRow}>
-                    <input
-                        type="checkbox"
-                        checked={syncStore.replaceBeforeRestore}
-                        onChange={(event) => void syncStore.setConfig({ replaceBeforeRestore: event.target.checked })}
-                    />
-                    先清空对应本地数据
-                </label>
+                <ToggleControl
+                    label="恢复前先清空对应本地数据"
+                    checked={syncStore.replaceBeforeRestore}
+                    onChange={(checked) => void syncStore.setConfig({ replaceBeforeRestore: checked })}
+                />
             </label>
             <label className={styles.settingRow}>
                 <span>服务器地址</span>

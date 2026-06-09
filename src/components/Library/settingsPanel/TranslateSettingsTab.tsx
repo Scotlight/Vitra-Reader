@@ -9,7 +9,17 @@ import {
     type TranslateConfig,
     type TranslateProvider,
 } from '@/services/translateService'
-import styles from '../LibraryView.module.css'
+import { SelectControl, type SelectControlOption } from './SelectControl'
+import { StepperControl } from './StepperControl'
+import { ToggleControl } from './ToggleControl'
+import styles from '../SettingsPanelV2.module.css'
+
+const TRANSLATE_PROVIDER_OPTIONS: SelectControlOption[] = [
+    { value: 'openai', label: 'OpenAI兼容' },
+    { value: 'ollama', label: 'Ollama兼容' },
+    { value: 'deepl', label: 'DeepL 官方' },
+    { value: 'deeplx', label: 'DeepLX兼容' },
+]
 
 export function TranslateSettingsTab() {
     const [translateConfig, setTranslateConfig] = useState<TranslateConfig>(DEFAULT_TRANSLATE_CONFIG)
@@ -88,20 +98,17 @@ export function TranslateSettingsTab() {
 
     return (
         <div className={styles.syncPanel}>
-            <div className={styles.syncStatus} style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+            <div className={`${styles.syncStatus} ${styles.inlineStatus}`}>
                 翻译服务配置（OpenAI/Ollama/DeepL/DeepLX 兼容）
             </div>
             <label className={styles.settingRow}>
                 <span>翻译 Provider</span>
-                <select
+                <SelectControl
+                    label="翻译 Provider"
                     value={translateConfig.provider}
-                    onChange={(event) => setTranslateConfig((prev) => ({ ...prev, provider: event.target.value as TranslateProvider }))}
-                >
-                    <option value="openai">OpenAI兼容</option>
-                    <option value="ollama">Ollama兼容</option>
-                    <option value="deepl">DeepL 官方</option>
-                    <option value="deeplx">DeepLX兼容</option>
-                </select>
+                    options={TRANSLATE_PROVIDER_OPTIONS}
+                    onChange={(value) => setTranslateConfig((prev) => ({ ...prev, provider: value as TranslateProvider }))}
+                />
             </label>
             <label className={styles.settingRow}>
                 <span>源语言</span>
@@ -235,35 +242,32 @@ export function TranslateSettingsTab() {
 
             <label className={styles.settingRow}>
                 <span>启用缓存</span>
-                <label className={styles.checkboxRow}>
-                    <input
-                        type="checkbox"
-                        checked={translateConfig.cacheEnabled}
-                        onChange={(event) => setTranslateConfig((prev) => ({ ...prev, cacheEnabled: event.target.checked }))}
-                    />
-                    本地缓存翻译结果
-                </label>
+                <ToggleControl
+                    label="启用本地翻译缓存"
+                    checked={translateConfig.cacheEnabled}
+                    onChange={(checked) => setTranslateConfig((prev) => ({ ...prev, cacheEnabled: checked }))}
+                />
             </label>
             <label className={styles.settingRow}>
                 <span>缓存时长(小时)</span>
-                <input
-                    className={styles.textInput}
-                    type="number"
+                <StepperControl
+                    label="缓存时长"
                     min={1}
                     max={24 * 365}
+                    step={1}
                     value={translateConfig.cacheTtlHours}
-                    onChange={(event) => setTranslateConfig((prev) => ({ ...prev, cacheTtlHours: Number(event.target.value) || prev.cacheTtlHours }))}
+                    onChange={(value) => setTranslateConfig((prev) => ({ ...prev, cacheTtlHours: value || prev.cacheTtlHours }))}
                 />
             </label>
             <label className={styles.settingRow}>
                 <span>缓存上限</span>
-                <input
-                    className={styles.textInput}
-                    type="number"
+                <StepperControl
+                    label="缓存上限"
                     min={50}
                     max={5000}
+                    step={50}
                     value={translateConfig.cacheMaxEntries}
-                    onChange={(event) => setTranslateConfig((prev) => ({ ...prev, cacheMaxEntries: Number(event.target.value) || prev.cacheMaxEntries }))}
+                    onChange={(value) => setTranslateConfig((prev) => ({ ...prev, cacheMaxEntries: value || prev.cacheMaxEntries }))}
                 />
             </label>
             <div className={styles.syncActions}>

@@ -17,6 +17,7 @@ type NavType = 'all' | 'fav' | 'notes' | 'highlight' | 'trash' | 'stats'
 
 interface LibrarySidebarProps {
     activeNav: NavType
+    isSettingsOpen: boolean
     setActiveNav: (nav: NavType) => void
     group: ReturnType<typeof useGroupManager>
     onOpenBook: (id: string) => void
@@ -30,6 +31,7 @@ const Icon = ({ src, className }: { src: string; className?: string }) => (
 
 export const LibrarySidebar = ({
     activeNav,
+    isSettingsOpen,
     setActiveNav,
     group,
     onOpenBook,
@@ -129,7 +131,7 @@ export const LibrarySidebar = ({
                     </div>
                 ))}
             </div>
-            <button className={styles.navItemBottom} onClick={onToggleSettings}>
+            <button className={`${styles.navItemBottom} ${isSettingsOpen ? styles.active : ''}`} onClick={onToggleSettings}>
                 <Icon className={styles.navIcon} src={settingsIcon} />设置
             </button>
         </aside>

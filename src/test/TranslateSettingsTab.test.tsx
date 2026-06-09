@@ -86,4 +86,36 @@ describe('TranslateSettingsTab', () => {
             )
         })
     })
+
+    it('切换 provider 后显示对应 Provider 字段', async () => {
+        const { findByDisplayValue, getByLabelText, getByText, queryByText } = render(<TranslateSettingsTab />)
+
+        await findByDisplayValue('stored-openai-key')
+        fireEvent.change(getByLabelText('翻译 Provider'), { target: { value: 'ollama' } })
+
+        expect(getByText('Ollama Endpoint')).toBeTruthy()
+        expect(getByText('Ollama Model')).toBeTruthy()
+        expect(queryByText('OpenAI兼容 API Key')).toBeNull()
+    })
+
+    it('缓存开关和缓存 stepper 会写入保存配置', async () => {
+        const { findByDisplayValue, getByRole } = render(<TranslateSettingsTab />)
+
+        await findByDisplayValue('stored-openai-key')
+        fireEvent.click(getByRole('switch', { name: '启用本地翻译缓存' }))
+        fireEvent.click(getByRole('button', { name: '缓存时长增加' }))
+        fireEvent.click(getByRole('button', { name: '缓存上限增加' }))
+        fireEvent.click(getByRole('button', { name: '保存翻译配置' }))
+
+        await waitFor(() => {
+            expect(translateMocks.saveTranslateConfig).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    cacheEnabled: false,
+                    cacheTtlHours: 169,
+                    cacheMaxEntries: 450,
+                }),
+                { allowInsecureKeyStorage: false },
+            )
+        })
+    })
 })

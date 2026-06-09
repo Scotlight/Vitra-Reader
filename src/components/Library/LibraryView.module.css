@@ -217,6 +217,10 @@
     overflow: hidden;
 }
 
+.settingsContent {
+    padding: 0;
+}
+
 .topbar {
     display: flex;
     align-items: center;

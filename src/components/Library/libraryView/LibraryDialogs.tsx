@@ -1,4 +1,3 @@
-import { SettingsPanel } from '../SettingsPanel'
 import { BookPropertiesModal } from '../BookPropertiesModal'
 import { CreateGroupModal, ManageGroupModal } from '../GroupModals'
 import type { BookMeta } from '@/services/storageService'
@@ -7,10 +6,6 @@ import type { LibraryDialogState } from './useLibraryViewState'
 import styles from '../LibraryView.module.css'
 
 interface LibraryDialogsProps {
-    systemFonts: string[]
-    loadingFonts: boolean
-    showSettings: boolean
-    onCloseSettings: () => void
     books: BookMeta[]
     showBookPropertiesModal: string | null
     onCloseBookProperties: () => void
@@ -36,10 +31,6 @@ interface LibraryDialogsProps {
 }
 
 export function LibraryDialogs({
-    systemFonts,
-    loadingFonts,
-    showSettings,
-    onCloseSettings,
     books,
     showBookPropertiesModal,
     onCloseBookProperties,
@@ -69,14 +60,6 @@ export function LibraryDialogs({
 
     return (
         <>
-            {showSettings && (
-                <SettingsPanel
-                    systemFonts={systemFonts}
-                    loadingFonts={loadingFonts}
-                    onClose={onCloseSettings}
-                />
-            )}
-
             {selectedBook && (
                 <BookPropertiesModal
                     book={selectedBook}

@@ -13,6 +13,7 @@ import { useLibraryMetaState } from './libraryView/useLibraryMetaState'
 import { useLibraryViewState } from './libraryView/useLibraryViewState'
 import { LibraryTopbar } from './libraryView/LibraryTopbar'
 import { LibraryDialogs } from './libraryView/LibraryDialogs'
+import { SettingsPanel } from './SettingsPanel'
 import styles from './LibraryView.module.css'
 
 export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { location: string; searchText?: string }) => void }) => {
@@ -228,30 +229,107 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         <div className={styles.libraryContainer}>
             <LibrarySidebar
                 activeNav={activeNav}
-                setActiveNav={setActiveNav}
+                setActiveNav={(nav) => {
+                    setShowSettings(false)
+                    setActiveNav(nav)
+                }}
                 group={group}
                 onOpenBook={onOpenBook}
                 onContextMenu={handleBookContextMenu}
-                onToggleSettings={() => setShowSettings((value) => !value)}
+                isSettingsOpen={showSettings}
+                onToggleSettings={() => setShowSettings(true)}
             />
 
-            <section className={styles.content}>
-                <LibraryTopbar
-                    keyword={keyword}
-                    sortModeLabel={sortModeLabel}
-                    isLoading={isLoading}
-                    onKeywordChange={setKeyword}
-                    onNextSortMode={nextSortMode}
-                    onRefresh={() => void loadBooks()}
-                    onToggleTheme={() => settings.updateSetting('themeId', settings.themeId === 'dark' ? 'light' : 'dark')}
-                    onImport={() => void handleImport()}
-                />
+            <section className={`${styles.content} ${showSettings ? styles.settingsContent : ''}`}>
+                {showSettings ? (
+                    <SettingsPanel
+                        systemFonts={systemFonts}
+                        loadingFonts={loadingFonts}
+                        onClose={() => setShowSettings(false)}
+                    />
+                ) : (
+                    <>
+                        <LibraryTopbar
+                            keyword={keyword}
+                            sortModeLabel={sortModeLabel}
+                            isLoading={isLoading}
+                            onKeywordChange={setKeyword}
+                            onNextSortMode={nextSortMode}
+                            onRefresh={() => void loadBooks()}
+                            onToggleTheme={() => settings.updateSetting('themeId', settings.themeId === 'dark' ? 'light' : 'dark')}
+                            onImport={() => void handleImport()}
+                        />
+
+                        <div className={styles.statusLine}>
+                            <span>{statusText}</span>
+                        </div>
+
+                        <div ref={setScrollContainer} className={styles.scrollArea} onContextMenu={handleBlankAreaContextMenu}>
+                            {activeNav === 'stats' ? (
+                                <ReadingStatsPanel />
+                            ) : (activeNav === 'highlight' || activeNav === 'notes') ? (
+                                <AnnotationList
+                                    activeNav={activeNav}
+                                    groupedHighlights={groupedHighlights}
+                                    groupedBookmarks={groupedBookmarks}
+                                    onOpenBook={onOpenBook}
+                                />
+                            ) : (
+                                <BookGrid
+                                    items={gridItems}
+                                    emptyMessage={emptyMessage}
+                                    progressMap={progressMap}
+                                    onOpenBook={onOpenBook}
+                                    onOpenGroup={(groupId) => {
+                                        setActiveNav('all')
+                                        setActiveGroupId(groupId)
+                                    }}
+                                    onContextMenu={handleBookContextMenu}
+                                    scrollContainer={scrollContainer}
+                                    sortable={showMixedHome || (activeNav === 'all' && Boolean(activeGroupId))}
+                                    sortContextKey={showMixedHome ? 'home' : activeGroupId ? `group:${activeGroupId}` : null}
+                                    onReorder={handleGridReorder}
+                                />
+                            )}
+                        </div>
+
+                        {blankContextMenu.visible && (
+                            <div
+                                className={styles.contextMenu}
+                                style={{ left: `${blankContextMenu.x}px`, top: `${blankContextMenu.y}px` }}
+                                onClick={(event) => event.stopPropagation()}
+                            >
+                                <button
+                                    className={styles.contextMenuItem}
+                                    onClick={() => {
+                                        setBlankContextMenu({ visible: false, x: 0, y: 0 })
+                                        openCreateGroupModal()
+                                    }}
+                                >
+                                    新建分组
+                                </button>
+                            </div>
+                        )}
+
+                        <BookContextMenu
+                            contextMenu={contextMenu}
+                            setContextMenu={setContextMenu}
+                            trashBookIds={trashBookIds}
+                            favoriteBookIds={favoriteBookIds}
+                            activeGroupId={activeGroupId}
+                            groupBookMap={groupBookMap}
+                            onRestoreFromTrash={restoreFromTrash}
+                            onPermanentDelete={handlePermanentDeleteBook}
+                            onOpenProperties={openBookPropertiesModal}
+                            onToggleFavorite={toggleFavorite}
+                            onAddToGroup={addBookToGroup}
+                            onRemoveFromGroup={removeBookFromActiveGroup}
+                            onMoveToTrash={moveToTrash}
+                        />
+                    </>
+                )}
 
                 <LibraryDialogs
-                    systemFonts={systemFonts}
-                    loadingFonts={loadingFonts}
-                    showSettings={showSettings}
-                    onCloseSettings={() => setShowSettings(false)}
                     books={books}
                     showBookPropertiesModal={showBookPropertiesModal}
                     onCloseBookProperties={() => setShowBookPropertiesModal(null)}
@@ -274,73 +352,6 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                     dialogState={dialogState}
                     onCloseDialog={closeDialog}
                     onConfirmDialog={() => void handleDialogConfirm()}
-                />
-
-                <div className={styles.statusLine}>
-                    <span>{statusText}</span>
-                </div>
-
-                <div ref={setScrollContainer} className={styles.scrollArea} onContextMenu={handleBlankAreaContextMenu}>
-                    {activeNav === 'stats' ? (
-                        <ReadingStatsPanel />
-                    ) : (activeNav === 'highlight' || activeNav === 'notes') ? (
-                        <AnnotationList
-                            activeNav={activeNav}
-                            groupedHighlights={groupedHighlights}
-                            groupedBookmarks={groupedBookmarks}
-                            onOpenBook={onOpenBook}
-                        />
-                    ) : (
-                        <BookGrid
-                            items={gridItems}
-                            emptyMessage={emptyMessage}
-                            progressMap={progressMap}
-                            onOpenBook={onOpenBook}
-                            onOpenGroup={(groupId) => {
-                                setActiveNav('all')
-                                setActiveGroupId(groupId)
-                            }}
-                            onContextMenu={handleBookContextMenu}
-                            scrollContainer={scrollContainer}
-                            sortable={showMixedHome || (activeNav === 'all' && Boolean(activeGroupId))}
-                            sortContextKey={showMixedHome ? 'home' : activeGroupId ? `group:${activeGroupId}` : null}
-                            onReorder={handleGridReorder}
-                        />
-                    )}
-                </div>
-
-                {blankContextMenu.visible && (
-                    <div
-                        className={styles.contextMenu}
-                        style={{ left: `${blankContextMenu.x}px`, top: `${blankContextMenu.y}px` }}
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <button
-                            className={styles.contextMenuItem}
-                            onClick={() => {
-                                setBlankContextMenu({ visible: false, x: 0, y: 0 })
-                                openCreateGroupModal()
-                            }}
-                        >
-                            新建分组
-                        </button>
-                    </div>
-                )}
-
-                <BookContextMenu
-                    contextMenu={contextMenu}
-                    setContextMenu={setContextMenu}
-                    trashBookIds={trashBookIds}
-                    favoriteBookIds={favoriteBookIds}
-                    activeGroupId={activeGroupId}
-                    groupBookMap={groupBookMap}
-                    onRestoreFromTrash={restoreFromTrash}
-                    onPermanentDelete={handlePermanentDeleteBook}
-                    onOpenProperties={openBookPropertiesModal}
-                    onToggleFavorite={toggleFavorite}
-                    onAddToGroup={addBookToGroup}
-                    onRemoveFromGroup={removeBookFromActiveGroup}
-                    onMoveToTrash={moveToTrash}
                 />
             </section>
         </div>

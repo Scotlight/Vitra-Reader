@@ -1,0 +1,744 @@
+.embeddedShell {
+    --settings-bg: var(--bg-primary);
+    --settings-panel: var(--panel-bg);
+    --settings-panel-solid: var(--bg-secondary);
+    --settings-ink: var(--text-primary);
+    --settings-muted: var(--text-secondary);
+    --settings-border: var(--border-color);
+    --settings-accent: var(--accent-color);
+    --settings-control-bg: color-mix(in srgb, var(--panel-bg) 86%, var(--bg-primary));
+    --settings-control-hover: color-mix(in srgb, var(--accent-color) 16%, transparent);
+    --settings-icon-filter: none;
+    --settings-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    overflow: hidden;
+    background: var(--settings-bg);
+    color: var(--settings-ink);
+}
+
+[data-theme='dark'] .embeddedShell {
+    --settings-icon-filter: brightness(0) invert(1);
+}
+
+.overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    overflow: auto;
+    background: rgba(17, 24, 39, 0.42);
+}
+
+.stage {
+    width: min(1320px, calc(100vw - 36px));
+    height: min(820px, calc(100vh - 36px));
+    min-height: 620px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgba(17, 24, 39, 0.18);
+    border-radius: 14px;
+    background: #f4f7f9;
+    color: #1e293b;
+    box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+}
+
+.titlebar {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px 0 18px;
+    flex: 0 0 auto;
+    background: #1f2937;
+    color: #f8fafc;
+}
+
+.titleLogo {
+    width: 22px;
+    height: 22px;
+}
+
+.titleText {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.closeButton {
+    margin-left: auto;
+    width: 32px;
+    height: 28px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: currentColor;
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+}
+
+.closeButton:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.appFrame {
+    min-height: 0;
+    flex: 1;
+    display: grid;
+    grid-template-columns: 220px 190px minmax(0, 1fr);
+}
+
+.primarySidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 22px 18px;
+    border-right: 1px solid #e2e8f0;
+    background: #eef3f6;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 2px 4px 12px;
+}
+
+.brandLogo {
+    width: 38px;
+    height: 38px;
+}
+
+.brandName {
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.primaryNav {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.primaryNavItem,
+.primarySetting {
+    border: none;
+    border-radius: 999px;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    background: transparent;
+    color: #334155;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: left;
+}
+
+.primarySetting {
+    margin-top: auto;
+    background: #0b9ba1;
+    color: #ffffff;
+    box-shadow: 0 10px 24px rgba(11, 155, 161, 0.24);
+}
+
+.navIcon {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    filter: var(--settings-icon-filter);
+    opacity: 0.86;
+}
+
+.settingsRail {
+    padding: 28px 16px;
+    border-right: 1px solid var(--settings-border);
+    background: var(--settings-panel);
+    backdrop-filter: blur(var(--ui-blur));
+    -webkit-backdrop-filter: blur(var(--ui-blur));
+}
+
+.railTitle {
+    margin: 0 0 18px;
+    color: var(--settings-ink);
+    font-size: 24px;
+    font-weight: 800;
+}
+
+.railMenu {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.railItem {
+    width: 100%;
+    min-height: 40px;
+    border: none;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 12px;
+    background: transparent;
+    color: var(--settings-muted);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: left;
+}
+
+.railItem:hover {
+    background: var(--settings-control-hover);
+    color: var(--settings-ink);
+}
+
+.railItemActive {
+    background: var(--settings-accent);
+    color: #ffffff;
+}
+
+.railItemActive .navIcon {
+    filter: brightness(0) invert(1);
+    opacity: 1;
+}
+
+.content {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 28px 30px 22px;
+    background: var(--settings-bg);
+}
+
+.contentHeader {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 20px;
+}
+
+.pageTitle {
+    margin: 0;
+    color: var(--settings-ink);
+    font-size: 28px;
+    font-weight: 850;
+    line-height: 1.1;
+}
+
+.pageHint {
+    margin: 6px 0 0;
+    color: var(--settings-muted);
+    font-size: 13px;
+}
+
+.contentScroll {
+    min-height: 0;
+    flex: 1;
+    overflow: auto;
+    padding-right: 4px;
+}
+
+.cardGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(280px, 1fr));
+    align-items: start;
+    gap: 18px;
+}
+
+.settingsCard {
+    border: 1px solid var(--settings-border);
+    border-radius: 12px;
+    background: var(--settings-panel);
+    box-shadow: var(--settings-shadow);
+    overflow: hidden;
+    backdrop-filter: blur(var(--ui-blur));
+    -webkit-backdrop-filter: blur(var(--ui-blur));
+}
+
+.cardHeader {
+    padding: 18px 20px 8px;
+}
+
+.cardTitle {
+    margin: 0;
+    color: var(--settings-ink);
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.cardBody {
+    padding: 0 20px 14px;
+}
+
+.settingRow {
+    min-height: 56px;
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid var(--settings-border);
+}
+
+.settingRow:last-child {
+    border-bottom: none;
+}
+
+.settingLabel {
+    min-width: 0;
+    color: var(--settings-ink);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.settingValue {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.themeSwatches {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.themeButton {
+    width: 28px;
+    height: 28px;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: inset 0 0 0 1px var(--settings-border);
+}
+
+.themeButtonActive {
+    border-color: var(--settings-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--settings-accent) 24%, transparent);
+}
+
+.colorInput {
+    width: 88px;
+    height: 36px;
+    border: 1px solid var(--settings-border);
+    border-radius: 8px;
+    background: var(--settings-control-bg);
+    cursor: pointer;
+}
+
+.miniButton {
+    min-height: 34px;
+    border: 1px solid var(--settings-border);
+    border-radius: 8px;
+    padding: 0 12px;
+    background: var(--settings-control-bg);
+    color: var(--settings-ink);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.miniButton:hover {
+    border-color: var(--settings-accent);
+    color: var(--settings-ink);
+}
+
+.bottomRow {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding-top: 18px;
+}
+
+.bottomActions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.resetButton,
+.actionButton,
+.applyButton {
+    min-height: 38px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.resetButton {
+    border: 1px solid var(--settings-border);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+    background: var(--settings-control-bg);
+    color: var(--settings-ink);
+}
+
+.actionButton {
+    border: 1px solid var(--settings-border);
+    padding: 0 18px;
+    background: var(--settings-control-bg);
+    color: var(--settings-ink);
+}
+
+.applyButton {
+    border: none;
+    padding: 0 22px;
+    background: var(--settings-accent);
+    color: #ffffff;
+    box-shadow: 0 10px 22px rgba(11, 155, 161, 0.22);
+}
+
+.legacyPanel {
+    padding-top: 4px;
+}
+
+.legacyPanel :global(.settingRow) {
+    grid-template-columns: 128px minmax(0, 1fr);
+}
+
+.syncPanel {
+    display: flex;
+    flex-direction: column;
+}
+
+.syncPanel > .settingRow {
+    grid-template-columns: minmax(128px, 0.42fr) minmax(0, 1fr);
+}
+
+.syncPanel .settingRow > span {
+    color: var(--settings-ink);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.syncPanel .selectControl,
+.syncPanel .textInput {
+    width: min(360px, 100%);
+}
+
+.textInput {
+    width: 100%;
+    min-width: 0;
+    height: 37px;
+    border: 1px solid var(--settings-border);
+    border-radius: 8px;
+    padding: 0 12px;
+    background: var(--settings-control-bg);
+    color: var(--settings-ink);
+    font-size: 14px;
+    font-weight: 650;
+    outline: none;
+}
+
+.textInput:focus,
+.selectControl select:focus {
+    border-color: var(--settings-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--settings-accent) 22%, transparent);
+}
+
+.textInput::placeholder {
+    color: var(--settings-muted);
+    font-weight: 600;
+}
+
+.checkboxRow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--settings-ink);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.checkboxRow input[type='checkbox'] {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--settings-accent);
+}
+
+.syncActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 14px;
+}
+
+.smallBtn,
+.syncPrimaryBtn {
+    min-height: 36px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.smallBtn {
+    border: 1px solid var(--settings-border);
+    padding: 0 12px;
+    background: var(--settings-control-bg);
+    color: var(--settings-ink);
+}
+
+.smallBtn:hover:not(:disabled) {
+    border-color: var(--settings-accent);
+    color: var(--settings-ink);
+}
+
+.syncPrimaryBtn {
+    border: none;
+    padding: 0 14px;
+    background: var(--settings-accent);
+    color: #ffffff;
+    box-shadow: 0 10px 22px rgba(11, 155, 161, 0.18);
+}
+
+.smallBtn:disabled,
+.syncPrimaryBtn:disabled {
+    cursor: not-allowed;
+    opacity: 0.62;
+    box-shadow: none;
+}
+
+.syncStatus {
+    margin-top: 10px;
+    border: 1px solid var(--settings-border);
+    border-radius: 8px;
+    padding: 9px 10px;
+    background: var(--settings-control-bg);
+    color: var(--settings-ink);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.inlineStatus {
+    margin: 0 0 10px;
+    border-color: var(--settings-border);
+    background: var(--settings-control-bg);
+    font-weight: 800;
+}
+
+.infoList {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.infoRow {
+    min-height: 48px;
+    display: grid;
+    grid-template-columns: 118px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--settings-border);
+    color: var(--settings-ink);
+    font-size: 14px;
+}
+
+.infoRow:last-child {
+    border-bottom: none;
+}
+
+.infoRow span {
+    color: var(--settings-muted);
+    font-weight: 700;
+}
+
+.selectControl {
+    width: 176px;
+    height: 37px;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.selectControl select {
+    width: 100%;
+    height: 100%;
+    border: 1px solid var(--settings-border);
+    border-radius: 8px;
+    appearance: none;
+    background: var(--settings-control-bg);
+    color: var(--settings-ink);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 0 34px 0 12px;
+}
+
+.selectChevron {
+    position: absolute;
+    right: 12px;
+    width: 12px;
+    height: 12px;
+    pointer-events: none;
+    opacity: 0.72;
+}
+
+.stepperControl {
+    width: 176px;
+    height: 37px;
+    border: 1px solid var(--settings-border);
+    border-radius: 8px;
+    display: inline-grid;
+    grid-template-columns: 38px 1fr 38px;
+    align-items: center;
+    background: var(--settings-control-bg);
+    overflow: hidden;
+}
+
+.stepperButton {
+    height: 100%;
+    border: none;
+    background: transparent;
+    color: var(--settings-ink);
+    cursor: pointer;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.stepperButton:hover:not(:disabled) {
+    background: var(--settings-control-hover);
+    color: var(--settings-ink);
+}
+
+.stepperButton:disabled {
+    color: var(--settings-muted);
+    cursor: not-allowed;
+}
+
+.stepperValue {
+    color: var(--settings-ink);
+    font-size: 14px;
+    font-weight: 800;
+    text-align: center;
+}
+
+.toggleControl {
+    width: 42px;
+    height: 24px;
+    border: none;
+    border-radius: 999px;
+    position: relative;
+    background: color-mix(in srgb, var(--settings-muted) 42%, transparent);
+    cursor: pointer;
+    transition: background var(--ui-transition-speed, 0.2s);
+}
+
+.toggleControl:disabled {
+    cursor: not-allowed;
+    opacity: 0.62;
+}
+
+.toggleKnob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: var(--settings-ink);
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.24);
+    transition: transform var(--ui-transition-speed, 0.2s);
+}
+
+.toggleControlOn {
+    background: var(--settings-accent);
+}
+
+.toggleControlOn .toggleKnob {
+    transform: translateX(18px);
+}
+
+@media (max-width: 1120px) {
+    .stage {
+        min-height: 0;
+    }
+
+    .appFrame {
+        grid-template-columns: 180px minmax(150px, 180px) minmax(0, 1fr);
+    }
+
+    .cardGrid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 820px) {
+    .stage {
+        height: calc(100vh - 28px);
+        width: calc(100vw - 28px);
+    }
+
+    .appFrame,
+    .embeddedShell {
+        grid-template-columns: 1fr;
+        overflow: auto;
+    }
+
+    .primarySidebar,
+    .settingsRail {
+        border-right: none;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .settingsRail {
+        padding: 18px;
+    }
+
+    .railMenu {
+        flex-direction: row;
+        overflow-x: auto;
+    }
+
+    .railItem {
+        width: auto;
+        flex: 0 0 auto;
+    }
+
+    .content {
+        overflow: visible;
+        padding: 22px 18px;
+    }
+
+    .contentScroll {
+        overflow: visible;
+    }
+
+    .settingRow {
+        grid-template-columns: 1fr;
+        align-items: start;
+        padding: 12px 0;
+    }
+
+    .settingValue {
+        justify-content: flex-start;
+    }
+
+    .bottomRow {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .bottomActions {
+        justify-content: flex-end;
+    }
+}
