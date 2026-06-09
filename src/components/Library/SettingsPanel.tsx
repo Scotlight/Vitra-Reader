@@ -3,8 +3,8 @@ import { useSettingsStore } from '@/stores/useSettingsStore'
 import { AboutSettingsCards } from './settingsPanel/AboutSettingsCards'
 import { DataSettingsCards } from './settingsPanel/DataSettingsCards'
 import { DisplaySettingsCards } from './settingsPanel/DisplaySettingsCards'
+import { ExternalConnectionSettingsCards } from './settingsPanel/ExternalConnectionSettingsCards'
 import { GeneralSettingsCards } from './settingsPanel/GeneralSettingsCards'
-import { LibrarySettingsCards } from './settingsPanel/LibrarySettingsCards'
 import { SettingsPanelShell, type SettingsRail } from './settingsPanel/SettingsPanelShell'
 
 interface SettingsPanelProps {
@@ -35,7 +35,7 @@ export const SettingsPanel = ({ systemFonts, loadingFonts, onClose }: SettingsPa
                 />
             )
         }
-        if (activeRail === 'library') return <LibrarySettingsCards />
+        if (activeRail === 'externalConnection') return <ExternalConnectionSettingsCards />
         if (activeRail === 'data') return <DataSettingsCards />
         if (activeRail === 'about') return <AboutSettingsCards />
         return <GeneralSettingsCards onClose={onClose} onReset={resetSettings} settings={settings} />

@@ -3,7 +3,7 @@ import { SettingRow } from './SettingRow'
 import { TranslateSettingsTab } from './TranslateSettingsTab'
 import styles from '../SettingsPanelV2.module.css'
 
-export function LibrarySettingsCards() {
+export function ExternalConnectionSettingsCards() {
     return (
         <div className={styles.singleCardGrid}>
             <LegacySettingsCard title="翻译服务">
