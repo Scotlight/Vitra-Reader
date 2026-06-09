@@ -21,6 +21,7 @@ export interface ReaderBookSessionState {
     readonly bookFormat: BookFormat
     readonly bookTitleText: string
     readonly currentProgress: number
+    readonly initialSectionHref: string
     readonly isReady: boolean
     readonly paginatedParams: ReaderPaginatedParams
     readonly provider: ContentProvider | null
@@ -32,6 +33,7 @@ export const INITIAL_READER_BOOK_SESSION_STATE: ReaderBookSessionState = {
     bookFormat: 'epub',
     bookTitleText: 'Reading',
     currentProgress: 0,
+    initialSectionHref: '',
     isReady: false,
     paginatedParams: INITIAL_PAGINATED_PARAMS,
     provider: null,
@@ -55,10 +57,12 @@ export async function loadReaderBookSession(
         const provider = await openReaderProvider(bookId, bookMeta?.title || bookId, file.data as ArrayBuffer, format)
         const toc = resolveSessionToc(provider)
         const initialLocation = resolveInitialLocation(provider, progress?.location)
+        const initialSectionHref = resolveInitialSectionHref(provider, initialLocation.spineIndex)
         return {
             bookFormat: format,
             bookTitleText: bookTitle,
             currentProgress: progressValue,
+            initialSectionHref,
             isReady: true,
             paginatedParams: resolvePaginatedParams(format, pageTurnMode, initialLocation),
             provider,
@@ -116,6 +120,11 @@ function resolveInitialLocation(provider: ContentProvider, location?: string) {
     }
     const spineIndex = provider.getSpineIndexByHref(location)
     return { spineIndex: spineIndex >= 0 ? spineIndex : 0, position: 0 }
+}
+
+export function resolveInitialSectionHref(provider: Pick<ContentProvider, 'getSpineItems'>, spineIndex: number): string {
+    const spineItems = provider.getSpineItems()
+    return spineItems[Math.max(0, Math.min(spineIndex, spineItems.length - 1))]?.href || ''
 }
 
 function resolveScrollParams(

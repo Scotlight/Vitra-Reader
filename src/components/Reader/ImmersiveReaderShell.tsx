@@ -110,14 +110,16 @@ export function ImmersiveReaderShell({
     toggleSettingsPanel,
 }: ImmersiveReaderShellProps) {
     const [chromeActive, setChromeActive] = useState(true)
+    const [tocPinned, setTocPinned] = useState(false)
     const activeChromeClass = chromeActive ? styles.activeChrome : ''
+    const tocPinnedClass = tocPinned ? styles.tocCapsulePinned : ''
     const tocListRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
-        if (!chromeActive || activeTab !== 'toc') return
+        if ((!chromeActive && !tocPinned) || activeTab !== 'toc') return
         const cancel = scheduleCenterActiveToc(() => tocListRef.current)
         return () => cancel()
-    }, [chromeActive, activeTab, currentSectionHref, toc.length])
+    }, [chromeActive, tocPinned, activeTab, currentSectionHref, toc.length])
 
     useReaderTabShortcut({ enabled: chromeActive, activeTab, onTabChange })
     const progressWidth = resolveProgressWidth(progressLabel)
@@ -161,7 +163,16 @@ export function ImmersiveReaderShell({
                 </div>
             </div>
 
-            <div ref={tocListRef} className={`${styles.glassCapsule} ${styles.tocCapsule} ${activeChromeClass}`} data-immersive-reader-chrome="true" data-active-tab={activeTab}>
+            <div ref={tocListRef} className={`${styles.glassCapsule} ${styles.tocCapsule} ${activeChromeClass} ${tocPinnedClass}`} data-immersive-reader-chrome="true" data-active-tab={activeTab}>
+                <button
+                    type="button"
+                    className={styles.tocPinButton}
+                    onClick={() => setTocPinned((current) => !current)}
+                    aria-label={tocPinned ? '切换为悬浮目录' : '切换为常驻目录'}
+                    title={tocPinned ? '切换为悬浮目录' : '切换为常驻目录'}
+                >
+                    {tocPinned ? '悬浮' : '常驻'}
+                </button>
                 {panelContent}
             </div>
 

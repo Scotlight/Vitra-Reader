@@ -48,6 +48,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         bookFormat,
         bookTitleText,
         currentProgress,
+        initialSectionHref,
         isReady,
         paginatedParams,
         provider,
@@ -114,6 +115,13 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     useEffect(() => {
         setModeSwitchAnchor(null)
     }, [bookId])
+    useEffect(() => {
+        setCurrentSectionHref('')
+    }, [bookId])
+    useEffect(() => {
+        if (!isReady) return
+        setCurrentSectionHref(normalizeTocHref(initialSectionHref))
+    }, [initialSectionHref, isReady])
     const {
         closePanels,
         handleSearch,

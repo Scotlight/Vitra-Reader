@@ -134,6 +134,35 @@
     transition: width 0.28s ease, max-height 0.28s ease;
 }
 
+.tocCapsulePinned {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(-50%) translateX(0);
+}
+
+.tocPinButton {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    min-width: 54px;
+    height: 30px;
+    border: 1px solid color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 14%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--reader-bg-color, var(--reader-bg)) 82%, transparent);
+    color: var(--reader-text-color, var(--reader-text));
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 760;
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+}
+
+.tocPinButton:hover {
+    color: var(--accent-color, #d96c4e);
+    background: color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 8%, transparent);
+}
+
 /* 目录=现尺寸；搜索/标注内容更宽更高，胶囊随 activeTab 变大 */
 .tocCapsule[data-active-tab='search'],
 .tocCapsule[data-active-tab='annotations'] {
@@ -276,7 +305,8 @@
 
 .leftSidebarTrigger:hover ~ .tocCapsule,
 .tocCapsule:hover,
-.tocCapsule.activeChrome {
+.tocCapsule.activeChrome,
+.tocCapsule.tocCapsulePinned {
     transform: translateY(-50%) translateX(0);
 }
 
