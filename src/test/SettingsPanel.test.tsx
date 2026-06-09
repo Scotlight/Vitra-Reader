@@ -100,13 +100,13 @@ describe('SettingsPanel', () => {
         expect(settingsMocks.resetToDefaults).toHaveBeenCalledTimes(1)
     })
 
-    it('取消和应用都会关闭面板', () => {
+    it('完成会关闭面板，且不显示误导性的取消按钮', () => {
         const onClose = vi.fn()
         const { view } = renderSettingsPanel(onClose)
 
-        fireEvent.click(view.getByRole('button', { name: '取消' }))
-        fireEvent.click(view.getByRole('button', { name: '应用' }))
+        expect(view.queryByRole('button', { name: '取消' })).toBeNull()
+        fireEvent.click(view.getByRole('button', { name: '完成' }))
 
-        expect(onClose).toHaveBeenCalledTimes(2)
+        expect(onClose).toHaveBeenCalledTimes(1)
     })
 })

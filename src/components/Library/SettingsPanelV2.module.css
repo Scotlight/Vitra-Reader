@@ -372,7 +372,6 @@
 }
 
 .resetButton,
-.actionButton,
 .applyButton {
     min-height: 38px;
     border-radius: 8px;
@@ -387,13 +386,6 @@
     align-items: center;
     gap: 8px;
     padding: 0 14px;
-    background: var(--settings-control-bg);
-    color: var(--settings-ink);
-}
-
-.actionButton {
-    border: 1px solid var(--settings-border);
-    padding: 0 18px;
     background: var(--settings-control-bg);
     color: var(--settings-ink);
 }

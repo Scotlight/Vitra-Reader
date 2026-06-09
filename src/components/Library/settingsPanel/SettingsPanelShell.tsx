@@ -76,11 +76,8 @@ export function SettingsPanelShell({
                         重置默认
                     </button>
                     <div className={styles.bottomActions}>
-                        <button type="button" className={styles.actionButton} onClick={onClose}>
-                            取消
-                        </button>
                         <button type="button" className={styles.applyButton} onClick={onClose}>
-                            应用
+                            完成
                         </button>
                     </div>
                 </div>
