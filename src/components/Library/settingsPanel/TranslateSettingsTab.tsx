@@ -1,17 +1,9 @@
-import { useEffect, useState } from 'react'
-import {
-    DEFAULT_TRANSLATE_CONFIG,
-    clearTranslationCache,
-    getProviderLabel,
-    loadTranslateConfig,
-    saveTranslateConfig,
-    translateText,
-    type TranslateConfig,
-    type TranslateProvider,
-} from '@/services/translateService'
+import type { TranslateProvider } from '@/services/translateService'
 import { SelectControl, type SelectControlOption } from './SelectControl'
 import { StepperControl } from './StepperControl'
 import { ToggleControl } from './ToggleControl'
+import { TranslateProviderFields } from './TranslateProviderFields'
+import { useTranslateSettings } from './useTranslateSettings'
 import styles from '../SettingsPanelV2.module.css'
 
 const TRANSLATE_PROVIDER_OPTIONS: SelectControlOption[] = [
@@ -22,79 +14,19 @@ const TRANSLATE_PROVIDER_OPTIONS: SelectControlOption[] = [
 ]
 
 export function TranslateSettingsTab() {
-    const [translateConfig, setTranslateConfig] = useState<TranslateConfig>(DEFAULT_TRANSLATE_CONFIG)
-    const [translateSaving, setTranslateSaving] = useState(false)
-    const [translateTesting, setTranslateTesting] = useState(false)
-    const [translateStatus, setTranslateStatus] = useState('')
-    const [safeStorageAvailable, setSafeStorageAvailable] = useState<boolean | null>(null)
-    const [allowInsecureKeyStorage, setAllowInsecureKeyStorage] = useState(false)
-
-    useEffect(() => {
-        let active = true
-        const api = window.electronAPI
-        void loadTranslateConfig().then((config) => {
-            if (active) setTranslateConfig(config)
-        })
-        if (api?.safeStorageIsAvailable) {
-            void api.safeStorageIsAvailable()
-                .then((available) => {
-                    if (active) setSafeStorageAvailable(available)
-                })
-                .catch(() => {
-                    if (active) setSafeStorageAvailable(false)
-                })
-        } else {
-            setSafeStorageAvailable(false)
-        }
-        return () => { active = false }
-    }, [])
-
-    const hasTranslateApiKey = translateConfig.deeplApiKey.trim().length > 0 || translateConfig.openaiApiKey.trim().length > 0
-    const shouldShowKeyStorageWarning = safeStorageAvailable === false && hasTranslateApiKey
-
-    const handleSaveTranslateConfig = async () => {
-        setTranslateSaving(true)
-        setTranslateStatus('保存翻译配置中...')
-        try {
-            const saved = await saveTranslateConfig(translateConfig, { allowInsecureKeyStorage })
-            setTranslateConfig(saved)
-            if (safeStorageAvailable === false && hasTranslateApiKey && !allowInsecureKeyStorage) {
-                setTranslateStatus('翻译配置已保存，API Key 未写入本地')
-            } else {
-                setTranslateStatus('翻译配置已保存')
-            }
-        } catch (error: unknown) {
-            setTranslateStatus(`保存失败: ${error instanceof Error ? error.message : String(error)}`)
-        } finally {
-            setTranslateSaving(false)
-        }
-    }
-
-    const handleTestTranslate = async () => {
-        setTranslateTesting(true)
-        setTranslateStatus('测试翻译中...')
-        try {
-            const result = await translateText('Hello world', translateConfig)
-            if (!result.ok) {
-                setTranslateStatus(`测试失败: ${result.error || '未知错误'}`)
-                return
-            }
-            setTranslateStatus(`测试成功 (${getProviderLabel(result.provider)}${result.fromCache ? '，缓存命中' : ''}): ${result.translatedText}`)
-        } catch (error: unknown) {
-            setTranslateStatus(`测试失败: ${error instanceof Error ? error.message : String(error)}`)
-        } finally {
-            setTranslateTesting(false)
-        }
-    }
-
-    const handleClearTranslationCache = async () => {
-        try {
-            await clearTranslationCache()
-            setTranslateStatus('翻译缓存已清空')
-        } catch (error: unknown) {
-            setTranslateStatus(`清空缓存失败: ${error instanceof Error ? error.message : String(error)}`)
-        }
-    }
+    const {
+        allowInsecureKeyStorage,
+        handleClearTranslationCache,
+        handleSaveTranslateConfig,
+        handleTestTranslate,
+        setAllowInsecureKeyStorage,
+        setTranslateConfig,
+        shouldShowKeyStorageWarning,
+        translateConfig,
+        translateSaving,
+        translateStatus,
+        translateTesting,
+    } = useTranslateSettings()
 
     return (
         <div className={styles.syncPanel}>
@@ -131,97 +63,10 @@ export function TranslateSettingsTab() {
                 />
             </label>
 
-            {translateConfig.provider === 'deepl' && (
-                <>
-                    <label className={styles.settingRow}>
-                        <span>DeepL API Key</span>
-                        <input
-                            className={styles.textInput}
-                            type="password"
-                            value={translateConfig.deeplApiKey}
-                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, deeplApiKey: event.target.value }))}
-                        />
-                    </label>
-                    <label className={styles.settingRow}>
-                        <span>DeepL Endpoint</span>
-                        <input
-                            className={styles.textInput}
-                            type="text"
-                            value={translateConfig.deeplEndpoint}
-                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, deeplEndpoint: event.target.value }))}
-                        />
-                    </label>
-                </>
-            )}
-
-            {translateConfig.provider === 'openai' && (
-                <>
-                    <label className={styles.settingRow}>
-                        <span>OpenAI兼容 API Key</span>
-                        <input
-                            className={styles.textInput}
-                            type="password"
-                            value={translateConfig.openaiApiKey}
-                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, openaiApiKey: event.target.value }))}
-                        />
-                    </label>
-                    <label className={styles.settingRow}>
-                        <span>OpenAI兼容 Endpoint</span>
-                        <input
-                            className={styles.textInput}
-                            type="text"
-                            value={translateConfig.openaiEndpoint}
-                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, openaiEndpoint: event.target.value }))}
-                        />
-                    </label>
-                    <label className={styles.settingRow}>
-                        <span>Model</span>
-                        <input
-                            className={styles.textInput}
-                            type="text"
-                            value={translateConfig.openaiModel}
-                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, openaiModel: event.target.value }))}
-                        />
-                    </label>
-                </>
-            )}
-
-            {translateConfig.provider === 'ollama' && (
-                <>
-                    <label className={styles.settingRow}>
-                        <span>Ollama Endpoint</span>
-                        <input
-                            className={styles.textInput}
-                            type="text"
-                            value={translateConfig.ollamaEndpoint}
-                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, ollamaEndpoint: event.target.value }))}
-                        />
-                    </label>
-                    <label className={styles.settingRow}>
-                        <span>Ollama Model</span>
-                        <input
-                            className={styles.textInput}
-                            type="text"
-                            value={translateConfig.ollamaModel}
-                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, ollamaModel: event.target.value }))}
-                        />
-                    </label>
-                </>
-            )}
-
-            {translateConfig.provider === 'deeplx' && (
-                <>
-                    <label className={styles.settingRow}>
-                        <span>DeepLX Endpoint</span>
-                        <input
-                            className={styles.textInput}
-                            type="text"
-                            value={translateConfig.deeplxEndpoint}
-                            onChange={(event) => setTranslateConfig((prev) => ({ ...prev, deeplxEndpoint: event.target.value }))}
-                        />
-                    </label>
-                </>
-            )}
+            <TranslateProviderFields
+                translateConfig={translateConfig}
+                setTranslateConfig={setTranslateConfig}
+            />
 
             {shouldShowKeyStorageWarning && (
                 <div className={styles.settingRow}>
