@@ -1,5 +1,9 @@
 import { motion } from 'framer-motion'
-import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type {
+    DragEvent as ReactDragEvent,
+    MouseEvent as ReactMouseEvent,
+    PointerEvent as ReactPointerEvent,
+} from 'react'
 import { BookFormatPlaceholder } from '../BookFormatPlaceholder'
 import type { LibraryGridItem } from '../BookGrid'
 import { LazyCoverImage } from './LazyCoverImage'
@@ -35,15 +39,21 @@ export function BookGridCard({
     sortContextKey,
     dragHandlers,
 }: BookGridCardProps) {
+    const preventNativeDrag = (event: ReactDragEvent<HTMLElement>) => {
+        event.preventDefault()
+    }
+
     const commonProps = {
         'data-virtual-card': 'true',
         'data-library-item': 'true',
         'data-sort-key': sortable ? item.key : undefined,
         'data-sort-context': sortable && sortContextKey ? sortContextKey : undefined,
+        draggable: false,
         className: `${item.type === 'book' ? styles.card : styles.groupCard} ${dragHandlers.draggingKey === item.key ? styles.dragSortingCard : ''}`,
         initial: false,
         whileHover: dragHandlers.draggingKey === item.key ? undefined : { y: -5, boxShadow: '0 8px 30px rgba(0,0,0,0.12)' },
         onClickCapture: dragHandlers.onClickCapture,
+        onDragStartCapture: preventNativeDrag,
         onPointerDown: sortable ? (event: ReactPointerEvent<HTMLElement>) => dragHandlers.onPointerDown(event, item.key) : undefined,
         onPointerMove: sortable ? dragHandlers.onPointerMove : undefined,
         onPointerUp: sortable ? dragHandlers.onPointerUp : undefined,

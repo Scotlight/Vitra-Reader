@@ -171,41 +171,15 @@ describe('epubEngineCore', () => {
                 coverImageBase64: MINIMAL_JPEG_BASE64,
             })
 
-            const originalFileReader = globalThis.FileReader
-
-            class MockFileReader {
-                onloadend: ((ev: ProgressEvent<FileReader>) => void) | null = null
-                onerror: ((ev: ProgressEvent<FileReader>) => void) | null = null
-                result: string | ArrayBuffer | null = null
-                error: DOMException | null = null
-                readyState = 0
-                EMPTY = 0
-                LOADING = 1
-                DONE = 2
-
-                onabort: ((ev: ProgressEvent<FileReader>) => void) | null = null
-                onload: ((ev: ProgressEvent<FileReader>) => void) | null = null
-                onloadstart: ((ev: ProgressEvent<FileReader>) => void) | null = null
-                onprogress: ((ev: ProgressEvent<FileReader>) => void) | null = null
-
-                readAsDataURL() {
-                    setTimeout(() => {
-                        if (this.onerror) {
-                            this.onerror.call(this, new ProgressEvent('error') as ProgressEvent<FileReader>)
-                        }
-                    }, 0)
-                }
-
-                abort() {}
-                readAsArrayBuffer() {}
-                readAsBinaryString() {}
-                readAsText() {}
-                addEventListener() {}
-                removeEventListener() {}
-                dispatchEvent() { return true }
-            }
-
-            globalThis.FileReader = MockFileReader as unknown as typeof FileReader
+            const originalFetch = globalThis.fetch
+            globalThis.fetch = vi.fn().mockResolvedValue({
+                blob: async () => ({
+                    type: 'image/jpeg',
+                    arrayBuffer: async () => {
+                        throw new Error('Blob read failed')
+                    },
+                }),
+            } as unknown as Response)
 
             try {
                 const result = await parseEpub(epubBuffer)
@@ -213,7 +187,7 @@ describe('epubEngineCore', () => {
                 expect(result.title).toBe('Blob Convert Fail')
                 expect(result.cover).toBeUndefined()
             } finally {
-                globalThis.FileReader = originalFileReader
+                globalThis.fetch = originalFetch
             }
         })
     })

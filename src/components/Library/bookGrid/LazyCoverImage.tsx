@@ -36,6 +36,7 @@ export function LazyCoverImage({ bookId, format, alt, compact }: { bookId: strin
         <img
             src={cover}
             alt={alt}
+            draggable={false}
             loading="lazy"
             decoding="async"
             className={compact ? undefined : styles.coverImage}

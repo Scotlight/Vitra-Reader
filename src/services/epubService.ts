@@ -11,6 +11,8 @@ export interface ParsedBook {
     language?: string
 }
 
+const DATA_URL_BASE64_CHUNK_SIZE = 0x8000
+
 /**
  * Parse .epub file array buffer to extract metadata and cover
  * @param data ArrayBuffer of the .epub file
@@ -56,11 +58,26 @@ export async function parseEpub(data: ArrayBuffer): Promise<ParsedBook> {
     }
 }
 
-function blobToBase64(blob: Blob): Promise<string> {
+async function blobToBase64(blob: Blob): Promise<string> {
+    if (typeof blob.arrayBuffer === 'function') {
+        const buffer = await blob.arrayBuffer()
+        const mimeType = blob.type || 'application/octet-stream'
+        return `data:${mimeType};base64,${arrayBufferToBase64(buffer)}`
+    }
+
     return new Promise((resolve, reject) => {
         const reader = new FileReader()
         reader.onloadend = () => resolve(reader.result as string)
         reader.onerror = reject
         reader.readAsDataURL(blob)
     })
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    for (let offset = 0; offset < bytes.length; offset += DATA_URL_BASE64_CHUNK_SIZE) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + DATA_URL_BASE64_CHUNK_SIZE))
+    }
+    return btoa(binary)
 }

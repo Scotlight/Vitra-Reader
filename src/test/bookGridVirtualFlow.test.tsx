@@ -1,6 +1,6 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, render, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import type { BookMeta } from '@/services/storageService'
 import { BookGrid, type LibraryGridItem } from '@/components/Library/BookGrid'
 
@@ -127,6 +127,7 @@ describe('BookGrid virtual flow', () => {
     })
 
     afterEach(() => {
+        vi.useRealTimers()
         restoreLayoutMocks?.()
         restoreLayoutMocks = null
         vi.restoreAllMocks()
@@ -227,5 +228,59 @@ describe('BookGrid virtual flow', () => {
         const row = view.container.querySelector<HTMLElement>('[data-row-index="0"]')
         expect(row).not.toBeNull()
         expect(row?.style.gridTemplateColumns).toBe('repeat(6, minmax(0, 1fr))')
+    })
+
+    it('首页卡片保留长按拖动排序，并阻止浏览器原生拖拽抢事件', async () => {
+        vi.useFakeTimers()
+        const onReorder = vi.fn()
+        const items: LibraryGridItem[] = [
+            { key: 'book:book-0', type: 'book', book: createBook(0) },
+            { key: 'book:book-1', type: 'book', book: createBook(1) },
+        ]
+
+        const view = render(
+            <BookGrid
+                items={items}
+                emptyMessage="empty"
+                progressMap={{}}
+                onOpenBook={vi.fn()}
+                onOpenGroup={vi.fn()}
+                onContextMenu={vi.fn()}
+                scrollContainer={null}
+                sortable
+                sortContextKey="home"
+                onReorder={onReorder}
+            />
+        )
+
+        const source = view.container.querySelector<HTMLElement>('[data-sort-key="book:book-0"]')
+        const target = view.container.querySelector<HTMLElement>('[data-sort-key="book:book-1"]')
+        expect(source).not.toBeNull()
+        expect(target).not.toBeNull()
+
+        const nativeDragEvent = new Event('dragstart', { bubbles: true, cancelable: true })
+        source!.dispatchEvent(nativeDragEvent)
+        expect(nativeDragEvent.defaultPrevented).toBe(true)
+
+        const originalElementFromPoint = document.elementFromPoint
+        const elementFromPoint = vi.fn(() => target)
+        Object.defineProperty(document, 'elementFromPoint', {
+            configurable: true,
+            value: elementFromPoint,
+        })
+
+        fireEvent.pointerDown(source!, { pointerId: 1, button: 0, clientX: 10, clientY: 10 })
+        await act(async () => {
+            vi.advanceTimersByTime(321)
+        })
+        fireEvent.pointerMove(source!, { pointerId: 1, clientX: 32, clientY: 10 })
+        fireEvent.pointerUp(source!, { pointerId: 1, clientX: 32, clientY: 10 })
+
+        expect(onReorder).toHaveBeenCalledWith('book:book-0', 'book:book-1')
+        Object.defineProperty(document, 'elementFromPoint', {
+            configurable: true,
+            value: originalElementFromPoint,
+        })
+        vi.useRealTimers()
     })
 })

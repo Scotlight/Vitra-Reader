@@ -41,6 +41,7 @@ vi.mock('@/services/storageService', () => ({
         highlights: {
             where: () => ({
                 equals: () => ({
+                    count: async () => 0,
                     toArray: async () => [],
                 }),
             }),
