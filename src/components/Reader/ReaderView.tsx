@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import type { PageTurnMode } from '@/stores/useSettingsStore'
 import type { ContentProvider, SearchResult } from '@/engine/core/contentProvider'
@@ -9,19 +9,14 @@ import { useAutoScrollActiveToc } from './useAutoScrollActiveToc'
 import { ReaderPanelContent } from './ReaderPanelContent'
 import type { ReaderPanelTab } from './readerPanelTypes'
 import { ReaderSurface } from './ReaderSurface'
-import { buildFontFamilyWithFallback } from '@/utils/fontFallback'
 import { findCurrentChapterLabel, normalizeTocHref } from './readerToc'
 import { useReaderAnnotations } from './useReaderAnnotations'
+import { useReaderAppearance } from './useReaderAppearance'
 import { useReaderBookSession } from './useReaderBookSession'
 import { useReaderClock } from './useReaderClock'
+import { useReaderModeSwitch } from './useReaderModeSwitch'
 import { useReaderNavigation } from './useReaderNavigation'
 import { useReadingActivityTracker } from './useReadingActivityTracker'
-import { resolveReaderColors } from './readerColors'
-import { buildReaderStyleConfig } from './readerStyleConfig'
-import {
-    createFallbackModePositionSnapshot,
-    type ReaderModePositionSnapshot,
-} from './readerModeSwitchPosition'
 import styles from './ReaderView.module.css'
 interface ReaderViewProps {
     bookId: string
@@ -37,10 +32,6 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const [searchQuery, setSearchQuery] = useState('')
     const [searchResults, setSearchResults] = useState<SearchResult[]>([])
     const [isSearching, setIsSearching] = useState(false)
-    const [modeSwitchAnchor, setModeSwitchAnchor] = useState<{
-        serial: number
-        snapshot: ReaderModePositionSnapshot
-    } | null>(null)
     const scrollReaderRef = useRef<ScrollReaderHandle>(null)
     const paginatedReaderRef = useRef<PaginatedReaderHandle>(null)
     const settings = useSettingsStore()
@@ -71,39 +62,11 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const modeDecision = resolveReaderRenderMode(bookFormat, settings.pageTurnMode)
     const effectivePageTurnMode = modeDecision.effectiveMode
     const isScrollMode = effectivePageTurnMode === 'scrolled-continuous'
-    const resolvedReaderFontFamily = buildFontFamilyWithFallback(settings.fontFamily)
-    const readerColors = useMemo(() => resolveReaderColors({
-        customBgColor: settings.customBgColor,
-        customTextColor: settings.customTextColor,
-        themeId: settings.themeId,
-    }), [settings.customBgColor, settings.customTextColor, settings.themeId])
-    const readerStyleConfig = useMemo(() => buildReaderStyleConfig(
-        {
-            fontSize: settings.fontSize,
-            letterSpacing: settings.letterSpacing,
-            lineHeight: settings.lineHeight,
-            pageWidth: settings.pageWidth,
-            paragraphIndentEnabled: settings.paragraphIndentEnabled,
-            paragraphSpacing: settings.paragraphSpacing,
-            textAlign: settings.textAlign,
-            themeId: settings.themeId,
-        },
+    const {
         readerColors,
+        readerStyleConfig,
         resolvedReaderFontFamily,
-        bookFormat,
-    ), [
-        bookFormat,
-        readerColors,
-        resolvedReaderFontFamily,
-        settings.fontSize,
-        settings.lineHeight,
-        settings.paragraphSpacing,
-        settings.paragraphIndentEnabled,
-        settings.letterSpacing,
-        settings.textAlign,
-        settings.pageWidth,
-        settings.themeId,
-    ])
+    } = useReaderAppearance(settings, bookFormat)
     useEffect(() => {
         providerRef.current = provider
         return () => {
@@ -112,9 +75,6 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             }
         }
     }, [provider])
-    useEffect(() => {
-        setModeSwitchAnchor(null)
-    }, [bookId])
     useEffect(() => {
         setCurrentSectionHref('')
     }, [bookId])
@@ -175,42 +135,26 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         setSearchQuery(keyword)
         openSearchPanelWithKeyword(keyword)
     }, [openSearchPanelWithKeyword])
-    const getFallbackModePositionSnapshot = useCallback(() => {
-        const fallbackSpineIndex = isScrollMode
-            ? scrollParams.initialSpineIndex
-            : paginatedParams.initialSpineIndex
-        return createFallbackModePositionSnapshot({
-            currentProgress,
-            currentSectionHref,
-            fallbackSpineIndex,
-            provider,
-            sourceMode: effectivePageTurnMode,
-        })
-    }, [
+    const updatePageTurnMode = useCallback((nextMode: PageTurnMode) => {
+        settings.updateSetting('pageTurnMode', nextMode)
+    }, [settings])
+    const {
+        handlePageTurnModeChange,
+        modeSwitchAnchor,
+    } = useReaderModeSwitch({
+        bookId,
         currentProgress,
         currentSectionHref,
         effectivePageTurnMode,
         isScrollMode,
-        paginatedParams.initialSpineIndex,
+        pageTurnMode: settings.pageTurnMode,
+        paginatedInitialSpineIndex: paginatedParams.initialSpineIndex,
+        paginatedReaderRef,
         provider,
-        scrollParams.initialSpineIndex,
-    ])
-    const handlePageTurnModeChange = useCallback((nextMode: PageTurnMode) => {
-        if (nextMode === settings.pageTurnMode) return
-        const liveSnapshot = isScrollMode
-            ? scrollReaderRef.current?.getPosition()
-            : paginatedReaderRef.current?.getPosition()
-        const snapshot = liveSnapshot ?? getFallbackModePositionSnapshot()
-        setModeSwitchAnchor((current) => ({
-            serial: (current?.serial ?? 0) + 1,
-            snapshot,
-        }))
-        settings.updateSetting('pageTurnMode', nextMode)
-    }, [
-        getFallbackModePositionSnapshot,
-        isScrollMode,
-        settings,
-    ])
+        scrollInitialSpineIndex: scrollParams.initialSpineIndex,
+        scrollReaderRef,
+        updatePageTurnMode,
+    })
     const content = (
         <>
             {!isReady && (
