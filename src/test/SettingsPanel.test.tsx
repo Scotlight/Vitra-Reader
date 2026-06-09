@@ -92,6 +92,16 @@ describe('SettingsPanel', () => {
         expect(settingsMocks.updateSetting).toHaveBeenCalledWith('fontSize', 23)
     })
 
+    it('翻译服务归类在外部连接设置中', () => {
+        const { view } = renderSettingsPanel()
+
+        fireEvent.click(view.getByRole('button', { name: /外部连接/ }))
+
+        expect(view.getByRole('heading', { name: '外部连接' })).toBeTruthy()
+        expect(view.getByText('翻译服务')).toBeTruthy()
+        expect(view.getByText('翻译设置占位')).toBeTruthy()
+    })
+
     it('重置默认调用 resetToDefaults', () => {
         const { view } = renderSettingsPanel()
 

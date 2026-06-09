@@ -5,7 +5,7 @@ import styles from '../SettingsPanelV2.module.css'
 
 export function DataSettingsCards() {
     return (
-        <div className={styles.cardGrid}>
+        <div className={styles.singleCardGrid}>
             <LegacySettingsCard title="同步和备份">
                 <SyncSettingsTab />
             </LegacySettingsCard>

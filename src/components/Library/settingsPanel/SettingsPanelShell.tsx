@@ -13,7 +13,7 @@ export type SettingsRail = 'general' | 'display' | 'library' | 'data' | 'about'
 const RAIL_ITEMS: Array<{ id: SettingsRail; label: string; icon: string }> = [
     { id: 'general', label: '通用', icon: settingsIcon },
     { id: 'display', label: '显示', icon: themeIcon },
-    { id: 'library', label: '书库', icon: libraryIcon },
+    { id: 'library', label: '外部连接', icon: libraryIcon },
     { id: 'data', label: '数据', icon: refreshIcon },
     { id: 'about', label: '关于', icon: gridIcon },
 ]
@@ -21,7 +21,7 @@ const RAIL_ITEMS: Array<{ id: SettingsRail; label: string; icon: string }> = [
 const RAIL_TITLES: Record<SettingsRail, { title: string; hint: string }> = {
     general: { title: '通用设置', hint: '控制主界面外观和基础交互。' },
     display: { title: '显示设置', hint: '调整主题、排版和阅读体验。' },
-    library: { title: '书库设置', hint: '配置书库辅助服务。' },
+    library: { title: '外部连接', hint: '配置翻译 Provider、外部 API 和缓存策略。' },
     data: { title: '数据设置', hint: '管理同步、备份和恢复。' },
     about: { title: '关于 Vitra', hint: '查看版本、协议和项目状态。' },
 }

@@ -257,6 +257,13 @@
     gap: 18px;
 }
 
+.singleCardGrid {
+    display: grid;
+    grid-template-columns: minmax(0, min(920px, 100%));
+    align-items: start;
+    gap: 18px;
+}
+
 .settingsCard {
     border: 1px solid var(--settings-border);
     border-radius: 12px;

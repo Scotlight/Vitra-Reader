@@ -5,16 +5,16 @@ import styles from '../SettingsPanelV2.module.css'
 
 export function LibrarySettingsCards() {
     return (
-        <div className={styles.cardGrid}>
-            <LegacySettingsCard title="翻译设置">
+        <div className={styles.singleCardGrid}>
+            <LegacySettingsCard title="翻译服务">
                 <TranslateSettingsTab />
             </LegacySettingsCard>
-            <SettingsCard title="书库选项">
-                <SettingRow label="导入规则">
-                    <span>沿用当前书库导入流程</span>
+            <SettingsCard title="连接说明">
+                <SettingRow label="服务类型">
+                    <span>外部翻译 API / 本地 Ollama / DeepLX 兼容服务</span>
                 </SettingRow>
-                <SettingRow label="翻译缓存">
-                    <span>在左侧卡片管理</span>
+                <SettingRow label="缓存策略">
+                    <span>翻译缓存和过期时间在上方配置中管理</span>
                 </SettingRow>
             </SettingsCard>
         </div>
