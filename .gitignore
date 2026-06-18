@@ -60,6 +60,12 @@ docs/plans/2026-04-19-*.md
 docs/requirements/2026-04-19-*.md
 docs/*副本.json
 docs/98ac0454-e309-4698-b72c-ee5ba5fdf33d.png
+docs/6431c408-0416-4466-990d-f3aeaf49d2ac.png
+docs/6ebc3048-6f53-4c9e-8ad9-9aaf2f58ea17.png
+docs/731461c7-ae9e-4182-8e71-f9aee8775bed.png
+docs/9832057d-8a97-4313-b64e-49ecb74df7c3.png
+docs/d05b1d06-7086-43cb-9493-3c320da44a3b.png
+docs/e25767fb-fd14-4bae-bf05-52319772b4be.png
 docs/vitra_reader_settings_style4_svg.html
 
 # Local icon files (root-level temporary)
@@ -77,6 +83,7 @@ QUICK_REFERENCE.md
 .kiro/specs/bidirectional-infinite-scroll/requirements.md
 .ace-tool/
 .claude/
+.codex/
 .kiro/
 .kiro/specs/bidirectional-infinite-scroll/
 .claude/
