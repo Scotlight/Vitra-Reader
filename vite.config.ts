@@ -29,7 +29,7 @@ function includesAnyPackage(id: string, packages: readonly string[]): boolean {
     return packages.some((packagePath) => id.includes(`/node_modules${packagePath}`))
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
     test: {
         environment: 'jsdom',
         globals: true,
@@ -72,30 +72,32 @@ export default defineConfig({
     },
     plugins: [
         react(),
-        electron([
-            {
-                // Main process entry
-                entry: 'electron/main.ts',
-                vite: {
-                    build: {
-                        outDir: 'dist-electron',
+        ...(mode === 'web' ? [] : [
+            electron([
+                {
+                    // Main process entry
+                    entry: 'electron/main.ts',
+                    vite: {
+                        build: {
+                            outDir: 'dist-electron',
+                        },
                     },
                 },
-            },
-            {
-                // Preload script
-                entry: 'electron/preload.ts',
-                onstart(args) {
-                    args.reload()
-                },
-                vite: {
-                    build: {
-                        outDir: 'dist-electron',
+                {
+                    // Preload script
+                    entry: 'electron/preload.ts',
+                    onstart(args) {
+                        args.reload()
+                    },
+                    vite: {
+                        build: {
+                            outDir: 'dist-electron',
+                        },
                     },
                 },
-            },
+            ]),
+            renderer(),
         ]),
-        renderer(),
     ],
     resolve: {
         alias: {
@@ -167,4 +169,4 @@ export default defineConfig({
             },
         },
     },
-})
+}))
