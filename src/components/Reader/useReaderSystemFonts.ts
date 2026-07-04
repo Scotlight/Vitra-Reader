@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { listSystemFonts } from '@/services/platform/platformBridge'
 
 const DEFAULT_SYSTEM_FONTS = Object.freeze(['系统默认', '微软雅黑', '宋体', '楷体', '黑体', '仿宋'])
 const ERROR_FONTS = Object.freeze(['系统默认', '微软雅黑', '宋体', '楷体'])
@@ -9,9 +10,8 @@ let cachePromise: Promise<string[]> | null = null
 export function getSystemFontsOnce(): Promise<string[]> {
     if (cachedFonts) return Promise.resolve(cachedFonts)
     if (cachePromise) return cachePromise
-    if (!window.electronAPI?.listSystemFonts) return Promise.resolve([...DEFAULT_SYSTEM_FONTS])
 
-    cachePromise = window.electronAPI.listSystemFonts()
+    cachePromise = listSystemFonts()
         .then((fonts) => {
             cachedFonts = !fonts?.length ? [...DEFAULT_SYSTEM_FONTS] : ['系统默认', ...fonts]
             return cachedFonts

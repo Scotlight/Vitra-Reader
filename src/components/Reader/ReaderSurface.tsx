@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import type { TocItem } from '@/engine/core/contentProvider'
 import type { PageTurnMode } from '@/stores/useSettingsStore'
+import { getWindowFullscreenBridge } from '@/services/platform/platformBridge'
 import { ImmersiveReaderShell } from './ImmersiveReaderShell'
 import { ReaderSettingsPanel } from './ReaderSettingsPanel'
 import type { ReaderColors } from './readerColors'
@@ -86,9 +87,9 @@ export function ReaderSurface({
     const [isFullscreen, setIsFullscreen] = useState(false)
 
     const syncFullscreenState = useCallback(() => {
-        const electronApi = window.electronAPI
-        if (electronApi?.getWindowFullscreen) {
-            void electronApi.getWindowFullscreen()
+        const windowFullscreen = getWindowFullscreenBridge()
+        if (windowFullscreen) {
+            void windowFullscreen.get()
                 .then(setIsFullscreen)
                 .catch((error) => {
                     console.warn('[Reader] Get window fullscreen state failed:', error)
@@ -101,7 +102,7 @@ export function ReaderSurface({
     }, [])
 
     useEffect(() => {
-        const removeWindowFullscreenListener = window.electronAPI?.onWindowFullscreenChange?.(setIsFullscreen)
+        const removeWindowFullscreenListener = getWindowFullscreenBridge()?.onChange(setIsFullscreen)
         document.addEventListener('fullscreenchange', syncFullscreenState)
         syncFullscreenState()
         return () => {
@@ -114,9 +115,9 @@ export function ReaderSurface({
         const container = readerContainerRef.current
         if (!container) return
 
-        const electronApi = window.electronAPI
-        if (electronApi?.setWindowFullscreen) {
-            void electronApi.setWindowFullscreen(!isFullscreen)
+        const windowFullscreen = getWindowFullscreenBridge()
+        if (windowFullscreen) {
+            void windowFullscreen.set(!isFullscreen)
                 .then(setIsFullscreen)
                 .catch((error) => {
                     console.warn('[Reader] Toggle window fullscreen failed:', error)
