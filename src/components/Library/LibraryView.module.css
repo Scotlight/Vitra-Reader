@@ -700,6 +700,7 @@
     overflow-y: auto;
     padding-bottom: 24px;
     scrollbar-width: thin;
+    scrollbar-gutter: stable;
 }
 
 .groupItems {
