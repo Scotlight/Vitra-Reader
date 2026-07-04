@@ -1,4 +1,5 @@
 import type { TranslateConfig } from './translateTypes'
+import { httpRequest } from '@/services/platform/platformBridge'
 
 // ── HTTP 层 ──────────────────────────────────────────────────────────────────
 
@@ -10,15 +11,7 @@ export async function requestViaMain(payload: {
     headers?: Record<string, string>
     body?: string
 }): Promise<HttpResult> {
-    if (window.electronAPI?.translateRequest) return window.electronAPI.translateRequest(payload)
-    const response = await fetch(payload.url, {
-        method: payload.method || 'POST',
-        headers: payload.headers,
-        body: payload.body,
-    })
-    const data = await response.text()
-    if (!response.ok) return { success: false, status: response.status, data, error: `HTTP ${response.status}` }
-    return { success: true, status: response.status, data }
+    return httpRequest(payload)
 }
 
 // ── API 响应类型定义 ──────────────────────────────────────────────────────────

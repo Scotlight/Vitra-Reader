@@ -1,4 +1,10 @@
 import { db } from '@/services/storageService'
+import {
+    getPlatformCapabilities,
+    safeStorageDecrypt,
+    safeStorageEncrypt,
+    safeStorageIsAvailable,
+} from '@/services/platform/platformBridge'
 import type { TranslateConfig } from './translateTypes'
 import { DEFAULT_TRANSLATE_CONFIG, normalizeConfig } from './translateTypes'
 
@@ -25,9 +31,8 @@ async function transformApiKeys(
 }
 
 async function encryptApiKeys(config: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const api = window.electronAPI
-    if (!api?.safeStorageEncrypt) return config
-    return transformApiKeys(config, api.safeStorageEncrypt.bind(api))
+    if (!getPlatformCapabilities().canSafeStorage) return config
+    return transformApiKeys(config, safeStorageEncrypt)
 }
 
 function removePersistedApiKeys(config: Record<string, unknown>): Record<string, unknown> {
@@ -40,22 +45,12 @@ function removePersistedApiKeys(config: Record<string, unknown>): Record<string,
     return copy
 }
 
-async function isSafeStorageAvailable(): Promise<boolean> {
-    const api = window.electronAPI
-    if (!api?.safeStorageEncrypt || !api.safeStorageIsAvailable) return false
-    try {
-        return await api.safeStorageIsAvailable()
-    } catch {
-        return false
-    }
-}
-
 async function prepareApiKeysForStorage(
     config: Record<string, unknown>,
     options: SaveTranslateConfigOptions,
 ): Promise<Record<string, unknown>> {
-    const safeStorageAvailable = await isSafeStorageAvailable()
-    const canTransformApiKeys = typeof window.electronAPI?.safeStorageEncrypt === 'function'
+    const safeStorageAvailable = await safeStorageIsAvailable()
+    const canTransformApiKeys = getPlatformCapabilities().canSafeStorage
     if (safeStorageAvailable || (options.allowInsecureKeyStorage && canTransformApiKeys)) {
         return encryptApiKeys(config)
     }
@@ -63,9 +58,8 @@ async function prepareApiKeysForStorage(
 }
 
 async function decryptApiKeys(config: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const api = window.electronAPI
-    if (!api?.safeStorageDecrypt) return config
-    return transformApiKeys(config, api.safeStorageDecrypt.bind(api))
+    if (!getPlatformCapabilities().canSafeStorage) return config
+    return transformApiKeys(config, safeStorageDecrypt)
 }
 
 export async function loadTranslateConfig(): Promise<TranslateConfig> {

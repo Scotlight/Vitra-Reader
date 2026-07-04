@@ -1,4 +1,5 @@
 import { db } from '@/services/storageService'
+import { webdavSync } from '@/services/platform/platformBridge'
 
 /** WebDAV 重试退避基础延迟（ms），实际延迟 = base * (attempt + 1） */
 const WEBDAV_RETRY_BACKOFF_BASE_MS = 500
@@ -90,7 +91,7 @@ export async function webdavSyncWithRetry(
 ): Promise<WebdavResult> {
     let lastError: string | null = null
     for (let attempt = 0; attempt <= retries; attempt += 1) {
-        const result = await window.electronAPI.webdavSync(action, payload)
+        const result = await webdavSync(action, payload)
         if (result.success) return result
         lastError = result.error || `WebDAV ${action} failed`
         if (attempt < retries) {

@@ -1,4 +1,5 @@
 import { useSyncStore } from '@/stores/useSyncStore'
+import { WEBDAV_DESKTOP_ONLY_ERROR, getPlatformCapabilities } from '@/services/platform/platformBridge'
 import { SelectControl, type SelectControlOption } from './SelectControl'
 import { ToggleControl } from './ToggleControl'
 import styles from '../SettingsPanelV2.module.css'
@@ -18,6 +19,7 @@ const RESTORE_MODE_OPTIONS: SelectControlOption[] = [
 
 export function SyncSettingsTab() {
     const syncStore = useSyncStore()
+    const canWebdavSync = getPlatformCapabilities().canWebdavSync
 
     return (
         <div className={styles.syncPanel}>
@@ -87,16 +89,17 @@ export function SyncSettingsTab() {
             </label>
 
             <div className={styles.syncActions}>
-                <button className={styles.smallBtn} onClick={() => void syncStore.testConnection()} disabled={syncStore.isTesting}>
+                <button className={styles.smallBtn} onClick={() => void syncStore.testConnection()} disabled={!canWebdavSync || syncStore.isTesting}>
                     {syncStore.isTesting ? '测试中...' : '测试'}
                 </button>
-                <button className={styles.smallBtn} onClick={() => void syncStore.restoreData()} disabled={syncStore.isRestoring}>
+                <button className={styles.smallBtn} onClick={() => void syncStore.restoreData()} disabled={!canWebdavSync || syncStore.isRestoring}>
                     {syncStore.isRestoring ? '恢复中...' : '恢复'}
                 </button>
-                <button className={styles.syncPrimaryBtn} onClick={() => void syncStore.syncData()} disabled={syncStore.isSyncing}>
+                <button className={styles.syncPrimaryBtn} onClick={() => void syncStore.syncData()} disabled={!canWebdavSync || syncStore.isSyncing}>
                     {syncStore.isSyncing ? '同步中...' : '绑定并同步'}
                 </button>
             </div>
+            {!canWebdavSync && <div className={styles.syncStatus}>{WEBDAV_DESKTOP_ONLY_ERROR}</div>}
             {syncStore.syncStatus && <div className={styles.syncStatus}>{syncStore.syncStatus}</div>}
             {syncStore.lastSyncTime && (
                 <div className={styles.syncStatus}>

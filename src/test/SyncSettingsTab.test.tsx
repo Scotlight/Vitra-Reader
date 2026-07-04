@@ -34,10 +34,18 @@ vi.mock('@/stores/useSyncStore', () => ({
 
 import { SyncSettingsTab } from '@/components/Library/settingsPanel/SyncSettingsTab'
 
+function installElectronApi(api: Partial<Window['electronAPI']> | undefined): void {
+    Object.defineProperty(window, 'electronAPI', {
+        configurable: true,
+        value: api,
+    })
+}
+
 describe('SyncSettingsTab', () => {
     afterEach(() => {
         cleanup()
         vi.clearAllMocks()
+        installElectronApi(undefined)
     })
 
     it('切换同步和恢复模式时写入 sync store 配置', () => {
@@ -72,6 +80,7 @@ describe('SyncSettingsTab', () => {
     })
 
     it('触发测试、恢复和同步操作，并显示状态信息', () => {
+        installElectronApi({ webdavSync: vi.fn() })
         const view = render(<SyncSettingsTab />)
 
         fireEvent.click(view.getByRole('button', { name: '测试' }))
@@ -83,5 +92,21 @@ describe('SyncSettingsTab', () => {
         expect(syncStoreMocks.syncData).toHaveBeenCalledTimes(1)
         expect(view.getByText('已连接')).toBeTruthy()
         expect(view.getByText(/上次同步:/)).toBeTruthy()
+    })
+
+    it('无 electronAPI 时同步按钮置灰并提示仅桌面版支持', () => {
+        const view = render(<SyncSettingsTab />)
+
+        const testButton = view.getByRole('button', { name: '测试' }) as HTMLButtonElement
+        const restoreButton = view.getByRole('button', { name: '恢复' }) as HTMLButtonElement
+        const syncButton = view.getByRole('button', { name: '绑定并同步' }) as HTMLButtonElement
+        expect(testButton.disabled).toBe(true)
+        expect(restoreButton.disabled).toBe(true)
+        expect(syncButton.disabled).toBe(true)
+
+        fireEvent.click(syncButton)
+        expect(syncStoreMocks.syncData).not.toHaveBeenCalled()
+
+        expect(view.getByText('WebDAV 同步仅桌面版支持')).toBeTruthy()
     })
 })
