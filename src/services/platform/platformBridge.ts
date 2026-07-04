@@ -81,9 +81,21 @@ function pickBookFilesViaInput(): Promise<PickedBookFile[]> {
         input.accept = BOOK_FILE_ACCEPT
         input.style.display = 'none'
 
+        let settled = false
+        let focusFallbackTimer: number | null = null
+
         const finish = (files: PickedBookFile[]) => {
+            if (settled) return
+            settled = true
+            if (focusFallbackTimer !== null) window.clearTimeout(focusFallbackTimer)
+            window.removeEventListener('focus', handleWindowFocus)
             input.remove()
             resolve(files)
+        }
+
+        const handleWindowFocus = () => {
+            if (focusFallbackTimer !== null) window.clearTimeout(focusFallbackTimer)
+            focusFallbackTimer = window.setTimeout(() => finish([]), 1000)
         }
 
         input.addEventListener('change', () => {
@@ -95,6 +107,7 @@ function pickBookFilesViaInput(): Promise<PickedBookFile[]> {
             finish(picked)
         })
         input.addEventListener('cancel', () => finish([]))
+        window.addEventListener('focus', handleWindowFocus)
 
         document.body.appendChild(input)
         input.click()

@@ -111,6 +111,45 @@ describe('platformBridge', () => {
             await expect(pending).resolves.toEqual([])
             expect(findPickerInput()).toBeNull()
         })
+
+        it('Web 端旧引擎无 cancel 事件时经窗口 focus 兜底返回空数组', async () => {
+            vi.useFakeTimers()
+            try {
+                const pending = pickBookFiles()
+                expect(findPickerInput()).not.toBeNull()
+
+                window.dispatchEvent(new Event('focus'))
+                await vi.advanceTimersByTimeAsync(1100)
+
+                await expect(pending).resolves.toEqual([])
+                expect(findPickerInput()).toBeNull()
+            } finally {
+                vi.useRealTimers()
+            }
+        })
+
+        it('focus 兜底窗口期内 change 先到时以所选文件为准', async () => {
+            vi.useFakeTimers()
+            try {
+                const pending = pickBookFiles()
+                const input = findPickerInput()
+
+                window.dispatchEvent(new Event('focus'))
+                Object.defineProperty(input, 'files', {
+                    configurable: true,
+                    value: [new File([new Uint8Array([5])], 'c.epub')],
+                })
+                input?.dispatchEvent(new Event('change'))
+                await vi.advanceTimersByTimeAsync(1100)
+
+                const files = await pending
+                expect(files).toHaveLength(1)
+                expect(files[0]?.name).toBe('c.epub')
+                expect(findPickerInput()).toBeNull()
+            } finally {
+                vi.useRealTimers()
+            }
+        })
     })
 
     describe('openExternalUrl', () => {
