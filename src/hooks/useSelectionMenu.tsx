@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { db, type Highlight } from '@/services/storageService';
 import { findTextInDOM, highlightRange } from '@/utils/textFinder';
 import { getProviderLabel, translateText } from '@/services/translateService';
+import { openExternalUrl } from '@/services/platform/platformBridge';
 import { SelectionMenu } from '@/components/Reader/SelectionMenu';
 import { NoteDialog } from '@/components/Reader/NoteDialog';
 import { TranslationDialog } from '@/components/Reader/TranslationDialog';
@@ -124,7 +125,7 @@ export function useSelectionMenu({ bookId, onSelectionSearch, getHighlightContai
     const handleWebSearch = useCallback(() => {
         const q = encodeURIComponent(selectionMenu.text.trim());
         if (!q) return;
-        window.electronAPI.openExternal(`https://www.google.com/search?q=${q}`);
+        openExternalUrl(`https://www.google.com/search?q=${q}`);
         dismissMenu();
     }, [selectionMenu.text, dismissMenu]);
 

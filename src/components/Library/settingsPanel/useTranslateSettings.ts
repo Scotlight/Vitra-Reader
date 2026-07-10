@@ -8,6 +8,7 @@ import {
     translateText,
     type TranslateConfig,
 } from '@/services/translateService'
+import { safeStorageIsAvailable } from '@/services/platform/platformBridge'
 
 export function useTranslateSettings() {
     const [translateConfig, setTranslateConfig] = useState<TranslateConfig>(DEFAULT_TRANSLATE_CONFIG)
@@ -19,21 +20,12 @@ export function useTranslateSettings() {
 
     useEffect(() => {
         let active = true
-        const api = window.electronAPI
         void loadTranslateConfig().then((config) => {
             if (active) setTranslateConfig(config)
         })
-        if (api?.safeStorageIsAvailable) {
-            void api.safeStorageIsAvailable()
-                .then((available) => {
-                    if (active) setSafeStorageAvailable(available)
-                })
-                .catch(() => {
-                    if (active) setSafeStorageAvailable(false)
-                })
-        } else {
-            setSafeStorageAvailable(false)
-        }
+        void safeStorageIsAvailable().then((available) => {
+            if (active) setSafeStorageAvailable(available)
+        })
         return () => { active = false }
     }, [])
 

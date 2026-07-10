@@ -1,4 +1,6 @@
 import { useCallback } from 'react'
+import { pickBookFiles } from '@/services/platform/platformBridge'
+
 interface UseLibraryImportOptions {
     readonly importBook: (
         book: { name: string; path: string; data: ArrayBuffer | Uint8Array },
@@ -14,19 +16,14 @@ export function useLibraryImport({
     showInfoDialog,
 }: UseLibraryImportOptions) {
     return useCallback(async () => {
-        if (!window.electronAPI) {
-            showInfoDialog('当前未检测到 Electron API。请通过 Electron 应用窗口运行，而不是浏览器直接访问。')
-            return
-        }
-
         try {
-            const files = await window.electronAPI.openEpub()
+            const files = await pickBookFiles()
             if (!files.length) return
 
             let failed = 0
             for (const file of files) {
                 try {
-                    const binary = await window.electronAPI.readFile(file.path)
+                    const binary = await file.data()
                     await importBook({
                         name: file.name,
                         path: file.path,

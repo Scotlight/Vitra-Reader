@@ -8,8 +8,10 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
+    "dev:web": "vite --mode web",
     "dev:monitor": "concurrently --names \"DEV,MON\" --prefix-colors \"blue,cyan\" \"npm run dev\" \"npm run monitor\"",
     "build": "tsc -b && vite build",
+    "build:web": "tsc -b && vite build --mode web",
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest",
@@ -141,6 +143,7 @@
     "vite": "^6.0.7",
     "vite-plugin-electron": "^0.28.8",
     "vite-plugin-electron-renderer": "^0.14.6",
+    "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.0"
   }
 }
