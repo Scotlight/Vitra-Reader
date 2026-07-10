@@ -53,6 +53,7 @@ export interface WindowFullscreenBridge {
 
 export const WEBDAV_DESKTOP_ONLY_ERROR = 'WebDAV 同步仅桌面版支持'
 export const SAFE_STORAGE_DESKTOP_ONLY_ERROR = 'safeStorage 仅桌面版支持'
+export const FULLSCREEN_UNSUPPORTED_ERROR = '当前浏览器不支持全屏模式'
 
 const BOOK_FILE_ACCEPT = [
     '.epub', '.pdf', '.txt', '.mobi', '.azw', '.azw3',
@@ -154,14 +155,21 @@ export async function webdavSync(
 export async function httpRequest(payload: PlatformHttpRequest): Promise<PlatformHttpResult> {
     const api = getElectronApi()
     if (api?.translateRequest) return api.translateRequest(payload)
-    const response = await fetch(payload.url, {
-        method: payload.method || 'POST',
-        headers: payload.headers,
-        body: payload.body,
-    })
-    const data = await response.text()
-    if (!response.ok) return { success: false, status: response.status, data, error: `HTTP ${response.status}` }
-    return { success: true, status: response.status, data }
+    try {
+        const response = await fetch(payload.url, {
+            method: payload.method || 'POST',
+            headers: payload.headers,
+            body: payload.body,
+        })
+        const data = await response.text()
+        if (!response.ok) return { success: false, status: response.status, data, error: `HTTP ${response.status}` }
+        return { success: true, status: response.status, data }
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+        }
+    }
 }
 
 export async function safeStorageIsAvailable(): Promise<boolean> {
@@ -194,6 +202,13 @@ export function getWindowFullscreenBridge(): WindowFullscreenBridge | null {
         set: (enabled) => api.setWindowFullscreen(enabled),
         onChange: (callback) => api.onWindowFullscreenChange(callback),
     }
+}
+
+export function requestElementFullscreen(element: Element): Promise<void> {
+    if (typeof element.requestFullscreen !== 'function') {
+        return Promise.reject(new Error(FULLSCREEN_UNSUPPORTED_ERROR))
+    }
+    return element.requestFullscreen()
 }
 
 export async function requestPersistentStorage(): Promise<boolean> {

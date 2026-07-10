@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+    FULLSCREEN_UNSUPPORTED_ERROR,
     SAFE_STORAGE_DESKTOP_ONLY_ERROR,
     WEBDAV_DESKTOP_ONLY_ERROR,
     getPlatformCapabilities,
@@ -8,6 +9,7 @@ import {
     listSystemFonts,
     openExternalUrl,
     pickBookFiles,
+    requestElementFullscreen,
     requestPersistentStorage,
     safeStorageDecrypt,
     safeStorageEncrypt,
@@ -228,6 +230,15 @@ describe('platformBridge', () => {
 
             expect(result).toEqual({ success: false, status: 500, data: 'boom', error: 'HTTP 500' })
         })
+
+        it('Web 端 fetch 异常映射为结构化失败', async () => {
+            vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Failed to fetch')))
+
+            await expect(httpRequest({ url: 'https://api' })).resolves.toEqual({
+                success: false,
+                error: 'Failed to fetch',
+            })
+        })
     })
 
     describe('safeStorage', () => {
@@ -288,6 +299,23 @@ describe('platformBridge', () => {
             expect(onWindowFullscreenChange).toHaveBeenCalledWith(listener)
             remove?.()
             expect(cleanup).toHaveBeenCalled()
+        })
+    })
+
+    describe('requestElementFullscreen', () => {
+        it('浏览器不支持 Fullscreen API 时返回可捕获的拒绝', async () => {
+            const element = document.createElement('div')
+
+            await expect(requestElementFullscreen(element)).rejects.toThrow(FULLSCREEN_UNSUPPORTED_ERROR)
+        })
+
+        it('浏览器支持 Fullscreen API 时调用元素方法', async () => {
+            const element = document.createElement('div')
+            const requestFullscreen = vi.fn().mockResolvedValue(undefined)
+            element.requestFullscreen = requestFullscreen
+
+            await expect(requestElementFullscreen(element)).resolves.toBeUndefined()
+            expect(requestFullscreen).toHaveBeenCalledTimes(1)
         })
     })
 

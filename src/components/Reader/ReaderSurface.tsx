@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import type { TocItem } from '@/engine/core/contentProvider'
 import type { PageTurnMode } from '@/stores/useSettingsStore'
-import { getWindowFullscreenBridge } from '@/services/platform/platformBridge'
+import { getWindowFullscreenBridge, requestElementFullscreen } from '@/services/platform/platformBridge'
 import { ImmersiveReaderShell } from './ImmersiveReaderShell'
 import { ReaderSettingsPanel } from './ReaderSettingsPanel'
 import type { ReaderColors } from './readerColors'
@@ -132,7 +132,7 @@ export function ReaderSurface({
             return
         }
 
-        void container.requestFullscreen().catch((error) => {
+        void requestElementFullscreen(container).catch((error) => {
             console.warn('[Reader] Enter fullscreen failed:', error)
         })
     }, [isFullscreen])
