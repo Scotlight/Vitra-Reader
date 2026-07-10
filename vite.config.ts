@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
+import { VitePWA } from 'vite-plugin-pwa'
 import path from 'node:path'
 
 const EVENTS_BROWSER_ENTRY = path.resolve(__dirname, 'node_modules/events/events.js')
@@ -30,6 +31,7 @@ function includesAnyPackage(id: string, packages: readonly string[]): boolean {
 }
 
 export default defineConfig(({ mode }) => ({
+    base: mode === 'web' ? '/Vitra-Reader/' : '/',
     test: {
         environment: 'jsdom',
         globals: true,
@@ -72,7 +74,29 @@ export default defineConfig(({ mode }) => ({
     },
     plugins: [
         react(),
-        ...(mode === 'web' ? [] : [
+        ...(mode === 'web' ? [
+            VitePWA({
+                registerType: 'autoUpdate',
+                manifest: {
+                    name: 'Vitra Reader',
+                    short_name: 'Vitra',
+                    description: 'A highly customizable offline EPUB reader',
+                    lang: 'zh-CN',
+                    start_url: '.',
+                    display: 'standalone',
+                    theme_color: '#6366F1',
+                    background_color: '#ffffff',
+                    icons: [
+                        { src: 'icons/pwa-192.png', sizes: '192x192', type: 'image/png' },
+                        { src: 'icons/pwa-512.png', sizes: '512x512', type: 'image/png' },
+                        { src: 'icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+                    ],
+                },
+                workbox: {
+                    globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+                },
+            }),
+        ] : [
             electron([
                 {
                     // Main process entry
