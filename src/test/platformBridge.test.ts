@@ -8,6 +8,7 @@ import {
     listSystemFonts,
     openExternalUrl,
     pickBookFiles,
+    requestPersistentStorage,
     safeStorageDecrypt,
     safeStorageEncrypt,
     safeStorageIsAvailable,
@@ -287,6 +288,40 @@ describe('platformBridge', () => {
             expect(onWindowFullscreenChange).toHaveBeenCalledWith(listener)
             remove?.()
             expect(cleanup).toHaveBeenCalled()
+        })
+    })
+
+    describe('requestPersistentStorage', () => {
+        const originalStorage = Object.getOwnPropertyDescriptor(Navigator.prototype, 'storage')
+            ?? Object.getOwnPropertyDescriptor(navigator, 'storage')
+
+        function installStorage(storage: unknown): void {
+            Object.defineProperty(navigator, 'storage', { configurable: true, value: storage })
+        }
+
+        afterEach(() => {
+            if (originalStorage) {
+                Object.defineProperty(navigator, 'storage', originalStorage)
+            } else {
+                delete (navigator as unknown as Record<string, unknown>).storage
+            }
+        })
+
+        it('无 storage.persist 能力时返回 false', async () => {
+            installStorage(undefined)
+            await expect(requestPersistentStorage()).resolves.toBe(false)
+        })
+
+        it('有能力时透传 persist 结果', async () => {
+            const persist = vi.fn(async () => true)
+            installStorage({ persist })
+            await expect(requestPersistentStorage()).resolves.toBe(true)
+            expect(persist).toHaveBeenCalledTimes(1)
+        })
+
+        it('persist 拒绝时兜底 false', async () => {
+            installStorage({ persist: vi.fn(async () => { throw new Error('denied') }) })
+            await expect(requestPersistentStorage()).resolves.toBe(false)
         })
     })
 })

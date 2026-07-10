@@ -195,3 +195,12 @@ export function getWindowFullscreenBridge(): WindowFullscreenBridge | null {
         onChange: (callback) => api.onWindowFullscreenChange(callback),
     }
 }
+
+export async function requestPersistentStorage(): Promise<boolean> {
+    if (!navigator.storage?.persist) return false
+    try {
+        return await navigator.storage.persist()
+    } catch {
+        return false
+    }
+}
