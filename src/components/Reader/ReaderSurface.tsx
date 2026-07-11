@@ -30,9 +30,15 @@ interface ReaderSurfaceProps {
     closePanels: () => void
     content: ReactNode
     currentSectionHref: string
+    currentProgress: number
+    isNightMode: boolean
+    onNextChapter: () => void
     onBack: () => void
     onPageTurnModeChange: (nextMode: PageTurnMode) => void
+    onPreviousChapter: () => void
+    onProgressCommit: (progress: number) => void
     onTabChange: (tab: ReaderPanelTab) => void
+    onToggleNightMode: () => void
     panelContent: ReactNode
     progressLabel: string
     readerColors: ReaderColors
@@ -71,9 +77,15 @@ export function ReaderSurface({
     closePanels,
     content,
     currentSectionHref,
+    currentProgress,
+    isNightMode,
+    onNextChapter,
     onBack,
     onPageTurnModeChange,
+    onPreviousChapter,
+    onProgressCommit,
     onTabChange,
+    onToggleNightMode,
     panelContent,
     progressLabel,
     readerColors,
@@ -161,8 +173,14 @@ export function ReaderSurface({
                 closePanels={closePanels}
                 content={content}
                 currentSectionHref={currentSectionHref}
+                currentProgress={currentProgress}
+                isNightMode={isNightMode}
+                onNextChapter={onNextChapter}
                 onBack={onBack}
+                onPreviousChapter={onPreviousChapter}
+                onProgressCommit={onProgressCommit}
                 onTabChange={onTabChange}
+                onToggleNightMode={onToggleNightMode}
                 onToggleFullscreen={toggleFullscreen}
                 panelContent={panelContent}
                 progressLabel={progressLabel}

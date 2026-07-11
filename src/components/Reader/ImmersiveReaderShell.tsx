@@ -2,9 +2,12 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 import type { TocItem } from '@/engine/core/contentProvider'
 import type { ReaderPanelTab } from './readerPanelTypes'
+import { MobileReaderChrome } from './MobileReaderChrome'
 import { scheduleCenterActiveToc } from './tocAutoScroll'
 import { useReaderTabShortcut } from './useReaderTabShortcut'
 import styles from './ImmersiveReaderShell.module.css'
+
+const MOBILE_LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 600px)'
 
 interface ImmersiveReaderShellProps {
     readonly activeTab: ReaderPanelTab
@@ -14,8 +17,14 @@ interface ImmersiveReaderShellProps {
     readonly closePanels: () => void
     readonly content: ReactNode
     readonly currentSectionHref: string
+    readonly currentProgress: number
+    readonly isNightMode: boolean
+    readonly onNextChapter: () => void
     readonly onBack: () => void
+    readonly onPreviousChapter: () => void
+    readonly onProgressCommit: (progress: number) => void
     readonly onTabChange: (tab: ReaderPanelTab) => void
+    readonly onToggleNightMode: () => void
     readonly onToggleFullscreen: () => void
     readonly panelContent: ReactNode
     readonly progressLabel: string
@@ -96,8 +105,14 @@ export function ImmersiveReaderShell({
     closePanels,
     content,
     currentSectionHref,
+    currentProgress,
+    isNightMode,
+    onNextChapter,
     onBack,
+    onPreviousChapter,
+    onProgressCommit,
     onTabChange,
+    onToggleNightMode,
     onToggleFullscreen,
     panelContent,
     progressLabel,
@@ -110,10 +125,24 @@ export function ImmersiveReaderShell({
     toggleSettingsPanel,
 }: ImmersiveReaderShellProps) {
     const [chromeActive, setChromeActive] = useState(true)
-    const [tocPinned, setTocPinned] = useState(false)
+    const [tocPinned, setTocPinned] = useState(() => (
+        window.matchMedia?.(MOBILE_LANDSCAPE_QUERY).matches ?? false
+    ))
     const activeChromeClass = chromeActive ? styles.activeChrome : ''
     const tocPinnedClass = tocPinned ? styles.tocCapsulePinned : ''
     const tocListRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        const landscapeViewport = window.matchMedia?.(MOBILE_LANDSCAPE_QUERY)
+        if (!landscapeViewport) return
+
+        const pinLegacySidebarInLandscape = () => {
+            if (landscapeViewport.matches) setTocPinned(true)
+        }
+        pinLegacySidebarInLandscape()
+        landscapeViewport.addEventListener('change', pinLegacySidebarInLandscape)
+        return () => landscapeViewport.removeEventListener('change', pinLegacySidebarInLandscape)
+    }, [])
 
     useEffect(() => {
         if ((!chromeActive && !tocPinned) || activeTab !== 'toc') return
@@ -188,6 +217,26 @@ export function ImmersiveReaderShell({
             )}
 
             <div className={styles.bottomProgressBar} style={{ width: progressWidth }} />
+
+            <MobileReaderChrome
+                activeTab={activeTab}
+                chapterCount={toc.length}
+                chapterLabel={chapterLabel}
+                clockText={clockText}
+                currentProgress={currentProgress}
+                isNightMode={isNightMode}
+                onNextChapter={onNextChapter}
+                onPreviousChapter={onPreviousChapter}
+                onProgressCommit={onProgressCommit}
+                onTabChange={onTabChange}
+                onToggleNightMode={onToggleNightMode}
+                panelContent={panelContent}
+                settingsOpen={settingsOpen}
+                showFooterChapter={showFooterChapter}
+                showFooterProgress={showFooterProgress}
+                showFooterTime={showFooterTime}
+                toggleSettingsPanel={toggleSettingsPanel}
+            />
 
             {settingsOpen && (
                 <div className={styles.panelLayer} data-immersive-reader-chrome="true">

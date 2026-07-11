@@ -35,6 +35,11 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const scrollReaderRef = useRef<ScrollReaderHandle>(null)
     const paginatedReaderRef = useRef<PaginatedReaderHandle>(null)
     const settings = useSettingsStore()
+    const nightAppearanceRef = useRef<{
+        themeId: string
+        customBgColor: string | null
+        customTextColor: string | null
+    } | null>(null)
     const {
         bookFormat,
         bookTitleText,
@@ -135,6 +140,61 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         setSearchQuery(keyword)
         openSearchPanelWithKeyword(keyword)
     }, [openSearchPanelWithKeyword])
+    const getCurrentSpineIndex = useCallback(() => {
+        const snapshot = isScrollMode
+            ? scrollReaderRef.current?.getPosition()
+            : paginatedReaderRef.current?.getPosition()
+        if (snapshot) return snapshot.spineIndex
+        const currentProvider = providerRef.current
+        if (!currentProvider) return 0
+        const hrefIndex = currentProvider.getSpineIndexByHref(currentSectionHref)
+        return hrefIndex >= 0 ? hrefIndex : 0
+    }, [currentSectionHref, isScrollMode])
+    const jumpToSpineIndex = useCallback((targetIndex: number) => {
+        const currentProvider = providerRef.current
+        if (!currentProvider) return
+        const spineItems = currentProvider.getSpineItems()
+        if (spineItems.length === 0) return
+        const safeIndex = Math.max(0, Math.min(spineItems.length - 1, targetIndex))
+        const target = spineItems[safeIndex]
+        if (target) setCurrentSectionHref(normalizeTocHref(target.href))
+        markActivity()
+        if (isScrollMode) {
+            void scrollReaderRef.current?.jumpToSpine(safeIndex)
+            return
+        }
+        void paginatedReaderRef.current?.jumpToSpine(safeIndex)
+    }, [isScrollMode, markActivity])
+    const handlePreviousChapter = useCallback(() => {
+        jumpToSpineIndex(getCurrentSpineIndex() - 1)
+    }, [getCurrentSpineIndex, jumpToSpineIndex])
+    const handleNextChapter = useCallback(() => {
+        jumpToSpineIndex(getCurrentSpineIndex() + 1)
+    }, [getCurrentSpineIndex, jumpToSpineIndex])
+    const handleProgressCommit = useCallback((progress: number) => {
+        const spineCount = providerRef.current?.getSpineItems().length ?? 0
+        if (spineCount === 0) return
+        const normalized = Math.max(0, Math.min(1, progress))
+        jumpToSpineIndex(Math.round(normalized * (spineCount - 1)))
+    }, [jumpToSpineIndex])
+    const handleToggleNightMode = useCallback(() => {
+        if (settings.themeId === 'dark') {
+            const previous = nightAppearanceRef.current
+            settings.updateSetting('themeId', previous?.themeId ?? 'light')
+            settings.updateSetting('customBgColor', previous?.customBgColor ?? null)
+            settings.updateSetting('customTextColor', previous?.customTextColor ?? null)
+            nightAppearanceRef.current = null
+            return
+        }
+        nightAppearanceRef.current = {
+            themeId: settings.themeId,
+            customBgColor: settings.customBgColor,
+            customTextColor: settings.customTextColor,
+        }
+        settings.updateSetting('customBgColor', null)
+        settings.updateSetting('customTextColor', null)
+        settings.updateSetting('themeId', 'dark')
+    }, [settings])
     const updatePageTurnMode = useCallback((nextMode: PageTurnMode) => {
         settings.updateSetting('pageTurnMode', nextMode)
     }, [settings])
@@ -209,6 +269,9 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             closePanels={closePanels}
             content={content}
             currentSectionHref={currentSectionHref}
+            currentProgress={currentProgress}
+            isNightMode={settings.themeId === 'dark'}
+            onNextChapter={handleNextChapter}
             panelContent={(
                 <ReaderPanelContent
                     activeTab={activeTab}
@@ -233,7 +296,10 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             )}
             onBack={onBack}
             onPageTurnModeChange={handlePageTurnModeChange}
+            onPreviousChapter={handlePreviousChapter}
+            onProgressCommit={handleProgressCommit}
             onTabChange={setActiveTab}
+            onToggleNightMode={handleToggleNightMode}
             progressLabel={`${Math.round(Math.max(0, Math.min(1, currentProgress)) * 100)}%`}
             readerColors={readerColors}
             resolvedReaderFontFamily={resolvedReaderFontFamily}

@@ -1,0 +1,295 @@
+.mobileChrome {
+    display: none;
+}
+
+@media (max-width: 850px) and (orientation: portrait) {
+    .mobileChrome {
+        --mobile-accent: var(--accent-color, #269654);
+        position: absolute;
+        inset: 0;
+        z-index: 38;
+        display: block;
+        color: var(--reader-text-color, var(--reader-text));
+        pointer-events: none;
+    }
+
+    .statusCapsule {
+        position: absolute;
+        right: max(10px, env(safe-area-inset-right));
+        bottom: calc(174px + env(safe-area-inset-bottom));
+        width: 74px;
+        max-height: 228px;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        overflow: hidden;
+        border: 1px solid color-mix(in srgb, var(--mobile-accent) 22%, transparent);
+        border-radius: 28px;
+        background: color-mix(in srgb, var(--reader-bg-color, var(--reader-bg)) 76%, transparent);
+        box-shadow: 0 12px 28px color-mix(in srgb, var(--reader-text-color, #000) 12%, transparent);
+        backdrop-filter: blur(20px) saturate(126%);
+        -webkit-backdrop-filter: blur(20px) saturate(126%);
+        pointer-events: auto;
+    }
+
+    .statusItem {
+        position: relative;
+        min-height: 58px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        box-sizing: border-box;
+        padding: 9px 7px;
+        font-size: 10px;
+        text-align: center;
+    }
+
+    .statusItem + .statusItem::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 18px;
+        right: 18px;
+        height: 1px;
+        background: color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 13%, transparent);
+    }
+
+    .statusItem strong {
+        color: var(--mobile-accent);
+        font-size: 18px;
+        line-height: 1;
+    }
+
+    .statusItem b {
+        font-size: 13px;
+        line-height: 1;
+    }
+
+    .statusItem span:last-child {
+        color: color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 58%, transparent);
+    }
+
+    .chapterName {
+        width: 100%;
+        display: -webkit-box;
+        overflow: hidden;
+        font-size: 10px;
+        font-weight: 650;
+        line-height: 1.35;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+
+    .progressControls {
+        position: absolute;
+        right: 0;
+        bottom: calc(82px + env(safe-area-inset-bottom));
+        left: 0;
+        height: 76px;
+        display: grid;
+        grid-template-columns: auto minmax(90px, 1fr) auto;
+        align-items: center;
+        gap: 16px;
+        box-sizing: border-box;
+        padding: 8px max(22px, env(safe-area-inset-right)) 6px max(22px, env(safe-area-inset-left));
+        opacity: 0;
+        transform: translateY(12px);
+        transition: opacity 180ms ease, transform 180ms ease;
+        pointer-events: none;
+    }
+
+    .progressControlsOpen {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+    }
+
+    .progressControls button {
+        min-width: 52px;
+        border: 0;
+        padding: 10px 0;
+        color: inherit;
+        background: transparent;
+        font: inherit;
+        font-size: 13px;
+    }
+
+    .progressControls input {
+        width: 100%;
+        height: 4px;
+        margin: 0;
+        accent-color: var(--mobile-accent);
+    }
+
+    .bottomNav {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        height: calc(82px + env(safe-area-inset-bottom));
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        box-sizing: border-box;
+        padding: 8px max(8px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(8px, env(safe-area-inset-left));
+        border-top: 1px solid color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 8%, transparent);
+        background: color-mix(in srgb, var(--reader-bg-color, var(--reader-bg)) 84%, transparent);
+        box-shadow: 0 -10px 30px color-mix(in srgb, var(--reader-text-color, #000) 7%, transparent);
+        backdrop-filter: blur(26px) saturate(132%);
+        -webkit-backdrop-filter: blur(26px) saturate(132%);
+        pointer-events: auto;
+    }
+
+    .bottomNav button {
+        min-width: 0;
+        border: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 4px;
+        color: inherit;
+        background: transparent;
+        font: inherit;
+        font-size: 12px;
+    }
+
+    .bottomNav svg {
+        width: 25px;
+        height: 25px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .bottomNav .activeAction {
+        color: var(--mobile-accent);
+    }
+
+    .progressIcon {
+        width: 31px;
+        height: 31px;
+        display: grid;
+        place-items: center;
+        box-sizing: border-box;
+        border: 1.5px solid currentColor;
+        border-radius: 50%;
+        font-size: 10px;
+        font-weight: 750;
+    }
+
+    .drawerLayer {
+        position: absolute;
+        inset: 0;
+        z-index: 60;
+        pointer-events: auto;
+    }
+
+    .drawerBackdrop {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        border: 0;
+        padding: 0;
+        background: color-mix(in srgb, var(--reader-bg-color, #fff) 14%, rgba(0, 0, 0, 0.18));
+        backdrop-filter: blur(7px);
+        -webkit-backdrop-filter: blur(7px);
+    }
+
+    .drawer {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: min(76vw, 430px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-sizing: border-box;
+        padding-top: env(safe-area-inset-top);
+        border-right: 1px solid color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 10%, transparent);
+        border-radius: 0 30px 30px 0;
+        background: color-mix(in srgb, var(--reader-bg-color, var(--reader-bg)) 88%, transparent);
+        box-shadow: 18px 0 44px rgba(0, 0, 0, 0.14);
+        backdrop-filter: blur(28px) saturate(118%);
+        -webkit-backdrop-filter: blur(28px) saturate(118%);
+        animation: drawerIn 210ms ease-out;
+    }
+
+    .drawer [data-reader-panel-tabs='true'] {
+        display: none;
+    }
+
+    .drawerTabs {
+        flex: 0 0 auto;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        border-bottom: 1px solid color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 10%, transparent);
+    }
+
+    .drawerTabs button {
+        position: relative;
+        min-height: 58px;
+        border: 0;
+        color: inherit;
+        background: transparent;
+        font-size: 14px;
+    }
+
+    .drawerTabs .drawerTabActive {
+        color: var(--mobile-accent);
+        font-weight: 720;
+    }
+
+    .drawerTabs .drawerTabActive::after {
+        content: '';
+        position: absolute;
+        right: 24%;
+        bottom: 0;
+        left: 24%;
+        height: 2px;
+        border-radius: 999px;
+        background: currentColor;
+    }
+
+    .drawerFooter {
+        min-height: calc(58px + env(safe-area-inset-bottom));
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        box-sizing: border-box;
+        padding: 18px 24px env(safe-area-inset-bottom);
+        border-top: 1px solid color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 10%, transparent);
+        color: color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 70%, transparent);
+        font-size: 12px;
+    }
+
+    .drawerFooter span:last-child {
+        max-width: 58%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    @keyframes drawerIn {
+        from { transform: translateX(-24px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+}
+
+@media (max-width: 420px) and (orientation: portrait) {
+    .statusCapsule {
+        right: max(7px, env(safe-area-inset-right));
+        width: 70px;
+    }
+
+    .progressControls {
+        gap: 10px;
+        padding-inline: 18px;
+    }
+}

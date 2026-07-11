@@ -48,7 +48,7 @@ export function ReaderPanelContent({
 }: ReaderPanelContentProps) {
     return (
         <>
-            <div className={styles.tabContainer}>
+            <div className={styles.tabContainer} data-reader-panel-tabs="true">
                 <button className={`${styles.tabBtn} ${activeTab === 'toc' ? styles.activeTab : ''}`} onClick={() => onTabChange('toc')}>
                     目录
                 </button>
@@ -82,9 +82,10 @@ export function ReaderPanelContent({
                     </div>
                     <div className={styles.resultList}>
                         {searchResults.map((result, index) => (
-                            <div
-                                key={`${result.cfi}-${index}`}
-                                className={styles.resultItem}
+                             <div
+                                 key={`${result.cfi}-${index}`}
+                                 className={styles.resultItem}
+                                 data-reader-panel-navigation="true"
                                 onClick={() => void jumpToAnnotation(result.cfi, searchQuery.trim() || undefined)}
                                 role="button"
                                 tabIndex={0}
@@ -113,7 +114,7 @@ export function ReaderPanelContent({
                         ) : (
                             <div className={styles.annotationList}>
                                 {highlights.map((highlight) => (
-                                    <div key={highlight.id} className={styles.annotationItem} onClick={() => void jumpToAnnotation(highlight.cfiRange, highlight.text)}>
+                                    <div key={highlight.id} className={styles.annotationItem} data-reader-panel-navigation="true" onClick={() => void jumpToAnnotation(highlight.cfiRange, highlight.text)}>
                                         <div className={styles.highlightColor} style={{ backgroundColor: highlight.color }} />
                                         <div className={styles.annotationContent}>
                                             <p className={styles.annotationText}>{highlight.text}</p>
@@ -142,7 +143,7 @@ export function ReaderPanelContent({
                         ) : (
                             <div className={styles.annotationList}>
                                 {bookmarks.map((bookmark) => (
-                                    <div key={bookmark.id} className={styles.annotationItem} onClick={() => void jumpToAnnotation(bookmark.location, bookmark.title)}>
+                                    <div key={bookmark.id} className={styles.annotationItem} data-reader-panel-navigation="true" onClick={() => void jumpToAnnotation(bookmark.location, bookmark.title)}>
                                         <div className={styles.noteIcon}>📝</div>
                                         <div className={styles.annotationContent}>
                                             <p className={styles.annotationQuote}>"{bookmark.title}"</p>
@@ -193,8 +194,9 @@ function renderTocItems(
         return [
             <button
                 key={key}
-                className={`${styles.tocItem} ${active ? styles.tocItemActive : ''}`}
-                data-toc-active={active ? 'true' : 'false'}
+                 className={`${styles.tocItem} ${active ? styles.tocItemActive : ''}`}
+                 data-reader-panel-navigation="true"
+                 data-toc-active={active ? 'true' : 'false'}
                 onClick={() => void handleTocClick(item.href)}
                 style={{ paddingLeft: `${12 + level * 14}px` }}
             >

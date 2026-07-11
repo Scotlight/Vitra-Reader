@@ -356,20 +356,25 @@
     }
 }
 
-@media (max-width: 850px) {
+@media (max-width: 850px) and (orientation: portrait) {
+    .headerTrigger,
     .leftSidebarTrigger,
     .rightSidebarTrigger,
+    .floatingHeader,
     .tocCapsule,
-    .statusCapsule {
+    .statusCapsule,
+    .bottomProgressBar {
         display: none;
     }
 
-    .floatingHeader {
-        width: calc(100vw - 24px);
-        padding: 0 12px;
+    .contentFrame {
+        top: env(safe-area-inset-top);
+        bottom: calc(158px + env(safe-area-inset-bottom));
     }
 
-    .bookTitle {
-        max-width: 30vw;
+    .panelLayer {
+        z-index: 72;
+        align-items: end;
+        padding: 0;
     }
 }
