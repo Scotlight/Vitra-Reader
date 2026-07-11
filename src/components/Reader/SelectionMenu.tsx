@@ -53,30 +53,34 @@ export const SelectionMenu = ({
 }: SelectionMenuProps) => {
     const menuRef = useRef<HTMLDivElement>(null)
 
-    // Click outside to dismiss
+    // Pointer events cover mouse, touch, and pen input without double-firing.
     useEffect(() => {
         if (!visible) return
-        const handler = (e: MouseEvent) => {
+        const handler = (e: PointerEvent) => {
             if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
                 onDismiss()
             }
         }
-        const timer = setTimeout(() => document.addEventListener('mousedown', handler), 50)
+        const timer = setTimeout(() => document.addEventListener('pointerdown', handler), 50)
         return () => {
             clearTimeout(timer)
-            document.removeEventListener('mousedown', handler)
+            document.removeEventListener('pointerdown', handler)
         }
     }, [visible, onDismiss])
 
     // Horizontal: prefer right side of cursor; flip to left if near right edge
     const nearRight = x + MENU_WIDTH_ESTIMATE + OFFSET > window.innerWidth
-    const menuLeft = nearRight ? x - MENU_WIDTH_ESTIMATE - OFFSET : x + OFFSET
+    const preferredLeft = nearRight ? x - MENU_WIDTH_ESTIMATE - OFFSET : x + OFFSET
+    const maxLeft = Math.max(8, window.innerWidth - MENU_WIDTH_ESTIMATE - 8)
+    const menuLeft = Math.max(8, Math.min(preferredLeft, maxLeft))
 
     // Vertical: top/middle/bottom zone
     const nearTop = y < MENU_HEIGHT_ESTIMATE / 2
     const nearBottom = y > window.innerHeight - MENU_HEIGHT_ESTIMATE / 2
     // near top: align menu top to cursor; near bottom: align menu bottom to cursor; else: center
-    const menuTop = nearTop ? y : nearBottom ? y - MENU_HEIGHT_ESTIMATE : y - MENU_HEIGHT_ESTIMATE / 2
+    const preferredTop = nearTop ? y : nearBottom ? y - MENU_HEIGHT_ESTIMATE : y - MENU_HEIGHT_ESTIMATE / 2
+    const maxTop = Math.max(8, window.innerHeight - MENU_HEIGHT_ESTIMATE - 8)
+    const menuTop = Math.max(8, Math.min(preferredTop, maxTop))
 
     return (
         <AnimatePresence>

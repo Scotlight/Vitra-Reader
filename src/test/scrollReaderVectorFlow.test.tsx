@@ -7,6 +7,7 @@ import type { ReaderStyleConfig } from '@/components/Reader/ShadowRenderer'
 const mocks = vi.hoisted(() => ({
     preprocessChapterContentMock: vi.fn(),
     progressPutMock: vi.fn(),
+    setSelectionMenuMock: vi.fn(),
     shadowRendererErrorChapterIds: new Set<string>(),
     shadowRendererSpy: vi.fn(),
 }))
@@ -30,7 +31,7 @@ vi.mock('@/hooks/useScrollEvents', () => ({
 vi.mock('@/hooks/useSelectionMenu', () => ({
     useSelectionMenu: () => ({
         selectionMenu: { visible: false, x: 0, y: 0, text: '', spineIndex: -1 },
-        setSelectionMenu: vi.fn(),
+        setSelectionMenu: mocks.setSelectionMenuMock,
         renderedHighlightsRef: { current: new Set<string>() },
         renderSelectionUI: () => null,
     }),
@@ -194,6 +195,7 @@ describe('ScrollReaderView vector flow', () => {
     beforeEach(() => {
         mocks.preprocessChapterContentMock.mockReset()
         mocks.progressPutMock.mockReset()
+        mocks.setSelectionMenuMock.mockReset()
         mocks.shadowRendererErrorChapterIds.clear()
         mocks.shadowRendererSpy.mockReset()
         vi.stubGlobal('ResizeObserver', ResizeObserverMock)
@@ -243,6 +245,61 @@ describe('ScrollReaderView vector flow', () => {
         expect(mocks.shadowRendererSpy).not.toHaveBeenCalled()
         expect(provider.extractChapterHtml).toHaveBeenCalledTimes(1)
         expect(mocks.preprocessChapterContentMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('触摸完成文本选择后从章节节点回溯并打开选择菜单', async () => {
+        const provider = createProvider()
+        mocks.preprocessChapterContentMock.mockResolvedValue(createNonVectorPreprocessResult())
+
+        const view = render(
+            <ScrollReaderView
+                provider={provider}
+                bookId="book-1"
+                readerStyles={DEFAULT_READER_STYLES}
+            />
+        )
+
+        await flushUi()
+
+        const viewport = view.container.querySelector('[class*="viewport"]') as HTMLElement
+        const chapter = view.container.querySelector('[data-chapter-id="ch-0"]') as HTMLElement
+        expect(viewport).not.toBeNull()
+        expect(chapter).not.toBeNull()
+
+        const textNode = document.createTextNode('touch selection')
+        chapter.appendChild(textNode)
+        const selection = window.getSelection()
+        const range = document.createRange()
+        range.setStart(textNode, 0)
+        range.setEnd(textNode, 5)
+        Object.defineProperty(range, 'getBoundingClientRect', {
+            value: () => ({
+                left: 20,
+                top: 40,
+                width: 40,
+                height: 10,
+                right: 60,
+                bottom: 50,
+                x: 20,
+                y: 40,
+                toJSON: () => ({}),
+            }),
+        })
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+
+        await act(async () => {
+            viewport.dispatchEvent(new Event('touchend', { bubbles: true }))
+            await new Promise((resolve) => window.setTimeout(resolve, 0))
+        })
+
+        expect(mocks.setSelectionMenuMock).toHaveBeenCalledWith({
+            visible: true,
+            x: 40,
+            y: 30,
+            text: 'touch',
+            spineIndex: 0,
+        })
     })
 
     it('样式切换后重新预处理向量章节，并继续走直接外壳路径', async () => {

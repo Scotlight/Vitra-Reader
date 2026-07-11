@@ -139,11 +139,14 @@ export function usePaginatedHighlights(options: UsePaginatedHighlightsOptions) {
         const viewport = viewportRef.current;
         if (!viewport) return;
 
-        const handleMouseUp = () => {
+        let touchSelectionTimer: number | null = null;
+
+        const handleSelection = () => {
             const sel = window.getSelection();
             const text = sel?.toString().trim();
             if (!text || !sel?.rangeCount) return;
             const range = sel.getRangeAt(0);
+            if (!viewport.contains(range.commonAncestorContainer)) return;
             const rect = range.getBoundingClientRect();
             setSelectionMenu({
                 visible: true,
@@ -154,17 +157,33 @@ export function usePaginatedHighlights(options: UsePaginatedHighlightsOptions) {
             });
         };
 
+        const handleTouchEnd = () => {
+            if (touchSelectionTimer !== null) {
+                window.clearTimeout(touchSelectionTimer);
+            }
+            // Mobile browsers can finalize the native selection after touchend.
+            touchSelectionTimer = window.setTimeout(() => {
+                touchSelectionTimer = null;
+                handleSelection();
+            }, 0);
+        };
+
         const handleContextMenu = (e: MouseEvent) => {
             const sel = window.getSelection();
             if (!sel?.toString().trim()) return;
             e.preventDefault();
-            handleMouseUp();
+            handleSelection();
         };
 
-        viewport.addEventListener('mouseup', handleMouseUp);
+        viewport.addEventListener('mouseup', handleSelection);
+        viewport.addEventListener('touchend', handleTouchEnd, { passive: true });
         viewport.addEventListener('contextmenu', handleContextMenu);
         return () => {
-            viewport.removeEventListener('mouseup', handleMouseUp);
+            if (touchSelectionTimer !== null) {
+                window.clearTimeout(touchSelectionTimer);
+            }
+            viewport.removeEventListener('mouseup', handleSelection);
+            viewport.removeEventListener('touchend', handleTouchEnd);
             viewport.removeEventListener('contextmenu', handleContextMenu);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -73,3 +73,27 @@
     border: 1px solid rgba(0, 0, 0, 0.2) !important;
     padding: 0 !important;
 }
+
+@media (max-width: 850px) and (orientation: portrait) {
+    .selectionMenu {
+        z-index: 120;
+        box-sizing: border-box;
+        width: min(240px, calc(100vw - 24px));
+        min-width: 0;
+        grid-template-columns: repeat(4, 42px);
+        justify-content: center;
+        gap: 5px;
+        padding: 9px;
+        border-radius: 16px;
+    }
+
+    .selectionMenu button {
+        touch-action: manipulation;
+    }
+
+    .menuIconBtn {
+        width: 42px;
+        height: 42px;
+        padding: 0 !important;
+    }
+}

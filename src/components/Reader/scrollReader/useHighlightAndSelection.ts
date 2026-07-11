@@ -25,7 +25,7 @@ interface UseHighlightAndSelectionOptions {
 
 /**
  * 滚动阅读下的选区检测 + 高亮注入协议：
- * - mouseup / contextmenu：从文本选区回溯 spineIndex，填充 selectionMenu
+ * - mouseup / touchend / contextmenu：从文本选区回溯 spineIndex，填充 selectionMenu
  * - scroll 触发时关闭选区菜单
  * - applyHighlightsToChapter: 对单章 DOM 扫描未渲染高亮并 highlightRange
  * - scheduleHighlightInjection: idle 任务节流高亮注入，给外部（虚拟段同步）
@@ -54,7 +54,9 @@ export function useHighlightAndSelection(
         const viewport = viewportRef.current;
         if (!viewport) return;
 
-        const handleMouseUp = () => {
+        let touchSelectionTimer: number | null = null;
+
+        const handleSelection = () => {
             const sel = window.getSelection();
             const text = sel?.toString().trim();
             if (!text || !sel?.rangeCount) {
@@ -62,6 +64,9 @@ export function useHighlightAndSelection(
             }
 
             const range = sel.getRangeAt(0);
+            if (!viewport.contains(range.commonAncestorContainer)) {
+                return;
+            }
             const rect = range.getBoundingClientRect();
 
             let node: Node | null = range.startContainer;
@@ -87,18 +92,34 @@ export function useHighlightAndSelection(
             });
         };
 
+        const handleTouchEnd = () => {
+            if (touchSelectionTimer !== null) {
+                window.clearTimeout(touchSelectionTimer);
+            }
+            // Mobile browsers can finalize the native selection after touchend.
+            touchSelectionTimer = window.setTimeout(() => {
+                touchSelectionTimer = null;
+                handleSelection();
+            }, 0);
+        };
+
         const handleContextMenu = (e: MouseEvent) => {
             const sel = window.getSelection();
             const text = sel?.toString().trim();
             if (!text) return;
             e.preventDefault();
-            handleMouseUp();
+            handleSelection();
         };
 
-        viewport.addEventListener('mouseup', handleMouseUp);
+        viewport.addEventListener('mouseup', handleSelection);
+        viewport.addEventListener('touchend', handleTouchEnd, { passive: true });
         viewport.addEventListener('contextmenu', handleContextMenu);
         return () => {
-            viewport.removeEventListener('mouseup', handleMouseUp);
+            if (touchSelectionTimer !== null) {
+                window.clearTimeout(touchSelectionTimer);
+            }
+            viewport.removeEventListener('mouseup', handleSelection);
+            viewport.removeEventListener('touchend', handleTouchEnd);
             viewport.removeEventListener('contextmenu', handleContextMenu);
         };
     }, [setSelectionMenu, viewportRef]);

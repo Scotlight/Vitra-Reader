@@ -339,7 +339,7 @@ describe('PaginatedReaderView flow', () => {
         expect(mocks.preprocessChapterContentMock.mock.calls[1]![0]).toMatchObject({ spineIndex: 1 })
     })
 
-    it('文本选择后通过统一 helper 设置选择菜单状态', async () => {
+    it('鼠标或触摸完成文本选择后设置选择菜单状态', async () => {
         const provider = createProvider()
         const view = render(
             <PaginatedReaderView
@@ -380,6 +380,20 @@ describe('PaginatedReaderView flow', () => {
         await act(async () => {
             viewport.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
             await Promise.resolve()
+        })
+
+        expect(mocks.setSelectionMenuMock).toHaveBeenCalledWith({
+            visible: true,
+            x: 25,
+            y: 10,
+            text: 'hello',
+            spineIndex: 0,
+        })
+
+        mocks.setSelectionMenuMock.mockReset()
+        await act(async () => {
+            viewport.dispatchEvent(new Event('touchend', { bubbles: true }))
+            await new Promise((resolve) => window.setTimeout(resolve, 0))
         })
 
         expect(mocks.setSelectionMenuMock).toHaveBeenCalledWith({

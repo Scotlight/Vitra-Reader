@@ -83,6 +83,7 @@ describe('useSelectionMenu translation dialog', () => {
     afterEach(() => {
         cleanup()
         translateMocks.translateText.mockReset()
+        vi.unstubAllGlobals()
     })
 
     it('打开翻译弹窗时不再渲染选区菜单', async () => {
@@ -133,5 +134,30 @@ describe('useSelectionMenu translation dialog', () => {
         expect(selectionMenu?.compareDocumentPosition(overlay as HTMLElement)).toBe(
             Node.DOCUMENT_POSITION_FOLLOWING,
         )
+    })
+
+    it('窄屏边缘选区时将菜单位置限制在可视区域内', () => {
+        vi.stubGlobal('innerWidth', 320)
+        vi.stubGlobal('innerHeight', 480)
+
+        render(
+            <SelectionMenu
+                visible
+                x={-100}
+                y={-100}
+                onCopy={noop}
+                onHighlight={noop}
+                onNote={noop}
+                onSearch={noop}
+                onWebSearch={noop}
+                onReadAloud={noop}
+                onTranslate={noop}
+                onDismiss={noop}
+            />,
+        )
+
+        const selectionMenu = document.querySelector<HTMLElement>('[class*="selectionMenu"]')
+        expect(selectionMenu?.style.left).toBe('8px')
+        expect(selectionMenu?.style.top).toBe('8px')
     })
 })
