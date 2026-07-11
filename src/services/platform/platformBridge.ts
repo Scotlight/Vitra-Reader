@@ -4,6 +4,11 @@ export interface PickedBookFile {
     data: () => Promise<Uint8Array | ArrayBuffer>
 }
 
+export interface PickedFontFile {
+    name: string
+    file: File
+}
+
 export interface PlatformCapabilities {
     isDesktop: boolean
     canWebdavSync: boolean
@@ -126,6 +131,38 @@ export async function pickBookFiles(): Promise<PickedBookFile[]> {
         }))
     }
     return pickBookFilesViaInput()
+}
+
+export function pickFontFile(): Promise<PickedFontFile | null> {
+    return new Promise((resolve) => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = '.ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2'
+        input.style.display = 'none'
+
+        let settled = false
+        let focusFallbackTimer: number | null = null
+        const finish = (result: PickedFontFile | null) => {
+            if (settled) return
+            settled = true
+            if (focusFallbackTimer !== null) window.clearTimeout(focusFallbackTimer)
+            window.removeEventListener('focus', handleWindowFocus)
+            input.remove()
+            resolve(result)
+        }
+        const handleWindowFocus = () => {
+            if (focusFallbackTimer !== null) window.clearTimeout(focusFallbackTimer)
+            focusFallbackTimer = window.setTimeout(() => finish(null), 1000)
+        }
+        input.addEventListener('change', () => {
+            const file = input.files?.[0]
+            finish(file ? { name: file.name, file } : null)
+        })
+        input.addEventListener('cancel', () => finish(null))
+        window.addEventListener('focus', handleWindowFocus)
+        document.body.appendChild(input)
+        input.click()
+    })
 }
 
 export function openExternalUrl(url: string): void {

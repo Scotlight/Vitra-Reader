@@ -19,12 +19,18 @@ const CSS_NAME_TO_DISPLAY = Object.freeze(
 
 export function toReaderFontFamily(fontName: string): string {
     if (fontName === '系统默认') return 'inherit'
+    if (fontName === '系统黑体') return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+    if (fontName === '系统宋体') return 'ui-serif, "Songti SC", "Noto Serif CJK SC", serif'
+    if (fontName === '系统等宽') return 'ui-monospace, "SFMono-Regular", Consolas, monospace'
     const cssName = FONT_NAME_TO_CSS[fontName as keyof typeof FONT_NAME_TO_CSS] || fontName
     return `"${cssName}", sans-serif`
 }
 
 export function toReaderFontDisplayName(fontFamily: string): string {
     if (fontFamily === 'inherit') return '系统默认'
+    if (fontFamily.startsWith('system-ui')) return '系统黑体'
+    if (fontFamily.startsWith('ui-serif')) return '系统宋体'
+    if (fontFamily.startsWith('ui-monospace')) return '系统等宽'
     const match = fontFamily.match(/^"?([^",]+)"?/)
     if (!match) return '系统默认'
     const cssName = (match[1] || '').trim()

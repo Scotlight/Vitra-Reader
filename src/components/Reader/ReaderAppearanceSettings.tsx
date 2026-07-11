@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { toReaderFontDisplayName, toReaderFontFamily } from './readerFonts'
 import { useReaderSystemFonts } from './useReaderSystemFonts'
+import { formatFontDownloadSize } from './readerFontCatalog'
+import { toStoredReaderFontFamily } from './readerFontService'
 import styles from './ReaderView.module.css'
 
 const THEME_IDS = ['light', 'dark', 'sepia', 'green'] as const
@@ -19,12 +21,35 @@ const TEXT_ALIGN_OPTIONS = [
 
 export function ReaderAppearanceSettings() {
     const settings = useSettingsStore()
-    const { loadingFonts, systemFonts } = useReaderSystemFonts()
+    const {
+        catalog,
+        downloadFont,
+        fontError,
+        fontOperationId,
+        importFont,
+        loadingFonts,
+        removeFont,
+        storedFonts,
+        systemFonts,
+    } = useReaderSystemFonts()
     const [tempTextColor, setTempTextColor] = useState<string | null>(null)
     const [textPickerDirty, setTextPickerDirty] = useState(false)
     const [tempBgColor, setTempBgColor] = useState<string | null>(null)
     const [bgPickerDirty, setBgPickerDirty] = useState(false)
     const currentFontName = toReaderFontDisplayName(settings.fontFamily)
+    const selectedStoredFont = storedFonts.find((font) => settings.fontFamily.includes(`"${font.family}"`))
+    const importedFonts = storedFonts.filter((font) => font.source === 'import')
+
+    const selectStoredFont = (font: (typeof storedFonts)[number]) => {
+        settings.updateSetting('fontFamily', toStoredReaderFontFamily(font))
+    }
+
+    const deleteStoredFont = async (font: (typeof storedFonts)[number]) => {
+        await removeFont(font.id)
+        if (settings.fontFamily.includes(`"${font.family}"`)) {
+            settings.updateSetting('fontFamily', 'inherit')
+        }
+    }
 
     return (
         <>
@@ -183,11 +208,16 @@ export function ReaderAppearanceSettings() {
             </div>
 
             <div className={styles.settingsGroup}>
-                <label>字体风格</label>
+                <label>系统字体</label>
                 {loadingFonts ? (
                     <div className={styles.fontLoading}>加载字体列表中...</div>
                 ) : (
-                    <select className={styles.fontSelect} value={currentFontName} onChange={(event) => settings.updateSetting('fontFamily', toReaderFontFamily(event.target.value))}>
+                    <select
+                        className={styles.fontSelect}
+                        value={selectedStoredFont ? '' : currentFontName}
+                        onChange={(event) => settings.updateSetting('fontFamily', toReaderFontFamily(event.target.value))}
+                    >
+                        {selectedStoredFont && <option value="">当前：{selectedStoredFont.displayName}</option>}
                         {systemFonts.map((fontName) => (
                             <option key={fontName} value={fontName} style={{ fontFamily: fontName === '系统默认' ? 'inherit' : fontName }}>
                                 {fontName}
@@ -195,6 +225,67 @@ export function ReaderAppearanceSettings() {
                         ))}
                     </select>
                 )}
+            </div>
+
+            <div className={styles.settingsGroup}>
+                <label>可下载字体</label>
+                <div className={styles.fontLibrary}>
+                    {catalog.map((font) => {
+                        const installed = storedFonts.find((entry) => entry.catalogId === font.id)
+                        const busy = fontOperationId === font.id || fontOperationId === installed?.id
+                        const selected = installed ? settings.fontFamily.includes(`"${installed.family}"`) : false
+                        return (
+                            <div key={font.id} className={`${styles.fontLibraryItem} ${selected ? styles.fontLibraryItemActive : ''}`}>
+                                <div className={styles.fontLibraryMeta}>
+                                    <strong style={{ fontFamily: installed ? toStoredReaderFontFamily(installed) : undefined }}>{font.displayName}</strong>
+                                    <span>{formatFontDownloadSize(font.sizeBytes)} · {font.license}</span>
+                                </div>
+                                <div className={styles.fontLibraryActions}>
+                                    {installed ? (
+                                        <>
+                                            <button type="button" onClick={() => selectStoredFont(installed)} disabled={selected || busy}>{selected ? '使用中' : '使用'}</button>
+                                            <button type="button" onClick={() => void deleteStoredFont(installed)} disabled={busy}>删除</button>
+                                        </>
+                                    ) : (
+                                        <button type="button" onClick={() => void downloadFont(font.id)} disabled={busy}>{busy ? '下载中…' : '下载'}</button>
+                                    )}
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            </div>
+
+            <div className={styles.settingsGroup}>
+                <div className={styles.fontSectionHeader}>
+                    <label>我的字体</label>
+                    <button type="button" className={styles.importFontBtn} onClick={() => void importFont()} disabled={fontOperationId === 'import'}>
+                        {fontOperationId === 'import' ? '导入中…' : '导入字体'}
+                    </button>
+                </div>
+                {importedFonts.length === 0 ? (
+                    <p className={styles.fontEmpty}>可从“文件”导入 TTF、OTF、WOFF 或 WOFF2 字体。</p>
+                ) : (
+                    <div className={styles.fontLibrary}>
+                        {importedFonts.map((font) => {
+                            const selected = settings.fontFamily.includes(`"${font.family}"`)
+                            const busy = fontOperationId === font.id
+                            return (
+                                <div key={font.id} className={`${styles.fontLibraryItem} ${selected ? styles.fontLibraryItemActive : ''}`}>
+                                    <div className={styles.fontLibraryMeta}>
+                                        <strong style={{ fontFamily: toStoredReaderFontFamily(font) }}>{font.displayName}</strong>
+                                        <span>{formatFontDownloadSize(font.sizeBytes)} · {font.format.toUpperCase()}</span>
+                                    </div>
+                                    <div className={styles.fontLibraryActions}>
+                                        <button type="button" onClick={() => selectStoredFont(font)} disabled={selected || busy}>{selected ? '使用中' : '使用'}</button>
+                                        <button type="button" onClick={() => void deleteStoredFont(font)} disabled={busy}>删除</button>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+                {fontError && <p className={styles.fontError} role="alert">{fontError}</p>}
             </div>
 
             <RangeControl label={`字号: ${settings.fontSize}px`} min={12} max={36} step={1} value={settings.fontSize} onChange={(value) => settings.updateSetting('fontSize', value)} />

@@ -9,6 +9,7 @@ import {
     listSystemFonts,
     openExternalUrl,
     pickBookFiles,
+    pickFontFile,
     requestElementFullscreen,
     requestPersistentStorage,
     safeStorageDecrypt,
@@ -152,6 +153,26 @@ describe('platformBridge', () => {
             } finally {
                 vi.useRealTimers()
             }
+        })
+    })
+
+    describe('pickFontFile', () => {
+        it('通过文件选择器返回单个字体文件', async () => {
+            const pending = pickFontFile()
+            const input = findPickerInput()
+            expect(input?.accept).toContain('.woff2')
+            const file = new File([new Uint8Array([0, 1, 0, 0])], 'reader.ttf', { type: 'font/ttf' })
+            Object.defineProperty(input, 'files', { configurable: true, value: [file] })
+            input?.dispatchEvent(new Event('change'))
+
+            await expect(pending).resolves.toEqual({ name: 'reader.ttf', file })
+            expect(findPickerInput()).toBeNull()
+        })
+
+        it('取消字体选择返回 null', async () => {
+            const pending = pickFontFile()
+            findPickerInput()?.dispatchEvent(new Event('cancel'))
+            await expect(pending).resolves.toBeNull()
         })
     })
 
