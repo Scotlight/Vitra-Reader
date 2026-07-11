@@ -37,7 +37,14 @@ vi.mock('@/stores/useSettingsStore', () => ({
 
 vi.mock('@/components/Reader/useReaderSystemFonts', () => ({
     useReaderSystemFonts: () => ({
+        catalog: [],
+        downloadFont: vi.fn(),
+        fontError: null,
+        fontOperationId: null,
+        importFont: vi.fn(),
         loadingFonts: false,
+        removeFont: vi.fn(),
+        storedFonts: [],
         systemFonts: ['系统默认', 'Segoe UI'],
     }),
 }))
