@@ -12,7 +12,7 @@ export interface ReaderFontCatalogItem {
     readonly sourceUrl: string
     readonly url: string
     readonly version: string
-    readonly sha256?: string
+    readonly sha256: string
 }
 
 const NOTO_COMMIT = 'f8d157532fbfaeda587e826d4cd5b21a49186f7c'
@@ -31,6 +31,7 @@ export const READER_FONT_CATALOG: readonly ReaderFontCatalogItem[] = Object.free
         sourceUrl: 'https://github.com/notofonts/noto-cjk',
         url: `https://raw.githubusercontent.com/notofonts/noto-cjk/${NOTO_COMMIT}/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf`,
         version: NOTO_COMMIT.slice(0, 8),
+        sha256: '2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b',
     },
     {
         id: 'noto-serif-cjk-sc-regular',
@@ -44,6 +45,7 @@ export const READER_FONT_CATALOG: readonly ReaderFontCatalogItem[] = Object.free
         sourceUrl: 'https://github.com/notofonts/noto-cjk',
         url: `https://raw.githubusercontent.com/notofonts/noto-cjk/${NOTO_COMMIT}/Serif/OTF/SimplifiedChinese/NotoSerifCJKsc-Regular.otf`,
         version: NOTO_COMMIT.slice(0, 8),
+        sha256: '2a2eae2628df83556c54018c41e20fa532c1b862c5256ae8b3f23feb918d12ca',
     },
     {
         id: 'lxgw-wenkai-regular',
@@ -57,6 +59,7 @@ export const READER_FONT_CATALOG: readonly ReaderFontCatalogItem[] = Object.free
         sourceUrl: 'https://github.com/lxgw/LxgwWenKai',
         url: `https://raw.githubusercontent.com/lxgw/LxgwWenKai/${LXGW_COMMIT}/fonts/TTF/LXGWWenKai-Regular.ttf`,
         version: LXGW_COMMIT.slice(0, 8),
+        sha256: '39ad71264b588165b469e35e6afb162a378dacd1f95348160240ba9038ac3009',
     },
 ])
 

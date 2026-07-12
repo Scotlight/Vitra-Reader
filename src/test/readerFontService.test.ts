@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReaderFontCatalogItem } from '@/components/Reader/readerFontCatalog'
 
-const { rows, settings } = vi.hoisted(() => {
+const { rows, readerFonts } = vi.hoisted(() => {
     const fontRows = new Map<string, unknown>()
     return {
         rows: fontRows,
-        settings: {
-            get: vi.fn(async (key: string) => fontRows.has(key) ? { key, value: fontRows.get(key) } : undefined),
-            put: vi.fn(async ({ key, value }: { key: string; value: unknown }) => {
-                fontRows.set(key, value)
-                return key
+        readerFonts: {
+            toArray: vi.fn(async () => Array.from(fontRows.values())),
+            put: vi.fn(async (font: { id: string }) => {
+                fontRows.set(font.id, font)
+                return font.id
             }),
-            delete: vi.fn(async (key: string) => {
-                fontRows.delete(key)
+            delete: vi.fn(async (id: string) => {
+                fontRows.delete(id)
             }),
         },
     }
@@ -20,11 +20,7 @@ const { rows, settings } = vi.hoisted(() => {
 
 vi.mock('@/services/storageService', () => ({
     db: {
-        settings,
-        transaction: vi.fn(async (...args: unknown[]) => {
-            const callback = args.at(-1) as () => Promise<unknown>
-            return callback()
-        }),
+        readerFonts,
     },
 }))
 
@@ -71,6 +67,7 @@ const catalogFont: ReaderFontCatalogItem = {
     sourceUrl: 'https://example.test/source',
     url: 'https://example.test/font.otf',
     version: '1',
+    sha256: '7ff30fcf2251a8e9cf8e5175d75e90b3c02656f9a344b10948a4d96bb568d74e',
 }
 
 describe('readerFontService', () => {
@@ -98,7 +95,7 @@ describe('readerFontService', () => {
 
         expect(font.catalogId).toBe('test-font')
         expect(font.source).toBe('catalog')
-        expect(settings.put).toHaveBeenCalled()
+        expect(readerFonts.put).toHaveBeenCalled()
         expect(fontSet.add).toHaveBeenCalledTimes(1)
         expect(toStoredReaderFontFamily(font)).toContain('Vitra Test Font')
     })
@@ -107,6 +104,13 @@ describe('readerFontService', () => {
         vi.stubGlobal('fetch', vi.fn(async () => new Response(new Uint8Array([79, 84, 84, 79, 0]), { status: 200 })))
 
         await expect(downloadReaderFont(catalogFont)).rejects.toThrow('长度与清单不一致')
+    })
+
+    it('目录提供哈希时拒绝完整性不匹配的下载内容', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(new Uint8Array([79, 84, 84, 79]), { status: 200 })))
+
+        await expect(downloadReaderFont({ ...catalogFont, sha256: '0'.repeat(64) }))
+            .rejects.toThrow('完整性校验失败')
     })
 
     it('导入本地字体并可从持久化记录恢复和删除', async () => {
@@ -118,7 +122,7 @@ describe('readerFontService', () => {
 
         expect(imported.displayName).toBe('我的字体')
         expect(restored.some((font) => font.id === imported.id)).toBe(true)
-        expect(rows.has(`readerFonts:data:v1:${imported.id}`)).toBe(false)
+        expect(rows.has(imported.id)).toBe(false)
         expect(fontSet.delete).toHaveBeenCalled()
     })
 

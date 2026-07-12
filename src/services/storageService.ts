@@ -1,7 +1,10 @@
 import Dexie, { type Table } from 'dexie'
 import type { BookFormat } from '@/engine/core/contentProvider'
 
-// Dexie schema 版本约定：当前最高版本 6；下次修改 schema 必须从 7 开始，并同步更新本注释中的最高版本号。
+// Dexie schema 版本约定：当前最高版本 7；下次修改 schema 必须从 8 开始，并同步更新本注释中的最高版本号。
+
+const LEGACY_READER_FONT_INDEX_KEY = 'readerFonts:index:v1'
+const LEGACY_READER_FONT_DATA_KEY_PREFIX = 'readerFonts:data:v1:'
 
 // ─── Data Models ────────────────────────────────────────────
 
@@ -74,6 +77,40 @@ export interface ReadingStatsDaily {
     updatedAt: number
 }
 
+export interface ReaderFontRecord {
+    id: string
+    displayName: string
+    family: string
+    category: 'sans' | 'serif' | 'handwriting'
+    format: string
+    sizeBytes: number
+    source: 'catalog' | 'import'
+    catalogId?: string
+    installedAt: number
+    data: ArrayBuffer
+}
+
+interface SettingRow {
+    key: string
+    value: unknown
+}
+
+export function extractLegacyReaderFontRecords(rows: readonly SettingRow[]): ReaderFontRecord[] {
+    return rows.flatMap((row) => {
+        if (!row.key.startsWith(LEGACY_READER_FONT_DATA_KEY_PREFIX)) return []
+        const font = row.value as Partial<ReaderFontRecord> | undefined
+        if (!font
+            || typeof font.id !== 'string'
+            || typeof font.displayName !== 'string'
+            || typeof font.family !== 'string'
+            || typeof font.installedAt !== 'number'
+            || !(font.data instanceof ArrayBuffer)) {
+            return []
+        }
+        return [font as ReaderFontRecord]
+    })
+}
+
 // ─── Database ───────────────────────────────────────────────
 
 class ReaderDatabase extends Dexie {
@@ -84,6 +121,7 @@ class ReaderDatabase extends Dexie {
     highlights!: Table<Highlight>
     translationCache!: Table<TranslationCacheEntry>
     readingStatsDaily!: Table<ReadingStatsDaily>
+    readerFonts!: Table<ReaderFontRecord>
     settings!: Table<{ key: string; value: unknown }>
 
     constructor() {
@@ -142,6 +180,30 @@ class ReaderDatabase extends Dexie {
             translationCache: 'key, provider, createdAt, lastAccessAt, expiresAt',
             readingStatsDaily: 'id, dateKey, bookId, updatedAt',
             settings: 'key',
+        })
+        this.version(7).stores({
+            books: 'id, title, author, addedAt, lastReadAt',
+            bookFiles: 'id',
+            progress: 'bookId',
+            bookmarks: 'id, bookId, createdAt',
+            highlights: 'id, bookId, cfiRange, createdAt',
+            translationCache: 'key, provider, createdAt, lastAccessAt, expiresAt',
+            readingStatsDaily: 'id, dateKey, bookId, updatedAt',
+            readerFonts: 'id, source, installedAt',
+            settings: 'key',
+        }).upgrade(async tx => {
+            const settings = tx.table<SettingRow>('settings')
+            const legacyRows = await settings
+                .filter((row) => row.key.startsWith(LEGACY_READER_FONT_DATA_KEY_PREFIX))
+                .toArray()
+            const fonts = extractLegacyReaderFontRecords(legacyRows)
+            if (fonts.length > 0) {
+                await tx.table<ReaderFontRecord>('readerFonts').bulkPut(fonts)
+            }
+            await settings.bulkDelete([
+                LEGACY_READER_FONT_INDEX_KEY,
+                ...legacyRows.map((row) => row.key),
+            ])
         })
     }
 }

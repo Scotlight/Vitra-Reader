@@ -89,6 +89,7 @@ function validPayload(): SyncPayloadShape {
         settings: [
             { key: 'reader:theme', value: 'dark' },
             { key: 'sync:webdavUser', value: 'secret-user' },
+            { key: 'readerFonts:data:v1:legacy-font', value: { data: 'legacy-font-data' } },
         ],
         bookFiles: [{
             id: 'book-1',

@@ -19,7 +19,7 @@ const SENSITIVE_SETTINGS_KEYS = new Set([
     'webdavRemoteEtag', 'webdavSyncMode', 'webdavRestoreMode', 'webdavReplaceBeforeRestore',
     'lastSyncTime',
 ])
-const UNSYNCABLE_SETTINGS_KEY_PREFIXES = ['vcache-', 'tcache:']
+const UNSYNCABLE_SETTINGS_KEY_PREFIXES = ['vcache-', 'tcache:', 'readerFonts:']
 
 export type SettingRow = { key: string; value: unknown }
 type SerializedBookFile = { id: string; dataBase64: string }
