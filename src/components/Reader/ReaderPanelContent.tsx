@@ -82,10 +82,10 @@ export function ReaderPanelContent({
                     </div>
                     <div className={styles.resultList}>
                         {searchResults.map((result, index) => (
-                             <div
-                                 key={`${result.cfi}-${index}`}
-                                 className={styles.resultItem}
-                                 data-reader-panel-navigation="true"
+                            <div
+                                key={`${result.cfi}-${index}`}
+                                className={styles.resultItem}
+                                data-reader-panel-navigation="true"
                                 onClick={() => void jumpToAnnotation(result.cfi, searchQuery.trim() || undefined)}
                                 role="button"
                                 tabIndex={0}
@@ -194,9 +194,9 @@ function renderTocItems(
         return [
             <button
                 key={key}
-                 className={`${styles.tocItem} ${active ? styles.tocItemActive : ''}`}
-                 data-reader-panel-navigation="true"
-                 data-toc-active={active ? 'true' : 'false'}
+                className={`${styles.tocItem} ${active ? styles.tocItemActive : ''}`}
+                data-reader-panel-navigation="true"
+                data-toc-active={active ? 'true' : 'false'}
                 onClick={() => void handleTocClick(item.href)}
                 style={{ paddingLeft: `${12 + level * 14}px` }}
             >
