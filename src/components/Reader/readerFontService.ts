@@ -1,4 +1,4 @@
-import { db, type ReaderFontRecord } from '@/services/storageService'
+import { db, migrateLegacyReaderFonts, type ReaderFontRecord } from '@/services/storageService'
 import { requestPersistentStorage } from '@/services/platform/platformBridge'
 import type { ReaderFontCatalogItem, ReaderFontCategory } from './readerFontCatalog'
 
@@ -64,24 +64,28 @@ export async function registerStoredReaderFont(font: StoredReaderFont): Promise<
     if (typeof FontFace === 'undefined' || !document.fonts) return
     const previous = registeredFontFaces.get(font.id)
     if (previous) document.fonts.delete(previous)
-    const face = new FontFace(font.family, font.data.slice(0), { style: 'normal', weight: '400' })
+    const face = new FontFace(font.family, font.data, { style: 'normal', weight: '400' })
     await face.load()
     document.fonts.add(face)
     registeredFontFaces.set(font.id, face)
 }
 
 export async function loadStoredReaderFonts(): Promise<StoredReaderFontSummary[]> {
-    const storedFonts = await db.readerFonts.toArray()
-    storedFonts.sort((left, right) => right.installedAt - left.installedAt)
+    await migrateLegacyReaderFonts()
+    const fontIds = await db.readerFonts.orderBy('installedAt').reverse().primaryKeys()
     const loaded: StoredReaderFontSummary[] = []
-    for (const font of storedFonts) {
-        if (!hasFontMagic(font.data)) continue
+    for (const fontId of fontIds) {
         try {
+            const font = await db.readerFonts.get(fontId)
+            if (!font || !(font.data instanceof ArrayBuffer) || !hasFontMagic(font.data)) {
+                console.warn(`[ReaderFont] 跳过无法识别的字体记录 ${fontId}`)
+                continue
+            }
             await registerStoredReaderFont(font)
             const { data: _data, ...summary } = font
             loaded.push(summary)
         } catch (error) {
-            console.warn(`[ReaderFont] 无法恢复字体 ${font.displayName}`, error)
+            console.warn(`[ReaderFont] 无法恢复字体 ${fontId}`, error)
         }
     }
     return loaded

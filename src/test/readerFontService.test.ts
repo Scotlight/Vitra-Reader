@@ -1,12 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReaderFontCatalogItem } from '@/components/Reader/readerFontCatalog'
 
-const { rows, readerFonts } = vi.hoisted(() => {
+const { rows, readerFonts, migrateLegacyReaderFonts } = vi.hoisted(() => {
     const fontRows = new Map<string, unknown>()
+    const primaryKeys = vi.fn(async () => Array.from(fontRows.values())
+        .sort((left, right) => (right as { installedAt: number }).installedAt - (left as { installedAt: number }).installedAt)
+        .map((font) => (font as { id: string }).id))
+    const reverse = vi.fn(() => ({ primaryKeys }))
     return {
         rows: fontRows,
         readerFonts: {
-            toArray: vi.fn(async () => Array.from(fontRows.values())),
+            get: vi.fn(async (id: string) => fontRows.get(id)),
+            orderBy: vi.fn((_index: string) => ({ reverse })),
             put: vi.fn(async (font: { id: string }) => {
                 fontRows.set(font.id, font)
                 return font.id
@@ -15,6 +20,7 @@ const { rows, readerFonts } = vi.hoisted(() => {
                 fontRows.delete(id)
             }),
         },
+        migrateLegacyReaderFonts: vi.fn<() => Promise<void>>(async () => undefined),
     }
 })
 
@@ -22,6 +28,7 @@ vi.mock('@/services/storageService', () => ({
     db: {
         readerFonts,
     },
+    migrateLegacyReaderFonts,
 }))
 
 vi.mock('@/services/platform/platformBridge', () => ({
@@ -81,6 +88,11 @@ describe('readerFontService', () => {
         })
         fontSet.add.mockClear()
         fontSet.delete.mockClear()
+        readerFonts.get.mockClear()
+        readerFonts.orderBy.mockClear()
+        readerFonts.put.mockClear()
+        readerFonts.delete.mockClear()
+        migrateLegacyReaderFonts.mockClear()
     })
 
     afterEach(() => {
@@ -129,5 +141,57 @@ describe('readerFontService', () => {
     it('拒绝伪装成字体的文件', async () => {
         const file = new File([new Uint8Array([1, 2, 3, 4])], 'fake.ttf', { type: 'font/ttf' })
         await expect(importReaderFont(file)).rejects.toThrow('不是有效字体文件')
+    })
+
+    it('恢复时跳过损坏记录并保留完好字体', async () => {
+        rows.set('broken', { id: 'broken', installedAt: 2, data: {} })
+        rows.set('valid', {
+            id: 'valid',
+            displayName: '完好字体',
+            family: 'Vitra Valid',
+            category: 'serif',
+            format: 'opentype',
+            sizeBytes: 4,
+            source: 'import',
+            installedAt: 1,
+            data: new Uint8Array([79, 84, 84, 79]).buffer,
+        })
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+        await expect(loadStoredReaderFonts()).resolves.toEqual([
+            expect.objectContaining({ id: 'valid' }),
+        ])
+    })
+
+    it('恢复列表按安装时间倒序', async () => {
+        const data = new Uint8Array([79, 84, 84, 79]).buffer
+        rows.set('older', {
+            id: 'older', displayName: '旧字体', family: 'Older', category: 'serif', format: 'otf',
+            sizeBytes: 4, source: 'import', installedAt: 1, data,
+        })
+        rows.set('newer', {
+            id: 'newer', displayName: '新字体', family: 'Newer', category: 'serif', format: 'otf',
+            sizeBytes: 4, source: 'import', installedAt: 2, data,
+        })
+
+        const restored = await loadStoredReaderFonts()
+
+        expect(restored.map((font) => font.id)).toEqual(['newer', 'older'])
+    })
+
+    it('恢复前先等待旧存储迁移', async () => {
+        let finishMigration: (() => void) | undefined
+        migrateLegacyReaderFonts.mockImplementationOnce(() => new Promise<void>((resolve) => {
+            finishMigration = resolve
+        }))
+
+        const loading = loadStoredReaderFonts()
+        await Promise.resolve()
+
+        expect(migrateLegacyReaderFonts).toHaveBeenCalledTimes(1)
+        expect(readerFonts.orderBy).not.toHaveBeenCalled()
+        finishMigration?.()
+        await loading
+        expect(readerFonts.orderBy).toHaveBeenCalledWith('installedAt')
     })
 })

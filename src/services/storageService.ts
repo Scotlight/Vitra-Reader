@@ -103,7 +103,7 @@ export function extractLegacyReaderFontRecords(rows: readonly SettingRow[]): Rea
             || typeof font.id !== 'string'
             || typeof font.displayName !== 'string'
             || typeof font.family !== 'string'
-            || typeof font.installedAt !== 'number'
+            || !Number.isFinite(font.installedAt)
             || !(font.data instanceof ArrayBuffer)) {
             return []
         }
@@ -121,8 +121,8 @@ class ReaderDatabase extends Dexie {
     highlights!: Table<Highlight>
     translationCache!: Table<TranslationCacheEntry>
     readingStatsDaily!: Table<ReadingStatsDaily>
-    readerFonts!: Table<ReaderFontRecord>
-    settings!: Table<{ key: string; value: unknown }>
+    readerFonts!: Table<ReaderFontRecord, string>
+    settings!: Table<{ key: string; value: unknown }, string>
 
     constructor() {
         super('EPubReaderDB')
@@ -189,26 +189,66 @@ class ReaderDatabase extends Dexie {
             highlights: 'id, bookId, cfiRange, createdAt',
             translationCache: 'key, provider, createdAt, lastAccessAt, expiresAt',
             readingStatsDaily: 'id, dateKey, bookId, updatedAt',
-            readerFonts: 'id, source, installedAt',
+            readerFonts: 'id, installedAt',
             settings: 'key',
-        }).upgrade(async tx => {
-            const settings = tx.table<SettingRow>('settings')
-            const legacyRows = await settings
-                .filter((row) => row.key.startsWith(LEGACY_READER_FONT_DATA_KEY_PREFIX))
-                .toArray()
-            const fonts = extractLegacyReaderFontRecords(legacyRows)
-            if (fonts.length > 0) {
-                await tx.table<ReaderFontRecord>('readerFonts').bulkPut(fonts)
-            }
-            await settings.bulkDelete([
-                LEGACY_READER_FONT_INDEX_KEY,
-                ...legacyRows.map((row) => row.key),
-            ])
         })
     }
 }
 
 export const db = new ReaderDatabase()
+
+interface LegacyReaderFontSettingsTable {
+    where(index: 'key'): { startsWith(prefix: string): { primaryKeys(): Promise<string[]> } }
+    get(key: string): Promise<SettingRow | undefined>
+    delete(key: string): Promise<void>
+}
+
+interface ReaderFontMigrationTargetTable {
+    put(record: ReaderFontRecord): Promise<unknown>
+}
+
+export async function runLegacyReaderFontMigration(
+    settingsTable: LegacyReaderFontSettingsTable,
+    readerFontsTable: ReaderFontMigrationTargetTable,
+): Promise<void> {
+    const legacyKeys = await settingsTable
+        .where('key')
+        .startsWith(LEGACY_READER_FONT_DATA_KEY_PREFIX)
+        .primaryKeys()
+    let migrated = 0
+    let discarded = 0
+
+    for (const key of legacyKeys) {
+        try {
+            const row = await settingsTable.get(key)
+            const [font] = row ? extractLegacyReaderFontRecords([row]) : []
+            if (!font) {
+                await settingsTable.delete(key)
+                discarded += 1
+                continue
+            }
+            await readerFontsTable.put(font)
+            await settingsTable.delete(key)
+            migrated += 1
+        } catch (error) {
+            console.warn(`[Storage] 迁移旧版阅读器字体 ${key} 失败，保留旧记录待重试`, error)
+        }
+    }
+
+    if (discarded > 0) console.warn(`[Storage] 已丢弃 ${discarded} 条无效旧版阅读器字体记录`)
+    if (migrated > 0) console.info(`[Storage] 已迁移 ${migrated} 条旧版阅读器字体记录`)
+    await settingsTable.delete(LEGACY_READER_FONT_INDEX_KEY)
+}
+
+let legacyReaderFontMigration: Promise<void> | null = null
+
+export function migrateLegacyReaderFonts(): Promise<void> {
+    legacyReaderFontMigration ??= runLegacyReaderFontMigration(db.settings, db.readerFonts).catch((error) => {
+        legacyReaderFontMigration = null
+        console.warn('[Storage] 旧版阅读器字体迁移失败，稍后重试', error)
+    })
+    return legacyReaderFontMigration
+}
 
 /** 按需获取单本书封面，不触发全量加载 */
 export async function getBookCover(bookId: string): Promise<string | undefined> {
