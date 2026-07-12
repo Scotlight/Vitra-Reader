@@ -168,7 +168,7 @@ export function ImmersiveReaderShell({
     )
 
     return (
-        <div className={styles.shell}>
+        <div className={styles.shell} data-toc-pinned={tocPinned ? 'true' : 'false'}>
             <div className={styles.headerTrigger} />
             <div className={styles.leftSidebarTrigger} />
             <div className={styles.rightSidebarTrigger} />

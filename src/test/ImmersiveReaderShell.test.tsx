@@ -77,5 +77,6 @@ describe('ImmersiveReaderShell', () => {
         const view = renderShell()
 
         expect(view.getByRole('button', { name: '切换为悬浮目录' }).textContent).toBe('悬浮')
+        expect(view.container.firstElementChild).toHaveAttribute('data-toc-pinned', 'true')
     })
 })
