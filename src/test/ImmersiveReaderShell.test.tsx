@@ -10,7 +10,7 @@ import { ImmersiveReaderShell } from '@/components/Reader/ImmersiveReaderShell'
 
 const toc: TocItem[] = [{ id: 'c1', href: 'chapter-1.xhtml', label: '第一章' }]
 
-function renderShell() {
+function renderShell(onPinnedSidebarWidthChange?: (width: number) => void) {
     return render(
         <ImmersiveReaderShell
             activeTab="toc"
@@ -32,7 +32,9 @@ function renderShell() {
             onTabChange={vi.fn()}
             onToggleNightMode={vi.fn()}
             onToggleFullscreen={vi.fn()}
+            onPinnedSidebarWidthChange={onPinnedSidebarWidthChange}
             panelContent={<div>目录内容</div>}
+            pinnedSidebarWidth={360}
             progressLabel="12%"
             settingsOpen={false}
             settingsPanel={<div>设置面板</div>}
@@ -81,5 +83,31 @@ describe('ImmersiveReaderShell', () => {
 
         expect(view.getByRole('button', { name: '切换为悬浮目录' }).textContent).toBe('悬浮')
         expect(view.container.firstElementChild).toHaveAttribute('data-toc-pinned', 'true')
+    })
+
+    it('悬浮模式不渲染宽度拖拽热区', () => {
+        const view = renderShell()
+        expect(view.queryByRole('separator')).toBeNull()
+    })
+
+    it('常驻模式下拖拽缝隙实时调宽并在松手时提交', () => {
+        const onWidthChange = vi.fn()
+        const view = renderShell(onWidthChange)
+
+        fireEvent.click(view.getByRole('button', { name: '切换为常驻目录' }))
+        const handle = view.getByRole('separator', { name: '调整目录栏宽度' })
+        const shellRoot = view.container.firstElementChild as HTMLElement
+        expect(shellRoot.style.getPropertyValue('--pinned-sidebar-width')).toBe('min(360px, 50vw)')
+
+        fireEvent(handle, new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 360 }))
+        expect(shellRoot).toHaveAttribute('data-sidebar-resizing', 'true')
+
+        fireEvent(window, new MouseEvent('pointermove', { clientX: 480 }))
+        expect(shellRoot.style.getPropertyValue('--pinned-sidebar-width')).toBe('min(480px, 50vw)')
+
+        fireEvent(window, new MouseEvent('pointerup'))
+        expect(onWidthChange).toHaveBeenCalledWith(480)
+        expect(shellRoot).toHaveAttribute('data-sidebar-resizing', 'false')
+        expect(shellRoot.style.getPropertyValue('--pinned-sidebar-width')).toBe('min(360px, 50vw)')
     })
 })

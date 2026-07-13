@@ -15,6 +15,7 @@ const baseSettings: ReaderSettings = {
     pageTurnAnimation: 'slide',
     pageTurnMode: 'paginated-single',
     pageWidth: 3,
+    pinnedSidebarWidth: 360,
     paragraphIndentEnabled: false,
     paragraphSpacing: 23,
     showFooterChapter: true,

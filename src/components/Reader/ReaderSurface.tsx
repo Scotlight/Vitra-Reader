@@ -14,6 +14,7 @@ interface ReaderSurfaceSettings {
     letterSpacing: number
     lineHeight: number
     paragraphSpacing: number
+    pinnedSidebarWidth: number
     showFooterChapter: boolean
     showFooterProgress: boolean
     showFooterTime: boolean
@@ -38,6 +39,7 @@ interface ReaderSurfaceProps {
     onNextChapter: () => void
     onBack: () => void
     onPageTurnModeChange: (nextMode: PageTurnMode) => void
+    onPinnedSidebarWidthChange: (width: number) => void
     onPreviousChapter: () => void
     onProgressCommit: (progress: number) => void
     onTabChange: (tab: ReaderPanelTab) => void
@@ -88,6 +90,7 @@ export function ReaderSurface({
     onNextChapter,
     onBack,
     onPageTurnModeChange,
+    onPinnedSidebarWidthChange,
     onPreviousChapter,
     onProgressCommit,
     onTabChange,
@@ -191,7 +194,9 @@ export function ReaderSurface({
                 onTabChange={onTabChange}
                 onToggleNightMode={onToggleNightMode}
                 onToggleFullscreen={toggleFullscreen}
+                onPinnedSidebarWidthChange={onPinnedSidebarWidthChange}
                 panelContent={panelContent}
+                pinnedSidebarWidth={settings.pinnedSidebarWidth}
                 progressLabel={progressLabel}
                 settingsOpen={settingsOpen}
                 settingsPanel={settingsPanel}

@@ -21,6 +21,7 @@ export interface ReaderSettings {
     paragraphIndentEnabled: boolean
     letterSpacing: number
     pageWidth: number
+    pinnedSidebarWidth: number
     brightness: number
     textAlign: 'left' | 'justify' | 'center'
     showFooterProgress: boolean
@@ -113,6 +114,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
     paragraphIndentEnabled: false,
     letterSpacing: 3,
     pageWidth: 3,
+    pinnedSidebarWidth: 360,
     brightness: 1,
     textAlign: 'left',
     showFooterProgress: true,

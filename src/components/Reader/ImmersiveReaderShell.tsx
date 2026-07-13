@@ -5,6 +5,7 @@ import type { ReaderPanelTab } from './readerPanelTypes'
 import { MobileReaderChrome } from './MobileReaderChrome'
 import { scheduleCenterActiveToc } from './tocAutoScroll'
 import { useReaderTabShortcut } from './useReaderTabShortcut'
+import { usePinnedSidebarResize } from './usePinnedSidebarResize'
 import { formatDurationLabel } from '@/services/readingStatsService'
 import styles from './ImmersiveReaderShell.module.css'
 
@@ -30,7 +31,9 @@ interface ImmersiveReaderShellProps {
     readonly onTabChange: (tab: ReaderPanelTab) => void
     readonly onToggleNightMode: () => void
     readonly onToggleFullscreen: () => void
+    readonly onPinnedSidebarWidthChange?: (width: number) => void
     readonly panelContent: ReactNode
+    readonly pinnedSidebarWidth?: number
     readonly progressLabel: string
     readonly showFooterChapter: boolean
     readonly showFooterProgress: boolean
@@ -121,7 +124,9 @@ export function ImmersiveReaderShell({
     onTabChange,
     onToggleNightMode,
     onToggleFullscreen,
+    onPinnedSidebarWidthChange,
     panelContent,
+    pinnedSidebarWidth,
     progressLabel,
     showFooterChapter,
     showFooterProgress,
@@ -138,6 +143,7 @@ export function ImmersiveReaderShell({
     const activeChromeClass = chromeActive ? styles.activeChrome : ''
     const tocPinnedClass = tocPinned ? styles.tocCapsulePinned : ''
     const tocListRef = useRef<HTMLDivElement>(null)
+    const { isResizing, sidebarWidth, startResize } = usePinnedSidebarResize(pinnedSidebarWidth, onPinnedSidebarWidthChange)
 
     useEffect(() => {
         const landscapeViewport = window.matchMedia?.(MOBILE_LANDSCAPE_QUERY)
@@ -175,7 +181,12 @@ export function ImmersiveReaderShell({
     )
 
     return (
-        <div className={styles.shell} data-toc-pinned={tocPinned ? 'true' : 'false'}>
+        <div
+            className={styles.shell}
+            data-toc-pinned={tocPinned ? 'true' : 'false'}
+            data-sidebar-resizing={isResizing ? 'true' : 'false'}
+            style={{ ['--pinned-sidebar-width' as string]: `min(${sidebarWidth}px, 50vw)` }}
+        >
             <div className={styles.headerTrigger} />
             <div className={styles.leftSidebarTrigger} />
             <div className={styles.rightSidebarTrigger} />
@@ -227,6 +238,16 @@ export function ImmersiveReaderShell({
                 )}
                 {panelContent}
             </div>
+
+            {tocPinned && (
+                <div
+                    className={styles.sidebarResizeHandle}
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="调整目录栏宽度"
+                    onPointerDown={startResize}
+                />
+            )}
 
             {statusItems.length > 0 && (
                 <div className={`${styles.glassCapsule} ${styles.statusCapsule} ${activeChromeClass}`} data-immersive-reader-chrome="true">

@@ -203,6 +203,9 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const updatePageTurnMode = useCallback((nextMode: PageTurnMode) => {
         settings.updateSetting('pageTurnMode', nextMode)
     }, [settings])
+    const handlePinnedSidebarWidthChange = useCallback((width: number) => {
+        settings.updateSetting('pinnedSidebarWidth', width)
+    }, [settings])
     const {
         handlePageTurnModeChange,
         modeSwitchAnchor,
@@ -304,6 +307,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
             )}
             onBack={onBack}
             onPageTurnModeChange={handlePageTurnModeChange}
+            onPinnedSidebarWidthChange={handlePinnedSidebarWidthChange}
             onPreviousChapter={handlePreviousChapter}
             onProgressCommit={handleProgressCommit}
             onTabChange={setActiveTab}

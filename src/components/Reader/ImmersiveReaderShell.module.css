@@ -412,6 +412,7 @@
     .floatingHeader,
     .tocCapsule,
     .statusCapsule,
+    .sidebarResizeHandle,
     .bottomProgressBar {
         display: none;
     }
@@ -454,4 +455,30 @@
 .shell[data-toc-pinned='true'] .floatingHeader {
     left: calc(var(--pinned-sidebar-width) + (100% - var(--pinned-sidebar-width)) / 2);
     width: calc(100vw - var(--pinned-sidebar-width) - 48px);
+}
+
+.sidebarResizeHandle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--pinned-sidebar-width) - 5px);
+    width: 10px;
+    z-index: 40;
+    cursor: col-resize;
+    touch-action: none;
+    background: transparent;
+}
+
+.shell[data-sidebar-resizing='true'] {
+    cursor: col-resize;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.shell[data-sidebar-resizing='true'] .tocCapsule {
+    transition: none;
+}
+
+.shell[data-sidebar-resizing='true'] .contentFrame {
+    pointer-events: none;
 }
