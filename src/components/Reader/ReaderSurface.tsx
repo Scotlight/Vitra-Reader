@@ -24,6 +24,9 @@ interface ReaderSurfaceSettings {
 interface ReaderSurfaceProps {
     activeTab: ReaderPanelTab
     bookFormat: string
+    bookAuthorText: string
+    bookCover: string
+    bookTotalActiveMs: number
     bookTitleText: string
     chapterLabel: string
     clockText: string
@@ -71,6 +74,9 @@ function buildReaderContainerStyle(
 export function ReaderSurface({
     activeTab,
     bookFormat,
+    bookAuthorText,
+    bookCover,
+    bookTotalActiveMs,
     bookTitleText,
     chapterLabel,
     clockText,
@@ -167,6 +173,9 @@ export function ReaderSurface({
         >
             <ImmersiveReaderShell
                 activeTab={activeTab}
+                bookAuthorText={bookAuthorText}
+                bookCover={bookCover}
+                bookTotalActiveMs={bookTotalActiveMs}
                 bookTitleText={bookTitleText}
                 chapterLabel={chapterLabel}
                 clockText={clockText}

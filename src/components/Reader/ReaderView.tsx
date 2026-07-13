@@ -13,6 +13,7 @@ import { findCurrentChapterLabel, normalizeTocHref } from './readerToc'
 import { useReaderAnnotations } from './useReaderAnnotations'
 import { useReaderAppearance } from './useReaderAppearance'
 import { useReaderBookSession } from './useReaderBookSession'
+import { useReaderBookHeaderInfo } from './useReaderBookHeaderInfo'
 import { useReaderClock } from './useReaderClock'
 import { useReaderModeSwitch } from './useReaderModeSwitch'
 import { useReaderNavigation } from './useReaderNavigation'
@@ -56,6 +57,10 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         pageTurnMode: settings.pageTurnMode,
     })
     const clockText = useReaderClock()
+    const bookHeaderInfo = useReaderBookHeaderInfo({
+        bookId,
+        isReady,
+    })
     const { markActivity } = useReadingActivityTracker({
         bookId,
         isReady,
@@ -263,6 +268,9 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         <ReaderSurface
             activeTab={activeTab}
             bookFormat={bookFormat}
+            bookAuthorText={bookHeaderInfo.author}
+            bookCover={bookHeaderInfo.cover}
+            bookTotalActiveMs={bookHeaderInfo.totalActiveMs}
             bookTitleText={bookTitleText}
             chapterLabel={findCurrentChapterLabel(toc, currentSectionHref)}
             clockText={clockText}

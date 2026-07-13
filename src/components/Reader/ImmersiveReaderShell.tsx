@@ -5,12 +5,16 @@ import type { ReaderPanelTab } from './readerPanelTypes'
 import { MobileReaderChrome } from './MobileReaderChrome'
 import { scheduleCenterActiveToc } from './tocAutoScroll'
 import { useReaderTabShortcut } from './useReaderTabShortcut'
+import { formatDurationLabel } from '@/services/readingStatsService'
 import styles from './ImmersiveReaderShell.module.css'
 
 const MOBILE_LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 600px)'
 
 interface ImmersiveReaderShellProps {
     readonly activeTab: ReaderPanelTab
+    readonly bookAuthorText: string
+    readonly bookCover: string
+    readonly bookTotalActiveMs: number
     readonly bookTitleText: string
     readonly chapterLabel: string
     readonly clockText: string
@@ -99,6 +103,9 @@ function buildStatusItems(
 
 export function ImmersiveReaderShell({
     activeTab,
+    bookAuthorText,
+    bookCover,
+    bookTotalActiveMs,
     bookTitleText,
     chapterLabel,
     clockText,
@@ -202,6 +209,22 @@ export function ImmersiveReaderShell({
                 >
                     {tocPinned ? '悬浮' : '常驻'}
                 </button>
+                {tocPinned && (
+                    <div className={styles.pinnedBookHeader}>
+                        {bookCover
+                            ? <img className={styles.pinnedBookCover} src={bookCover} alt="" />
+                            : <div className={styles.pinnedBookCoverFallback} aria-hidden="true" />}
+                        <div className={styles.pinnedBookMeta}>
+                            <span className={styles.pinnedBookTitle} title={bookTitleText}>{bookTitleText}</span>
+                            {bookAuthorText && (
+                                <span className={styles.pinnedBookAuthor} title={bookAuthorText}>作者: {bookAuthorText}</span>
+                            )}
+                            {bookTotalActiveMs > 0 && (
+                                <span className={styles.pinnedBookDuration}>已读: {formatDurationLabel(bookTotalActiveMs)}</span>
+                            )}
+                        </div>
+                    </div>
+                )}
                 {panelContent}
             </div>
 

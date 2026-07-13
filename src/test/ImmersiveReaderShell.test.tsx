@@ -14,6 +14,9 @@ function renderShell() {
     return render(
         <ImmersiveReaderShell
             activeTab="toc"
+            bookAuthorText="测试作者"
+            bookCover=""
+            bookTotalActiveMs={0}
             bookTitleText="测试书"
             chapterLabel="第一章"
             clockText="09:30"

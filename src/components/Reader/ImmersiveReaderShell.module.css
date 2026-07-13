@@ -163,6 +163,55 @@
     background: color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 8%, transparent);
 }
 
+.pinnedBookHeader {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    box-sizing: border-box;
+    padding: 20px 16px 16px;
+    border-bottom: 1px solid color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 10%, transparent);
+}
+
+.pinnedBookCover,
+.pinnedBookCoverFallback {
+    flex-shrink: 0;
+    width: 56px;
+    height: 78px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 8%, transparent);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+}
+
+.pinnedBookMeta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding-top: 2px;
+    padding-right: 48px;
+}
+
+.pinnedBookTitle {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 640;
+    line-height: 1.35;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.pinnedBookAuthor,
+.pinnedBookDuration {
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 1.3;
+    color: color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 68%, transparent);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* 目录=现尺寸；搜索/标注内容更宽更高，胶囊随 activeTab 变大 */
 .tocCapsule[data-active-tab='search'],
 .tocCapsule[data-active-tab='annotations'] {
@@ -379,32 +428,30 @@
     }
 }
 
-@media (orientation: landscape) and (max-height: 600px) {
-    .shell {
-        --landscape-sidebar-width: min(360px, 36vw);
-    }
+.shell {
+    --pinned-sidebar-width: min(360px, 36vw);
+}
 
-    .shell[data-toc-pinned='true'] .contentFrame {
-        left: var(--landscape-sidebar-width);
-    }
+.shell[data-toc-pinned='true'] .contentFrame {
+    left: var(--pinned-sidebar-width);
+}
 
-    .shell[data-toc-pinned='true'] .tocCapsule,
-    .shell[data-toc-pinned='true'] .tocCapsule[data-active-tab='search'],
-    .shell[data-toc-pinned='true'] .tocCapsule[data-active-tab='annotations'] {
-        top: 0;
-        bottom: 0;
-        left: 0;
-        width: var(--landscape-sidebar-width);
-        max-height: none;
-        border-width: 0 1px 0 0;
-        border-radius: 0;
-        background: color-mix(in srgb, var(--reader-bg-color, var(--reader-bg)) 94%, transparent);
-        box-shadow: 16px 0 36px rgba(0, 0, 0, 0.12);
-        transform: none;
-    }
+.shell[data-toc-pinned='true'] .tocCapsule,
+.shell[data-toc-pinned='true'] .tocCapsule[data-active-tab='search'],
+.shell[data-toc-pinned='true'] .tocCapsule[data-active-tab='annotations'] {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--pinned-sidebar-width);
+    max-height: none;
+    border-width: 0 1px 0 0;
+    border-radius: 0;
+    background: color-mix(in srgb, var(--reader-bg-color, var(--reader-bg)) 94%, transparent);
+    box-shadow: 16px 0 36px rgba(0, 0, 0, 0.12);
+    transform: none;
+}
 
-    .shell[data-toc-pinned='true'] .floatingHeader {
-        left: calc(var(--landscape-sidebar-width) + (100% - var(--landscape-sidebar-width)) / 2);
-        width: calc(100vw - var(--landscape-sidebar-width) - 48px);
-    }
+.shell[data-toc-pinned='true'] .floatingHeader {
+    left: calc(var(--pinned-sidebar-width) + (100% - var(--pinned-sidebar-width)) / 2);
+    width: calc(100vw - var(--pinned-sidebar-width) - 48px);
 }

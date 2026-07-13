@@ -141,6 +141,12 @@ export async function addActiveReadingMs(bookId: string, activeMs: number, nowMs
     })
 }
 
+export async function loadBookTotalActiveMs(bookId: string): Promise<number> {
+    if (!bookId) return 0
+    const rows = await db.readingStatsDaily.where('bookId').equals(bookId).toArray()
+    return rows.reduce((sum, row) => sum + normalizeStatsMs(row.activeMs), 0)
+}
+
 export async function loadReadingStatsSummary(
     period: ReadingStatsPeriod,
     anchorMs: number = Date.now(),
