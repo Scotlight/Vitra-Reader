@@ -105,6 +105,8 @@ export class BookPipeline {
     const format = await detectFormat(request.buffer, request.filename);
     const signaler = new AbortController();
     const parser = this.createParser(format, request);
+    // 三个 promise 共享一次 parse：metadata 尽快可用，preview 是可失败的体验增强，ready
+    // 保持完整 ParsedBook 生命周期。取消后 parseBook 负责销毁已完成但不再交付的实例。
     const ready = this.parseBook(parser, signaler.signal);
     const metadata = ready.then((book) => book.metadata);
     const preview = this.buildPreview(ready, request.previewCount ?? DEFAULT_PREVIEW_SECTIONS, signaler.signal)
@@ -179,6 +181,7 @@ async function readPreviewSections(
         excerpt: toExcerpt(html),
       });
     } finally {
+      // section.load() 可能持有 Blob URL 或 provider 缓存；即使预览提取失败也必须及时释放。
       section.unload();
     }
   }
@@ -198,6 +201,7 @@ async function toHtmlContent(loadedContent: string): Promise<string> {
     return loadedContent;
   }
 
+  // Provider 可用 blob URL 延迟暴露章节内容，预览层统一还原成 HTML 再生成摘要。
   const response = await fetch(loadedContent);
   if (!response.ok) {
     throw new Error(`BookPipeline: failed to read section blob (${response.status})`);
@@ -215,6 +219,7 @@ function schedulePreviewWarmup(
 ): void {
   if (sections.length === 0) return;
 
+  // 预热不影响 open 的主路径：它只让随后访问的前几个章节更快命中 provider 缓存。
   const runWarmup = async () => {
     for (const section of sections) {
       if (signal.aborted) return;

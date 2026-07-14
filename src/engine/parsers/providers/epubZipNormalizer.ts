@@ -6,6 +6,11 @@ const MAX_LEADING_BYTES_TO_SCAN = 1024 * 1024
 
 const normalizedArchiveCache = new WeakMap<ArrayBuffer, ArrayBuffer>()
 
+/**
+ * 把带前导字节的 EPUB 归一为从 ZIP local file header 开始的标准 archive。
+ * 某些同步/导出链路会在 ZIP 前保留包装字节；只扫描受限前缀，既支持这类文件，也避免
+ * 对损坏的大文件做无界线性搜索。重新压缩采用 level 0，目标是重建 ZIP 偏移而非压缩体积。
+ */
 export function normalizeEpubArchiveBuffer(buffer: ArrayBuffer): ArrayBuffer {
     const cached = normalizedArchiveCache.get(buffer)
     if (cached) return cached
@@ -20,6 +25,7 @@ export function normalizeEpubArchiveBuffer(buffer: ArrayBuffer): ArrayBuffer {
         throw new Error('[EpubZipNormalizer] Invalid EPUB ZIP archive: missing local file header')
     }
 
+    // 先尝试原始 buffer：部分 ZIP 实现可容忍前导字节；失败后才从已定位的 header 解压。
     const entries = tryUnzipEpubEntries(buffer, 0)
     const epubEntries = entries && isEpubArchiveEntries(entries)
         ? entries
@@ -56,6 +62,7 @@ function isEpubArchiveEntries(entries: Record<string, Uint8Array>): boolean {
     const normalizedNames = new Map(
         Object.keys(entries).map((name) => [normalizeZipEntryName(name), name]),
     )
+    // container.xml 是 EPUB 的权威结构标记；mimetype 是为兼容非标准归档保留的后备判断。
     if (normalizedNames.has('meta-inf/container.xml')) return true
 
     const mimetypeName = normalizedNames.get('mimetype')

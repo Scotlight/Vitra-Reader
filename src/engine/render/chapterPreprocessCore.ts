@@ -18,6 +18,7 @@ import {
   scanHtmlBySaxStream,
 } from './htmlSaxStream';
 
+// Fragment 只用于非向量路径的渐进插入；向量路径由 segmentMetas 独占完整 HTML payload。
 const FRAGMENT_TARGET_CHARS = 120_000;
 const FRAGMENT_HARD_MAX_CHARS = 180_000;
 const VECTOR_MIN_SEGMENT_EST_HEIGHT = 96;
@@ -50,6 +51,8 @@ function shouldDropFullHtmlPayload(
   segmentMetas: readonly SegmentMeta[] | undefined,
 ): boolean {
   if (!segmentMetas || segmentMetas.length === 0) return false;
+  // render plan 启用后，segmentMetas 已持有每段 htmlContent。清空顶层 payload 防止同一章节
+  // 同时以完整字符串和分段字符串常驻内存。
   return buildVectorRenderPlan({
     mode: 'scroll',
     chapterSize: cleanedHtml.length,
@@ -62,6 +65,7 @@ export function preprocessChapterCore(input: ChapterPreprocessInput): ChapterPre
   const inlineStyles = sanitizeStyleSheets(extractStyles(sanitized.htmlContent));
   const sanitizedExternalStyles = sanitizeStyleSheets(input.externalStyles);
   const cleanedHtml = removeStyleTags(sanitized.htmlContent);
+  // 先清洗再加 chapter scope，防止原书 CSS 的全局选择器越出 ShadowRenderer 的章节边界。
   const scopedStyles = [...sanitizedExternalStyles, ...inlineStyles]
     .map((css) => scopeStyles(css, input.chapterId))
     .filter((css) => css.trim().length > 0);
@@ -158,6 +162,7 @@ function splitHtmlIntoFragments(html: string): string[] {
   let start = 0;
   let lastSafeCut = 0;
 
+  // 优先在闭合块元素后断开；若无法证明切点位于标签外，宁可回退为完整 HTML，不能生成损坏标记。
   for (const end of blockBoundaryOffsets) {
     if (end - start < FRAGMENT_TARGET_CHARS) {
       lastSafeCut = end;
@@ -238,6 +243,7 @@ export function vectorizeHtmlToSegmentMetas(
   }
 
   const segments: SegmentMeta[] = [];
+  // 媒体 offset 已按 SAX 扫描顺序排列，游标单调推进可避免每段重复搜索全部媒体标签。
   const mediaCursor = { value: 0 };
   let start = 0;
   let lastSafeCut = 0;

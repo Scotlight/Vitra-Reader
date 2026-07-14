@@ -110,6 +110,8 @@ function readTrailingEntrySize(data: Uint8Array): number {
 }
 
 function parseRecordOffsets(view: DataView): number[] {
+    // Palm Database 的 record list 从 0x4E 起，每项 8 字节；首个 uint32 是该 record
+    // 在整份文件内的绝对偏移。最后一个 record 的结尾由文件长度决定。
     const recordCount = readUint16Safe(view, 0x4C)
     const records: number[] = []
     for (let i = 0; i < recordCount; i += 1) records.push(readUint32Safe(view, 0x4E + i * 8))
@@ -120,10 +122,12 @@ function parseMobiHeader(view: DataView, records: readonly number[]): MobiHeader
     if (records.length === 0) throw new Error('MOBI parse failed: no PDB records')
     const record0Offset = records[0]
     if (record0Offset === undefined) throw new Error('MOBI parse failed: no PDB record 0')
+    // Record 0 先是 16-byte PalmDOC header，紧随其后的 4 字节才是 MOBI magic。
     const magic = readString(view, record0Offset + 0x10, 4)
     if (magic !== MOBI_MAGIC) throw new Error(`MOBI parse failed: invalid header magic "${magic}"`)
 
     const mobiHeaderLength = readUint32Safe(view, record0Offset + 0x14)
+    // 0xF2 属于较长 MOBI header；短 header 不读取该偏移，防止把相邻 EXTH 数据误当 flags。
     const extraDataFlags = mobiHeaderLength >= MOBI_TRAILING_FLAGS_MIN_HEADER_LENGTH
         ? readUint16Safe(view, record0Offset + 0xF2)
         : 0
@@ -150,6 +154,7 @@ function parseMetadataFromExth(buf: ArrayBuffer, header: MobiHeader): ExthMetada
 
     const exthCount = readUint32Safe(view, exthOffset + 8)
     const result: ExthMetadata = {}
+    // 每条 EXTH 是 type + length + payload；length 包含这 8 个字节，损坏长度立即停止遍历。
     let pos = exthOffset + 12
     for (let i = 0; i < exthCount && pos + 8 <= buf.byteLength; i += 1) {
         const type = readUint32Safe(view, pos)
@@ -166,7 +171,9 @@ function parseMetadataFromExth(buf: ArrayBuffer, header: MobiHeader): ExthMetada
 }
 
 function palmDocDecompress(data: Uint8Array): Uint8Array {
-    // 预分配缓冲区（输入的 4 倍），不够时翻倍扩容
+    // 预分配缓冲区（输入的 4 倍），不够时翻倍扩容。
+    // PalmDOC 的 0x80..0xBF 控制字编码了向已输出窗口回看的 LZ77 引用，必须逐字节复制，
+    // 这样重叠引用也能得到正确结果。
     let buf = new Uint8Array(data.length * 4)
     let pos = 0
     let i = 0
@@ -225,6 +232,7 @@ function palmDocDecompress(data: Uint8Array): Uint8Array {
 function trimTrailingEntries(data: Uint8Array, flags: number): Uint8Array {
     let result = data
     const trailers = countTrailingEntries(flags)
+    // 每个 trailer 的变长长度字段位于 record 末尾，所以需要从后向前剥离。
     for (let i = 0; i < trailers && result.length >= 4; i += 1) {
         const size = readTrailingEntrySize(result)
         if (size <= 0 || size > result.length) break
@@ -299,6 +307,8 @@ function findCoverUrl(
 ): string | null {
     const offset = typeof coverOffset === 'number' ? coverOffset : thumbnailOffset
     if (offset === undefined || !Number.isFinite(offset)) return null
+    // 常见文件把 EXTH 封面值当作 firstImageIndex 的相对位移，少数文件直接存 record index；
+    // 同时尝试两种解释以保持兼容，且不会猜测非图片记录。
     const candidates = new Set([header.firstImageIndex + offset, offset])
     return resources.find((resource) => candidates.has(resource.recordIndex))?.url ?? null
 }

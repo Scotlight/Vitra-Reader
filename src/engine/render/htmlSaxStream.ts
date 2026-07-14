@@ -1,3 +1,4 @@
+// Chunk 只限制一次扫描推进的工作量，并不要求标签恰好落在 chunk 内；findTagEnd 会跨越边界。
 const SAX_STREAM_CHUNK_SIZE = 32_768;
 
 const BLOCK_BOUNDARY_TAGS = new Set([
@@ -70,6 +71,7 @@ function findTagEnd(html: string, from: number): number {
       }
       continue;
     }
+    // 属性值里的 `>` 不能结束标签，例如 `<img alt="a > b">`。
     if (char === '"' || char === "'") {
       quote = char;
       continue;
@@ -135,6 +137,7 @@ function readTagToken(html: string, start: number): HtmlTagToken | null {
  * 流式 SAX 风格扫描：
  * - 不构建 DOM，不做正则全量匹配
  * - 分块推进（chunk），按标签事件收集边界与媒体位点
+ * - 这是轻量的切分辅助器，不承担 HTML 合法性校验；不完整标签会安全地视为文件尾部
  */
 export function streamHtmlBySaxStream(html: string, handlers: HtmlSaxStreamHandlers): void {
   if (!html) {
@@ -199,6 +202,7 @@ export function consumeMediaOffsetInRange(
   end: number,
   cursorRef: { value: number },
 ): boolean {
+  // 同一 offset 只会被消费一次。调用方按 segment 的自然顺序传入 range 时，复杂度为 O(n)。
   let cursor = cursorRef.value;
   while (cursor < mediaOffsets.length) {
     const offset = mediaOffsets[cursor];
