@@ -81,6 +81,10 @@ describe('SettingsPanel', () => {
         expect(view.getByRole('heading', { name: '显示设置' })).toBeTruthy()
         expect(view.getByText('主题与排版')).toBeTruthy()
         expect(view.getByText('阅读体验')).toBeTruthy()
+        expect(view.getByText('字体预览')).toBeTruthy()
+        expect(view.getByText('清晨的光从窗边慢慢移进来，书页也跟着亮了一点。')).toBeTruthy()
+        expect(view.getByText('读到这里时，句子的停顿和段落之间的距离会更加明显。')).toBeTruthy()
+        expect(view.getByText('这段文字用来观察字体、字号、字距、行距与首行缩进。')).toBeTruthy()
     })
 
     it('Display 字号 stepper 写入 settings store', () => {

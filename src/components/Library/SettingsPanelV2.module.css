@@ -264,6 +264,88 @@
     gap: 18px;
 }
 
+/* 显示页专用：主题整行 + 体验/预览并排，不复用 cardGrid 以免牵动其他设置页 */
+.displaySettingsGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(280px, 1fr));
+    grid-template-areas:
+        "theme theme"
+        "experience preview";
+    align-items: stretch;
+    gap: 18px;
+}
+
+.displayThemeArea {
+    grid-area: theme;
+    min-width: 0;
+}
+
+.displayExperienceArea {
+    grid-area: experience;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.displayPreviewArea {
+    grid-area: preview;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 第二行两卡等高：卡片本身撑满区域，预览内容靠 viewport 裁剪，不反向撑高网格 */
+.displayExperienceArea > section,
+.displayPreviewArea > section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.displayExperienceArea > section > :last-child,
+.displayPreviewArea > section > :last-child {
+    flex: 1;
+}
+
+/* 主题卡横跨后内部两列，避免七项单列过高 */
+.themeTypographyGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 20px;
+}
+
+.themeTypographyThemeRow {
+    grid-column: 1 / -1;
+}
+
+.themeTypographyGrid .settingRow {
+    min-height: 52px;
+}
+
+/* 固定预览视口：字号等只改内部排版，框体尺寸由 CSS 锁定，溢出直接裁掉 */
+.fontPreviewViewport {
+    box-sizing: border-box;
+    width: 100%;
+    height: 220px;
+    min-height: 220px;
+    max-height: 220px;
+    padding: 16px 18px;
+    border: 1px solid var(--settings-border);
+    border-radius: 10px;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+.fontPreviewParagraph {
+    margin: 0 0 var(--font-preview-paragraph-spacing, 0) 0;
+    text-indent: var(--font-preview-indent, 0);
+}
+
+.fontPreviewParagraph:last-child {
+    margin-bottom: 0;
+}
+
 .settingsCard {
     border: 1px solid var(--settings-border);
     border-radius: 12px;
@@ -677,6 +759,18 @@
     }
 
     .cardGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .displaySettingsGrid {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "theme"
+            "experience"
+            "preview";
+    }
+
+    .themeTypographyGrid {
         grid-template-columns: 1fr;
     }
 }
