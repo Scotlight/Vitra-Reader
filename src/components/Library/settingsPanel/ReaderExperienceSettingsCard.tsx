@@ -4,6 +4,7 @@ import { SettingRow } from './SettingRow'
 import { StepperControl } from './StepperControl'
 import { ToggleControl } from './ToggleControl'
 import type { SettingsFormStore } from './settingsTypes'
+import { useIsCoarsePointer } from '@/hooks/useIsCoarsePointer'
 
 const TEXT_ALIGN_OPTIONS: SelectControlOption[] = [
     { value: 'left', label: '左对齐' },
@@ -39,6 +40,8 @@ export function ReaderExperienceSettingsCard({
     settings,
     systemFonts,
 }: ReaderExperienceSettingsCardProps) {
+    // 屏幕亮度靠 app 内遮罩降亮，仅对触屏（手机/平板）有意义；桌面隐藏此项，值恒当 1 处理。
+    const isCoarsePointer = useIsCoarsePointer()
     const selectedFontValue = getFontSelectValue(
         typeof settings.fontFamily === 'string' ? settings.fontFamily : 'inherit',
     )
@@ -84,17 +87,19 @@ export function ReaderExperienceSettingsCard({
                     onChange={(value) => settings.updateSetting('pageWidth', value)}
                 />
             </SettingRow>
-            <SettingRow label="屏幕亮度">
-                <StepperControl
-                    label="屏幕亮度"
-                    min={30}
-                    max={100}
-                    step={5}
-                    value={Math.round(settings.brightness * 100)}
-                    unit="%"
-                    onChange={(value) => settings.updateSetting('brightness', value / 100)}
-                />
-            </SettingRow>
+            {isCoarsePointer && (
+                <SettingRow label="屏幕亮度">
+                    <StepperControl
+                        label="屏幕亮度"
+                        min={30}
+                        max={100}
+                        step={5}
+                        value={Math.round(settings.brightness * 100)}
+                        unit="%"
+                        onChange={(value) => settings.updateSetting('brightness', value / 100)}
+                    />
+                </SettingRow>
+            )}
             <SettingRow label="文字对齐">
                 <SelectControl
                     label="文字对齐"

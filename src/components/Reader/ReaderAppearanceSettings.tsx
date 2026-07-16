@@ -4,6 +4,7 @@ import { toReaderFontDisplayName, toReaderFontFamily } from './readerFonts'
 import { useReaderSystemFonts } from './useReaderSystemFonts'
 import { formatFontDownloadSize } from './readerFontCatalog'
 import { toStoredReaderFontFamily } from './readerFontService'
+import { useIsCoarsePointer } from '@/hooks/useIsCoarsePointer'
 import styles from './ReaderView.module.css'
 
 const THEME_IDS = ['light', 'dark', 'sepia', 'green'] as const
@@ -21,6 +22,8 @@ const TEXT_ALIGN_OPTIONS = [
 
 export function ReaderAppearanceSettings() {
     const settings = useSettingsStore()
+    // 屏幕亮度靠 app 内遮罩降亮，仅对触屏有意义；桌面隐藏此滑块，值恒当 1。
+    const isCoarsePointer = useIsCoarsePointer()
     const {
         catalog,
         downloadFont,
@@ -302,7 +305,9 @@ export function ReaderAppearanceSettings() {
             </div>
 
             <RangeControl label={`页面宽度: ${settings.pageWidth.toFixed(1)}`} min={0.5} max={3} step={0.1} value={settings.pageWidth} onChange={(value) => settings.updateSetting('pageWidth', value)} />
-            <RangeControl label={`屏幕亮度: ${settings.brightness.toFixed(2)}`} min={0.3} max={1} step={0.05} value={settings.brightness} onChange={(value) => settings.updateSetting('brightness', value)} />
+            {isCoarsePointer && (
+                <RangeControl label={`屏幕亮度: ${settings.brightness.toFixed(2)}`} min={0.3} max={1} step={0.05} value={settings.brightness} onChange={(value) => settings.updateSetting('brightness', value)} />
+            )}
 
             <div className={styles.settingsGroup}>
                 <label>对齐方式</label>

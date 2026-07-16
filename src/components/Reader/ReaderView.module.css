@@ -167,6 +167,16 @@
     pointer-events: auto;
 }
 
+/* 触屏亮度遮罩：纯黑遮罩靠内联 opacity(=1-brightness) 降亮，仅移动端渲染。
+   z-index:14 盖在内容与 renderLock(12/13) 之上；pointer-events:none 保证只降亮不挡翻页/工具栏交互。 */
+.brightnessOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 14;
+    background: #000;
+    pointer-events: none;
+}
+
 .prevZone,
 .nextZone {
     position: absolute;

@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import type { TocItem } from '@/engine/core/contentProvider'
 import type { PageTurnMode } from '@/stores/useSettingsStore'
 import { getWindowFullscreenBridge, requestElementFullscreen } from '@/services/platform/platformBridge'
+import { useIsCoarsePointer } from '@/hooks/useIsCoarsePointer'
 import { ImmersiveReaderShell } from './ImmersiveReaderShell'
 import { ReaderSettingsPanel } from './ReaderSettingsPanel'
 import type { ReaderColors } from './readerColors'
@@ -10,6 +11,7 @@ import type { ReaderPanelTab } from './readerPanelTypes'
 import styles from './ReaderView.module.css'
 
 interface ReaderSurfaceSettings {
+    brightness: number
     fontSize: number
     letterSpacing: number
     lineHeight: number
@@ -106,6 +108,11 @@ export function ReaderSurface({
 }: ReaderSurfaceProps) {
     const readerContainerRef = useRef<HTMLDivElement | null>(null)
     const [isFullscreen, setIsFullscreen] = useState(false)
+    // 亮度遮罩只对触屏生效：桌面无此设置，brightness 恒当 1 处理，遮罩不渲染。
+    const isCoarsePointer = useIsCoarsePointer()
+    // brightness ∈ [0.3,1]：1 全亮（无遮罩），越低叠越黑。opacity = 1 - brightness，
+    // 故最暗 0.3 对应 0.7 黑色遮罩。遮罩随本组件卸载而消失，退出阅读即回系统亮度。
+    const brightnessOverlayOpacity = isCoarsePointer ? 1 - Math.max(0.3, Math.min(1, settings.brightness)) : 0
 
     const syncFullscreenState = useCallback(() => {
         const windowFullscreen = getWindowFullscreenBridge()
@@ -206,6 +213,13 @@ export function ReaderSurface({
                 toc={toc}
                 toggleSettingsPanel={toggleSettingsPanel}
             />
+            {brightnessOverlayOpacity > 0 && (
+                <div
+                    className={styles.brightnessOverlay}
+                    style={{ opacity: brightnessOverlayOpacity }}
+                    aria-hidden="true"
+                />
+            )}
         </div>
     )
 }
