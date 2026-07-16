@@ -63,6 +63,9 @@ docs/*副本.json
 docs/[0-9a-f]*-[0-9a-f]*-*.png
 docs/vitra_reader_settings_style4_svg.html
 
+# Root-level dev screenshots（布局/目录调试截图，不入库；合法资产在 docs/ 或 public/icons/）
+/*.png
+
 # Local icon files (root-level temporary)
 1w2ze-5r6yb-001.ico
 6010d-l3wuw-001.ico
