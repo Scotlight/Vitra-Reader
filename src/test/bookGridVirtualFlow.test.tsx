@@ -1,7 +1,7 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, waitFor } from '@testing-library/react'
-import type { BookMeta } from '@/services/storageService'
+import { BOOK_SHELF_LABEL, type BookMeta } from '@/services/storageService'
 import { BookGrid, type LibraryGridItem } from '@/components/Library/BookGrid'
 
 vi.mock('framer-motion', () => ({
@@ -33,6 +33,9 @@ function createBook(index: number): BookMeta {
         addedAt: 1_000 + index,
         lastReadAt: 2_000 + index,
         format: 'epub',
+        shelfLabel: BOOK_SHELF_LABEL.TO_READ,
+        shelfLabelUpdatedAt: 1_000 + index,
+        metadataUpdatedAt: 1_000 + index,
     }
 }
 

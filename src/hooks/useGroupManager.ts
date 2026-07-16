@@ -214,6 +214,37 @@ export function useGroupManager(options: UseGroupManagerOptions) {
         await persistGroupState(sanitizeGroupState(groups, nextMap, nextOrder, nextHome, books))
     }
 
+    /**
+     * 属性弹窗多选分组：按目标集合重写该书的全部分组成员关系。
+     * 不在任何分组时把书放回首页顺序，与「从分组移除」语义一致。
+     */
+    const setBookGroupMembership = async (bookId: string, nextGroupIds: string[]) => {
+        const wanted = new Set(nextGroupIds.filter(Boolean))
+        const nextMap: Record<string, string[]> = { ...groupBookMap }
+        const nextOrder: Record<string, string[]> = { ...groupBookOrder }
+
+        for (const group of groups) {
+            const currentIds = nextMap[group.id] || []
+            const has = currentIds.includes(bookId)
+            const should = wanted.has(group.id)
+            if (should && !has) {
+                nextMap[group.id] = [...currentIds, bookId]
+                nextOrder[group.id] = [...(nextOrder[group.id] || []), bookId]
+            } else if (!should && has) {
+                nextMap[group.id] = currentIds.filter((id) => id !== bookId)
+                nextOrder[group.id] = (nextOrder[group.id] || []).filter((id) => id !== bookId)
+            }
+        }
+
+        const stillGrouped = Object.values(nextMap).some((ids) => ids.includes(bookId))
+        let nextHome = homeOrder.filter((key) => key !== buildHomeOrderKey('book', bookId))
+        if (!stillGrouped) {
+            nextHome = [...nextHome, buildHomeOrderKey('book', bookId)]
+        }
+
+        await persistGroupState(sanitizeGroupState(groups, nextMap, nextOrder, nextHome, books))
+    }
+
     const reorderHomeItems = async (sourceKey: string, targetKey: string, availableKeys: string[]) => {
         const ordered = reorderKeys(availableKeys, sourceKey, targetKey)
         await persistGroupState(sanitizeGroupState(groups, groupBookMap, groupBookOrder, ordered, books))
@@ -248,6 +279,7 @@ export function useGroupManager(options: UseGroupManagerOptions) {
         moveGroupBooks,
         addBookToGroup,
         removeBookFromActiveGroup,
+        setBookGroupMembership,
         reorderHomeItems,
         reorderActiveGroupBooks,
     }

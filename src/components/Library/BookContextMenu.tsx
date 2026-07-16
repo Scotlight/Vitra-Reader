@@ -1,17 +1,24 @@
 import type { MouseEvent as ReactMouseEvent } from 'react'
+import {
+    BOOK_SHELF_LABEL_DISPLAY,
+    BOOK_SHELF_LABEL_VALUES,
+    normalizeShelfLabel,
+    type BookMeta,
+    type BookShelfLabel,
+} from '@/services/storageService'
 import styles from './LibraryView.module.css'
 
 interface BookContextMenuProps {
     contextMenu: { visible: boolean; x: number; y: number; bookId: string | null }
     setContextMenu: (state: { visible: boolean; x: number; y: number; bookId: null }) => void
     trashBookIds: string[]
-    favoriteBookIds: string[]
+    books: BookMeta[]
     activeGroupId: string | null
     groupBookMap: Record<string, string[]>
     onRestoreFromTrash: (bookId: string) => Promise<void>
     onPermanentDelete: (bookId: string) => void
     onOpenProperties: (bookId: string) => void
-    onToggleFavorite: (bookId: string) => Promise<void>
+    onSetShelfLabel: (bookId: string, shelfLabel: BookShelfLabel) => Promise<void>
     onAddToGroup: (bookId: string) => Promise<void>
     onRemoveFromGroup: (bookId: string) => Promise<void>
     onMoveToTrash: (bookId: string) => Promise<void>
@@ -23,19 +30,20 @@ export const BookContextMenu = ({
     contextMenu,
     setContextMenu,
     trashBookIds,
-    favoriteBookIds,
+    books,
     activeGroupId,
     groupBookMap,
     onRestoreFromTrash,
     onPermanentDelete,
     onOpenProperties,
-    onToggleFavorite,
+    onSetShelfLabel,
     onAddToGroup,
     onRemoveFromGroup,
     onMoveToTrash,
 }: BookContextMenuProps) => {
     if (!contextMenu.visible || !contextMenu.bookId) return null
     const bookId = contextMenu.bookId
+    const currentLabel = normalizeShelfLabel(books.find((book) => book.id === bookId)?.shelfLabel)
 
     return (
         <div
@@ -66,12 +74,24 @@ export const BookContextMenu = ({
                     >
                         属性
                     </button>
-                    <button
-                        className={styles.contextMenuItem}
-                        onClick={async () => { await onToggleFavorite(bookId); setContextMenu(dismiss) }}
-                    >
-                        {favoriteBookIds.includes(bookId) ? '取消喜爱' : '加入喜爱'}
-                    </button>
+                    <div className={styles.contextMenuSection}>
+                        <div className={styles.contextMenuSectionTitle}>设置标签</div>
+                        {BOOK_SHELF_LABEL_VALUES.map((label) => (
+                            <button
+                                key={label}
+                                className={styles.contextMenuItem}
+                                onClick={async () => {
+                                    await onSetShelfLabel(bookId, label)
+                                    setContextMenu(dismiss)
+                                }}
+                            >
+                                <span className={styles.contextMenuRadio} aria-hidden="true">
+                                    {currentLabel === label ? '●' : '○'}
+                                </span>
+                                {BOOK_SHELF_LABEL_DISPLAY[label]}
+                            </button>
+                        ))}
+                    </div>
                     <button
                         className={styles.contextMenuItem}
                         onClick={async () => { await onAddToGroup(bookId); setContextMenu(dismiss) }}

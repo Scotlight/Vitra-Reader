@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LibrarySidebar } from '@/components/Library/LibrarySidebar'
 import type { useGroupManager } from '@/hooks/useGroupManager'
-import type { BookMeta } from '@/services/storageService'
+import { BOOK_SHELF_LABEL, type BookMeta } from '@/services/storageService'
 
 const sampleBook: BookMeta = {
     id: 'book-1',
@@ -10,6 +10,9 @@ const sampleBook: BookMeta = {
     author: 'Frank Herbert',
     fileSize: 1,
     addedAt: 1,
+    shelfLabel: BOOK_SHELF_LABEL.TO_READ,
+    shelfLabelUpdatedAt: 1,
+    metadataUpdatedAt: 1,
 }
 
 function createGroupManager(overrides: Partial<ReturnType<typeof useGroupManager>> = {}) {
@@ -60,6 +63,13 @@ function renderSidebar(overrides: Partial<ReturnType<typeof useGroupManager>> = 
             isSettingsOpen={false}
             setActiveNav={setActiveNav}
             group={group}
+            totalBookCount={1}
+            shelfLabelCounts={{
+                [BOOK_SHELF_LABEL.TO_READ]: 1,
+                [BOOK_SHELF_LABEL.READING]: 0,
+                [BOOK_SHELF_LABEL.READ]: 0,
+                [BOOK_SHELF_LABEL.GOOD]: 0,
+            }}
             onOpenBook={vi.fn()}
             onContextMenu={vi.fn()}
             onToggleSettings={vi.fn()}
@@ -106,5 +116,18 @@ describe('LibrarySidebar', () => {
 
         expect(setActiveNav).toHaveBeenCalledWith('all')
         expect(group.setActiveGroupId).toHaveBeenCalledWith(null)
+    })
+
+    it('侧栏展示四个固定标签筛选且点击时清空分组', () => {
+        const { group, setActiveNav, view } = renderSidebar({ activeGroupId: 'group-1' })
+
+        expect(view.queryByRole('button', { name: /我的喜爱/ })).toBeNull()
+        fireEvent.click(view.getByRole('button', { name: /待看/ }))
+
+        expect(setActiveNav).toHaveBeenCalledWith(BOOK_SHELF_LABEL.TO_READ)
+        expect(group.setActiveGroupId).toHaveBeenCalledWith(null)
+        expect(view.getByRole('button', { name: /在看/ })).toBeTruthy()
+        expect(view.getByRole('button', { name: /已看/ })).toBeTruthy()
+        expect(view.getByRole('button', { name: /好看/ })).toBeTruthy()
     })
 })

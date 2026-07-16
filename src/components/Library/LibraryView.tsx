@@ -56,7 +56,6 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         allBookmarks,
         persistFavorites,
         persistTrash,
-        toggleFavorite,
         moveToTrash,
         restoreFromTrash,
     } = useLibraryMetaState({ activeNav })
@@ -97,6 +96,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         moveGroupBooks,
         addBookToGroup,
         removeBookFromActiveGroup,
+        setBookGroupMembership,
         reorderHomeItems,
         reorderActiveGroupBooks,
     } = group
@@ -114,13 +114,13 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         emptyMessage,
         statusText,
         sortModeLabel,
+        shelfLabelCounts,
     } = useLibraryDerivedData({
         books,
         keyword,
         sortMode,
         activeNav,
         activeGroupId,
-        favoriteBookIds,
         trashBookIds,
         noteBookIds,
         highlightBookIds,
@@ -132,6 +132,12 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         bookById,
     })
 
+    // 侧栏「全部」数量只计非回收书，与标签计数口径一致。
+    const totalBookCount = useMemo(
+        () => books.filter((book) => !trashBookIdSet.has(book.id)).length,
+        [books, trashBookIdSet],
+    )
+
     const homeItemKeys = useMemo(() => homeItems.map((item) => item.key), [homeItems])
     const {
         handleBlankAreaContextMenu,
@@ -139,6 +145,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         handleGridReorder,
         handlePermanentDeleteBook,
         openBookPropertiesModal,
+        setBookShelfLabel,
     } = useLibraryBookActions({
         activeGroupId,
         activeNav,
@@ -157,6 +164,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         showInfoDialog,
         showMixedHome,
         trashBookIds,
+        onBooksChanged: loadBooks,
     })
 
     const handleImport = useLibraryImport({
@@ -174,6 +182,8 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                     setActiveNav(nav)
                 }}
                 group={group}
+                totalBookCount={totalBookCount}
+                shelfLabelCounts={shelfLabelCounts}
                 onOpenBook={onOpenBook}
                 onContextMenu={handleBookContextMenu}
                 isSettingsOpen={showSettings}
@@ -255,13 +265,13 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                             contextMenu={contextMenu}
                             setContextMenu={setContextMenu}
                             trashBookIds={trashBookIds}
-                            favoriteBookIds={favoriteBookIds}
+                            books={books}
                             activeGroupId={activeGroupId}
                             groupBookMap={groupBookMap}
                             onRestoreFromTrash={restoreFromTrash}
                             onPermanentDelete={handlePermanentDeleteBook}
                             onOpenProperties={openBookPropertiesModal}
-                            onToggleFavorite={toggleFavorite}
+                            onSetShelfLabel={setBookShelfLabel}
                             onAddToGroup={addBookToGroup}
                             onRemoveFromGroup={removeBookFromActiveGroup}
                             onMoveToTrash={moveToTrash}
@@ -271,16 +281,18 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
 
                 <LibraryDialogs
                     books={books}
+                    groups={groups}
+                    groupBookMap={groupBookMap}
                     showBookPropertiesModal={showBookPropertiesModal}
                     onCloseBookProperties={() => setShowBookPropertiesModal(null)}
                     onSavedBookProperties={loadBooks}
+                    onSaveGroupMembership={setBookGroupMembership}
                     showCreateGroupModal={showCreateGroupModal}
                     newGroupName={newGroupName}
                     setNewGroupName={setNewGroupName}
                     onCloseCreateGroupModal={() => setShowCreateGroupModal(false)}
                     onCreateGroup={() => void createGroup()}
                     showManageGroupModal={showManageGroupModal}
-                    groups={groups}
                     manageSourceGroupId={manageSourceGroupId}
                     setManageSourceGroupId={setManageSourceGroupId}
                     manageTargetGroupId={manageTargetGroupId}

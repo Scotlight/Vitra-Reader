@@ -1,5 +1,9 @@
 import { useCallback, type Dispatch, type MouseEvent as ReactMouseEvent, type SetStateAction } from 'react'
-import type { BookMeta } from '@/services/storageService'
+import {
+    updateBookShelfLabel,
+    type BookMeta,
+    type BookShelfLabel,
+} from '@/services/storageService'
 import type { LibraryActiveNav } from './useLibraryDerivedData'
 import type { LibraryBlankContextMenuState, LibraryContextMenuState } from './useLibraryViewState'
 
@@ -21,6 +25,7 @@ interface UseLibraryBookActionsOptions {
     readonly showInfoDialog: (message: string) => void
     readonly showMixedHome: boolean
     readonly trashBookIds: string[]
+    readonly onBooksChanged: () => Promise<void>
 }
 
 export function useLibraryBookActions({
@@ -41,6 +46,7 @@ export function useLibraryBookActions({
     showInfoDialog,
     showMixedHome,
     trashBookIds,
+    onBooksChanged,
 }: UseLibraryBookActionsOptions) {
     const handleBookContextMenu = useCallback((event: ReactMouseEvent<HTMLElement>, bookId: string) => {
         event.preventDefault()
@@ -90,6 +96,7 @@ export function useLibraryBookActions({
     const handlePermanentDeleteBook = useCallback((bookId: string) => {
         showConfirmDialog('确认删除这本书吗？这会删除本地文件和阅读进度。', async () => {
             await removeBook(bookId)
+            // 兼容期内仍清理旧收藏键，避免遗留幽灵 ID。
             if (favoriteBookIds.includes(bookId)) {
                 await persistFavorites(favoriteBookIds.filter((id) => id !== bookId))
             }
@@ -115,11 +122,17 @@ export function useLibraryBookActions({
         setShowBookPropertiesModal(bookId)
     }, [books, setShowBookPropertiesModal, showInfoDialog])
 
+    const setBookShelfLabel = useCallback(async (bookId: string, shelfLabel: BookShelfLabel) => {
+        await updateBookShelfLabel(bookId, shelfLabel)
+        await onBooksChanged()
+    }, [onBooksChanged])
+
     return {
         handleBlankAreaContextMenu,
         handleBookContextMenu,
         handleGridReorder,
         handlePermanentDeleteBook,
         openBookPropertiesModal,
+        setBookShelfLabel,
     }
 }

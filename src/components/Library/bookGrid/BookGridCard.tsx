@@ -4,6 +4,10 @@ import type {
     MouseEvent as ReactMouseEvent,
     PointerEvent as ReactPointerEvent,
 } from 'react'
+import {
+    BOOK_SHELF_LABEL_DISPLAY,
+    normalizeShelfLabel,
+} from '@/services/storageService'
 import { BookFormatPlaceholder } from '../BookFormatPlaceholder'
 import type { LibraryGridItem } from '../BookGrid'
 import { LazyCoverImage } from './LazyCoverImage'
@@ -92,6 +96,9 @@ export function BookGridCard({
 
     const { book } = item
     const progress = progressMap[book.id] ?? 0
+    // 标签缺字段时兜成 to_read，避免旧内存缓存或半残同步数据导致徽标空白。
+    const shelfLabel = normalizeShelfLabel(book.shelfLabel)
+    const shelfLabelText = BOOK_SHELF_LABEL_DISPLAY[shelfLabel]
 
     return (
         <motion.div
@@ -102,12 +109,18 @@ export function BookGridCard({
             <div className={styles.coverWrapper}>
                 <LazyCoverImage bookId={book.id} format={book.format} alt={book.title} />
                 <div className={styles.cardOverlay} />
+                <span
+                    className={`${styles.shelfLabelBadge} ${styles[`shelfLabelBadge_${shelfLabel}`]}`}
+                    data-shelf-label={shelfLabel}
+                >
+                    {shelfLabelText}
+                </span>
             </div>
             <div className={styles.meta}>
                 <h3 className={styles.title} title={book.title}>{book.title}</h3>
                 <p className={styles.author}>{book.author || 'Unknown'}</p>
                 <div className={styles.progressRow}>
-                    <span>{progress}%</span>
+                    <span>{shelfLabelText} · {progress}%</span>
                 </div>
                 <div className={styles.progressTrack}>
                     <div className={styles.progressFill} style={{ width: `${progress}%` }} />

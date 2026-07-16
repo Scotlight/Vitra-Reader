@@ -1,12 +1,26 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useLibraryBookActions } from '@/components/Library/libraryView/useLibraryBookActions'
+import { BOOK_SHELF_LABEL, type BookMeta } from '@/services/storageService'
 
-function createOptions(overrides: Partial<Parameters<typeof useLibraryBookActions>[0]> = {}) {
+const sampleBook: BookMeta = {
+    id: 'book-1',
+    title: 'Book',
+    author: 'Author',
+    fileSize: 1,
+    addedAt: 1,
+    shelfLabel: BOOK_SHELF_LABEL.TO_READ,
+    shelfLabelUpdatedAt: 1,
+    metadataUpdatedAt: 1,
+}
+
+function createOptions(
+    overrides: Partial<Parameters<typeof useLibraryBookActions>[0]> = {},
+): Parameters<typeof useLibraryBookActions>[0] {
     return {
         activeGroupId: null,
         activeNav: 'all' as const,
-        books: [{ id: 'book-1', title: 'Book', author: 'Author', fileSize: 1, addedAt: 1 }],
+        books: [sampleBook],
         favoriteBookIds: ['book-1'],
         homeItemKeys: ['book:book-1', 'book:book-2'],
         persistFavorites: vi.fn(async () => undefined),
@@ -21,6 +35,7 @@ function createOptions(overrides: Partial<Parameters<typeof useLibraryBookAction
         showInfoDialog: vi.fn(),
         showMixedHome: true,
         trashBookIds: ['book-1'],
+        onBooksChanged: vi.fn(async () => undefined),
         ...overrides,
     }
 }
@@ -47,10 +62,10 @@ describe('useLibraryBookActions', () => {
     })
 
     it('永久删除确认后同步清理收藏和回收站元数据', async () => {
-        const options = createOptions()
-        options.showConfirmDialog = vi.fn((_message, onConfirm) => {
+        const showConfirmDialog = vi.fn((_message, onConfirm) => {
             void onConfirm()
         })
+        const options = createOptions({ showConfirmDialog })
         const { result } = renderHook(() => useLibraryBookActions(options))
 
         await act(async () => {

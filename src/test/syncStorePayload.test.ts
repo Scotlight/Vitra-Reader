@@ -24,9 +24,13 @@ const storageMocks = vi.hoisted(() => {
     }
 })
 
-vi.mock('@/services/storageService', () => ({
-    db: storageMocks,
-}))
+vi.mock('@/services/storageService', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@/services/storageService')>()
+    return {
+        ...actual,
+        db: storageMocks,
+    }
+})
 
 vi.mock('@/services/readingStatsService', () => ({
     loadReadingStatsRowsForSync: vi.fn(),
@@ -149,7 +153,18 @@ describe('syncStorePayload restore', () => {
         expect(storageMocks.bookmarks.clear).toHaveBeenCalledTimes(1)
         expect(storageMocks.highlights.clear).toHaveBeenCalledTimes(1)
         expect(storageMocks.bookFiles.clear).toHaveBeenCalledTimes(1)
-        expect(storageMocks.books.bulkPut).toHaveBeenCalledWith(payload.books)
+        expect(storageMocks.books.bulkPut).toHaveBeenCalledWith([
+            expect.objectContaining({
+                id: 'book-1',
+                title: 'Book',
+                author: 'Author',
+                fileSize: 128,
+                addedAt: 1,
+                shelfLabel: 'to_read',
+                shelfLabelUpdatedAt: 1,
+                metadataUpdatedAt: 1,
+            }),
+        ])
         expect(storageMocks.settings.bulkPut).toHaveBeenCalledWith([
             { key: 'reader:theme', value: 'dark' },
         ])

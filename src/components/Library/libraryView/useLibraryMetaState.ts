@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Bookmark, Highlight } from '@/services/storageService'
-import { areProgressMapsEqual, areStringListsEqual } from './useLibraryDerivedData'
+import {
+    areProgressMapsEqual,
+    areStringListsEqual,
+    type LibraryActiveNav,
+} from './useLibraryDerivedData'
 import {
     loadLibraryAnnotationMeta,
     loadLibraryCoreMeta,
@@ -8,19 +12,18 @@ import {
     saveTrashBookIds,
 } from './libraryMetaRepository'
 
-type LibraryMetaNav = 'all' | 'fav' | 'notes' | 'highlight' | 'trash' | 'stats'
-
 interface UseLibraryMetaStateOptions {
-    activeNav: LibraryMetaNav
+    activeNav: LibraryActiveNav
 }
 
-function isAnnotationNav(nav: LibraryMetaNav): boolean {
+function isAnnotationNav(nav: LibraryActiveNav): boolean {
     return nav === 'notes' || nav === 'highlight'
 }
 
 export function useLibraryMetaState(options: UseLibraryMetaStateOptions) {
     const { activeNav } = options
     const [progressMap, setProgressMap] = useState<Record<string, number>>({})
+    // 旧收藏列表仅保留一个发布周期：迁移读源 + 彻底删除时顺带清理，UI 不再消费。
     const [favoriteBookIds, setFavoriteBookIds] = useState<string[]>([])
     const [trashBookIds, setTrashBookIds] = useState<string[]>([])
     const [noteBookIds, setNoteBookIds] = useState<string[]>([])
@@ -29,7 +32,7 @@ export function useLibraryMetaState(options: UseLibraryMetaStateOptions) {
     const [allBookmarks, setAllBookmarks] = useState<Bookmark[]>([])
     const metaRefreshTaskRef = useRef<Promise<void> | null>(null)
     const annotationRefreshTaskRef = useRef<Promise<void> | null>(null)
-    const activeNavRef = useRef<LibraryMetaNav>(activeNav)
+    const activeNavRef = useRef<LibraryActiveNav>(activeNav)
 
     const loadCoreMeta = useCallback(async () => {
         if (metaRefreshTaskRef.current) return metaRefreshTaskRef.current
@@ -106,15 +109,10 @@ export function useLibraryMetaState(options: UseLibraryMetaStateOptions) {
         await saveTrashBookIds(next)
     }
 
-    const toggleFavorite = async (bookId: string) => {
-        const exists = favoriteBookIds.includes(bookId)
-        const next = exists ? favoriteBookIds.filter((id) => id !== bookId) : [...favoriteBookIds, bookId]
-        await persistFavorites(next)
-    }
-
     const moveToTrash = async (bookId: string) => {
         if (trashBookIds.includes(bookId)) return
         await persistTrash([...trashBookIds, bookId])
+        // 旧收藏键仍可能残留；进回收时顺手摘掉，避免迁移回滚时脏数据。
         if (favoriteBookIds.includes(bookId)) {
             await persistFavorites(favoriteBookIds.filter((id) => id !== bookId))
         }
@@ -134,8 +132,8 @@ export function useLibraryMetaState(options: UseLibraryMetaStateOptions) {
         allBookmarks,
         persistFavorites,
         persistTrash,
-        toggleFavorite,
         moveToTrash,
         restoreFromTrash,
+        reloadCoreMeta: loadCoreMeta,
     }
 }

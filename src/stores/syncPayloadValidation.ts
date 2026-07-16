@@ -6,6 +6,11 @@ import type {
     ReadingProgress,
     ReadingStatsDaily,
 } from '@/services/storageService'
+import {
+    BOOK_SHELF_LABEL,
+    isBookShelfLabel,
+    normalizeShelfLabel,
+} from '@/services/storageService'
 import { base64ToArrayBuffer } from './syncPayloadSerialization'
 import type { SyncPayloadShape } from './syncStorePayload'
 
@@ -65,11 +70,33 @@ function validateSyncArray<T>(
 
 function isBookMeta(value: unknown): value is BookMeta {
     if (!isRecord(value)) return false
-    return hasString(value, 'id')
+    // 旧备份可能没有 shelfLabel 字段：基础字段通过后在 normalize 阶段补默认值。
+    if (!(hasString(value, 'id')
         && hasString(value, 'title')
         && hasString(value, 'author')
         && hasNumber(value, 'fileSize')
-        && hasNumber(value, 'addedAt')
+        && hasNumber(value, 'addedAt'))) {
+        return false
+    }
+    if (value.shelfLabel !== undefined && !isBookShelfLabel(value.shelfLabel)) return false
+    if (value.shelfLabelUpdatedAt !== undefined && !hasNumber(value, 'shelfLabelUpdatedAt')) return false
+    if (value.metadataUpdatedAt !== undefined && !hasNumber(value, 'metadataUpdatedAt')) return false
+    return true
+}
+
+/** 旧 WebDAV 包缺标签字段时补齐，保证 bulkPut 不写入半残 BookMeta。 */
+function normalizeBookMeta(book: BookMeta): BookMeta {
+    const addedAt = Number.isFinite(book.addedAt) ? book.addedAt : Date.now()
+    return {
+        ...book,
+        shelfLabel: normalizeShelfLabel(book.shelfLabel, BOOK_SHELF_LABEL.TO_READ),
+        shelfLabelUpdatedAt: Number.isFinite(book.shelfLabelUpdatedAt)
+            ? book.shelfLabelUpdatedAt
+            : (Number.isFinite(book.lastReadAt) ? Number(book.lastReadAt) : addedAt),
+        metadataUpdatedAt: Number.isFinite(book.metadataUpdatedAt)
+            ? book.metadataUpdatedAt
+            : addedAt,
+    }
 }
 
 function isReadingProgress(value: unknown): value is ReadingProgress {
@@ -133,7 +160,8 @@ export function stageDownloadedPayload(
     const staging: DownloadedPayloadStaging = {}
 
     if (applyData) {
-        staging.books = validateSyncArray(payload.books, 'books', isBookMeta, clearFirst)
+        const books = validateSyncArray(payload.books, 'books', isBookMeta, clearFirst)
+        staging.books = books?.map(normalizeBookMeta)
         staging.progress = validateSyncArray(payload.progress, 'progress', isReadingProgress, clearFirst)
         staging.readingStatsDaily = validateSyncArray(
             payload.readingStatsDaily,

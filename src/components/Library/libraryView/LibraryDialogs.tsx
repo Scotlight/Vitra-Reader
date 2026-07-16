@@ -7,16 +7,18 @@ import styles from '../LibraryView.module.css'
 
 interface LibraryDialogsProps {
     books: BookMeta[]
+    groups: GroupItem[]
+    groupBookMap: Record<string, string[]>
     showBookPropertiesModal: string | null
     onCloseBookProperties: () => void
     onSavedBookProperties: () => Promise<void>
+    onSaveGroupMembership: (bookId: string, groupIds: string[]) => Promise<void>
     showCreateGroupModal: boolean
     newGroupName: string
     setNewGroupName: (value: string) => void
     onCloseCreateGroupModal: () => void
     onCreateGroup: () => void
     showManageGroupModal: boolean
-    groups: GroupItem[]
     manageSourceGroupId: string
     setManageSourceGroupId: (value: string) => void
     manageTargetGroupId: string
@@ -32,16 +34,18 @@ interface LibraryDialogsProps {
 
 export function LibraryDialogs({
     books,
+    groups,
+    groupBookMap,
     showBookPropertiesModal,
     onCloseBookProperties,
     onSavedBookProperties,
+    onSaveGroupMembership,
     showCreateGroupModal,
     newGroupName,
     setNewGroupName,
     onCloseCreateGroupModal,
     onCreateGroup,
     showManageGroupModal,
-    groups,
     manageSourceGroupId,
     setManageSourceGroupId,
     manageTargetGroupId,
@@ -64,8 +68,11 @@ export function LibraryDialogs({
                 <BookPropertiesModal
                     book={selectedBook}
                     books={books}
+                    groups={groups}
+                    groupBookMap={groupBookMap}
                     onClose={onCloseBookProperties}
                     onSaved={onSavedBookProperties}
+                    onSaveGroupMembership={onSaveGroupMembership}
                 />
             )}
 

@@ -1,7 +1,12 @@
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { BookMeta } from '@/services/storageService'
+import {
+    BOOK_SHELF_LABEL,
+    BOOK_SHELF_LABEL_DISPLAY,
+    BOOK_SHELF_LABEL_VALUES,
+} from '@/services/storageService'
 import type { useGroupManager } from '@/hooks/useGroupManager'
-import heartIcon from '@/assets/icons/heart.svg'
+import type { LibraryActiveNav, ShelfLabelCounts } from './libraryView/useLibraryDerivedData'
 import noteIcon from '@/assets/icons/note.svg'
 import highlightIcon from '@/assets/icons/highlight.svg'
 import trashIcon from '@/assets/icons/trash.svg'
@@ -11,13 +16,13 @@ import libraryIcon from '@/assets/icons/library.svg'
 import vitraLogo from '@/assets/icons/vitra-logo.svg'
 import styles from './LibraryView.module.css'
 
-type NavType = 'all' | 'fav' | 'notes' | 'highlight' | 'trash' | 'stats'
-
 interface LibrarySidebarProps {
-    activeNav: NavType
+    activeNav: LibraryActiveNav
     isSettingsOpen: boolean
-    setActiveNav: (nav: NavType) => void
+    setActiveNav: (nav: LibraryActiveNav) => void
     group: ReturnType<typeof useGroupManager>
+    totalBookCount: number
+    shelfLabelCounts: ShelfLabelCounts
     onOpenBook: (id: string) => void
     onContextMenu: (event: ReactMouseEvent<HTMLElement>, bookId: string) => void
     onToggleSettings: () => void
@@ -32,6 +37,8 @@ export const LibrarySidebar = ({
     isSettingsOpen,
     setActiveNav,
     group,
+    totalBookCount,
+    shelfLabelCounts,
     onOpenBook,
     onContextMenu,
     onToggleSettings,
@@ -59,8 +66,30 @@ export const LibrarySidebar = ({
                     setActiveGroupId(null)
                 }}
             >
-                <Icon className={styles.navIcon} src={libraryIcon} />全部图书
+                <Icon className={styles.navIcon} src={libraryIcon} />
+                <span className={styles.navItemLabel}>全部图书</span>
+                <span className={styles.navItemCount}>{totalBookCount}</span>
             </button>
+
+            {/* 固定标签筛选：与自定义分组视觉分区，数量来自非回收书库。 */}
+            <div className={styles.shelfLabelNav}>
+                {BOOK_SHELF_LABEL_VALUES.map((label) => (
+                    <button
+                        key={label}
+                        className={`${styles.navItem} ${styles.shelfLabelNavItem} ${activeNav === label ? styles.active : ''}`}
+                        data-shelf-label={label}
+                        onClick={() => {
+                            setActiveNav(label)
+                            setActiveGroupId(null)
+                        }}
+                    >
+                        <span className={`${styles.shelfLabelDot} ${styles[`shelfLabelDot_${label}`]}`} aria-hidden="true" />
+                        <span className={styles.navItemLabel}>{BOOK_SHELF_LABEL_DISPLAY[label]}</span>
+                        <span className={styles.navItemCount}>{shelfLabelCounts[label]}</span>
+                    </button>
+                ))}
+            </div>
+
             {groups.length > 0 && (
                 <div className={styles.groupTree}>
                     {groups.map((groupItem) => (
@@ -113,7 +142,6 @@ export const LibrarySidebar = ({
                     ))}
                 </div>
             )}
-            <button className={`${styles.navItem} ${activeNav === 'fav' ? styles.active : ''}`} onClick={() => setActiveNav('fav')}><Icon className={styles.navIcon} src={heartIcon} />我的喜爱</button>
             <button className={`${styles.navItem} ${activeNav === 'notes' ? styles.active : ''}`} onClick={() => setActiveNav('notes')}><Icon className={styles.navIcon} src={noteIcon} />我的笔记</button>
             <button className={`${styles.navItem} ${activeNav === 'highlight' ? styles.active : ''}`} onClick={() => setActiveNav('highlight')}><Icon className={styles.navIcon} src={highlightIcon} />我的高亮</button>
             <button className={`${styles.navItem} ${activeNav === 'trash' ? styles.active : ''}`} onClick={() => setActiveNav('trash')}><Icon className={styles.navIcon} src={trashIcon} />我的回收</button>
@@ -132,3 +160,6 @@ export const LibrarySidebar = ({
         </aside>
     )
 }
+
+// 保留常量导出，方便测试断言侧栏标签顺序与显示名一致。
+export { BOOK_SHELF_LABEL, BOOK_SHELF_LABEL_DISPLAY }

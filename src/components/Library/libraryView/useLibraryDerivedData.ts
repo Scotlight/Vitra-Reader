@@ -1,5 +1,14 @@
 import { useMemo } from 'react'
-import type { Bookmark, BookMeta, Highlight } from '@/services/storageService'
+import {
+    BOOK_SHELF_LABEL,
+    BOOK_SHELF_LABEL_DISPLAY,
+    BOOK_SHELF_LABEL_VALUES,
+    normalizeShelfLabel,
+    type Bookmark,
+    type BookMeta,
+    type BookShelfLabel,
+    type Highlight,
+} from '@/services/storageService'
 import type { GroupCollection } from '@/hooks/useGroupManager'
 import { applyHomeOrder, buildHomeOrderKey, parseHomeOrderKey } from '@/hooks/groupManagerState'
 import type { LibraryGridItem } from '../BookGrid'
@@ -23,8 +32,36 @@ export function areProgressMapsEqual(left: Record<string, number>, right: Record
     return true
 }
 
-export type LibraryActiveNav = 'all' | 'fav' | 'notes' | 'highlight' | 'trash' | 'stats'
+export type LibraryActiveNav =
+    | 'all'
+    | BookShelfLabel
+    | 'notes'
+    | 'highlight'
+    | 'trash'
+    | 'stats'
 export type LibrarySortMode = 'lastRead' | 'addedAt' | 'title' | 'author'
+
+export type ShelfLabelCounts = Record<BookShelfLabel, number>
+
+export function isShelfLabelNav(nav: LibraryActiveNav): nav is BookShelfLabel {
+    return (BOOK_SHELF_LABEL_VALUES as readonly string[]).includes(nav)
+}
+
+/** 统计非回收书籍的标签数量，供侧栏展示。 */
+export function countShelfLabels(books: readonly BookMeta[], trashBookIds: readonly string[]): ShelfLabelCounts {
+    const trashSet = new Set(trashBookIds)
+    const counts: ShelfLabelCounts = {
+        [BOOK_SHELF_LABEL.TO_READ]: 0,
+        [BOOK_SHELF_LABEL.READING]: 0,
+        [BOOK_SHELF_LABEL.READ]: 0,
+        [BOOK_SHELF_LABEL.GOOD]: 0,
+    }
+    for (const book of books) {
+        if (trashSet.has(book.id)) continue
+        counts[normalizeShelfLabel(book.shelfLabel)] += 1
+    }
+    return counts
+}
 
 type AnnotationGroup<T> = {
     bookId: string
@@ -38,7 +75,6 @@ interface UseLibraryDerivedDataOptions {
     sortMode: LibrarySortMode
     activeNav: LibraryActiveNav
     activeGroupId: string | null
-    favoriteBookIds: string[]
     trashBookIds: string[]
     noteBookIds: string[]
     highlightBookIds: string[]
@@ -57,7 +93,6 @@ export function useLibraryDerivedData(options: UseLibraryDerivedDataOptions) {
         sortMode,
         activeNav,
         activeGroupId,
-        favoriteBookIds,
         trashBookIds,
         noteBookIds,
         highlightBookIds,
@@ -69,10 +104,13 @@ export function useLibraryDerivedData(options: UseLibraryDerivedDataOptions) {
         bookById,
     } = options
 
-    const favoriteBookIdSet = useMemo(() => new Set(favoriteBookIds), [favoriteBookIds])
     const trashBookIdSet = useMemo(() => new Set(trashBookIds), [trashBookIds])
     const noteBookIdSet = useMemo(() => new Set(noteBookIds), [noteBookIds])
     const highlightBookIdSet = useMemo(() => new Set(highlightBookIds), [highlightBookIds])
+    const shelfLabelCounts = useMemo(
+        () => countShelfLabels(books, trashBookIds),
+        [books, trashBookIds],
+    )
 
     const filteredBooks = useMemo(() => {
         if (activeNav === 'stats') return []
@@ -87,8 +125,8 @@ export function useLibraryDerivedData(options: UseLibraryDerivedDataOptions) {
             : sourceBase.filter((book) => !trashBookIdSet.has(book.id))
 
         const navFiltered =
-            activeNav === 'fav'
-                ? source.filter((book) => favoriteBookIdSet.has(book.id))
+            isShelfLabelNav(activeNav)
+                ? source.filter((book) => normalizeShelfLabel(book.shelfLabel) === activeNav)
                 : activeNav === 'notes'
                     ? source.filter((book) => noteBookIdSet.has(book.id))
                     : activeNav === 'highlight'
@@ -107,7 +145,7 @@ export function useLibraryDerivedData(options: UseLibraryDerivedDataOptions) {
             if (sortMode === 'addedAt') return (right.addedAt || 0) - (left.addedAt || 0)
             return (right.lastReadAt || 0) - (left.lastReadAt || 0)
         })
-    }, [activeGroupId, activeNav, books, favoriteBookIdSet, groupCollections, highlightBookIdSet, keyword, noteBookIdSet, sortMode, trashBookIdSet])
+    }, [activeGroupId, activeNav, books, groupCollections, highlightBookIdSet, keyword, noteBookIdSet, sortMode, trashBookIdSet])
 
     const showMixedHome = activeNav === 'all' && !activeGroupId && keyword.trim() === ''
 
@@ -187,8 +225,8 @@ export function useLibraryDerivedData(options: UseLibraryDerivedDataOptions) {
         ? groupCollections.find((item) => item.id === activeGroupId)?.name ?? '当前分组'
         : ''
 
-    const emptyMessage = activeNav === 'fav'
-        ? '还没有加入喜爱的图书。'
+    const emptyMessage = isShelfLabelNav(activeNav)
+        ? `还没有标记为「${BOOK_SHELF_LABEL_DISPLAY[activeNav]}」的图书。`
         : activeNav === 'trash'
             ? '回收站还是空的。'
             : activeNav === 'stats'
@@ -228,5 +266,6 @@ export function useLibraryDerivedData(options: UseLibraryDerivedDataOptions) {
         emptyMessage,
         statusText,
         sortModeLabel,
+        shelfLabelCounts,
     }
 }

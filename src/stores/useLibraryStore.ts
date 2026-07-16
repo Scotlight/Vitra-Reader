@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { db, type BookMeta } from '@/services/storageService'
+import { BOOK_SHELF_LABEL, db, type BookMeta } from '@/services/storageService'
 import { stripBookExtension, type BookFormat } from '@/engine/core/contentProvider'
 import { detectFormat as detectEngineFormat } from '@/engine/core/formatDetector'
 import { parseBookMetadata } from '@/engine/core/contentProviderFactory'
@@ -85,6 +85,7 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
             const description = typeof metaRecord.description === 'string' ? metaRecord.description : ''
             const cover = typeof metaRecord.cover === 'string' ? metaRecord.cover : ''
 
+            // 新导入默认 to_read；标签与元数据时间戳同写入时刻，后续编辑再独立推进。
             meta = {
                 id,
                 title,
@@ -101,6 +102,9 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
                 fileSize: fileData.byteLength,
                 addedAt: now,
                 lastReadAt: now,
+                shelfLabel: BOOK_SHELF_LABEL.TO_READ,
+                shelfLabelUpdatedAt: now,
+                metadataUpdatedAt: now,
             }
         } catch (e) {
             console.error('Failed to parse book:', e)
@@ -119,6 +123,9 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
                 fileSize: fileData.byteLength,
                 addedAt: now,
                 lastReadAt: now,
+                shelfLabel: BOOK_SHELF_LABEL.TO_READ,
+                shelfLabelUpdatedAt: now,
+                metadataUpdatedAt: now,
             }
         }
 

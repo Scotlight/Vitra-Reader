@@ -1,7 +1,15 @@
 import Dexie, { type Table } from 'dexie'
 import type { BookFormat } from '@/engine/core/contentProvider'
+import {
+    BOOK_SHELF_LABEL,
+    LEGACY_FAVORITE_BOOK_IDS_KEY,
+    LEGACY_FAVORITE_BOOK_IDS_LEGACY_KEY,
+    normalizeShelfLabel,
+    resolveMigratedShelfLabel,
+    type BookShelfLabel,
+} from './bookShelfLabel'
 
-// Dexie schema 版本约定：当前最高版本 7；下次修改 schema 必须从 8 开始，并同步更新本注释中的最高版本号。
+// Dexie schema 版本约定：当前最高版本 8；下次修改 schema 必须从 9 开始，并同步更新本注释中的最高版本号。
 
 const LEGACY_READER_FONT_INDEX_KEY = 'readerFonts:index:v1'
 const LEGACY_READER_FONT_DATA_KEY_PREFIX = 'readerFonts:data:v1:'
@@ -24,7 +32,24 @@ export interface BookMeta {
     fileSize: number
     addedAt: number
     lastReadAt?: number
+    /** 固定书架标签，互斥单选 */
+    shelfLabel: BookShelfLabel
+    /** 标签独立合并用时间戳 */
+    shelfLabelUpdatedAt: number
+    /** 书名/作者/简介/封面等人工编辑时间 */
+    metadataUpdatedAt: number
 }
+
+export type { BookShelfLabel }
+export {
+    BOOK_SHELF_LABEL,
+    BOOK_SHELF_LABEL_DISPLAY,
+    BOOK_SHELF_LABEL_VALUES,
+    isBookShelfLabel,
+    normalizeShelfLabel,
+    resolveMigratedShelfLabel,
+    LEGACY_FAVORITE_BOOK_IDS_KEY,
+} from './bookShelfLabel'
 
 export interface BookFile {
     id: string
@@ -111,6 +136,61 @@ export function extractLegacyReaderFontRecords(rows: readonly SettingRow[]): Rea
     })
 }
 
+export interface ShelfLabelMigrationBook {
+    id: string
+    shelfLabel?: unknown
+    shelfLabelUpdatedAt?: unknown
+    metadataUpdatedAt?: unknown
+    addedAt?: unknown
+    lastReadAt?: unknown
+}
+
+export interface ShelfLabelMigrationProgress {
+    bookId: string
+    percentage?: number
+}
+
+/**
+ * 纯函数：给旧 BookMeta 补齐 shelfLabel 相关字段。
+ * 已有合法标签则只补时间戳，不覆盖用户已写值（幂等）。
+ */
+export function applyShelfLabelMigrationToBook(
+    book: ShelfLabelMigrationBook,
+    options: {
+        favoriteIds: ReadonlySet<string>
+        progressByBookId: ReadonlyMap<string, number>
+        now: number
+    },
+): {
+    shelfLabel: BookShelfLabel
+    shelfLabelUpdatedAt: number
+    metadataUpdatedAt: number
+} {
+    const existingLabel = normalizeShelfLabel(book.shelfLabel, BOOK_SHELF_LABEL.TO_READ)
+    const hasExistingLabel = book.shelfLabel !== undefined && book.shelfLabel !== null
+    const shelfLabel = hasExistingLabel
+        ? existingLabel
+        : resolveMigratedShelfLabel({
+            isFavorite: options.favoriteIds.has(book.id),
+            percentage: options.progressByBookId.get(book.id) ?? 0,
+        })
+
+    const shelfLabelUpdatedAt = Number.isFinite(book.shelfLabelUpdatedAt)
+        ? Number(book.shelfLabelUpdatedAt)
+        : (Number.isFinite(book.lastReadAt) ? Number(book.lastReadAt) : options.now)
+
+    const metadataUpdatedAt = Number.isFinite(book.metadataUpdatedAt)
+        ? Number(book.metadataUpdatedAt)
+        : (Number.isFinite(book.addedAt) ? Number(book.addedAt) : options.now)
+
+    return { shelfLabel, shelfLabelUpdatedAt, metadataUpdatedAt }
+}
+
+function parseFavoriteIds(value: unknown): string[] {
+    if (!Array.isArray(value)) return []
+    return value.map((item) => String(item)).filter(Boolean)
+}
+
 // ─── Database ───────────────────────────────────────────────
 
 class ReaderDatabase extends Dexie {
@@ -192,6 +272,52 @@ class ReaderDatabase extends Dexie {
             readerFonts: 'id, installedAt',
             settings: 'key',
         })
+        // v8：固定书架标签 + 元数据时间戳；索引 shelfLabel 供侧栏筛选。
+        // 旧收藏键保留只读兼容一个发布周期，不在 upgrade 中删除。
+        this.version(8).stores({
+            books: 'id, title, author, addedAt, lastReadAt, shelfLabel',
+            bookFiles: 'id',
+            progress: 'bookId',
+            bookmarks: 'id, bookId, createdAt',
+            highlights: 'id, bookId, cfiRange, createdAt',
+            translationCache: 'key, provider, createdAt, lastAccessAt, expiresAt',
+            readingStatsDaily: 'id, dateKey, bookId, updatedAt',
+            readerFonts: 'id, installedAt',
+            settings: 'key',
+        }).upgrade(async (tx) => {
+            const settingsTable = tx.table('settings')
+            const progressTable = tx.table('progress')
+            const booksTable = tx.table('books')
+
+            const [favoriteRow, legacyFavoriteRow, progressRows] = await Promise.all([
+                settingsTable.get(LEGACY_FAVORITE_BOOK_IDS_KEY),
+                settingsTable.get(LEGACY_FAVORITE_BOOK_IDS_LEGACY_KEY),
+                progressTable.toArray(),
+            ])
+
+            // 优先读新键，回退旧键；不删旧键，方便一个版本内回滚排查。
+            const favoriteIds = new Set(parseFavoriteIds(
+                favoriteRow?.value ?? legacyFavoriteRow?.value,
+            ))
+            const progressByBookId = new Map<string, number>(
+                (progressRows as ShelfLabelMigrationProgress[]).map((row) => [
+                    row.bookId,
+                    typeof row.percentage === 'number' ? row.percentage : 0,
+                ]),
+            )
+            const now = Date.now()
+
+            await booksTable.toCollection().modify((book: ShelfLabelMigrationBook) => {
+                const migrated = applyShelfLabelMigrationToBook(book, {
+                    favoriteIds,
+                    progressByBookId,
+                    now,
+                })
+                book.shelfLabel = migrated.shelfLabel
+                book.shelfLabelUpdatedAt = migrated.shelfLabelUpdatedAt
+                book.metadataUpdatedAt = migrated.metadataUpdatedAt
+            })
+        })
     }
 }
 
@@ -254,4 +380,13 @@ export function migrateLegacyReaderFonts(): Promise<void> {
 export async function getBookCover(bookId: string): Promise<string | undefined> {
     const book = await db.books.get(bookId)
     return book?.cover || undefined
+}
+
+/** 更新固定书架标签；时间戳独立推进，便于后续字段级同步合并。 */
+export async function updateBookShelfLabel(bookId: string, shelfLabel: BookShelfLabel): Promise<void> {
+    const now = Date.now()
+    await db.books.update(bookId, {
+        shelfLabel: normalizeShelfLabel(shelfLabel),
+        shelfLabelUpdatedAt: now,
+    })
 }

@@ -72,6 +72,48 @@
     opacity: 0.9;
 }
 
+.navItemLabel {
+    flex: 1;
+    min-width: 0;
+}
+
+.navItemCount {
+    margin-left: auto;
+    font-size: 13px;
+    opacity: 0.75;
+    font-variant-numeric: tabular-nums;
+}
+
+.shelfLabelNav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 2px 0 8px;
+    padding: 4px 0 6px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.shelfLabelNavItem {
+    padding-left: 18px;
+    font-size: 15px;
+}
+
+.shelfLabelDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+
+.shelfLabelDot_to_read { background: #7b8aa1; }
+.shelfLabelDot_reading { background: #2f88cc; }
+.shelfLabelDot_read { background: #3c9964; }
+.shelfLabelDot_good { background: #d68439; }
+
+.active .shelfLabelDot {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
 .groupTree {
     display: flex;
     flex-direction: column;
@@ -824,6 +866,31 @@
     background: var(--bg-secondary);
 }
 
+/* 卡片徽标：绝对定位不参与布局，避免标签变化引起网格重排。 */
+.shelfLabelBadge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 2;
+    max-width: calc(100% - 12px);
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.shelfLabelBadge_to_read { background: rgba(123, 138, 161, 0.92); }
+.shelfLabelBadge_reading { background: rgba(47, 136, 204, 0.92); }
+.shelfLabelBadge_read { background: rgba(60, 153, 100, 0.92); }
+.shelfLabelBadge_good { background: rgba(214, 132, 57, 0.92); }
+
 .coverImage {
     width: 100%;
     height: 100%;
@@ -951,6 +1018,99 @@
 
 .contextDanger {
     color: #d9534f;
+}
+
+.contextMenuSection {
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    padding: 4px 0;
+    margin: 2px 0;
+}
+
+.contextMenuSectionTitle {
+    padding: 4px 12px 2px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: 0.85;
+}
+
+.contextMenuRadio {
+    display: inline-block;
+    width: 1.1em;
+    margin-right: 6px;
+    font-size: 12px;
+    opacity: 0.85;
+}
+
+.languageField {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.shelfLabelRadioGroup {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.shelfLabelRadio {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    cursor: pointer;
+}
+
+.shelfLabelRadio input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.shelfLabelChip {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    font-size: 13px;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.55);
+}
+
+.shelfLabelRadio input:checked + .shelfLabelChip {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 1px var(--accent-color);
+}
+
+.shelfLabelChip_to_read { background: rgba(123, 138, 161, 0.18); }
+.shelfLabelChip_reading { background: rgba(47, 136, 204, 0.16); }
+.shelfLabelChip_read { background: rgba(60, 153, 100, 0.16); }
+.shelfLabelChip_good { background: rgba(214, 132, 57, 0.16); }
+
+.groupCheckboxList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 140px;
+    overflow: auto;
+    width: 100%;
+    padding: 4px 0;
+}
+
+.groupCheckboxItem {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.mutedHint {
+    font-size: 13px;
+    color: var(--text-secondary);
 }
 
 .settingRow select option {
