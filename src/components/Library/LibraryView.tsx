@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useReaderSystemFonts } from '@/components/Reader/useReaderSystemFonts'
 import { useLibraryStore } from '@/stores/useLibraryStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
@@ -16,12 +16,15 @@ import { useLibraryImport } from './libraryView/useLibraryImport'
 import { LibraryTopbar } from './libraryView/LibraryTopbar'
 import { LibraryDialogs } from './libraryView/LibraryDialogs'
 import { SettingsPanel } from './SettingsPanel'
+import { MobileLibraryChrome, type MobileLibraryDestination } from './MobileLibraryChrome'
+import type { MobileSettingsPage } from './settingsPanel/mobileSettings'
 import styles from './LibraryView.module.css'
 
 export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { location: string; searchText?: string }) => void }) => {
     const { books, importBook, isLoading, loadBooks, removeBook } = useLibraryStore()
     const settings = useSettingsStore()
     const { systemFonts, loadingFonts } = useReaderSystemFonts()
+    const [mobileSettingsPage, setMobileSettingsPage] = useState<MobileSettingsPage | null>(null)
     const {
         keyword,
         setKeyword,
@@ -165,11 +168,21 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         showInfoDialog,
     })
 
+    const handleMobileNavigate = (destination: MobileLibraryDestination) => {
+        setMobileSettingsPage(null)
+        setShowSettings(false)
+        setActiveNav(destination)
+        if (destination === 'all' || destination === 'stats') {
+            setActiveGroupId(null)
+        }
+    }
+
     return (
         <div className={styles.libraryContainer}>
             <LibrarySidebar
                 activeNav={activeNav}
                 setActiveNav={(nav) => {
+                    setMobileSettingsPage(null)
                     setShowSettings(false)
                     setActiveNav(nav)
                 }}
@@ -177,15 +190,39 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                 onOpenBook={onOpenBook}
                 onContextMenu={handleBookContextMenu}
                 isSettingsOpen={showSettings}
-                onToggleSettings={() => setShowSettings(true)}
+                onToggleSettings={() => {
+                    setMobileSettingsPage(null)
+                    setShowSettings(true)
+                }}
             />
 
             <section className={`${styles.content} ${showSettings ? styles.settingsContent : ''}`}>
+                <MobileLibraryChrome
+                    activeNav={activeNav}
+                    isLoading={isLoading}
+                    isSettingsOpen={showSettings}
+                    keyword={keyword}
+                    mobileSettingsPage={mobileSettingsPage}
+                    statusText={statusText}
+                    onImport={() => void handleImport()}
+                    onKeywordChange={setKeyword}
+                    onNavigate={handleMobileNavigate}
+                    onMobileSettingsBack={() => setMobileSettingsPage(null)}
+                    onOpenSettings={() => {
+                        setMobileSettingsPage(null)
+                        setShowSettings(true)
+                    }}
+                />
                 {showSettings ? (
                     <SettingsPanel
                         systemFonts={systemFonts}
                         loadingFonts={loadingFonts}
-                        onClose={() => setShowSettings(false)}
+                        mobilePage={mobileSettingsPage}
+                        onClose={() => {
+                            setMobileSettingsPage(null)
+                            setShowSettings(false)
+                        }}
+                        onMobilePageChange={setMobileSettingsPage}
                     />
                 ) : (
                     <>

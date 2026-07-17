@@ -2,7 +2,12 @@
     display: flex;
     height: 100%;
     overflow: hidden;
-    background: var(--bg-primary);
+    /* 与全局 stage 渐变一致，给半透明侧栏/顶栏提供可模糊后景 */
+    background: var(--ui-stage-gradient, var(--bg-primary));
+}
+
+.mobileLibraryChrome {
+    display: none;
 }
 
 .sidebar {
@@ -14,8 +19,8 @@
     gap: 8px;
     overflow-y: auto;
     background: var(--panel-bg);
-    backdrop-filter: blur(var(--ui-blur));
-    -webkit-backdrop-filter: blur(var(--ui-blur));
+    backdrop-filter: var(--ui-material-filter);
+    -webkit-backdrop-filter: var(--ui-material-filter);
 }
 
 .brand {
@@ -92,7 +97,7 @@
 .groupNodeRow {
     display: flex;
     align-items: center;
-    border-radius: 10px;
+    border-radius: var(--ui-radius-control);
 }
 
 .groupNodeRowActive {
@@ -105,7 +110,7 @@
     color: var(--text-secondary);
     width: 20px;
     height: 24px;
-    border-radius: 6px;
+    border-radius: var(--ui-radius-small);
     cursor: pointer;
     display: inline-flex;
     align-items: center;
@@ -123,7 +128,7 @@
     text-align: left;
     padding: 8px 10px;
     flex: 1;
-    border-radius: 10px;
+    border-radius: var(--ui-radius-control);
     cursor: pointer;
     font-size: 14px;
     line-height: 1.2;
@@ -149,7 +154,7 @@
     background: transparent;
     color: var(--text-secondary);
     text-align: left;
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     padding: 6px 8px;
     font-size: 13px;
     cursor: pointer;
@@ -222,10 +227,10 @@
     gap: 16px;
     margin-bottom: 8px;
     background: var(--panel-bg);
-    backdrop-filter: blur(var(--ui-blur));
-    -webkit-backdrop-filter: blur(var(--ui-blur));
+    backdrop-filter: var(--ui-material-filter);
+    -webkit-backdrop-filter: var(--ui-material-filter);
     border: 1px solid var(--border-color);
-    border-radius: 14px;
+    border-radius: var(--ui-radius-panel);
     padding: 10px 12px;
 }
 
@@ -329,7 +334,7 @@
     margin: 8px 0 10px;
     background: var(--panel-bg);
     border: 1px solid var(--border-color);
-    border-radius: 14px;
+    border-radius: var(--ui-radius-panel);
     padding: 16px 18px;
     width: min(980px, 94vw);
     max-height: 86vh;
@@ -340,7 +345,7 @@
 .dialogPanel {
     background: var(--panel-bg);
     border: 1px solid var(--border-color);
-    border-radius: 14px;
+    border-radius: var(--ui-radius-panel);
     padding: 12px 14px;
     width: min(640px, 92vw);
     max-height: 78vh;
@@ -367,7 +372,7 @@
 .bookCoverPreview {
     width: 108px;
     aspect-ratio: 3 / 4;
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     overflow: hidden;
     border: 1px solid var(--border-color);
     background: var(--bg-secondary);
@@ -439,7 +444,7 @@
     width: 100%;
     height: 30px;
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: var(--ui-radius-small);
     background: transparent;
 }
 
@@ -452,7 +457,7 @@
     width: 100%;
     height: 30px;
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: var(--ui-radius-small);
     background: rgba(255, 255, 255, 0.7);
     color: var(--text-primary);
 }
@@ -468,7 +473,7 @@
     width: 100%;
     height: 34px;
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     padding: 0 10px;
     background: rgba(255, 255, 255, 0.85);
     color: var(--text-primary);
@@ -478,7 +483,7 @@
     width: 100%;
     min-height: 120px;
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     padding: 8px 10px;
     background: rgba(255, 255, 255, 0.85);
     color: var(--text-primary);
@@ -515,7 +520,7 @@
 .smallBtn {
     border: 1px solid var(--border-color);
     background: rgba(255, 255, 255, 0.8);
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     padding: 6px 10px;
     cursor: pointer;
     font-size: 12px;
@@ -537,7 +542,7 @@
     border: none;
     background: var(--accent-color);
     color: #fff;
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     padding: 6px 12px;
     font-size: 12px;
     cursor: pointer;
@@ -570,7 +575,7 @@
 .tabBtn {
     border: 1px solid var(--border-color);
     background: rgba(255, 255, 255, 0.7);
-    border-radius: 10px;
+    border-radius: var(--ui-radius-control);
     padding: 8px 12px;
     cursor: pointer;
     font-size: 13px;
@@ -649,7 +654,7 @@
     margin-bottom: 10px;
     padding: 8px;
     border: 1px solid var(--border-color);
-    border-radius: 10px;
+    border-radius: var(--ui-radius-panel);
     background: var(--panel-bg);
 }
 
@@ -713,7 +718,7 @@
 .groupCard {
     border: 1px solid var(--border-color);
     background: var(--panel-bg);
-    border-radius: 14px;
+    border-radius: var(--ui-radius-panel);
     padding: 10px;
     cursor: pointer;
     text-align: left;
@@ -745,7 +750,7 @@
 
 .groupCover {
     aspect-ratio: 3 / 4;
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     overflow: hidden;
     background: rgba(0, 0, 0, 0.06);
     display: flex;
@@ -799,7 +804,7 @@
 
 .card {
     cursor: pointer;
-    border-radius: 10px;
+    border-radius: var(--ui-radius-control);
     padding: 6px;
     transition: background 0.2s, transform 0.2s;
     user-select: none;
@@ -817,7 +822,7 @@
 .coverWrapper {
     width: 100%;
     aspect-ratio: 0.72;
-    border-radius: 6px;
+    border-radius: var(--ui-radius-small);
     overflow: hidden;
     position: relative;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
@@ -921,17 +926,377 @@
     font-size: 18px;
 }
 
+@media (max-width: 760px) {
+    .libraryContainer {
+        height: 100dvh;
+    }
+
+    .sidebar,
+    .topbar,
+    .statusLine {
+        display: none;
+    }
+
+    .content {
+        position: relative;
+        min-width: 0;
+        padding: 0;
+        background: var(--bg-primary);
+    }
+
+    .settingsContent {
+        padding: 0;
+    }
+
+    .mobileLibraryChrome {
+        flex: 0 0 auto;
+        display: block;
+        color: var(--text-primary);
+    }
+
+    .mobileLibraryHeader {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: max(14px, env(safe-area-inset-top)) 16px 12px;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--panel-bg);
+        backdrop-filter: var(--ui-material-filter);
+        -webkit-backdrop-filter: var(--ui-material-filter);
+    }
+
+    .mobileBrandRow,
+    .mobileTitleRow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .mobileBrand {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        font-size: 20px;
+        font-weight: 750;
+    }
+
+    .mobileBrand img {
+        width: 30px;
+        height: 30px;
+        flex: 0 0 auto;
+    }
+
+    .mobileImportButton {
+        min-width: 88px;
+        height: 44px;
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        border: 0;
+        border-radius: var(--ui-radius-control);
+        padding: 0 14px;
+        color: #ffffff;
+        background: var(--accent-color);
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--accent-color) 24%, transparent);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 750;
+    }
+
+    .mobileImportButton:disabled {
+        opacity: 0.5;
+    }
+
+    .mobileImportButton img {
+        width: 20px;
+        height: 20px;
+        filter: brightness(0) invert(1);
+        opacity: 1;
+    }
+
+    .mobileTitleRow h1 {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--text-primary);
+        font-size: 27px;
+        font-weight: 750;
+        line-height: 1.15;
+        letter-spacing: 0;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .mobileTitleRow span {
+        max-width: 48%;
+        overflow: hidden;
+        color: var(--text-secondary);
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .mobileSettingsTitleRow {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr) 44px;
+        min-height: 48px;
+    }
+
+    .mobileSettingsTitleRow h1 {
+        text-align: center;
+    }
+
+    .mobileSettingsBackButton {
+        width: 44px;
+        height: 44px;
+        border: 0;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        color: var(--text-primary);
+        background: transparent;
+        font: inherit;
+        font-size: 30px;
+        line-height: 1;
+    }
+
+    .mobileSettingsTitleSpacer {
+        width: 44px;
+        max-width: none;
+    }
+
+    .mobileSearch {
+        position: relative;
+        display: block;
+    }
+
+    .mobileSearch img {
+        position: absolute;
+        top: 50%;
+        left: 14px;
+        width: 18px;
+        height: 18px;
+        opacity: 0.62;
+        transform: translateY(-50%);
+        pointer-events: none;
+    }
+
+    .mobileSearch input {
+        width: 100%;
+        height: 46px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--ui-roundness);
+        outline: 0;
+        padding: 0 14px 0 42px;
+        color: var(--text-primary);
+        background: var(--bg-secondary);
+        font: inherit;
+        font-size: 14px;
+    }
+
+    .mobileSearch input::placeholder {
+        color: var(--text-secondary);
+    }
+
+    .mobileFilters {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+        overflow-x: auto;
+        padding: 3px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--ui-roundness);
+        background: var(--bg-secondary);
+        scrollbar-width: none;
+    }
+
+    .mobileFilters::-webkit-scrollbar {
+        display: none;
+    }
+
+    .mobileFilters button {
+        min-width: max-content;
+        min-height: 38px;
+        border: 0;
+        border-radius: calc(var(--ui-roundness) * 0.75);
+        padding: 0 14px;
+        color: var(--text-secondary);
+        background: transparent;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 650;
+    }
+
+    .mobileFilters .mobileFilterActive {
+        color: var(--text-primary);
+        background: var(--bg-primary);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    .scrollArea {
+        padding: 4px 12px calc(88px + env(safe-area-inset-bottom));
+        overscroll-behavior-y: contain;
+        scrollbar-gutter: auto;
+    }
+
+    .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px 10px;
+        padding-top: 10px;
+    }
+
+    .virtualGridRow {
+        align-items: start;
+    }
+
+    .card,
+    .groupCard {
+        min-width: 0;
+        border-radius: var(--ui-roundness);
+        padding: 3px;
+    }
+
+    .groupCard {
+        padding: 8px;
+    }
+
+    .coverWrapper {
+        border-radius: calc(var(--ui-roundness) * 0.75);
+    }
+
+    .meta {
+        margin-top: 7px;
+    }
+
+    .title {
+        min-height: 39px;
+        margin-bottom: 2px;
+        font-size: 14px;
+        line-height: 1.4;
+        -webkit-line-clamp: 2;
+    }
+
+    .author {
+        font-size: 12px;
+    }
+
+    .progressRow {
+        margin-top: 5px;
+        font-size: 11px;
+    }
+
+    .progressTrack {
+        height: 3px;
+        margin-top: 3px;
+    }
+
+    .mobileBottomNav {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 30;
+        min-height: calc(72px + env(safe-area-inset-bottom));
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        padding: 6px max(6px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(6px, env(safe-area-inset-left));
+        border-top: 1px solid var(--border-color);
+        background: var(--panel-bg);
+        box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.06);
+        backdrop-filter: var(--ui-material-filter);
+        -webkit-backdrop-filter: var(--ui-material-filter);
+    }
+
+    .mobileNavButton {
+        min-width: 0;
+        min-height: 58px;
+        border: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 4px;
+        color: var(--text-secondary);
+        background: transparent;
+        font: inherit;
+        font-size: 11px;
+        font-weight: 650;
+    }
+
+    .mobileNavButton img {
+        width: 22px;
+        height: 22px;
+        opacity: 0.72;
+    }
+
+    .mobileBottomNav .mobileNavButtonActive {
+        color: var(--accent-color);
+    }
+
+    .mobileNavButtonActive img {
+        opacity: 1;
+    }
+
+    [data-theme='dark'] .mobileLibraryChrome img,
+    [data-theme='sepia'] .mobileLibraryChrome img,
+    [data-theme='green'] .mobileLibraryChrome img {
+        filter: brightness(0) saturate(100%);
+        opacity: 0.78;
+    }
+
+    [data-theme='dark'] .mobileLibraryChrome img {
+        filter: brightness(0) invert(1);
+    }
+
+    [data-theme='dark'] .mobileBrand img,
+    [data-theme='sepia'] .mobileBrand img,
+    [data-theme='green'] .mobileBrand img {
+        filter: none;
+        opacity: 1;
+    }
+
+    [data-theme='dark'] .mobileImportButton img,
+    [data-theme='sepia'] .mobileImportButton img,
+    [data-theme='green'] .mobileImportButton img {
+        filter: brightness(0) invert(1);
+        opacity: 1;
+    }
+}
+
+@media (max-width: 360px) {
+    .mobileLibraryHeader {
+        padding-inline: 12px;
+    }
+
+    .mobileTitleRow h1 {
+        font-size: 24px;
+    }
+
+    .scrollArea {
+        padding-inline: 9px;
+    }
+
+    .grid {
+        gap-inline: 7px;
+    }
+}
+
 .contextMenu {
     position: fixed;
     z-index: 60;
     min-width: 140px;
     background: var(--panel-bg);
     border: 1px solid var(--border-color);
-    border-radius: 10px;
+    border-radius: var(--ui-radius-panel);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
     overflow: hidden;
-    backdrop-filter: blur(var(--ui-blur));
-    -webkit-backdrop-filter: blur(var(--ui-blur));
+    backdrop-filter: var(--ui-material-filter);
+    -webkit-backdrop-filter: var(--ui-material-filter);
 }
 
 .contextMenuItem {
@@ -1005,7 +1370,7 @@
     gap: 10px;
     padding: 10px 8px;
     border-bottom: 1px solid rgba(0, 0, 0, 0.04);
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     cursor: pointer;
 }
 

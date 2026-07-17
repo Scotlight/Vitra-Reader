@@ -31,12 +31,14 @@ function getFontSelectValue(fontFamily: string): string {
 
 interface ReaderExperienceSettingsCardProps {
     loadingFonts: boolean
+    scope?: 'all' | 'font' | 'reading'
     settings: SettingsFormStore
     systemFonts: string[]
 }
 
 export function ReaderExperienceSettingsCard({
     loadingFonts,
+    scope = 'all',
     settings,
     systemFonts,
 }: ReaderExperienceSettingsCardProps) {
@@ -48,82 +50,91 @@ export function ReaderExperienceSettingsCard({
     const fontOptions = Array.from(new Set(['系统默认', selectedFontValue, ...systemFonts]))
         .filter(Boolean)
         .map((font) => ({ value: font, label: font }))
+    const showFont = scope !== 'reading'
+    const showReading = scope !== 'font'
+    const title = scope === 'font' ? '字体' : scope === 'reading' ? '阅读方式' : '阅读体验'
 
     return (
-        <SettingsCard title="阅读体验">
-            <SettingRow label="字体">
-                {loadingFonts ? (
-                    <span>加载字体中...</span>
-                ) : (
-                    <SelectControl
-                        label="字体"
-                        value={selectedFontValue}
-                        options={fontOptions}
-                        onChange={(value) => {
-                            settings.updateSetting(
-                                'fontFamily',
-                                value === '系统默认' ? 'inherit' : `"${value}", sans-serif`,
-                            )
-                        }}
-                    />
-                )}
-            </SettingRow>
-            <SettingRow label="正文首行缩进">
-                <ToggleControl
-                    label="正文首行缩进"
-                    checked={settings.paragraphIndentEnabled}
-                    onChange={(checked) => settings.updateSetting('paragraphIndentEnabled', checked)}
-                />
-            </SettingRow>
-            <SettingRow label="页面宽度">
-                <StepperControl
-                    label="页面宽度"
-                    min={0.5}
-                    max={3}
-                    step={0.1}
-                    value={settings.pageWidth}
-                    unit="x"
-                    decimals={1}
-                    onChange={(value) => settings.updateSetting('pageWidth', value)}
-                />
-            </SettingRow>
-            {isCoarsePointer && (
-                <SettingRow label="屏幕亮度">
-                    <StepperControl
-                        label="屏幕亮度"
-                        min={30}
-                        max={100}
-                        step={5}
-                        value={Math.round(settings.brightness * 100)}
-                        unit="%"
-                        onChange={(value) => settings.updateSetting('brightness', value / 100)}
-                    />
+        <SettingsCard title={title}>
+            {showFont && (
+                <SettingRow label="字体">
+                    {loadingFonts ? (
+                        <span>加载字体中...</span>
+                    ) : (
+                        <SelectControl
+                            label="字体"
+                            value={selectedFontValue}
+                            options={fontOptions}
+                            onChange={(value) => {
+                                settings.updateSetting(
+                                    'fontFamily',
+                                    value === '系统默认' ? 'inherit' : `"${value}", sans-serif`,
+                                )
+                            }}
+                        />
+                    )}
                 </SettingRow>
             )}
-            <SettingRow label="文字对齐">
-                <SelectControl
-                    label="文字对齐"
-                    value={settings.textAlign}
-                    options={TEXT_ALIGN_OPTIONS}
-                    onChange={(value) => settings.updateSetting('textAlign', value as typeof settings.textAlign)}
-                />
-            </SettingRow>
-            <SettingRow label="翻页模式">
-                <SelectControl
-                    label="翻页模式"
-                    value={settings.pageTurnMode}
-                    options={PAGE_TURN_MODE_OPTIONS}
-                    onChange={(value) => settings.updateSetting('pageTurnMode', value as typeof settings.pageTurnMode)}
-                />
-            </SettingRow>
-            <SettingRow label="翻页动画">
-                <SelectControl
-                    label="翻页动画"
-                    value={settings.pageTurnAnimation}
-                    options={PAGE_TURN_ANIMATION_OPTIONS}
-                    onChange={(value) => settings.updateSetting('pageTurnAnimation', value as typeof settings.pageTurnAnimation)}
-                />
-            </SettingRow>
+            {showReading && (
+                <>
+                    <SettingRow label="正文首行缩进">
+                        <ToggleControl
+                            label="正文首行缩进"
+                            checked={settings.paragraphIndentEnabled}
+                            onChange={(checked) => settings.updateSetting('paragraphIndentEnabled', checked)}
+                        />
+                    </SettingRow>
+                    <SettingRow label="页面宽度">
+                        <StepperControl
+                            label="页面宽度"
+                            min={0.5}
+                            max={3}
+                            step={0.1}
+                            value={settings.pageWidth}
+                            unit="x"
+                            decimals={1}
+                            onChange={(value) => settings.updateSetting('pageWidth', value)}
+                        />
+                    </SettingRow>
+                    {isCoarsePointer && (
+                        <SettingRow label="屏幕亮度">
+                            <StepperControl
+                                label="屏幕亮度"
+                                min={30}
+                                max={100}
+                                step={5}
+                                value={Math.round(settings.brightness * 100)}
+                                unit="%"
+                                onChange={(value) => settings.updateSetting('brightness', value / 100)}
+                            />
+                        </SettingRow>
+                    )}
+                    <SettingRow label="文字对齐">
+                        <SelectControl
+                            label="文字对齐"
+                            value={settings.textAlign}
+                            options={TEXT_ALIGN_OPTIONS}
+                            onChange={(value) => settings.updateSetting('textAlign', value as typeof settings.textAlign)}
+                        />
+                    </SettingRow>
+                    <SettingRow label="翻页模式">
+                        <SelectControl
+                            label="翻页模式"
+                            value={settings.pageTurnMode}
+                            options={PAGE_TURN_MODE_OPTIONS}
+                            onChange={(value) => settings.updateSetting('pageTurnMode', value as typeof settings.pageTurnMode)}
+                        />
+                    </SettingRow>
+                    <SettingRow label="翻页动画">
+                        <SelectControl
+                            label="翻页动画"
+                            value={settings.pageTurnAnimation}
+                            options={PAGE_TURN_ANIMATION_OPTIONS}
+                            onChange={(value) => settings.updateSetting('pageTurnAnimation', value as typeof settings.pageTurnAnimation)}
+                        />
+                    </SettingRow>
+                </>
+            )}
         </SettingsCard>
     )
 }

@@ -23,12 +23,53 @@
     /* UI Appearance */
     --ui-roundness: 8px;
     --ui-blur: 20px;
+    /* Mica 用弱模糊；App 会按 uiBlurStrength 注入具体值，这里给兜底 */
+    --ui-mica-blur: 9px;
     --ui-opacity: 0.85;
     --ui-transition-speed: 0.25s;
 
-    /* Panel */
-    --panel-bg: rgba(255, 255, 255, var(--ui-opacity));
+    /* 圆角语义层：面板 / 控件 / 小标签，避免各模块散落固定 px */
+    --ui-radius-panel: var(--ui-roundness);
+    --ui-radius-control: clamp(4px, calc(var(--ui-roundness) * 0.75), 14px);
+    --ui-radius-small: clamp(2px, calc(var(--ui-roundness) * 0.5), 10px);
+
+    /* 材质默认（mica）；data-ui-material 选择器会覆盖 */
+    --ui-material-filter: blur(var(--ui-mica-blur)) saturate(115%);
+    --ui-material-tint-strength: 8%;
+    --ui-surface-blur: blur(var(--ui-blur));
+    --ui-surface-saturation: saturate(120%);
+
+    /* 内容区低对比度渐变，给透明/模糊提供可观察的后景 */
+    --ui-stage-gradient: linear-gradient(
+        145deg,
+        color-mix(in srgb, var(--bg-secondary) 88%, var(--accent-color) 12%) 0%,
+        var(--bg-secondary) 42%,
+        color-mix(in srgb, var(--bg-primary) 92%, var(--accent-color) 8%) 100%
+    );
+
+    /* Panel：半透明底 + 材质轻微染色，只改背景 alpha，不碰文字 opacity */
+    --panel-bg: color-mix(
+        in srgb,
+        var(--accent-color) var(--ui-material-tint-strength),
+        rgba(255, 255, 255, var(--ui-opacity))
+    );
     --panel-width: 280px;
+}
+
+/* 界面材质：default 无模糊；mica 弱模糊染色；acrylic 全模糊高饱和 */
+[data-ui-material='default'] {
+    --ui-material-filter: none;
+    --ui-material-tint-strength: 0%;
+}
+
+[data-ui-material='mica'] {
+    --ui-material-filter: blur(var(--ui-mica-blur)) saturate(115%);
+    --ui-material-tint-strength: 8%;
+}
+
+[data-ui-material='acrylic'] {
+    --ui-material-filter: blur(var(--ui-blur)) saturate(140%);
+    --ui-material-tint-strength: 14%;
 }
 
 /* ─── Dark Theme ─────────────────────────────────────────── */
@@ -41,7 +82,11 @@
     --border-color: rgba(255, 255, 255, 0.08);
     --reader-bg: #16213e;
     --reader-text: #e0e0e0;
-    --panel-bg: rgba(22, 33, 62, var(--ui-opacity));
+    --panel-bg: color-mix(
+        in srgb,
+        var(--accent-color) var(--ui-material-tint-strength),
+        rgba(22, 33, 62, var(--ui-opacity))
+    );
 }
 
 /* ─── Sepia Theme ────────────────────────────────────────── */
@@ -54,7 +99,11 @@
     --border-color: rgba(91, 70, 54, 0.12);
     --reader-bg: #f4ecd8;
     --reader-text: #5b4636;
-    --panel-bg: rgba(244, 236, 216, var(--ui-opacity));
+    --panel-bg: color-mix(
+        in srgb,
+        var(--accent-color) var(--ui-material-tint-strength),
+        rgba(244, 236, 216, var(--ui-opacity))
+    );
 }
 
 /* ─── Green Theme ────────────────────────────────────────── */
@@ -67,5 +116,9 @@
     --border-color: rgba(45, 74, 62, 0.1);
     --reader-bg: #c7edcc;
     --reader-text: #2d4a3e;
-    --panel-bg: rgba(199, 237, 204, var(--ui-opacity));
+    --panel-bg: color-mix(
+        in srgb,
+        var(--accent-color) var(--ui-material-tint-strength),
+        rgba(199, 237, 204, var(--ui-opacity))
+    );
 }

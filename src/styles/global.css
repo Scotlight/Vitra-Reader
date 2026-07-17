@@ -19,7 +19,7 @@ body {
     font-family: var(--font-family);
     font-size: 14px;
     color: var(--text-primary);
-    background: var(--bg-primary);
+    background: var(--ui-stage-gradient, var(--bg-primary));
     line-height: 1.5;
     transition: background var(--ui-transition-speed),
         color var(--ui-transition-speed);
@@ -56,10 +56,10 @@ body {
 /* ─── Glass Panel Utility ────────────────────────────────── */
 .glass-panel {
     background: var(--panel-bg);
-    backdrop-filter: blur(var(--ui-blur));
-    -webkit-backdrop-filter: blur(var(--ui-blur));
+    backdrop-filter: var(--ui-material-filter);
+    -webkit-backdrop-filter: var(--ui-material-filter);
     border: 1px solid var(--border-color);
-    border-radius: var(--ui-roundness);
+    border-radius: var(--ui-radius-panel);
 }
 
 /* ─── Focus Visible ──────────────────────────────────────── */
