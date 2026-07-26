@@ -68,9 +68,13 @@ function App() {
         }
     }, [autoSync, loadPersistedSettings, loadSyncConfig])
 
+    // Mica 用约 45% 的模糊强度，在 App 侧算好注入，避免 CSS 里对 blur 做 calc 兼容性翻车
+    const micaBlurPx = Math.max(0, Math.round(settings.uiBlurStrength * 0.45))
+
     return (
         <div
             className={styles.app}
+            data-ui-material={settings.uiMaterial}
             style={{
                 '--reader-bg': settings.customBgColor || 'var(--bg-primary)',
                 '--reader-text': settings.customTextColor || 'var(--text-primary)',
@@ -78,6 +82,7 @@ function App() {
                 // Apply UI settings globally
                 '--ui-opacity': settings.uiOpacity,
                 '--ui-blur': `${settings.uiBlurStrength}px`,
+                '--ui-mica-blur': `${micaBlurPx}px`,
                 '--ui-roundness': `${settings.uiRoundness}px`,
                 '--ui-transition-speed': settings.uiAnimation ? '0.25s' : '0s',
             } as React.CSSProperties}

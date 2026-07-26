@@ -2,7 +2,8 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: var(--bg-primary);
+  /* 主题渐变后景：让面板透明/毛玻璃有可模糊的内容层 */
+  background: var(--ui-stage-gradient, var(--bg-primary));
   color: var(--text-primary);
   font-family: var(--font-family);
   overflow: hidden;

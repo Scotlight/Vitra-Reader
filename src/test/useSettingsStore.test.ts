@@ -75,4 +75,50 @@ describe('useSettingsStore', () => {
         expect(warningSpy).not.toHaveBeenCalled()
         expect(useSettingsStore.getState().persistenceError).toBe(false)
     })
+
+    it('界面外观四项写入后可被 loadPersistedSettings 还原', async () => {
+        useSettingsStore.getState().updateSetting('uiRoundness', 24)
+        useSettingsStore.getState().updateSetting('uiBlurStrength', 40)
+        useSettingsStore.getState().updateSetting('uiOpacity', 0.4)
+        useSettingsStore.getState().updateSetting('uiMaterial', 'acrylic')
+        await settlePersistence()
+
+        const lastPut = storageMocks.settingsPut.mock.calls.at(-1)?.[0] as {
+            value: {
+                uiRoundness: number
+                uiBlurStrength: number
+                uiOpacity: number
+                uiMaterial: string
+            }
+        }
+        expect(lastPut.value.uiRoundness).toBe(24)
+        expect(lastPut.value.uiBlurStrength).toBe(40)
+        expect(lastPut.value.uiOpacity).toBe(0.4)
+        expect(lastPut.value.uiMaterial).toBe('acrylic')
+
+        useSettingsStore.setState(initialState, true)
+        storageMocks.settingsGet.mockImplementation(async (key: string) => {
+            if (key === 'settings:readerSettings') {
+                return {
+                    key,
+                    value: {
+                        ...initialState,
+                        uiRoundness: 24,
+                        uiBlurStrength: 40,
+                        uiOpacity: 0.4,
+                        uiMaterial: 'acrylic',
+                    },
+                }
+            }
+            return undefined
+        })
+
+        await useSettingsStore.getState().loadPersistedSettings()
+
+        const restored = useSettingsStore.getState()
+        expect(restored.uiRoundness).toBe(24)
+        expect(restored.uiBlurStrength).toBe(40)
+        expect(restored.uiOpacity).toBe(0.4)
+        expect(restored.uiMaterial).toBe('acrylic')
+    })
 })

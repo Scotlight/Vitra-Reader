@@ -3,13 +3,14 @@ import { SettingsCard } from './SettingsCard'
 import { SettingRow } from './SettingRow'
 import { StepperControl } from './StepperControl'
 import { ToggleControl } from './ToggleControl'
+import { UIAppearancePreview } from './UIAppearancePreview'
 import type { SettingsFormStore } from './settingsTypes'
 import styles from '../SettingsPanelV2.module.css'
 
 const UI_MATERIAL_OPTIONS: SelectControlOption[] = [
-    { value: 'default', label: '默认' },
-    { value: 'mica', label: 'Mica' },
-    { value: 'acrylic', label: 'Acrylic' },
+    { value: 'default', label: '默认 · 无模糊' },
+    { value: 'mica', label: 'Mica · 柔和染色' },
+    { value: 'acrylic', label: 'Acrylic · 强透明模糊' },
 ]
 
 interface GeneralSettingsCardsProps {
@@ -19,9 +20,12 @@ interface GeneralSettingsCardsProps {
 }
 
 export function GeneralSettingsCards({ onClose, onReset, settings }: GeneralSettingsCardsProps) {
+    const isDefaultMaterial = settings.uiMaterial === 'default'
+
     return (
         <div className={styles.cardGrid}>
             <SettingsCard title="界面外观">
+                <UIAppearancePreview />
                 <SettingRow label="圆角">
                     <StepperControl
                         label="圆角"
@@ -43,6 +47,11 @@ export function GeneralSettingsCards({ onClose, onReset, settings }: GeneralSett
                         onChange={(value) => settings.updateSetting('uiBlurStrength', value)}
                     />
                 </SettingRow>
+                {isDefaultMaterial && (
+                    <p className={styles.uiAppearanceHint} data-testid="ui-default-blur-hint">
+                        默认材质不使用背景模糊；切换到 Mica / Acrylic 后生效。
+                    </p>
+                )}
                 <SettingRow label="透明度">
                     <StepperControl
                         label="透明度"

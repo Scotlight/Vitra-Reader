@@ -1,12 +1,12 @@
 .embeddedShell {
-    --settings-bg: var(--bg-primary);
+    --settings-bg: var(--ui-stage-gradient, var(--bg-secondary));
     --settings-panel: var(--panel-bg);
     --settings-panel-solid: var(--bg-secondary);
     --settings-ink: var(--text-primary);
     --settings-muted: var(--text-secondary);
     --settings-border: var(--border-color);
     --settings-accent: var(--accent-color);
-    --settings-control-bg: color-mix(in srgb, var(--panel-bg) 86%, var(--bg-primary));
+    --settings-control-bg: color-mix(in srgb, var(--bg-primary) 72%, transparent);
     --settings-control-hover: color-mix(in srgb, var(--accent-color) 16%, transparent);
     --settings-icon-filter: none;
     --settings-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
@@ -18,6 +18,15 @@
     overflow: hidden;
     background: var(--settings-bg);
     color: var(--settings-ink);
+}
+
+.mobileSettingsHome {
+    display: none;
+}
+
+.mobileAppearanceGrid {
+    display: grid;
+    gap: 18px;
 }
 
 [data-theme='dark'] .embeddedShell {
@@ -44,7 +53,7 @@
     flex-direction: column;
     overflow: hidden;
     border: 1px solid rgba(17, 24, 39, 0.18);
-    border-radius: 14px;
+    border-radius: var(--ui-radius-panel);
     background: #f4f7f9;
     color: #1e293b;
     box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
@@ -76,7 +85,7 @@
     width: 32px;
     height: 28px;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--ui-radius-small);
     background: transparent;
     color: currentColor;
     cursor: pointer;
@@ -163,8 +172,8 @@
     padding: 28px 16px;
     border-right: 1px solid var(--settings-border);
     background: var(--settings-panel);
-    backdrop-filter: blur(var(--ui-blur));
-    -webkit-backdrop-filter: blur(var(--ui-blur));
+    backdrop-filter: var(--ui-material-filter);
+    -webkit-backdrop-filter: var(--ui-material-filter);
 }
 
 .railTitle {
@@ -184,7 +193,7 @@
     width: 100%;
     min-height: 40px;
     border: none;
-    border-radius: 10px;
+    border-radius: var(--ui-radius-control);
     display: flex;
     align-items: center;
     gap: 10px;
@@ -218,7 +227,8 @@
     display: flex;
     flex-direction: column;
     padding: 28px 30px 22px;
-    background: var(--settings-bg);
+    /* 内容区用次级底色，与半透明卡片形成层次，透明度变化才看得见 */
+    background: transparent;
 }
 
 .contentHeader {
@@ -332,9 +342,93 @@
     max-height: 220px;
     padding: 16px 18px;
     border: 1px solid var(--settings-border);
-    border-radius: 10px;
+    border-radius: var(--ui-radius-control);
     overflow: hidden;
     word-break: break-word;
+}
+
+/* 界面外观即时预览：后景色块专门用来观察模糊/透明，前景继承全局 CSS 变量 */
+.uiAppearancePreview {
+    margin: 0 0 14px;
+    border: 1px solid var(--settings-border);
+    border-radius: var(--ui-radius-panel);
+    overflow: hidden;
+    background: var(--settings-control-bg);
+}
+
+.uiAppearancePreviewStage {
+    position: relative;
+    min-height: 118px;
+    padding: 16px;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 18% 30%, color-mix(in srgb, var(--accent-color) 42%, transparent) 0%, transparent 42%),
+        radial-gradient(circle at 82% 70%, color-mix(in srgb, #f59e0b 36%, transparent) 0%, transparent 46%),
+        linear-gradient(135deg,
+            color-mix(in srgb, var(--bg-secondary) 70%, #60a5fa 30%) 0%,
+            color-mix(in srgb, var(--bg-primary) 75%, #a78bfa 25%) 100%);
+}
+
+.uiAppearancePreviewPanel {
+    width: min(100%, 280px);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--settings-border);
+    border-radius: var(--ui-radius-panel);
+    background: var(--panel-bg);
+    backdrop-filter: var(--ui-material-filter);
+    -webkit-backdrop-filter: var(--ui-material-filter);
+    box-shadow: var(--settings-shadow);
+    color: var(--settings-ink);
+}
+
+.uiAppearancePreviewLabel {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--settings-muted);
+}
+
+.uiAppearancePreviewControls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.uiAppearancePreviewButton {
+    min-height: 32px;
+    border: 1px solid var(--settings-border);
+    border-radius: var(--ui-radius-control);
+    padding: 0 12px;
+    background: var(--settings-accent);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.uiAppearancePreviewInput {
+    flex: 1;
+    min-width: 0;
+    height: 32px;
+    border: 1px solid var(--settings-border);
+    border-radius: var(--ui-radius-control);
+    padding: 0 10px;
+    background: color-mix(in srgb, var(--bg-primary) 78%, transparent);
+    color: var(--settings-ink);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.uiAppearanceHint {
+    margin: 0 0 10px;
+    color: var(--settings-muted);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.45;
 }
 
 .fontPreviewParagraph {
@@ -348,12 +442,12 @@
 
 .settingsCard {
     border: 1px solid var(--settings-border);
-    border-radius: 12px;
+    border-radius: var(--ui-radius-panel);
     background: var(--settings-panel);
     box-shadow: var(--settings-shadow);
     overflow: hidden;
-    backdrop-filter: blur(var(--ui-blur));
-    -webkit-backdrop-filter: blur(var(--ui-blur));
+    backdrop-filter: var(--ui-material-filter);
+    -webkit-backdrop-filter: var(--ui-material-filter);
 }
 
 .cardHeader {
@@ -423,7 +517,7 @@
     width: 88px;
     height: 36px;
     border: 1px solid var(--settings-border);
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     background: var(--settings-control-bg);
     cursor: pointer;
 }
@@ -431,7 +525,7 @@
 .miniButton {
     min-height: 34px;
     border: 1px solid var(--settings-border);
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     padding: 0 12px;
     background: var(--settings-control-bg);
     color: var(--settings-ink);
@@ -463,7 +557,7 @@
 .resetButton,
 .applyButton {
     min-height: 38px;
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     cursor: pointer;
     font-size: 14px;
     font-weight: 800;
@@ -520,7 +614,7 @@
     min-width: 0;
     height: 37px;
     border: 1px solid var(--settings-border);
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     padding: 0 12px;
     background: var(--settings-control-bg);
     color: var(--settings-ink);
@@ -566,7 +660,7 @@
 .smallBtn,
 .syncPrimaryBtn {
     min-height: 36px;
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     cursor: pointer;
     font-size: 13px;
     font-weight: 800;
@@ -602,7 +696,7 @@
 .syncStatus {
     margin-top: 10px;
     border: 1px solid var(--settings-border);
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     padding: 9px 10px;
     background: var(--settings-control-bg);
     color: var(--settings-ink);
@@ -655,7 +749,7 @@
     width: 100%;
     height: 100%;
     border: 1px solid var(--settings-border);
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     appearance: none;
     background: var(--settings-control-bg);
     color: var(--settings-ink);
@@ -678,7 +772,7 @@
     width: 176px;
     height: 37px;
     border: 1px solid var(--settings-border);
-    border-radius: 8px;
+    border-radius: var(--ui-radius-control);
     display: inline-grid;
     grid-template-columns: 38px 1fr 38px;
     align-items: center;
@@ -775,7 +869,7 @@
     }
 }
 
-@media (max-width: 820px) {
+@media (max-width: 760px) {
     .stage {
         height: calc(100vh - 28px);
         width: calc(100vw - 28px);
@@ -784,17 +878,16 @@
     .appFrame,
     .embeddedShell {
         grid-template-columns: 1fr;
-        overflow: auto;
+        overflow: hidden;
     }
 
-    .primarySidebar,
-    .settingsRail {
+    .primarySidebar {
         border-right: none;
         border-bottom: 1px solid #e2e8f0;
     }
 
     .settingsRail {
-        padding: 18px;
+        display: none;
     }
 
     .railMenu {
@@ -808,12 +901,95 @@
     }
 
     .content {
-        overflow: visible;
-        padding: 22px 18px;
+        height: 100%;
+        overflow: hidden;
+        padding: 0;
+    }
+
+    .content.mobileContentHidden {
+        display: none;
+    }
+
+    .contentHeader,
+    .bottomRow {
+        display: none;
     }
 
     .contentScroll {
-        overflow: visible;
+        overflow: auto;
+        padding: 16px 16px calc(94px + env(safe-area-inset-bottom));
+    }
+
+    .mobileSettingsHome {
+        height: 100%;
+        display: block;
+        overflow-y: auto;
+        box-sizing: border-box;
+        padding: 12px 16px calc(94px + env(safe-area-inset-bottom));
+        background: var(--settings-bg);
+    }
+
+    .mobileSettingsGroups {
+        display: grid;
+        gap: 20px;
+    }
+
+    .mobileSettingsGroup {
+        min-width: 0;
+    }
+
+    .mobileSettingsGroupTitle {
+        margin: 0 8px 8px;
+        color: var(--settings-muted);
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.4;
+    }
+
+    .mobileSettingsMenu {
+        border-top: 1px solid var(--settings-border);
+        border-bottom: 1px solid var(--settings-border);
+    }
+
+    .mobileSettingsItem {
+        width: 100%;
+        min-height: 68px;
+        border: 0;
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr) 28px;
+        align-items: center;
+        gap: 14px;
+        padding: 0 8px;
+        color: var(--settings-ink);
+        background: transparent;
+        font: inherit;
+        font-size: 17px;
+        font-weight: 700;
+        text-align: left;
+    }
+
+    .mobileSettingsItem + .mobileSettingsItem {
+        border-top: 1px solid var(--settings-border);
+    }
+
+    .mobileSettingsItemIcon {
+        width: 24px;
+        height: 24px;
+        object-fit: contain;
+        filter: var(--settings-icon-filter);
+        opacity: 0.88;
+    }
+
+    .mobileSettingsChevron {
+        color: var(--settings-muted);
+        font-size: 30px;
+        font-weight: 400;
+        line-height: 1;
+        text-align: center;
+    }
+
+    .mobileAppearanceGrid {
+        gap: 14px;
     }
 
     .settingRow {
