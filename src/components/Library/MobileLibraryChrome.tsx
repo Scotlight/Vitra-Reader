@@ -5,10 +5,14 @@ import searchIcon from '@/assets/icons/search.svg'
 import settingsIcon from '@/assets/icons/settings.svg'
 import shelfAddIcon from '@/assets/icons/shelf-add.svg'
 import vitraLogo from '@/assets/icons/vitra-logo.svg'
+import { BOOK_SHELF_LABEL_DISPLAY, BOOK_SHELF_LABEL_VALUES } from '@/services/bookShelfLabel'
+import { isShelfLabelNav, type LibraryActiveNav } from './libraryView/useLibraryDerivedData'
 import { MOBILE_SETTINGS_PAGE_TITLES, type MobileSettingsPage } from './settingsPanel/mobileSettings'
 import styles from './LibraryView.module.css'
 
-export type MobileLibraryDestination = 'all' | 'fav' | 'notes' | 'highlight' | 'trash' | 'stats'
+// 不自立一套导航类型：'fav' 已拆成四个固定书架标签（9fe4a7b），
+// 移动端直接复用桌面侧栏的 nav 模型，避免两套类型漂移再撞类型错
+export type MobileLibraryDestination = LibraryActiveNav
 
 interface MobileLibraryChromeProps {
     readonly activeNav: MobileLibraryDestination
@@ -29,9 +33,13 @@ interface MobileLibraryFilter {
     label: string
 }
 
+// 筛选 chips 与桌面侧栏同源：全部 + 四个书架标签（待看/在看/已看/好看）+ 回收站
 const libraryFilters: ReadonlyArray<MobileLibraryFilter> = [
     { destination: 'all', label: '全部' },
-    { destination: 'fav', label: '收藏' },
+    ...BOOK_SHELF_LABEL_VALUES.map((value) => ({
+        destination: value,
+        label: BOOK_SHELF_LABEL_DISPLAY[value],
+    })),
     { destination: 'trash', label: '回收站' },
 ]
 
@@ -74,7 +82,7 @@ export function MobileLibraryChrome({
     onOpenSettings,
     statusText,
 }: MobileLibraryChromeProps) {
-    const isLibrarySection = activeNav === 'all' || activeNav === 'fav' || activeNav === 'trash'
+    const isLibrarySection = activeNav === 'all' || activeNav === 'trash' || isShelfLabelNav(activeNav)
     const isAnnotationSection = activeNav === 'notes' || activeNav === 'highlight'
     const filters = isLibrarySection ? libraryFilters : isAnnotationSection ? annotationFilters : []
     const pageTitle = isSettingsOpen

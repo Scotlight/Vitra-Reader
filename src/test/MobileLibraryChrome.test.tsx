@@ -33,14 +33,16 @@ describe('MobileLibraryChrome', () => {
             target: { value: '沙丘' },
         })
         fireEvent.click(view.getByRole('button', { name: '导入图书' }))
-        fireEvent.click(view.getByRole('button', { name: '筛选收藏' }))
+        fireEvent.click(view.getByRole('button', { name: '筛选待看' }))
+        fireEvent.click(view.getByRole('button', { name: '筛选好看' }))
         fireEvent.click(view.getByRole('button', { name: '筛选回收站' }))
 
         expect(props.onKeywordChange).toHaveBeenCalledWith('沙丘')
         expect(props.onImport).toHaveBeenCalledTimes(1)
         expect(view.getByRole('button', { name: '导入图书' })).toHaveTextContent('导入')
-        expect(props.onNavigate).toHaveBeenNthCalledWith(1, 'fav')
-        expect(props.onNavigate).toHaveBeenNthCalledWith(2, 'trash')
+        expect(props.onNavigate).toHaveBeenNthCalledWith(1, 'to_read')
+        expect(props.onNavigate).toHaveBeenNthCalledWith(2, 'good')
+        expect(props.onNavigate).toHaveBeenNthCalledWith(3, 'trash')
     })
 
     it('底部导航只承载书架、标注、统计和设置四个一级入口', () => {
@@ -62,7 +64,7 @@ describe('MobileLibraryChrome', () => {
 
         expect(view.getByRole('heading', { name: '标注' })).toBeInTheDocument()
         expect(view.queryByRole('searchbox')).not.toBeInTheDocument()
-        expect(view.queryByRole('button', { name: '筛选收藏' })).not.toBeInTheDocument()
+        expect(view.queryByRole('button', { name: '筛选待看' })).not.toBeInTheDocument()
 
         fireEvent.click(view.getByRole('button', { name: '筛选高亮' }))
 
