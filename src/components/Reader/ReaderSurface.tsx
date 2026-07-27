@@ -6,6 +6,7 @@ import { getWindowFullscreenBridge, requestElementFullscreen } from '@/services/
 import { useIsCoarsePointer } from '@/hooks/useIsCoarsePointer'
 import { ImmersiveReaderShell } from './ImmersiveReaderShell'
 import { ReaderSettingsPanel } from './ReaderSettingsPanel'
+import { useReaderShortcuts } from './useReaderShortcuts'
 import type { ReaderColors } from './readerColors'
 import type { ReaderPanelTab } from './readerPanelTypes'
 import styles from './ReaderView.module.css'
@@ -40,11 +41,13 @@ interface ReaderSurfaceProps {
     isNightMode: boolean
     onNextChapter: () => void
     onBack: () => void
+    onFontSizeDelta: (delta: number) => void
     onPageTurnModeChange: (nextMode: PageTurnMode) => void
     onPinnedSidebarWidthChange: (width: number) => void
     onPreviousChapter: () => void
     onProgressCommit: (progress: number) => void
     onTabChange: (tab: ReaderPanelTab) => void
+    onThemeChange: (themeId: string) => void
     onToggleNightMode: () => void
     panelContent: ReactNode
     progressLabel: string
@@ -91,11 +94,13 @@ export function ReaderSurface({
     isNightMode,
     onNextChapter,
     onBack,
+    onFontSizeDelta,
     onPageTurnModeChange,
     onPinnedSidebarWidthChange,
     onPreviousChapter,
     onProgressCommit,
     onTabChange,
+    onThemeChange,
     onToggleNightMode,
     panelContent,
     progressLabel,
@@ -164,6 +169,13 @@ export function ReaderSurface({
             console.warn('[Reader] Enter fullscreen failed:', error)
         })
     }, [isFullscreen])
+
+    // 内置快捷键挂在阅读外壳这一层：全屏开关归本组件所有，字号与主题回调给上层的 settings store。
+    useReaderShortcuts({
+        onFontSizeDelta,
+        onThemeChange,
+        onToggleFullscreen: toggleFullscreen,
+    })
 
     const settingsPanel = (
         <ReaderSettingsPanel

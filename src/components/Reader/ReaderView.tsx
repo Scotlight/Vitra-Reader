@@ -10,6 +10,7 @@ import { ReaderPanelContent } from './ReaderPanelContent'
 import type { ReaderPanelTab } from './readerPanelTypes'
 import { ReaderSurface } from './ReaderSurface'
 import { findCurrentChapterLabel, normalizeTocHref } from './readerToc'
+import { clampReaderFontSize } from './readerShortcutActions'
 import { useReaderAnnotations } from './useReaderAnnotations'
 import { useReaderAppearance } from './useReaderAppearance'
 import { useReaderBookSession } from './useReaderBookSession'
@@ -206,6 +207,14 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const handlePinnedSidebarWidthChange = useCallback((width: number) => {
         settings.updateSetting('pinnedSidebarWidth', width)
     }, [settings])
+    const handleFontSizeDelta = useCallback((delta: number) => {
+        settings.updateSetting('fontSize', clampReaderFontSize(settings.fontSize + delta))
+    }, [settings])
+    const handleShortcutThemeChange = useCallback((themeId: string) => {
+        // 与设置面板里的主题按钮保持一致：只切 themeId，不清用户设过的自定义前景/背景色。
+        // 代价是自定义色生效时按 F1~F4 看不出变化，但这是现有 UI 的既有行为，快捷键不另造一套语义。
+        settings.updateSetting('themeId', themeId)
+    }, [settings])
     const {
         handlePageTurnModeChange,
         modeSwitchAnchor,
@@ -306,11 +315,13 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                 />
             )}
             onBack={onBack}
+            onFontSizeDelta={handleFontSizeDelta}
             onPageTurnModeChange={handlePageTurnModeChange}
             onPinnedSidebarWidthChange={handlePinnedSidebarWidthChange}
             onPreviousChapter={handlePreviousChapter}
             onProgressCommit={handleProgressCommit}
             onTabChange={setActiveTab}
+            onThemeChange={handleShortcutThemeChange}
             onToggleNightMode={handleToggleNightMode}
             progressLabel={`${Math.round(Math.max(0, Math.min(1, currentProgress)) * 100)}%`}
             readerColors={readerColors}

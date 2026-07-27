@@ -1,17 +1,11 @@
 import { useEffect } from 'react'
 import { READER_TABS, type ReaderPanelTab } from './readerPanelTypes'
+import { isEditableTarget } from './readerShortcutActions'
 
 interface UseReaderTabShortcutArgs {
     readonly enabled: boolean
     readonly activeTab: ReaderPanelTab
     readonly onTabChange: (tab: ReaderPanelTab) => void
-}
-
-function isEditableTarget(target: EventTarget | null): boolean {
-    if (!(target instanceof HTMLElement)) return false
-    const tag = target.tagName
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
-    return target.isContentEditable
 }
 
 // Tab / Shift+Tab 在三个面板 tab 间循环切换。
