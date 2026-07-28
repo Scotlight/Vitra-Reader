@@ -1167,8 +1167,84 @@
         font-weight: 600;
     }
 
+    /* ── 首页头（原型 1a）：大标题 + 搜索圆钮 + 导入胶囊 ── */
+
+    .mobileHomeHeaderRow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 44px;
+    }
+
+    /* 首页标题用衬线呼应"纸质书"气质，与 MobileHomeView 内书名同一字体栈 */
+    .mobileHomeTitle {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--text-primary);
+        font-family: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'SimSun', serif;
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 1.2;
+        letter-spacing: 0.02em;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .mobileHomeActions {
+        display: inline-flex;
+        align-items: center;
+        flex: 0 0 auto;
+        gap: 10px;
+    }
+
+    .mobileHomeSearchButton {
+        width: 36px;
+        height: 36px;
+        border: 0;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+        transition: transform 120ms ease, background-color 160ms ease;
+    }
+
+    .mobileHomeSearchButton:active {
+        transform: scale(0.92);
+        background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+    }
+
+    .mobileHomeSearchButton img {
+        width: 17px;
+        height: 17px;
+        opacity: 0.75;
+    }
+
+    .mobileHomeImportButton {
+        height: 36px;
+        border: 0;
+        border-radius: 999px;
+        padding: 0 15px;
+        color: #fff;
+        background: var(--accent-color);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        transition: transform 120ms ease, opacity 120ms ease;
+    }
+
+    .mobileHomeImportButton:active {
+        transform: scale(0.95);
+    }
+
+    .mobileHomeImportButton:disabled {
+        opacity: 0.5;
+    }
+
     .scrollArea {
-        padding: 4px 12px calc(88px + env(safe-area-inset-bottom));
+        /* 底部预留 = 胶囊底距 16 + 胶囊高 62 + 呼吸 16 */
+        padding: 4px 12px calc(94px + env(safe-area-inset-bottom));
         overscroll-behavior-y: contain;
         scrollbar-gutter: auto;
     }
@@ -1234,42 +1310,47 @@
         background: color-mix(in srgb, var(--text-primary) 8%, transparent);
     }
 
+    /* 悬浮胶囊底栏（原型 1a）：脱离屏幕底边悬浮，取代通栏 tab bar */
     .mobileBottomNav {
         position: absolute;
-        right: 0;
-        bottom: 0;
-        left: 0;
+        right: 16px;
+        bottom: calc(16px + env(safe-area-inset-bottom));
+        left: 16px;
         z-index: 30;
-        min-height: calc(64px + env(safe-area-inset-bottom));
+        min-height: 62px;
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        padding: 4px max(6px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(6px, env(safe-area-inset-left));
-        border-top: 1px solid var(--border-color);
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        align-items: stretch;
+        padding: 5px;
+        border: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+        border-radius: 22px;
         background: var(--panel-bg);
-        box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.03);
-        backdrop-filter: var(--ui-material-filter);
-        -webkit-backdrop-filter: var(--ui-material-filter);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
     }
 
-    /* 底部 nav 按钮：active 改"实色图标 + 顶部 2px 短横线"双重指示，加 200ms 颜色过渡 + 按压反馈 */
+    /* 底部 nav 按钮：active 改"accent 16% 底色胶囊 + accent 文字"（原型 1a），加按压反馈 */
     .mobileNavButton {
         position: relative;
         min-width: 0;
-        min-height: 54px;
+        min-height: 52px;
         border: 0;
+        border-radius: 17px;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         gap: 3px;
-        padding: 4px;
+        padding: 4px 2px;
         color: var(--text-secondary);
         background: transparent;
         font: inherit;
-        font-size: 11px;
+        /* 「阅读时间」4 字要在 1/5 栏宽（320px 屏约 55px）里放下，字号压到 10.5px */
+        font-size: 10.5px;
         font-weight: 500;
         letter-spacing: 0.01em;
-        transition: color 200ms ease, transform 120ms ease, opacity 120ms ease;
+        transition: color 200ms ease, background-color 200ms ease, transform 200ms cubic-bezier(0.32, 0.72, 0, 1), opacity 120ms ease;
     }
 
     .mobileNavButton:active {
@@ -1277,34 +1358,25 @@
         opacity: 0.75;
     }
 
+    .mobileNavButton span {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     .mobileNavButton img {
-        width: 24px;
-        height: 24px;
+        width: 22px;
+        height: 22px;
         opacity: 0.7;
         transition: opacity 200ms ease;
     }
 
-    /* active 指示条：顶部 2px 短横线，避免与下方文字粘连，也跟微信读书/iOS 一致 */
-    .mobileNavButton::before {
-        content: '';
-        position: absolute;
-        top: 2px;
-        left: 50%;
-        width: 20px;
-        height: 2px;
-        border-radius: 999px;
-        background: var(--accent-color);
-        transform: translateX(-50%) scaleX(0);
-        transition: transform 200ms cubic-bezier(0.32, 0.72, 0, 1);
-    }
-
     .mobileBottomNav .mobileNavButtonActive {
         color: var(--accent-color);
+        background: color-mix(in srgb, var(--accent-color) 16%, transparent);
         font-weight: 600;
-    }
-
-    .mobileNavButtonActive::before {
-        transform: translateX(-50%) scaleX(1);
+        transform: translateY(-1px);
     }
 
     .mobileNavButtonActive img {

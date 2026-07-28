@@ -9,11 +9,13 @@ function renderChrome(overrides: Partial<Parameters<typeof MobileLibraryChrome>[
         isSettingsOpen: false,
         keyword: '',
         mobileSettingsPage: null,
+        mobileTab: 'shelf',
+        onHomeSearch: vi.fn(),
         onImport: vi.fn(),
         onKeywordChange: vi.fn(),
         onNavigate: vi.fn(),
         onMobileSettingsBack: vi.fn(),
-        onOpenSettings: vi.fn(),
+        onTabChange: vi.fn(),
         statusText: '共 12 本',
         ...overrides,
     }
@@ -43,18 +45,35 @@ describe('MobileLibraryChrome', () => {
         expect(props.onNavigate).toHaveBeenNthCalledWith(2, 'trash')
     })
 
-    it('底部导航只承载书架、标注、统计和设置四个一级入口', () => {
+    it('底部导航承载首页、书架、阅读时间、笔记、设置五个一级 tab', () => {
         const { props, view } = renderChrome()
 
+        fireEvent.click(view.getByRole('button', { name: '首页' }))
         fireEvent.click(view.getByRole('button', { name: '书架' }))
-        fireEvent.click(view.getByRole('button', { name: '标注' }))
-        fireEvent.click(view.getByRole('button', { name: '统计' }))
+        fireEvent.click(view.getByRole('button', { name: '阅读时间' }))
+        fireEvent.click(view.getByRole('button', { name: '笔记' }))
         fireEvent.click(view.getByRole('button', { name: '设置' }))
 
-        expect(props.onNavigate).toHaveBeenNthCalledWith(1, 'all')
-        expect(props.onNavigate).toHaveBeenNthCalledWith(2, 'notes')
-        expect(props.onNavigate).toHaveBeenNthCalledWith(3, 'stats')
-        expect(props.onOpenSettings).toHaveBeenCalledTimes(1)
+        expect(props.onTabChange).toHaveBeenNthCalledWith(1, 'home')
+        expect(props.onTabChange).toHaveBeenNthCalledWith(2, 'shelf')
+        expect(props.onTabChange).toHaveBeenNthCalledWith(3, 'time')
+        expect(props.onTabChange).toHaveBeenNthCalledWith(4, 'notes')
+        expect(props.onTabChange).toHaveBeenNthCalledWith(5, 'settings')
+    })
+
+    it('首页 tab 渲染专属头部：大标题 + 搜索圆钮 + 导入胶囊，无品牌行与筛选', () => {
+        const { props, view } = renderChrome({ mobileTab: 'home' })
+
+        expect(view.getByRole('heading', { name: '首页' })).toBeInTheDocument()
+        expect(view.queryByText('Vitra')).not.toBeInTheDocument()
+        expect(view.queryByRole('searchbox')).not.toBeInTheDocument()
+        expect(view.queryByRole('button', { name: '筛选收藏' })).not.toBeInTheDocument()
+
+        fireEvent.click(view.getByRole('button', { name: '搜索书库' }))
+        fireEvent.click(view.getByRole('button', { name: '导入图书' }))
+
+        expect(props.onHomeSearch).toHaveBeenCalledTimes(1)
+        expect(props.onImport).toHaveBeenCalledTimes(1)
     })
 
     it('标注一级页只显示笔记和高亮二级筛选', () => {

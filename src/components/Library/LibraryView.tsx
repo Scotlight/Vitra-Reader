@@ -3,6 +3,7 @@ import { useReaderSystemFonts } from '@/components/Reader/useReaderSystemFonts'
 import { useLibraryStore } from '@/stores/useLibraryStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useGroupManager } from '@/hooks/useGroupManager'
+import { useIsMobileLayout } from '@/hooks/useIsMobileLayout'
 import { LibrarySidebar } from './LibrarySidebar'
 import { BookContextMenu } from './BookContextMenu'
 import { AnnotationList } from './AnnotationList'
@@ -16,7 +17,8 @@ import { useLibraryImport } from './libraryView/useLibraryImport'
 import { LibraryTopbar } from './libraryView/LibraryTopbar'
 import { LibraryDialogs } from './libraryView/LibraryDialogs'
 import { SettingsPanel } from './SettingsPanel'
-import { MobileLibraryChrome, type MobileLibraryDestination } from './MobileLibraryChrome'
+import { MobileLibraryChrome, type MobileLibraryDestination, type MobileLibraryTab } from './MobileLibraryChrome'
+import { MobileHomeView, type MobileHomeShortcut } from './mobileHome/MobileHomeView'
 import type { MobileSettingsPage } from './settingsPanel/mobileSettings'
 import styles from './LibraryView.module.css'
 
@@ -24,7 +26,10 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
     const { books, importBook, isLoading, loadBooks, removeBook } = useLibraryStore()
     const settings = useSettingsStore()
     const { systemFonts, loadingFonts } = useReaderSystemFonts()
+    const isMobileLayout = useIsMobileLayout()
     const [mobileSettingsPage, setMobileSettingsPage] = useState<MobileSettingsPage | null>(null)
+    // 移动端一级 tab 叠加层：只在移动布局下参与渲染决策，桌面端完全无感（chrome 隐藏 + 内容分支有 isMobileLayout 闸）
+    const [mobileTab, setMobileTab] = useState<MobileLibraryTab>('home')
     const {
         keyword,
         setKeyword,
@@ -33,6 +38,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         activeNav,
         setActiveNav,
         sortMode,
+        setSortMode,
         dialogState,
         contextMenu,
         setContextMenu,
@@ -177,6 +183,43 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         }
     }
 
+    // 5 个一级 tab → 既有 activeNav/showSettings 的映射层。home 不动 activeNav：
+    // 首页内容自派生（见 MobileHomeView），不占用桌面共用的导航语义。
+    const handleMobileTabChange = (tab: MobileLibraryTab) => {
+        setMobileTab(tab)
+        setMobileSettingsPage(null)
+        if (tab === 'settings') {
+            setShowSettings(true)
+            return
+        }
+        setShowSettings(false)
+        if (tab === 'shelf') {
+            setActiveNav('all')
+            setActiveGroupId(null)
+        } else if (tab === 'time') {
+            setActiveNav('stats')
+            setActiveGroupId(null)
+        } else if (tab === 'notes') {
+            setActiveNav('notes')
+        }
+    }
+
+    // 首页快捷入口 → 书架 tab 的对应筛选/排序。search 暂落到书架（那里有搜索框），
+    // 全屏搜索是原型的独立浮层，属后续 phase。
+    const handleHomeShortcut = (shortcut: MobileHomeShortcut) => {
+        setMobileTab('shelf')
+        setMobileSettingsPage(null)
+        setShowSettings(false)
+        setActiveGroupId(null)
+        if (shortcut === 'fav' || shortcut === 'trash') {
+            setActiveNav(shortcut)
+            return
+        }
+        setActiveNav('all')
+        if (shortcut === 'recentlyAdded') setSortMode('addedAt')
+        if (shortcut === 'recentlyRead') setSortMode('lastRead')
+    }
+
     return (
         <div className={styles.libraryContainer}>
             <LibrarySidebar
@@ -203,15 +246,14 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                     isSettingsOpen={showSettings}
                     keyword={keyword}
                     mobileSettingsPage={mobileSettingsPage}
+                    mobileTab={mobileTab}
                     statusText={statusText}
+                    onHomeSearch={() => handleHomeShortcut('search')}
                     onImport={() => void handleImport()}
                     onKeywordChange={setKeyword}
                     onNavigate={handleMobileNavigate}
                     onMobileSettingsBack={() => setMobileSettingsPage(null)}
-                    onOpenSettings={() => {
-                        setMobileSettingsPage(null)
-                        setShowSettings(true)
-                    }}
+                    onTabChange={handleMobileTabChange}
                 />
                 {showSettings ? (
                     <SettingsPanel
@@ -242,7 +284,15 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                         </div>
 
                         <div ref={setScrollContainer} className={styles.scrollArea} onContextMenu={handleBlankAreaContextMenu}>
-                            {activeNav === 'stats' ? (
+                            {isMobileLayout && mobileTab === 'home' ? (
+                                <MobileHomeView
+                                    books={books}
+                                    progressMap={progressMap}
+                                    trashBookIdSet={trashBookIdSet}
+                                    onOpenBook={(id) => onOpenBook(id)}
+                                    onShortcut={handleHomeShortcut}
+                                />
+                            ) : activeNav === 'stats' ? (
                                 <ReadingStatsPanel />
                             ) : (activeNav === 'highlight' || activeNav === 'notes') ? (
                                 <AnnotationList
