@@ -25,6 +25,20 @@ interface ReaderViewProps {
     jumpTarget?: { location: string; searchText?: string } | null
 }
 export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
+    // 包装 onBack：通知过渡层做返回动画
+    // LibraryView 用 display:none 隐藏，querySelector 此时找不到卡片；
+    // 所以这里发"带 fallback 位置"的事件，具体卡片位置由过渡层从 book:open 时存的初始位置读
+    const handleBack = useCallback(() => {
+        import('@/components/Library/BookOpenTransition').then((m) => {
+            m.emitBookClose({
+                bookId,
+                // 占位值，过渡层会优先用 open 时存的 cardRect；找不到才用这里
+                cardRect: { top: window.innerHeight / 2 - 100, left: window.innerWidth / 2 - 75, width: 150, height: 200 },
+            })
+        })
+        onBack()
+    }, [bookId, onBack])
+
     const tocListRef = useRef<HTMLDivElement>(null)
     const providerRef = useRef<ContentProvider | null>(null)
     const [settingsOpen, setSettingsOpen] = useState(false)
@@ -65,6 +79,12 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         bookId,
         isReady,
     })
+    // 上报共享元素过渡：isReady=true 时通知 BookOpenTransition 可以退出了
+    // 用 CustomEvent 解耦，避免给 ReaderView 加 prop
+    useEffect(() => {
+        if (!isReady) return
+        import('@/components/Library/BookOpenTransition').then((m) => m.emitReaderReady(bookId))
+    }, [isReady, bookId])
     const annotationState = useReaderAnnotations({
         activeTab,
         bookId,
@@ -305,7 +325,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                     tocListRef={tocListRef}
                 />
             )}
-            onBack={onBack}
+            onBack={handleBack}
             onPageTurnModeChange={handlePageTurnModeChange}
             onPinnedSidebarWidthChange={handlePinnedSidebarWidthChange}
             onPreviousChapter={handlePreviousChapter}

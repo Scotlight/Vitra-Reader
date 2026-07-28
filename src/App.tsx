@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { useSettingsStore } from './stores/useSettingsStore'
 import { useSyncStore } from './stores/useSyncStore'
 import { LibraryView } from './components/Library/LibraryView'
+import { BookOpenTransition } from './components/Library/BookOpenTransition'
 import styles from './App.module.css'
 
 type View = 'library' | 'reader'
@@ -97,6 +98,8 @@ function App() {
                         <ReaderView bookId={currentBookId} onBack={handleBackToLibrary} jumpTarget={jumpTarget} />
                     </Suspense>
                 )}
+                {/* 共享元素过渡层：监听 book:open/close 事件，跟 Library/Reader 解耦 */}
+                <BookOpenTransition />
             </main>
         </div>
     )

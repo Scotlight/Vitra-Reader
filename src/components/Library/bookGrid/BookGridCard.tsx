@@ -6,6 +6,7 @@ import type {
 } from 'react'
 import { BookFormatPlaceholder } from '../BookFormatPlaceholder'
 import type { LibraryGridItem } from '../BookGrid'
+import { emitBookOpen } from '../BookOpenTransition'
 import { LazyCoverImage } from './LazyCoverImage'
 import styles from '../LibraryView.module.css'
 
@@ -93,10 +94,28 @@ export function BookGridCard({
     const { book } = item
     const progress = progressMap[book.id] ?? 0
 
+    const handleOpen = (event: ReactMouseEvent<HTMLElement>) => {
+        // 移动端共享元素过渡：从 DOM 拿到封面 URL 和卡片位置，发给过渡层
+        // 桌面端过渡层自身会忽略这个事件，所以这里不需要做平台判断
+        const cardEl = event.currentTarget as HTMLElement
+        const coverEl = cardEl.querySelector(`.${styles.coverWrapper} img`) as HTMLImageElement | null
+        const coverSrc = coverEl?.currentSrc || coverEl?.src
+        if (coverSrc) {
+            const rect = cardEl.getBoundingClientRect()
+            emitBookOpen({
+                bookId: book.id,
+                cover: coverSrc,
+                cardRect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+            })
+        }
+        onOpenBook(book.id)
+    }
+
     return (
         <motion.div
             {...commonProps}
-            onClick={() => onOpenBook(book.id)}
+            data-book-id={book.id}
+            onClick={handleOpen}
             onContextMenu={(event: ReactMouseEvent<HTMLElement>) => onContextMenu(event, book.id)}
         >
             <div className={styles.coverWrapper}>
