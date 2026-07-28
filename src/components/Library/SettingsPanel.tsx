@@ -4,14 +4,11 @@ import { AboutSettingsCards } from './settingsPanel/AboutSettingsCards'
 import { DataSettingsCards } from './settingsPanel/DataSettingsCards'
 import { DisplaySettingsCards } from './settingsPanel/DisplaySettingsCards'
 import { ExternalConnectionSettingsCards } from './settingsPanel/ExternalConnectionSettingsCards'
-import { FontPreviewSettingsCard } from './settingsPanel/FontPreviewSettingsCard'
 import { GeneralSettingsCards } from './settingsPanel/GeneralSettingsCards'
-import { ReaderExperienceSettingsCard } from './settingsPanel/ReaderExperienceSettingsCard'
+import { MobileReaderSettingsSubpage } from './settingsPanel/MobileReaderSettingsSubpage'
 import type { MobileSettingsPage } from './settingsPanel/mobileSettings'
 import { SettingsPanelShell, type SettingsRail } from './settingsPanel/SettingsPanelShell'
-import { ThemeTypographySettingsCard } from './settingsPanel/ThemeTypographySettingsCard'
 import { ReadingStatsPanel } from './ReadingStatsPanel'
-import styles from './SettingsPanelV2.module.css'
 
 interface SettingsPanelProps {
     systemFonts: string[]
@@ -56,30 +53,18 @@ export const SettingsPanel = ({
     }
 
     const renderMobileContent = () => {
-        if (mobilePage === 'readingMode' || mobilePage === 'font') {
+        // 字体/排版/主题/阅读方式 4 个子页面走移动端专用骨架（Readest/iOS 风格 boxed list）
+        // 桌面端组件（ReaderExperienceSettingsCard 等）保留给桌面，不再被移动端复用
+        if (mobilePage === 'readingMode' || mobilePage === 'font' || mobilePage === 'typography' || mobilePage === 'theme') {
             return (
-                <div className={styles.singleCardGrid}>
-                    <ReaderExperienceSettingsCard
-                        loadingFonts={loadingFonts}
-                        scope={mobilePage === 'font' ? 'font' : 'reading'}
-                        settings={settings}
-                        systemFonts={systemFonts}
-                    />
-                    {mobilePage === 'font' && <FontPreviewSettingsCard settings={settings} />}
-                </div>
-            )
-        }
-        if (mobilePage === 'typography' || mobilePage === 'theme') {
-            return (
-                <div className={styles.mobileAppearanceGrid}>
-                    <ThemeTypographySettingsCard
-                        onTempTextColorChange={setTempTextColor}
-                        scope={mobilePage}
-                        settings={settings}
-                        tempTextColor={tempTextColor}
-                    />
-                    {mobilePage === 'typography' && <FontPreviewSettingsCard settings={settings} />}
-                </div>
+                <MobileReaderSettingsSubpage
+                    page={mobilePage}
+                    settings={settings}
+                    systemFonts={systemFonts}
+                    loadingFonts={loadingFonts}
+                    tempTextColor={tempTextColor}
+                    onTempTextColorChange={setTempTextColor}
+                />
             )
         }
         if (mobilePage === 'appearance') {

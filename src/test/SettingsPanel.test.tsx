@@ -208,18 +208,24 @@ describe('SettingsPanel', () => {
                 onMobilePageChange={onMobilePageChange}
             />,
         )
-        expect(view.getByText('阅读方式')).toBeInTheDocument()
-        expect(view.getByText('翻页模式')).toBeInTheDocument()
-        expect(view.queryByLabelText('字体')).not.toBeInTheDocument()
+        // 新移动端骨架：分组标题"翻页模式"/"翻页动画" + 3 个可视化 radio + 1 个 select
+        expect(view.getByRole('heading', { name: '翻页模式' })).toBeInTheDocument()
+        expect(view.getByRole('heading', { name: '翻页动画' })).toBeInTheDocument()
+        expect(view.getByRole('radio', { name: '单页' })).toBeInTheDocument()
+        expect(view.getByRole('radio', { name: '双页' })).toBeInTheDocument()
+        expect(view.getByRole('radio', { name: '滚动' })).toBeInTheDocument()
+        expect(view.getByLabelText('动画效果')).toBeInTheDocument()
         expect(view.queryByRole('navigation', { name: '设置分类' })).not.toBeInTheDocument()
     })
 
     it('手机版字体、排版、主题和翻译页面只显示各自设置', () => {
         const { view } = renderSettingsPanel(vi.fn(), 'font')
 
-        expect(view.getByLabelText('字体')).toBeInTheDocument()
-        expect(view.getByText('字体预览')).toBeInTheDocument()
-        expect(view.queryByText('翻页模式')).not.toBeInTheDocument()
+        // 新移动端骨架：预览 testid + 组标题"字体"/"字号与间距"
+        expect(view.getByTestId('mobile-font-preview')).toBeInTheDocument()
+        expect(view.getByRole('heading', { name: '字体' })).toBeInTheDocument()
+        expect(view.getByRole('heading', { name: '字号与间距' })).toBeInTheDocument()
+        expect(view.queryByLabelText('翻页模式')).not.toBeInTheDocument()
 
         view.rerender(
             <SettingsPanel
@@ -230,8 +236,10 @@ describe('SettingsPanel', () => {
                 onMobilePageChange={vi.fn()}
             />,
         )
-        expect(view.getByRole('button', { name: '字号增加' })).toBeInTheDocument()
-        expect(view.queryByRole('button', { name: '浅色' })).not.toBeInTheDocument()
+        // 排版页：首行缩进 toggle + 文字对齐 select + 段距 stepper
+        expect(view.getByRole('switch', { name: '正文首行缩进' })).toBeInTheDocument()
+        expect(view.getByLabelText('文字对齐')).toBeInTheDocument()
+        expect(view.queryByRole('radio', { name: '浅色' })).not.toBeInTheDocument()
 
         view.rerender(
             <SettingsPanel
@@ -242,8 +250,10 @@ describe('SettingsPanel', () => {
                 onMobilePageChange={vi.fn()}
             />,
         )
-        expect(view.getByRole('button', { name: '浅色' })).toBeInTheDocument()
-        expect(view.queryByRole('button', { name: '字号增加' })).not.toBeInTheDocument()
+        // 主题页：4 个色板 radio + 自定义颜色行
+        expect(view.getByRole('radio', { name: '浅色' })).toBeInTheDocument()
+        expect(view.getByRole('radio', { name: '深色' })).toBeInTheDocument()
+        expect(view.queryByRole('switch', { name: '正文首行缩进' })).not.toBeInTheDocument()
 
         view.rerender(
             <SettingsPanel
