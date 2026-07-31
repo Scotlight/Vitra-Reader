@@ -59,6 +59,8 @@ export function BookOpenTransition() {
     const [isMobile, setIsMobile] = useState(() => checkIsMobile())
 
     useEffect(() => {
+        // 与 checkIsMobile 一致：缺 matchMedia 的环境不订阅，保持初始非移动端判定
+        if (typeof window.matchMedia !== 'function') return
         const mq = window.matchMedia('(max-width: 850px) and (orientation: portrait)')
         const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
         mq.addEventListener('change', handler)
@@ -194,6 +196,8 @@ export function BookOpenTransition() {
 
 function checkIsMobile(): boolean {
     if (typeof window === 'undefined') return false
+    // jsdom 与部分老 WebView 没有 matchMedia，缺省时按非移动端处理而非抛错
+    if (typeof window.matchMedia !== 'function') return false
     return window.matchMedia('(max-width: 850px) and (orientation: portrait)').matches
 }
 
