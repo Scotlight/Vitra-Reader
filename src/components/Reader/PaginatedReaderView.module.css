@@ -11,7 +11,10 @@
     column-fill: auto;
     column-gap: 0;
     box-sizing: border-box;
-    transition: transform 0.25s ease-out, opacity 0.15s ease-out;
+    /* transform 过渡即 slide 页内翻页动画：JS 翻页时先 transition:'none' 钉起始帧、
+       下一帧恢复 '' 走这里的过渡把 translateX 带到目标页。
+       重排/resize 时 usePaginatedPageLayout 也会临时 transition:'none' 绕过它防跳动。 */
+    transition: transform 0.28s cubic-bezier(0.3, 0.9, 0.25, 1), opacity 0.15s ease-out;
     opacity: 1;
     /* height 由 JS 动态设置 */
 }

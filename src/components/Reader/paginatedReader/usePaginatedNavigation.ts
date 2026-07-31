@@ -1,8 +1,13 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react';
 import type { SpineItemInfo } from '@/engine/core/contentProvider';
 import type { PageBoundary } from '@/engine/types/pagination';
 import { shouldSkipPaginatedBlankCandidate } from './paginatedBlankDetection';
+import {
+    formatSlideStartTransform,
+    PAGE_TURN_FADE_MS,
+    type PaginatedPageTurnAnimation,
+} from './paginatedPageTurnAnimation';
 
 interface UsePaginatedNavigationOptions {
     viewportRef: RefObject<HTMLDivElement | null>;
@@ -18,6 +23,8 @@ interface UsePaginatedNavigationOptions {
     setCurrentSpineIndex: (spineIndex: number) => void;
     hideSelectionMenu: () => void;
     loadChapter: (spineIndex: number, goToLastPage?: boolean, visited?: Set<number>) => Promise<void> | void;
+    /** 页内翻页动画类型，默认瞬时（none） */
+    pageTurnAnimation?: PaginatedPageTurnAnimation;
 }
 
 export function usePaginatedNavigation(options: UsePaginatedNavigationOptions) {
@@ -35,7 +42,22 @@ export function usePaginatedNavigation(options: UsePaginatedNavigationOptions) {
         setCurrentSpineIndex,
         hideSelectionMenu,
         loadChapter,
+        pageTurnAnimation = 'none',
     } = options;
+
+    // 翻页动画只认容器当前真实位置，避免快速连翻时起始帧错页。
+    // 用 ref 存动画类型，避免每次切设置都重建 goToPage/nextPage/prevPage 链。
+    const animationRef = useRef<PaginatedPageTurnAnimation>(pageTurnAnimation);
+    animationRef.current = pageTurnAnimation;
+    const slideFrameRef = useRef<number | null>(null);
+    const fadeTimerRef = useRef<number | null>(null);
+    const fadeFrameRef = useRef<number | null>(null);
+
+    useEffect(() => () => {
+        if (slideFrameRef.current !== null) window.cancelAnimationFrame(slideFrameRef.current);
+        if (fadeTimerRef.current !== null) window.clearTimeout(fadeTimerRef.current);
+        if (fadeFrameRef.current !== null) window.cancelAnimationFrame(fadeFrameRef.current);
+    }, []);
 
     const isPageLikelyBlank = useCallback((pageIndex: number): boolean => {
         const container = columnRef.current;
@@ -75,11 +97,60 @@ export function usePaginatedNavigation(options: UsePaginatedNavigationOptions) {
     }, [columnRef, pageBoundariesRef, pageMapReadyRef, viewportRef]);
 
     const goToPage = useCallback((page: number) => {
+        const container = columnRef.current;
+        const viewport = viewportRef.current;
+        const animation = animationRef.current;
+        const fromPage = currentPageRef.current;
+        const delta = page - fromPage;
+
         setCurrentPage(page);
         currentPageRef.current = page;
-        setDisplayPage(page);
         hideSelectionMenu();
-    }, [currentPageRef, hideSelectionMenu, setCurrentPage, setDisplayPage]);
+
+        // none / 无方向 / 缺容器 → 瞬时跳变（原行为）。
+        // 注意复位 opacity：若上一次是 fade 淡出中途被打断，容器可能停在半透明。
+        if (animation === 'none' || delta === 0 || !container || !viewport) {
+            if (container) {
+                container.style.opacity = '1';
+            }
+            setDisplayPage(page);
+            return;
+        }
+
+        if (animation === 'slide') {
+            // slide 起手也复位 opacity，避免上一次 fade 淡出残留半透明。
+            container.style.opacity = '1';
+            // 起始帧钉在旧页（fromPage），禁 transition；下一帧恢复 '' 让 CSS 把
+            // translateX 带到目标页——方向感来自 from→to 的位移差，前进新页自右进入、
+            // 后退对称。与 usePaginatedPageLayout 重排时 "transition:'none' → rAF 恢复" 同一手法。
+            const width = viewport.clientWidth;
+            if (slideFrameRef.current !== null) window.cancelAnimationFrame(slideFrameRef.current);
+            container.style.transition = 'none';
+            container.style.transform = formatSlideStartTransform(fromPage, width);
+            slideFrameRef.current = window.requestAnimationFrame(() => {
+                slideFrameRef.current = null;
+                container.style.transition = '';
+                setDisplayPage(page);
+            });
+            return;
+        }
+
+        // fade：先淡出（displayPage 不动，视图停在旧页），到点后换页再淡入
+        if (fadeTimerRef.current !== null) window.clearTimeout(fadeTimerRef.current);
+        if (fadeFrameRef.current !== null) window.cancelAnimationFrame(fadeFrameRef.current);
+        container.style.transition = `opacity ${PAGE_TURN_FADE_MS}ms ease-out`;
+        container.style.opacity = '0';
+        fadeTimerRef.current = window.setTimeout(() => {
+            fadeTimerRef.current = null;
+            container.style.transition = 'none';
+            setDisplayPage(page);
+            fadeFrameRef.current = window.requestAnimationFrame(() => {
+                fadeFrameRef.current = null;
+                container.style.transition = `opacity ${PAGE_TURN_FADE_MS}ms ease-out`;
+                container.style.opacity = '1';
+            });
+        }, PAGE_TURN_FADE_MS);
+    }, [columnRef, viewportRef, currentPageRef, hideSelectionMenu, setCurrentPage, setDisplayPage]);
 
     const nextPage = useCallback(() => {
         if (currentPageRef.current < totalPagesRef.current - 1) {

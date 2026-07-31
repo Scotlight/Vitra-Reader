@@ -19,6 +19,7 @@ import {
     resolvePageChapterProgress,
     type ReaderModePositionSnapshot,
 } from './readerModeSwitchPosition';
+import type { PaginatedPageTurnAnimation } from './paginatedReader/paginatedPageTurnAnimation';
 import styles from './PaginatedReaderView.module.css';
 
 interface PaginatedReaderViewProps {
@@ -29,6 +30,8 @@ interface PaginatedReaderViewProps {
     initialChapterProgress?: number;
     pageTurnMode: 'paginated-single' | 'paginated-double';
     readerStyles: ReaderStyleConfig;
+    /** 页内翻页动画，缺省瞬时 */
+    pageTurnAnimation?: PaginatedPageTurnAnimation;
     onProgressChange?: (progress: number) => void;
     onChapterChange?: (label: string, href: string) => void;
     onSelectionSearch?: (keyword: string) => void;
@@ -47,6 +50,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
     initialChapterProgress,
     pageTurnMode,
     readerStyles,
+    pageTurnAnimation = 'none',
     onProgressChange,
     onChapterChange,
     onSelectionSearch,
@@ -152,6 +156,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         setCurrentSpineIndex: setSyncedCurrentSpineIndex,
         hideSelectionMenu: () => setSelectionMenu((previous) => ({ ...previous, visible: false })),
         loadChapter,
+        pageTurnAnimation,
     });
 
     // Load initial chapter when spine is ready

@@ -630,4 +630,28 @@ describe('PaginatedReaderView flow', () => {
         const secondHiddenPageBlock = view.container.querySelector('[data-page-index="2"]') as HTMLElement | null
         expect(secondHiddenPageBlock?.getAttribute('data-vitra-horizontal-window')).toBe('hidden')
     })
+
+    it('接受 pageTurnAnimation prop 并正常渲染（slide/fade/none）', async () => {
+        // 动画的起始帧/方向/位移计算归 paginatedPageTurnAnimation 单测；
+        // jsdom 不做 CSS 多栏布局，页内翻页的空白检测与像素位移不可靠，
+        // 组件层这里只验证三种动画值都能被接受、章节正常加载渲染。
+        for (const anim of ['slide', 'fade', 'none'] as const) {
+            const provider = createProvider()
+            const view = render(
+                <PaginatedReaderView
+                    provider={provider}
+                    bookId="book-1"
+                    pageTurnMode="paginated-single"
+                    readerStyles={DEFAULT_READER_STYLES}
+                    pageTurnAnimation={anim}
+                />
+            )
+            await flushUi()
+            await waitFor(() => {
+                expect(mocks.shadowRendererSpy).toHaveBeenCalled()
+            })
+            expect(view.container.querySelector('[class*="columnContainer"]')).toBeTruthy()
+            view.unmount()
+        }
+    })
 })

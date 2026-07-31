@@ -280,6 +280,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                     initialChapterProgress={modeSwitchAnchor?.snapshot?.chapterProgress}
                     pageTurnMode={effectivePageTurnMode === 'paginated-double' ? 'paginated-double' : 'paginated-single'}
                     readerStyles={readerStyleConfig}
+                    pageTurnAnimation={settings.pageTurnAnimation}
                     onProgressChange={handleProgressChange}
                     onChapterChange={handleChapterChange}
                     onSelectionSearch={handleSelectionSearch}
