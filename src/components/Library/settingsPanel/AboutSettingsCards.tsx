@@ -1,9 +1,13 @@
 import { SettingsCard } from './SettingsCard'
+import { getPlatformCapabilities } from '@/services/platform/platformBridge'
 import styles from '../SettingsPanelV2.module.css'
 
-const APP_VERSION = '0.1.0'
-
 export function AboutSettingsCards() {
+    // 运行环境按是否存在 Electron bridge 动态判断：桌面壳 → Electron，纯浏览器 → Web/PWA
+    const runtimeLabel = getPlatformCapabilities().isDesktop
+        ? 'Electron + React'
+        : 'Web/PWA + React'
+
     return (
         <div className={styles.cardGrid}>
             <SettingsCard title="版本信息">
@@ -14,11 +18,11 @@ export function AboutSettingsCards() {
                     </div>
                     <div className={styles.infoRow}>
                         <span>版本号</span>
-                        <strong>{APP_VERSION}</strong>
+                        <strong>{__APP_VERSION__}</strong>
                     </div>
                     <div className={styles.infoRow}>
                         <span>运行环境</span>
-                        <strong>Electron + React</strong>
+                        <strong>{runtimeLabel}</strong>
                     </div>
                 </div>
             </SettingsCard>

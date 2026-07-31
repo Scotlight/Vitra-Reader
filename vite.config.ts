@@ -4,6 +4,13 @@ import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'node:path'
+import { readFileSync } from 'node:fs'
+
+// 版本号唯一来源是 package.json，构建期注入为 __APP_VERSION__ 全局常量，
+// 供"关于"页等展示，避免在源码里硬编码后与发布版本漂移。
+const PACKAGE_VERSION = JSON.parse(
+    readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'),
+) as { version: string }
 
 const EVENTS_BROWSER_ENTRY = path.resolve(__dirname, 'node_modules/events/events.js')
 const STREAM_BROWSER_ENTRY = path.resolve(__dirname, 'node_modules/stream-browserify/index.js')
@@ -32,6 +39,9 @@ function includesAnyPackage(id: string, packages: readonly string[]): boolean {
 
 export default defineConfig(({ mode }) => ({
     base: mode === 'web' ? '/Vitra-Reader/' : '/',
+    define: {
+        __APP_VERSION__: JSON.stringify(PACKAGE_VERSION.version),
+    },
     test: {
         environment: 'jsdom',
         globals: true,

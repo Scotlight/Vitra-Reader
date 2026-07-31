@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+// 构建期由 vite.config define 注入的应用版本号（取自 package.json）
+declare const __APP_VERSION__: string
+
 declare module 'mammoth' {
     interface MammothResult {
         value: string;
