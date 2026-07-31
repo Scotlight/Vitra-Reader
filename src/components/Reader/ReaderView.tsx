@@ -18,6 +18,7 @@ import { useReaderClock } from './useReaderClock'
 import { useReaderModeSwitch } from './useReaderModeSwitch'
 import { useReaderNavigation } from './useReaderNavigation'
 import { useReadingActivityTracker } from './useReadingActivityTracker'
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import styles from './ReaderView.module.css'
 interface ReaderViewProps {
     bookId: string
@@ -50,6 +51,8 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
     const scrollReaderRef = useRef<ScrollReaderHandle>(null)
     const paginatedReaderRef = useRef<PaginatedReaderHandle>(null)
     const settings = useSettingsStore()
+    // 无障碍：系统开启"减弱动态效果"时，页内翻页动画强制为 none（在传入阅读器处收敛）
+    const prefersReducedMotion = usePrefersReducedMotion()
     const nightAppearanceRef = useRef<{
         themeId: string
         customBgColor: string | null
@@ -280,7 +283,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                     initialChapterProgress={modeSwitchAnchor?.snapshot?.chapterProgress}
                     pageTurnMode={effectivePageTurnMode === 'paginated-double' ? 'paginated-double' : 'paginated-single'}
                     readerStyles={readerStyleConfig}
-                    pageTurnAnimation={settings.pageTurnAnimation}
+                    pageTurnAnimation={prefersReducedMotion ? 'none' : settings.pageTurnAnimation}
                     onProgressChange={handleProgressChange}
                     onChapterChange={handleChapterChange}
                     onSelectionSearch={handleSelectionSearch}

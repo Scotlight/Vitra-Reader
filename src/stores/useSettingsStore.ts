@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { db } from '@/services/storageService'
 
 export type PageTurnMode = 'paginated-single' | 'paginated-double' | 'scrolled-continuous'
+export type PageTurnAnimation = 'slide' | 'fade' | 'none'
 export type UIMaterial = 'default' | 'mica' | 'acrylic'
 
 export interface ReaderSettings {
@@ -30,7 +31,7 @@ export interface ReaderSettings {
 
     // Page Turn
     pageTurnMode: PageTurnMode
-    pageTurnAnimation: 'slide' | 'fade' | 'none'
+    pageTurnAnimation: PageTurnAnimation
 
     // UI Appearance
     uiMaterial: UIMaterial

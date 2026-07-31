@@ -1,7 +1,8 @@
+import type { PageTurnAnimation } from '@/stores/useSettingsStore'
 import { formatPaginatedTranslateX } from './paginatedPageLayoutMath'
 
-/** 页级翻页动画类型，与 settings.pageTurnAnimation 对齐 */
-export type PaginatedPageTurnAnimation = 'slide' | 'fade' | 'none'
+/** 页级翻页动画类型，统一复用 settings 的 PageTurnAnimation，避免多处内联联合类型漂移 */
+export type PaginatedPageTurnAnimation = PageTurnAnimation
 
 /** slide 翻页时长（ms），与 CSS 中 .columnContainer 的 transform transition 保持一致 */
 export const PAGE_TURN_SLIDE_MS = 280
