@@ -1066,8 +1066,8 @@
     }
 
     .mobileSettingsBackButton {
-        width: 44px;
-        height: 44px;
+        width: 56px;
+        height: 56px;
         border: 0;
         display: grid;
         place-items: center;
@@ -1075,12 +1075,18 @@
         color: var(--text-primary);
         background: transparent;
         font: inherit;
-        font-size: 30px;
+        font-size: 38px;
         line-height: 1;
+        cursor: pointer;
+        border-radius: 8px;
+    }
+
+    .mobileSettingsBackButton:active {
+        background: rgba(0, 0, 0, 0.08);
     }
 
     .mobileSettingsTitleSpacer {
-        width: 44px;
+        width: 56px;
         max-width: none;
     }
 

@@ -1,3 +1,4 @@
+import arrowBackIcon from '@/assets/icons/arrow-back.svg'
 import homeIcon from '@/assets/icons/home.svg'
 import libraryIcon from '@/assets/icons/library.svg'
 import noteIcon from '@/assets/icons/note.svg'
@@ -176,7 +177,7 @@ export function MobileLibraryChrome({
                                     aria-label="返回设置分类"
                                     onClick={onMobileSettingsBack}
                                 >
-                                    <span aria-hidden="true">←</span>
+                                    <img src={arrowBackIcon} alt="" />
                                 </button>
                             )}
                             <h1>{pageTitle}</h1>
@@ -221,17 +222,20 @@ export function MobileLibraryChrome({
                 )}
             </header>
 
-            <nav className={styles.mobileBottomNav} aria-label="移动端书库导航">
-                {mobileTabs.map(({ tab, icon, label }) => (
-                    <MobileNavButton
-                        key={tab}
-                        active={isTabActive(tab)}
-                        icon={icon}
-                        label={label}
-                        onClick={() => onTabChange(tab)}
-                    />
-                ))}
-            </nav>
+            {/* 设置子页时隐藏底部导航栏，只保留顶栏返回按钮 */}
+            {!(isSettingsOpen && mobileSettingsPage) && (
+                <nav className={styles.mobileBottomNav} aria-label="移动端书库导航">
+                    {mobileTabs.map(({ tab, icon, label }) => (
+                        <MobileNavButton
+                            key={tab}
+                            active={isTabActive(tab)}
+                            icon={icon}
+                            label={label}
+                            onClick={() => onTabChange(tab)}
+                        />
+                    ))}
+                </nav>
+            )}
         </div>
     )
 }
