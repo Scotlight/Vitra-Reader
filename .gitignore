@@ -45,8 +45,8 @@ scroll.md
 dev_error_log.txt
 npm_install_log.txt
 *.tsbuildinfo
-outputs/runtime/
-outputs/tasks/
+# AI 工作流产物兜底（计划文档 / 调试截图 / 本地 apk），整目录不入库
+outputs/
 
 # MCP tool debug artifacts (screenshots / console logs)
 .playwright-mcp/
