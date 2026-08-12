@@ -19,6 +19,7 @@ import { LibraryDialogs } from './libraryView/LibraryDialogs'
 import { SettingsPanel } from './SettingsPanel'
 import { MobileLibraryChrome, type MobileLibraryDestination, type MobileLibraryTab } from './MobileLibraryChrome'
 import { MobileHomeView, type MobileHomeShortcut } from './mobileHome/MobileHomeView'
+import { MobileShelfView } from './mobileShelf/MobileShelfView'
 import type { MobileSettingsPage } from './settingsPanel/mobileSettings'
 import styles from './LibraryView.module.css'
 
@@ -291,6 +292,17 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                                     trashBookIdSet={trashBookIdSet}
                                     onOpenBook={(id) => onOpenBook(id)}
                                     onShortcut={handleHomeShortcut}
+                                />
+                            ) : isMobileLayout && mobileTab === 'shelf' ? (
+                                // 书架 tab 不吃 gridItems（showMixedHome 时那是混合分组卡片的 homeItems），
+                                // 自建窄派生 + chips 内部自治，见 mobileShelfData 头注释
+                                <MobileShelfView
+                                    books={books}
+                                    progressMap={progressMap}
+                                    trashBookIdSet={trashBookIdSet}
+                                    groups={groups}
+                                    groupBookMap={groupBookMap}
+                                    onOpenBook={(id) => onOpenBook(id)}
                                 />
                             ) : activeNav === 'stats' ? (
                                 <ReadingStatsPanel />
