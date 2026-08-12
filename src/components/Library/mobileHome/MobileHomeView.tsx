@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
-import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { BookMeta } from '@/services/storageService'
-import { emitBookOpen } from '../BookOpenTransition'
+import { emitBookOpenFromCard } from '../bookOpenTransitionHelpers'
 import { LazyCoverImage } from '../bookGrid/LazyCoverImage'
 import { pickContinueReading, pickRecentlyAdded, type LibraryProgressMap } from './mobileHomeData'
 import styles from './MobileHomeView.module.css'
@@ -60,29 +59,13 @@ export function MobileHomeView({
         [books, trashBookIdSet],
     )
 
-    // 复用 BookGridCard 那套共享元素过渡：从被点元素量位置 + 从 DOM 取已加载的封面 URL
-    const handleOpen = (event: ReactMouseEvent<HTMLElement>, bookId: string) => {
-        const cardEl = event.currentTarget
-        const coverEl = cardEl.querySelector('img')
-        const coverSrc = coverEl?.currentSrc || coverEl?.src
-        if (coverSrc) {
-            const rect = cardEl.getBoundingClientRect()
-            emitBookOpen({
-                bookId,
-                cover: coverSrc,
-                cardRect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
-            })
-        }
-        onOpenBook(bookId)
-    }
-
     return (
         <div className={styles.home} data-mobile-home="true">
             {continueReading && (
                 <button
                     type="button"
                     className={styles.continueCard}
-                    onClick={(event) => handleOpen(event, continueReading.book.id)}
+                    onClick={(event) => emitBookOpenFromCard(event, continueReading.book.id, onOpenBook)}
                 >
                     <span className={styles.continueCover}>
                         <LazyCoverImage
@@ -134,7 +117,7 @@ export function MobileHomeView({
                             key={book.id}
                             type="button"
                             className={styles.recentCard}
-                            onClick={(event) => handleOpen(event, book.id)}
+                            onClick={(event) => emitBookOpenFromCard(event, book.id, onOpenBook)}
                         >
                             <span className={styles.recentCover}>
                                 <LazyCoverImage bookId={book.id} format={book.format} alt="" compact />
