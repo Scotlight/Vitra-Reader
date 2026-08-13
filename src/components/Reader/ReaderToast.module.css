@@ -1,0 +1,39 @@
+/* 阅读器 toast（原型 1a：深底白字 popIn）。z 44：压过 mobileChrome(38)/drawer(60 在自身层内)，
+   不压 settings panelLayer 之上的系统对话框层 */
+
+.toast {
+    position: absolute;
+    bottom: calc(96px + env(safe-area-inset-bottom));
+    left: 50%;
+    z-index: 44;
+    max-width: min(78vw, 420px);
+    box-sizing: border-box;
+    padding: 10px 18px;
+    border-radius: 999px;
+    color: #f5f1e8;
+    background: #17140f;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: center;
+    transform: translateX(-50%);
+    pointer-events: none;
+    animation: toastPopIn 350ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes toastPopIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(10px) scale(0.94);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .toast {
+        animation: none;
+    }
+}

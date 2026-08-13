@@ -3,6 +3,7 @@ import type { MouseEvent, ReactNode } from 'react'
 import type { TocItem } from '@/engine/core/contentProvider'
 import type { ReaderPanelTab } from './readerPanelTypes'
 import { MobileReaderChrome } from './MobileReaderChrome'
+import { ReaderToast, emitReaderToast } from './ReaderToast'
 import { scheduleCenterActiveToc } from './tocAutoScroll'
 import { useReaderTabShortcut } from './useReaderTabShortcut'
 import { usePinnedSidebarResize } from './usePinnedSidebarResize'
@@ -278,7 +279,7 @@ export function ImmersiveReaderShell({
                 currentProgress={currentProgress}
                 isNightMode={isNightMode}
                 onBack={onBack}
-                onBookmarkTap={() => {}}
+                onBookmarkTap={() => emitReaderToast('书签功能即将上线')}
                 onNextChapter={onNextChapter}
                 onPreviousChapter={onPreviousChapter}
                 onProgressCommit={onProgressCommit}
@@ -299,6 +300,8 @@ export function ImmersiveReaderShell({
                     {settingsPanel}
                 </div>
             )}
+
+            <ReaderToast />
         </div>
     )
 }
