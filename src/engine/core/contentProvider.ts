@@ -15,6 +15,8 @@ export interface SpineItemInfo {
     href: string
     id: string
     linear: boolean
+    /** EPUB3 目录文档（manifest properties 含 nav）。保留在 spine 里占位保序，阅读流跳过不停留 */
+    isNavDoc?: boolean
 }
 
 export interface SearchResult {

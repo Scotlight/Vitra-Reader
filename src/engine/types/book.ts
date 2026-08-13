@@ -42,6 +42,8 @@ export interface BookSection {
   readonly unload: () => void;
   readonly size: number;
   readonly linear?: boolean;
+  /** EPUB3 目录文档标记，语义见 SpineItemInfo.isNavDoc */
+  readonly isNavDoc?: boolean;
   readonly pageSpread?: 'left' | 'right' | 'center';
   readonly styles?: readonly string[];
 }

@@ -3,6 +3,7 @@ import { resolveReaderRenderMode } from '@/engine/core/readerRenderMode'
 import type { BookFormat, ContentProvider, TocItem } from '@/engine/core/contentProvider'
 import type { PageTurnMode } from '@/stores/useSettingsStore'
 import { buildFallbackTocFromSpine } from './readerToc'
+import { snapLocationToReadable } from './readableSpine'
 
 export interface ReaderScrollParams {
     readonly initialSpineIndex: number
@@ -110,6 +111,12 @@ function resolveSessionToc(provider: ContentProvider): TocItem[] {
 }
 
 function resolveInitialLocation(provider: ContentProvider, location?: string) {
+    // 落点若在书内目录页（nav 文档）上——包括"无进度从头开"和"历史进度恰好停在目录页"——
+    // 统一向后修正到第一个正文项
+    return snapLocationToReadable(provider.getSpineItems(), resolveRawInitialLocation(provider, location))
+}
+
+function resolveRawInitialLocation(provider: ContentProvider, location?: string) {
     if (!location) return { spineIndex: 0, position: 0 }
     if (location.startsWith('vitra:') || location.startsWith('bdise:')) {
         const parts = location.split(':')

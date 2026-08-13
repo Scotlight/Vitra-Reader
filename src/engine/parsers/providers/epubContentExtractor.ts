@@ -19,6 +19,21 @@ interface SpineLookupResult {
 }
 
 /**
+ * 判断 manifest 项是否为 EPUB3 目录文档（properties 含 "nav"）。
+ * epub 运行时可能把 properties 解析成数组或保留空格分隔字符串，两种都兼容；
+ * 用 split 精确匹配 token，避免 "nav-extra" 这类值误报。
+ */
+function manifestItemHasNavProperty(item: unknown): boolean {
+    if (!item || typeof item !== 'object') return false
+    const props = (item as Record<string, unknown>)['properties']
+    if (Array.isArray(props)) {
+        return props.some((p) => typeof p === 'string' && p.split(/\s+/).includes('nav'))
+    }
+    if (typeof props === 'string') return props.split(/\s+/).includes('nav')
+    return false
+}
+
+/**
  * 获取 spine 列表
  */
 export function getSpineItems(book: Book): SpineItemInfo[] {
@@ -26,12 +41,20 @@ export function getSpineItems(book: Book): SpineItemInfo[] {
     const spineItems = bookInternal?.spine?.spineItems;
     if (!Array.isArray(spineItems)) return [];
 
-    return spineItems.map((item, index) => ({
-        index,
-        href: item.href || '',
-        id: item.idref || item.id || `spine-${index}`,
-        linear: item.linear !== false,
-    }));
+    // 网文转制 EPUB 常把 nav.xhtml 编进 spine 首位且不标 linear="no"，
+    // 逐项对照 manifest 打标，供阅读流跳过（目录抽屉仍走 navigation 解析，不受影响）
+    const manifest = bookInternal?.packaging?.manifest ?? {};
+
+    return spineItems.map((item, index) => {
+        const idref = item.idref || item.id || '';
+        return {
+            index,
+            href: item.href || '',
+            id: idref || `spine-${index}`,
+            linear: item.linear !== false,
+            isNavDoc: manifestItemHasNavProperty(idref ? manifest[idref] : undefined),
+        };
+    });
 }
 
 function lookupSpineItem(book: Book, spineIndex: number): SpineLookupResult {

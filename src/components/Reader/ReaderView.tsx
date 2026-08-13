@@ -10,6 +10,7 @@ import { ReaderPanelContent } from './ReaderPanelContent'
 import type { ReaderPanelTab } from './readerPanelTypes'
 import { ReaderSurface } from './ReaderSurface'
 import { findCurrentChapterLabel, normalizeTocHref } from './readerToc'
+import { resolveReadableSpineIndex } from './readableSpine'
 import { useReaderAnnotations } from './useReaderAnnotations'
 import { useReaderAppearance } from './useReaderAppearance'
 import { useReaderBookSession } from './useReaderBookSession'
@@ -178,12 +179,13 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         const hrefIndex = currentProvider.getSpineIndexByHref(currentSectionHref)
         return hrefIndex >= 0 ? hrefIndex : 0
     }, [currentSectionHref, isScrollMode])
-    const jumpToSpineIndex = useCallback((targetIndex: number) => {
+    const jumpToSpineIndex = useCallback((targetIndex: number, direction: 1 | -1 = 1) => {
         const currentProvider = providerRef.current
         if (!currentProvider) return
         const spineItems = currentProvider.getSpineItems()
         if (spineItems.length === 0) return
-        const safeIndex = Math.max(0, Math.min(spineItems.length - 1, targetIndex))
+        // 书内目录页永不停留：按行进方向滑到最近的正文项（readableSpine 注释有完整语义）
+        const safeIndex = resolveReadableSpineIndex(spineItems, targetIndex, direction)
         const target = spineItems[safeIndex]
         if (target) setCurrentSectionHref(normalizeTocHref(target.href))
         markActivity()
@@ -194,7 +196,7 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
         void paginatedReaderRef.current?.jumpToSpine(safeIndex)
     }, [isScrollMode, markActivity])
     const handlePreviousChapter = useCallback(() => {
-        jumpToSpineIndex(getCurrentSpineIndex() - 1)
+        jumpToSpineIndex(getCurrentSpineIndex() - 1, -1)
     }, [getCurrentSpineIndex, jumpToSpineIndex])
     const handleNextChapter = useCallback(() => {
         jumpToSpineIndex(getCurrentSpineIndex() + 1)

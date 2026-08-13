@@ -124,6 +124,7 @@ export class BookContentAdapter implements ContentProvider {
       href: section.href,
       id: String(section.id),
       linear: section.linear ?? true,
+      isNavDoc: section.isNavDoc ?? false,
     }))
   }
 

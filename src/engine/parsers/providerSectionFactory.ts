@@ -79,6 +79,7 @@ function createProviderSection({
         id: spine.id || spine.index,
         href: spine.href,
         linear: spine.linear,
+        isNavDoc: spine.isNavDoc,
         get size() {
             return caches.size.get(spine.index) ?? 0
         },
