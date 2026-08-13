@@ -5,6 +5,8 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
+    /* 仿真翻页的 3D 舞台：无 perspective 的 rotateY 只是水平压缩，看不出翻页 */
+    perspective: 1200px;
 }
 
 .columnContainer {

@@ -4,6 +4,7 @@ import styles from '../SettingsPanelV2.module.css'
 export interface SelectControlOption {
     value: string
     label: string
+    disabled?: boolean
 }
 
 interface SelectControlProps {
@@ -22,7 +23,7 @@ export function SelectControl({ value, options, onChange, label }: SelectControl
                 onChange={(event) => onChange(event.target.value)}
             >
                 {options.map((option) => (
-                    <option key={option.value} value={option.value}>
+                    <option key={option.value} value={option.value} disabled={option.disabled}>
                         {option.label}
                     </option>
                 ))}

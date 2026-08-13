@@ -35,6 +35,7 @@ const TEXT_ALIGN_OPTIONS = [
 const PAGE_TURN_ANIMATION_OPTIONS = [
     { value: 'slide', label: '滑动' },
     { value: 'fade', label: '渐变' },
+    { value: 'realistic', label: '仿真' },
     { value: 'none', label: '无' },
 ] as const
 
@@ -329,7 +330,11 @@ export function MobileReaderSettingsSubpage({
                         <MobileSelectRow
                             label="动画效果"
                             value={settings.pageTurnAnimation}
-                            options={PAGE_TURN_ANIMATION_OPTIONS}
+                            options={PAGE_TURN_ANIMATION_OPTIONS.map((option) => ({
+                                ...option,
+                                // 仿真与双页组合未定义（单容器翻转轴按单页视口算），置灰
+                                disabled: option.value === 'realistic' && settings.pageTurnMode === 'paginated-double',
+                            }))}
                             onChange={(v) => settings.updateSetting('pageTurnAnimation', v as typeof settings.pageTurnAnimation)}
                         />
                     </MobileSettingsGroup>

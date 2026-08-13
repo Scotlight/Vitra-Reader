@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { db } from '@/services/storageService'
 
 export type PageTurnMode = 'paginated-single' | 'paginated-double' | 'scrolled-continuous'
-export type PageTurnAnimation = 'slide' | 'fade' | 'none'
+export type PageTurnAnimation = 'slide' | 'fade' | 'none' | 'realistic'
 export type UIMaterial = 'default' | 'mica' | 'acrylic'
 /** 移动端强调色。auto = 跟随主题（现状行为），四命名色对应原型 1a 色板 */
 export type MobileAccentId = 'auto' | 'ember' | 'tide' | 'moss' | 'plum'

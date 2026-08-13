@@ -285,7 +285,15 @@ export const ReaderView = ({ bookId, onBack, jumpTarget }: ReaderViewProps) => {
                     initialChapterProgress={modeSwitchAnchor?.snapshot?.chapterProgress}
                     pageTurnMode={effectivePageTurnMode === 'paginated-double' ? 'paginated-double' : 'paginated-single'}
                     readerStyles={readerStyleConfig}
-                    pageTurnAnimation={prefersReducedMotion ? 'none' : settings.pageTurnAnimation}
+                    // 减弱动态 → 强制无动画；仿真 × 双页组合未定义（设置 UI 已置灰，
+                    // 这里兜历史持久化组合）→ 退化为 slide
+                    pageTurnAnimation={
+                        prefersReducedMotion
+                            ? 'none'
+                            : settings.pageTurnAnimation === 'realistic' && effectivePageTurnMode === 'paginated-double'
+                                ? 'slide'
+                                : settings.pageTurnAnimation
+                    }
                     onProgressChange={handleProgressChange}
                     onChapterChange={handleChapterChange}
                     onSelectionSearch={handleSelectionSearch}

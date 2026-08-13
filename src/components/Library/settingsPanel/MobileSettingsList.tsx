@@ -113,7 +113,7 @@ export function MobileStepperRow({
 interface MobileSelectRowProps {
     label: string
     value: string
-    options: ReadonlyArray<{ value: string; label: string }>
+    options: ReadonlyArray<{ value: string; label: string; disabled?: boolean }>
     onChange: (value: string) => void
     hint?: string
 }
@@ -134,7 +134,7 @@ export function MobileSelectRow({ label, value, options, onChange, hint }: Mobil
                     onChange={(e) => onChange(e.target.value)}
                 >
                     {options.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        <option key={opt.value} value={opt.value} disabled={opt.disabled}>{opt.label}</option>
                     ))}
                 </select>
             </label>

@@ -4,8 +4,11 @@ import type { SpineItemInfo } from '@/engine/core/contentProvider';
 import type { PageBoundary } from '@/engine/types/pagination';
 import { shouldSkipPaginatedBlankCandidate } from './paginatedBlankDetection';
 import {
+    formatRealisticFlipTransform,
     formatSlideStartTransform,
     PAGE_TURN_FADE_MS,
+    PAGE_TURN_REALISTIC_MS,
+    resolveRealisticFlipOrigin,
     type PaginatedPageTurnAnimation,
 } from './paginatedPageTurnAnimation';
 
@@ -52,11 +55,15 @@ export function usePaginatedNavigation(options: UsePaginatedNavigationOptions) {
     const slideFrameRef = useRef<number | null>(null);
     const fadeTimerRef = useRef<number | null>(null);
     const fadeFrameRef = useRef<number | null>(null);
+    const realisticTimerRef = useRef<number | null>(null);
+    const realisticFrameRef = useRef<number | null>(null);
 
     useEffect(() => () => {
         if (slideFrameRef.current !== null) window.cancelAnimationFrame(slideFrameRef.current);
         if (fadeTimerRef.current !== null) window.clearTimeout(fadeTimerRef.current);
         if (fadeFrameRef.current !== null) window.cancelAnimationFrame(fadeFrameRef.current);
+        if (realisticTimerRef.current !== null) window.clearTimeout(realisticTimerRef.current);
+        if (realisticFrameRef.current !== null) window.cancelAnimationFrame(realisticFrameRef.current);
     }, []);
 
     const isPageLikelyBlank = useCallback((pageIndex: number): boolean => {
@@ -132,6 +139,58 @@ export function usePaginatedNavigation(options: UsePaginatedNavigationOptions) {
                 container.style.transition = '';
                 setDisplayPage(page);
             });
+            return;
+        }
+
+        if (animation === 'realistic') {
+            // 仿真半翻提交（详见 PAGE_TURN_REALISTIC_MS 注释）：
+            // 前进 = 旧页绕视口左缘掀到 -88° → 提交新页平铺（掀过背面的瞬间换页）；
+            // 后退 = 先提交新页 → 预置 -88° → 盖回 0°。
+            // -88° 封顶：越过 -90° 会露出内容镜像背面。
+            if (realisticTimerRef.current !== null) window.clearTimeout(realisticTimerRef.current);
+            if (realisticFrameRef.current !== null) window.cancelAnimationFrame(realisticFrameRef.current);
+            container.style.opacity = '1';
+            const width = viewport.clientWidth;
+
+            if (delta > 0) {
+                container.style.transformOrigin = resolveRealisticFlipOrigin(fromPage, width);
+                container.style.transition = 'none';
+                container.style.transform = formatRealisticFlipTransform(fromPage, width, 0);
+                realisticFrameRef.current = window.requestAnimationFrame(() => {
+                    realisticFrameRef.current = null;
+                    container.style.transition = `transform ${PAGE_TURN_REALISTIC_MS}ms cubic-bezier(0.3, 0.9, 0.25, 1)`;
+                    container.style.transform = formatRealisticFlipTransform(fromPage, width, -88);
+                });
+                realisticTimerRef.current = window.setTimeout(() => {
+                    realisticTimerRef.current = null;
+                    // 提交换页：React 渲染的 inline transform（纯 translateX）会覆盖掉旋转，
+                    // 新页自然平铺，无需手动回正
+                    container.style.transition = 'none';
+                    container.style.transformOrigin = '';
+                    setDisplayPage(page);
+                }, PAGE_TURN_REALISTIC_MS);
+                return;
+            }
+
+            // 后退：setDisplayPage 的提交发生在本轮任务的 React flush，首个 rAF 在
+            // 提交后、绘制前执行——预置 -88° 不会闪一帧平铺新页
+            setDisplayPage(page);
+            realisticFrameRef.current = window.requestAnimationFrame(() => {
+                realisticFrameRef.current = null;
+                container.style.transformOrigin = resolveRealisticFlipOrigin(page, width);
+                container.style.transition = 'none';
+                container.style.transform = formatRealisticFlipTransform(page, width, -88);
+                realisticFrameRef.current = window.requestAnimationFrame(() => {
+                    realisticFrameRef.current = null;
+                    container.style.transition = `transform ${PAGE_TURN_REALISTIC_MS}ms cubic-bezier(0.3, 0.9, 0.25, 1)`;
+                    container.style.transform = formatRealisticFlipTransform(page, width, 0);
+                });
+            });
+            realisticTimerRef.current = window.setTimeout(() => {
+                realisticTimerRef.current = null;
+                container.style.transition = '';
+                container.style.transformOrigin = '';
+            }, PAGE_TURN_REALISTIC_MS + 50);
             return;
         }
 

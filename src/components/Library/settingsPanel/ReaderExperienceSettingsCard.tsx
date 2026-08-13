@@ -21,6 +21,7 @@ const PAGE_TURN_MODE_OPTIONS: SelectControlOption[] = [
 const PAGE_TURN_ANIMATION_OPTIONS: SelectControlOption[] = [
     { value: 'slide', label: '滑动' },
     { value: 'fade', label: '渐变' },
+    { value: 'realistic', label: '仿真' },
     { value: 'none', label: '无' },
 ]
 
@@ -129,7 +130,11 @@ export function ReaderExperienceSettingsCard({
                         <SelectControl
                             label="翻页动画"
                             value={settings.pageTurnAnimation}
-                            options={PAGE_TURN_ANIMATION_OPTIONS}
+                            options={PAGE_TURN_ANIMATION_OPTIONS.map((option) => ({
+                                ...option,
+                                // 仿真与双页组合未定义（单容器翻转轴按单页视口算），置灰
+                                disabled: option.value === 'realistic' && settings.pageTurnMode === 'paginated-double',
+                            }))}
                             onChange={(value) => settings.updateSetting('pageTurnAnimation', value as typeof settings.pageTurnAnimation)}
                         />
                     </SettingRow>
