@@ -117,7 +117,8 @@ const DEFAULT_SETTINGS: ReaderSettings = {
     fontWeight: 'normal',
     lineHeight: 1.6,
     paragraphSpacing: 23,
-    paragraphIndentEnabled: false,
+    // 中文书首行缩进是主流排版预期，默认开启（只影响新用户与"重置默认"，已持久化的选择不受影响）
+    paragraphIndentEnabled: true,
     letterSpacing: 3,
     pageWidth: 3,
     pinnedSidebarWidth: 360,

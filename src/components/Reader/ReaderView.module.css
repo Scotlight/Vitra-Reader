@@ -1230,7 +1230,10 @@ input[type=range] {
 .settingsGlassGrid > .settingsGroup:has(.themeGrid),
 .settingsGlassGrid > .settingsGroup:has(.fontSelect),
 .settingsGlassGrid > .settingsGroup:has(.fontLoading),
-.settingsGlassGrid > .settingsGroup:has(.toggleColumn) {
+.settingsGlassGrid > .settingsGroup:has(.toggleColumn),
+/* 翻页模式常驻卡横跨整行：折叠区都是整行，半宽卡夹在中间破坏节奏（只会命中直接子级，
+   折叠区内部的对齐/缩进 toggleRow 不是 glassGrid 直接子级，不受影响） */
+.settingsGlassGrid > .settingsGroup:has(.toggleRow) {
     grid-column: 1 / -1;
 }
 
@@ -1496,28 +1499,17 @@ input[type=range] {
     }
 
     .settingsGlassGrid,
-    .settingsGlassGrid .themeGrid,
     .settingsGlassGrid .toggleColumn {
         grid-template-columns: 1fr;
     }
 
+    /* 主题四色块在手机上保持一行横排：之前的单列大行布局一组吃掉半屏（用户实测反馈） */
+    .settingsGlassGrid .themeGrid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+    }
+
     .settingsGlassGrid > .settingsGroup {
         padding: 20px 22px 22px;
-    }
-
-    .settingsGlassGrid .themeBtn {
-        min-height: 74px;
-        grid-template-columns: 64px 1fr;
-        justify-items: start;
-    }
-
-    .settingsGlassGrid .themeBtn::before {
-        width: 50px;
-        height: 50px;
-    }
-
-    .settingsGlassGrid .activeTheme::after {
-        top: 44px;
-        left: 44px;
     }
 }

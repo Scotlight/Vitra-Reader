@@ -36,8 +36,11 @@ export function ReaderSettingsPanel({ bookFormat, isOpen, onClose, onPageTurnMod
                             </div>
                         </div>
                         <div className={styles.settingsGlassGrid}>
-                            <ReaderAppearanceSettings />
-                            <ReaderModeSettings bookFormat={bookFormat} onPageTurnModeChange={onPageTurnModeChange} />
+                            <ReaderAppearanceSettings
+                                readingModeSlot={
+                                    <ReaderModeSettings bookFormat={bookFormat} onPageTurnModeChange={onPageTurnModeChange} />
+                                }
+                            />
                         </div>
                     </div>
                 </motion.div>
