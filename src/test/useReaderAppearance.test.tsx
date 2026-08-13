@@ -28,6 +28,7 @@ const baseSettings: ReaderSettings = {
     uiMaterial: 'mica',
     uiOpacity: 0.85,
     uiRoundness: 8,
+    mobileAccent: 'auto',
 }
 
 describe('useReaderAppearance', () => {

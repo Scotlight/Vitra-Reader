@@ -122,3 +122,16 @@
         rgba(199, 237, 204, var(--ui-opacity))
     );
 }
+/* ─── 移动端可配强调色（Phase 4） ─────────────────────────
+   定义在 :root 无媒体查询：Library(760px) 与 Reader(850px 竖屏) 断点双轨，
+   放进任一 media 块都会让另一侧 761-850px 区间取不到值。
+   auto（无 data-accent 属性）时回落主题 accent，老用户升级零变化；
+   桌面端没有消费方，零影响 */
+:root {
+    --mobile-accent: var(--accent-color);
+}
+
+[data-accent='ember'] { --mobile-accent: oklch(0.63 0.14 48); }
+[data-accent='tide']  { --mobile-accent: oklch(0.60 0.12 210); }
+[data-accent='moss']  { --mobile-accent: oklch(0.58 0.13 145); }
+[data-accent='plum']  { --mobile-accent: oklch(0.58 0.15 340); }

@@ -1233,7 +1233,7 @@
         border-radius: 999px;
         padding: 0 15px;
         color: #fff;
-        background: var(--accent-color);
+        background: var(--mobile-accent);
         font: inherit;
         font-size: 13px;
         font-weight: 600;
@@ -1379,8 +1379,8 @@
     }
 
     .mobileBottomNav .mobileNavButtonActive {
-        color: var(--accent-color);
-        background: color-mix(in srgb, var(--accent-color) 16%, transparent);
+        color: var(--mobile-accent);
+        background: color-mix(in srgb, var(--mobile-accent) 16%, transparent);
         font-weight: 600;
         transform: translateY(-1px);
     }

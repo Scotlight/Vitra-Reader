@@ -4,6 +4,8 @@ import { db } from '@/services/storageService'
 export type PageTurnMode = 'paginated-single' | 'paginated-double' | 'scrolled-continuous'
 export type PageTurnAnimation = 'slide' | 'fade' | 'none'
 export type UIMaterial = 'default' | 'mica' | 'acrylic'
+/** 移动端强调色。auto = 跟随主题（现状行为），四命名色对应原型 1a 色板 */
+export type MobileAccentId = 'auto' | 'ember' | 'tide' | 'moss' | 'plum'
 
 export interface ReaderSettings {
     // Theme
@@ -39,6 +41,9 @@ export interface ReaderSettings {
     uiOpacity: number
     uiRoundness: number
     uiAnimation: boolean
+
+    // Mobile
+    mobileAccent: MobileAccentId
 }
 
 interface SettingsStore extends ReaderSettings {
@@ -128,6 +133,8 @@ const DEFAULT_SETTINGS: ReaderSettings = {
     uiOpacity: 0.85,
     uiRoundness: 8,
     uiAnimation: true,
+    // 不加进 DEFAULT_SETTINGS 的键会被持久化白名单静默过滤（存不进也读不出）
+    mobileAccent: 'auto',
 }
 
 export const useSettingsStore = create<SettingsStore>((set) => {

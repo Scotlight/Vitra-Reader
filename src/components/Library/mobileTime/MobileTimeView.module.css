@@ -59,7 +59,7 @@
 }
 
 .statValue {
-    color: var(--accent-color);
+    color: var(--mobile-accent);
     font-family: var(--time-mono);
     font-size: 25px;
     font-weight: 700;
@@ -97,7 +97,7 @@
 }
 
 .trendBarToday {
-    background: var(--accent-color);
+    background: var(--mobile-accent);
 }
 
 @keyframes growBar {
@@ -130,7 +130,7 @@
     place-items: center;
     border-radius: 50%;
     background: conic-gradient(
-        var(--accent-color) calc(var(--ring-ratio, 0) * 360deg),
+        var(--mobile-accent) calc(var(--ring-ratio, 0) * 360deg),
         color-mix(in srgb, var(--text-primary) 12%, transparent) 0
     );
 }
@@ -202,7 +202,7 @@
 }
 
 .topRankFirst {
-    color: var(--accent-color);
+    color: var(--mobile-accent);
 }
 
 .topCover {
@@ -246,7 +246,7 @@
     display: block;
     height: 100%;
     border-radius: 999px;
-    background: var(--accent-color);
+    background: var(--mobile-accent);
 }
 
 .topDuration {

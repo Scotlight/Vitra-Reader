@@ -33,7 +33,7 @@
 }
 
 .tabActive {
-    border-bottom-color: var(--mobile-accent, var(--accent-color));
+    border-bottom-color: var(--mobile-accent);
     color: var(--text-primary);
 }
 
@@ -54,7 +54,7 @@
     padding: 12px 14px;
     border: 0;
     /* 左 2px 色边：高亮用标注原色（--edge-color），笔记回落 accent */
-    border-left: 2px solid var(--edge-color, var(--mobile-accent, var(--accent-color)));
+    border-left: 2px solid var(--edge-color, var(--mobile-accent));
     border-radius: 0 10px 10px 0;
     background: color-mix(in srgb, var(--text-primary) 5%, transparent);
     color: inherit;
@@ -142,7 +142,7 @@
 }
 
 .dateDay {
-    color: var(--mobile-accent, var(--accent-color));
+    color: var(--mobile-accent);
     font-family: var(--notes-serif);
     font-size: 19px;
     font-weight: 600;

@@ -45,6 +45,16 @@ const THEME_SWATCHES = [
     { id: 'green', color: '#c7edcc', label: '绿色' },
 ] as const
 
+/* 强调色四色板（原型 1a）+ 跟随主题。auto 的圆点直接显示当前主题 accent，
+   让"跟随"选项也有实色可看，而不是一个抽象图标 */
+const ACCENT_SWATCHES = [
+    { id: 'auto', color: 'var(--accent-color)', label: '跟随主题' },
+    { id: 'ember', color: 'oklch(0.63 0.14 48)', label: '炭橙' },
+    { id: 'tide', color: 'oklch(0.60 0.12 210)', label: '海青' },
+    { id: 'moss', color: 'oklch(0.58 0.13 145)', label: '苔绿' },
+    { id: 'plum', color: 'oklch(0.58 0.15 340)', label: '梅紫' },
+] as const
+
 const PREVIEW_PARAGRAPHS = [
     '清晨的光从窗边慢慢移进来，书页也跟着亮了一点。',
     '读到这里时，句子的停顿和段落之间的距离会更加明显。',
@@ -343,6 +353,27 @@ export function MobileReaderSettingsSubpage({
                                         className={`${styles.themeSwatch} ${active ? styles.themeSwatchActive : ''}`}
                                         style={{ background: theme.color }}
                                         onClick={() => settings.updateSetting('themeId', theme.id)}
+                                    />
+                                )
+                            })}
+                        </div>
+                    </MobileSettingsGroup>
+
+                    <MobileSettingsGroup label="强调色">
+                        <div className={styles.themeSwatchRow} role="radiogroup" aria-label="强调色">
+                            {ACCENT_SWATCHES.map((accent) => {
+                                const active = settings.mobileAccent === accent.id
+                                return (
+                                    <button
+                                        key={accent.id}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={active}
+                                        aria-label={accent.label}
+                                        title={accent.label}
+                                        className={`${styles.themeSwatch} ${active ? styles.themeSwatchActive : ''}`}
+                                        style={{ background: accent.color }}
+                                        onClick={() => settings.updateSetting('mobileAccent', accent.id)}
                                     />
                                 )
                             })}

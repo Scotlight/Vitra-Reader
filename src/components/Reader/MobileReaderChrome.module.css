@@ -4,7 +4,8 @@
 
 @media (max-width: 850px) and (orientation: portrait) {
     .mobileChrome {
-        --mobile-accent: var(--accent-color, #269654);
+        /* --mobile-accent 由 :root 全局提供（variables.css Phase 4）。
+           这里绝不能再局部定义，否则遮蔽全局值导致色板设置在 Reader 内永远无效 */
         position: absolute;
         inset: 0;
         z-index: 38;

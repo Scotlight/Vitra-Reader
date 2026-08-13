@@ -47,7 +47,7 @@
 
 .chipActive {
     color: white;
-    background: var(--accent-color);
+    background: var(--mobile-accent);
 }
 
 /* ── 书籍列表 ────────────────────────────── */

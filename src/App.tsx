@@ -39,6 +39,15 @@ function App() {
     }, [settings.themeId, settings.customBgColor, settings.customTextColor])
 
     useEffect(() => {
+        // auto = 移除属性回落 :root 的 var(--accent-color)（跟随主题），命名色才挂 data-accent
+        if (settings.mobileAccent === 'auto') {
+            document.documentElement.removeAttribute('data-accent')
+        } else {
+            document.documentElement.setAttribute('data-accent', settings.mobileAccent)
+        }
+    }, [settings.mobileAccent])
+
+    useEffect(() => {
         let intervalId: number | undefined
         let mounted = true
 

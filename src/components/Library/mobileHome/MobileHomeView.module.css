@@ -23,7 +23,7 @@
     padding: 14px;
     color: inherit;
     /* 双层混色照原型：accent 9% 打底色调，再叠 fg 4% 保证浅色主题下也有边界 */
-    background: color-mix(in srgb, var(--accent-color) 9%, color-mix(in srgb, var(--text-primary) 4%, transparent));
+    background: color-mix(in srgb, var(--mobile-accent) 9%, color-mix(in srgb, var(--text-primary) 4%, transparent));
     font: inherit;
     text-align: left;
     transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -90,7 +90,7 @@
     display: block;
     height: 100%;
     border-radius: 2px;
-    background: var(--accent-color);
+    background: var(--mobile-accent);
     transition: width 600ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
