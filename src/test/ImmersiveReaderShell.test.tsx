@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TocItem } from '@/engine/core/contentProvider'
 
@@ -109,5 +109,58 @@ describe('ImmersiveReaderShell', () => {
         expect(onWidthChange).toHaveBeenCalledWith(480)
         expect(shellRoot).toHaveAttribute('data-sidebar-resizing', 'false')
         expect(shellRoot.style.getPropertyValue('--pinned-sidebar-width')).toBe('min(360px, 50vw)')
+    })
+})
+
+describe('ImmersiveReaderShell 沉浸模式', () => {
+    afterEach(() => {
+        cleanup()
+        vi.useRealTimers()
+    })
+
+    it('immersiveMode 开启时 2.5s 后自动隐藏 chrome，默认关闭不隐藏', () => {
+        vi.useFakeTimers()
+        const view = render(
+            <ImmersiveReaderShell
+                activeTab="toc"
+                bookAuthorText="测试作者"
+                bookCover=""
+                bookTotalActiveMs={0}
+                bookTitleText="测试书"
+                chapterLabel="第一章"
+                clockText="09:30"
+                closePanels={vi.fn()}
+                content={<div>正文内容</div>}
+                currentSectionHref="chapter-1.xhtml"
+                currentProgress={0.12}
+                immersiveMode
+                isNightMode={false}
+                onNextChapter={vi.fn()}
+                onBack={vi.fn()}
+                onPreviousChapter={vi.fn()}
+                onProgressCommit={vi.fn()}
+                onTabChange={vi.fn()}
+                onToggleNightMode={vi.fn()}
+                onToggleFullscreen={vi.fn()}
+                panelContent={<div>目录内容</div>}
+                pinnedSidebarWidth={360}
+                progressLabel="12%"
+                settingsOpen={false}
+                settingsPanel={<div>设置面板</div>}
+                showFooterChapter
+                showFooterProgress
+                showFooterTime
+                toc={toc}
+                toggleSettingsPanel={vi.fn()}
+            />,
+        )
+
+        const chromeRoot = () => view.container.querySelector('[data-mobile-reader-chrome="true"]')
+        expect(chromeRoot()?.getAttribute('data-chrome-visible')).toBe('true')
+
+        act(() => {
+            vi.advanceTimersByTime(2600)
+        })
+        expect(chromeRoot()?.getAttribute('data-chrome-visible')).toBe('false')
     })
 })

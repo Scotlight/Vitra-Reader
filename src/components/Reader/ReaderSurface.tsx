@@ -13,6 +13,7 @@ import styles from './ReaderView.module.css'
 interface ReaderSurfaceSettings {
     brightness: number
     fontSize: number
+    immersiveMode: boolean
     letterSpacing: number
     lineHeight: number
     paragraphSpacing: number
@@ -193,6 +194,7 @@ export function ReaderSurface({
                 content={content}
                 currentSectionHref={currentSectionHref}
                 currentProgress={currentProgress}
+                immersiveMode={settings.immersiveMode}
                 isNightMode={isNightMode}
                 onNextChapter={onNextChapter}
                 onBack={onBack}

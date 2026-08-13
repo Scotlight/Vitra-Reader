@@ -338,6 +338,15 @@ export function MobileReaderSettingsSubpage({
                             onChange={(v) => settings.updateSetting('pageTurnAnimation', v as typeof settings.pageTurnAnimation)}
                         />
                     </MobileSettingsGroup>
+
+                    <MobileSettingsGroup label="沉浸">
+                        <MobileToggleRow
+                            label="沉浸模式"
+                            hint="进书 2.5 秒后自动隐藏工具栏"
+                            checked={settings.immersiveMode}
+                            onChange={(checked) => settings.updateSetting('immersiveMode', checked)}
+                        />
+                    </MobileSettingsGroup>
                 </>
             )}
 

@@ -34,6 +34,8 @@ export interface ReaderSettings {
     // Page Turn
     pageTurnMode: PageTurnMode
     pageTurnAnimation: PageTurnAnimation
+    /** 沉浸模式：进书短暂显示 chrome 后自动隐藏（Reader 侧消费） */
+    immersiveMode: boolean
 
     // UI Appearance
     uiMaterial: UIMaterial
@@ -129,6 +131,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
     showFooterTime: true,
     pageTurnMode: 'paginated-single',
     pageTurnAnimation: 'slide',
+    immersiveMode: false,
     uiMaterial: 'mica',
     uiBlurStrength: 20,
     uiOpacity: 0.85,

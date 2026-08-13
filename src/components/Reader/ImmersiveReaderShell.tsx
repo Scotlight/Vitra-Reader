@@ -24,6 +24,8 @@ interface ImmersiveReaderShellProps {
     readonly content: ReactNode
     readonly currentSectionHref: string
     readonly currentProgress: number
+    /** 沉浸模式：进书 2.5s 无交互后自动隐藏 chrome。默认关闭维持现状 */
+    readonly immersiveMode?: boolean
     readonly isNightMode: boolean
     readonly onNextChapter: () => void
     readonly onBack: () => void
@@ -117,6 +119,7 @@ export function ImmersiveReaderShell({
     content,
     currentSectionHref,
     currentProgress,
+    immersiveMode = false,
     isNightMode,
     onNextChapter,
     onBack,
@@ -138,6 +141,22 @@ export function ImmersiveReaderShell({
     toggleSettingsPanel,
 }: ImmersiveReaderShellProps) {
     const [chromeActive, setChromeActive] = useState(true)
+    // 沉浸模式的一次性自动隐藏：进书先显示 chrome 让用户定位，2.5s 无交互后隐去。
+    // 用户在此期间点过正文（手动切过显隐）就取消——用户的显式意图优先于自动行为
+    const immersiveAutoHideRef = useRef<number | null>(null)
+    useEffect(() => {
+        if (!immersiveMode) return
+        immersiveAutoHideRef.current = window.setTimeout(() => {
+            immersiveAutoHideRef.current = null
+            setChromeActive(false)
+        }, 2500)
+        return () => {
+            if (immersiveAutoHideRef.current !== null) {
+                window.clearTimeout(immersiveAutoHideRef.current)
+                immersiveAutoHideRef.current = null
+            }
+        }
+    }, [immersiveMode])
     const [tocPinned, setTocPinned] = useState(() => (
         window.matchMedia?.(MOBILE_LANDSCAPE_QUERY).matches ?? false
     ))
@@ -170,6 +189,10 @@ export function ImmersiveReaderShell({
     const handleContentClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
         if (hasSelectedText()) return
         if ((event.target as HTMLElement).closest('a,button,input,select,textarea,[role="button"],[contenteditable="true"]')) return
+        if (immersiveAutoHideRef.current !== null) {
+            window.clearTimeout(immersiveAutoHideRef.current)
+            immersiveAutoHideRef.current = null
+        }
         setChromeActive((current) => !current)
     }, [])
     const statusItems = buildStatusItems(

@@ -138,6 +138,13 @@ export function ReaderExperienceSettingsCard({
                             onChange={(value) => settings.updateSetting('pageTurnAnimation', value as typeof settings.pageTurnAnimation)}
                         />
                     </SettingRow>
+                    <SettingRow label="沉浸模式">
+                        <ToggleControl
+                            label="沉浸模式"
+                            checked={settings.immersiveMode}
+                            onChange={(checked) => settings.updateSetting('immersiveMode', checked)}
+                        />
+                    </SettingRow>
                 </>
             )}
         </SettingsCard>

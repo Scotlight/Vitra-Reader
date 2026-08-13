@@ -29,6 +29,7 @@ const baseSettings: ReaderSettings = {
     uiOpacity: 0.85,
     uiRoundness: 8,
     mobileAccent: 'auto',
+    immersiveMode: false,
 }
 
 describe('useReaderAppearance', () => {
