@@ -904,6 +904,8 @@
         height: 100%;
         overflow: hidden;
         padding: 0;
+        /* 子页进入平移：display none→block 翻转会重播 animation，无需在 TSX 里管动画状态 */
+        animation: settingsSubpageIn 240ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     .content.mobileContentHidden {
@@ -927,6 +929,9 @@
         box-sizing: border-box;
         padding: 8px 16px calc(94px + env(safe-area-inset-bottom));
         background: var(--settings-bg);
+        /* 返回时组件重挂载即播。位移只给 12px：设置面板首次打开时它也会播一次，
+           幅度大了会跟面板自身的进入动画打架，小位移在两种场景下都只是"内容落定"感 */
+        animation: settingsHomeIn 240ms cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     /* 分组间距：20→28px，让不同分组的"段落感"更清晰 */
@@ -1037,5 +1042,36 @@
 
     .bottomActions {
         justify-content: flex-end;
+    }
+}
+
+/* 移动端设置子页/首页切换动画。keyframes 放顶层：CSS Modules 下嵌进 media 块的
+   @keyframes 部分构建链会静默丢弃，顶层定义两侧场景都能引用 */
+@keyframes settingsSubpageIn {
+    from {
+        opacity: 0;
+        transform: translateX(24px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes settingsHomeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+    .content,
+    .mobileSettingsHome {
+        animation: none;
     }
 }
