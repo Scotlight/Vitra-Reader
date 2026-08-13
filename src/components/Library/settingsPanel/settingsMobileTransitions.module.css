@@ -1,0 +1,45 @@
+/* 移动端设置首页 ⇄ 子页切换动画。独立成模块是因为 SettingsPanelV2.module.css
+   已过止损线（仅允许删减），新样式一律独立文件（mobile-phase-index §五）。
+   keyframes 放顶层：CSS Modules 下嵌进 media 块的 @keyframes 部分构建链会静默丢弃 */
+
+@media (max-width: 760px) {
+    /* 子页进入：display none→block 翻转会重播 animation，无需在 TSX 里管动画状态 */
+    .subpageEnter {
+        animation: settingsSubpageIn 240ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    /* 返回时组件重挂载即播。位移只给 12px：设置面板首次打开时它也会播一次，
+       幅度大了会跟面板自身的进入动画打架，小位移在两种场景下都只是"内容落定"感 */
+    .homeEnter {
+        animation: settingsHomeIn 240ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+}
+
+@keyframes settingsSubpageIn {
+    from {
+        opacity: 0;
+        transform: translateX(24px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes settingsHomeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+    .subpageEnter,
+    .homeEnter {
+        animation: none;
+    }
+}

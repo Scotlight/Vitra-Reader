@@ -10,6 +10,7 @@ import noteIcon from '@/assets/icons/note.svg'
 import readerTranslateIcon from '@/assets/icons/reader-translate.svg'
 import vitraLogo from '@/assets/icons/vitra-logo.svg'
 import styles from '../SettingsPanelV2.module.css'
+import transitions from './settingsMobileTransitions.module.css'
 import { SettingsPanelIcon } from './SettingsPanelIcon'
 import { MOBILE_SETTINGS_PAGE_TITLES, type MobileSettingsPage } from './mobileSettings'
 
@@ -111,7 +112,10 @@ export function SettingsPanelShell({
             </aside>
 
             {mobilePage === null && (
-                <section className={styles.mobileSettingsHome} aria-label="设置分类首页">
+                <section
+                    className={`${styles.mobileSettingsHome} ${transitions.homeEnter}`}
+                    aria-label="设置分类首页"
+                >
                     <nav className={styles.mobileSettingsGroups} aria-label="设置分类">
                         {MOBILE_SETTINGS_GROUPS.map((group) => (
                             <section key={group.label} className={styles.mobileSettingsGroup}>
@@ -136,7 +140,9 @@ export function SettingsPanelShell({
                 </section>
             )}
 
-            <main className={`${styles.content} ${mobilePage === null ? styles.mobileContentHidden : ''}`}>
+            <main
+                className={`${styles.content} ${transitions.subpageEnter} ${mobilePage === null ? styles.mobileContentHidden : ''}`}
+            >
                 <div className={styles.contentHeader}>
                     <div>
                         <h1 className={styles.pageTitle}>{activeRailMeta.title}</h1>
