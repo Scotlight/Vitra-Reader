@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+    buildDailyActiveTrendFromRows,
     buildMonthlyReadingReportFromRows,
+    countCurrentReadingStreakFromDateKeys,
     estimateRemainingMsFromProgress,
     formatDurationLabel,
     resolveReadingStatsCutoffDateKey,
@@ -81,5 +83,76 @@ describe('readingStatsService', () => {
         expect(formatDurationLabel(3_723_000)).toBe('1小时2分钟')
         expect(formatDurationLabel(125_000)).toBe('2分钟5秒')
         expect(formatDurationLabel(900)).toBe('0秒')
+    })
+
+    describe('buildDailyActiveTrendFromRows', () => {
+        // 8/2 往前 5 天 = 7/29~8/2，锁住跨月窗口
+        const anchorMs = new Date(2026, 7, 2, 12, 0, 0, 0).getTime()
+
+        it('跨月滚动窗口：长度恒为 days，无记录日补 0', () => {
+            const rows = [
+                { id: '2026-07-30::a', dateKey: '2026-07-30', bookId: 'a', activeMs: 600_000, updatedAt: anchorMs },
+                { id: '2026-08-02::a', dateKey: '2026-08-02', bookId: 'a', activeMs: 300_000, updatedAt: anchorMs },
+            ]
+            const trend = buildDailyActiveTrendFromRows(rows, 5, anchorMs)
+            expect(trend.map((item) => item.dateKey)).toEqual([
+                '2026-07-29',
+                '2026-07-30',
+                '2026-07-31',
+                '2026-08-01',
+                '2026-08-02',
+            ])
+            expect(trend.map((item) => item.activeMs)).toEqual([0, 600_000, 0, 0, 300_000])
+        })
+
+        it('同一天多本书相加', () => {
+            const rows = [
+                { id: '2026-08-02::a', dateKey: '2026-08-02', bookId: 'a', activeMs: 600_000, updatedAt: anchorMs },
+                { id: '2026-08-02::b', dateKey: '2026-08-02', bookId: 'b', activeMs: 300_000, updatedAt: anchorMs },
+            ]
+            const trend = buildDailyActiveTrendFromRows(rows, 1, anchorMs)
+            expect(trend).toEqual([{ dateKey: '2026-08-02', activeMs: 900_000 }])
+        })
+
+        it('窗口外的记录被忽略', () => {
+            const rows = [
+                { id: '2026-07-28::a', dateKey: '2026-07-28', bookId: 'a', activeMs: 999_000, updatedAt: anchorMs },
+            ]
+            const trend = buildDailyActiveTrendFromRows(rows, 5, anchorMs)
+            expect(trend.every((item) => item.activeMs === 0)).toBe(true)
+        })
+
+        it('days<=0 返回空数组', () => {
+            expect(buildDailyActiveTrendFromRows([], 0, anchorMs)).toEqual([])
+            expect(buildDailyActiveTrendFromRows([], -3, anchorMs)).toEqual([])
+        })
+    })
+
+    describe('countCurrentReadingStreakFromDateKeys', () => {
+        const anchorMs = new Date(2026, 7, 2, 12, 0, 0, 0).getTime()
+
+        it('今天没读但昨天读了：连击不清零', () => {
+            const keys = new Set(['2026-07-31', '2026-08-01'])
+            expect(countCurrentReadingStreakFromDateKeys(keys, anchorMs)).toBe(2)
+        })
+
+        it('今天和昨天都没读：连击为 0', () => {
+            const keys = new Set(['2026-07-30'])
+            expect(countCurrentReadingStreakFromDateKeys(keys, anchorMs)).toBe(0)
+        })
+
+        it('跨月连续不截断', () => {
+            const keys = new Set(['2026-07-30', '2026-07-31', '2026-08-01', '2026-08-02'])
+            expect(countCurrentReadingStreakFromDateKeys(keys, anchorMs)).toBe(4)
+        })
+
+        it('中断即停止回溯', () => {
+            const keys = new Set(['2026-08-02', '2026-08-01', '2026-07-30'])
+            expect(countCurrentReadingStreakFromDateKeys(keys, anchorMs)).toBe(2)
+        })
+
+        it('空集合返回 0', () => {
+            expect(countCurrentReadingStreakFromDateKeys(new Set(), anchorMs)).toBe(0)
+        })
     })
 })

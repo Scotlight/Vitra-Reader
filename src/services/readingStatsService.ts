@@ -268,3 +268,86 @@ export function formatDurationLabel(durationMs: number): string {
     return `${seconds}秒`
 }
 
+/**
+ * 滚动窗口按天活跃时长的纯函数内核（供 loadDailyActiveTrend 与测试共用）。
+ *
+ * 与 `loadMonthlyReadingReport().dailyTrend` 的区别：后者锚在自然月（当月已过天数），
+ * 月初时只有 1~2 条；本函数按"截至锚点日往前数 N 天"取，跨月连续。
+ * 无记录的日子补 0，保证返回长度恒为 days——柱图消费方不需要处理空洞。
+ */
+export function buildDailyActiveTrendFromRows(
+    rows: readonly ReadingStatsDaily[],
+    days: number,
+    anchorMs: number = Date.now(),
+): DailyReadingStatsItem[] {
+    const normalizedDays = Math.floor(days)
+    if (normalizedDays <= 0) return []
+
+    const anchorDayStart = atLocalDayStart(new Date(anchorMs))
+    const windowStart = new Date(anchorDayStart.getTime())
+    windowStart.setDate(windowStart.getDate() - (normalizedDays - 1))
+    const dateKeys = resolveDateKeysInRange(windowStart, anchorDayStart)
+
+    // 先用全量 dateKey 建 0 底，再叠加：同一天多本书的记录要相加
+    const msByKey = new Map(dateKeys.map((dateKey) => [dateKey, 0]))
+    rows.forEach((row) => {
+        if (!msByKey.has(row.dateKey)) return
+        const activeMs = normalizeStatsMs(row.activeMs)
+        if (activeMs <= 0) return
+        msByKey.set(row.dateKey, (msByKey.get(row.dateKey) ?? 0) + activeMs)
+    })
+
+    return dateKeys.map((dateKey) => ({ dateKey, activeMs: msByKey.get(dateKey) ?? 0 }))
+}
+
+export async function loadDailyActiveTrend(
+    days: number,
+    anchorMs: number = Date.now(),
+): Promise<DailyReadingStatsItem[]> {
+    const normalizedDays = Math.floor(days)
+    if (normalizedDays <= 0) return []
+
+    const anchorDayStart = atLocalDayStart(new Date(anchorMs))
+    const windowStart = new Date(anchorDayStart.getTime())
+    windowStart.setDate(windowStart.getDate() - (normalizedDays - 1))
+    const rows = await db.readingStatsDaily
+        .where('dateKey')
+        .between(toLocalDateKey(windowStart.getTime()), toLocalDateKey(anchorDayStart.getTime()), true, true)
+        .toArray()
+    return buildDailyActiveTrendFromRows(rows, normalizedDays, anchorMs)
+}
+
+/**
+ * 当前连续阅读天数的纯函数内核。
+ *
+ * 与 `countLongestReadingStreak` 语义不同：那个是"区间内最长连续段"，
+ * 本函数是"从锚点日倒着数，连续有记录的天数"，跨月有效。
+ * 产品决策：今天没读但昨天读了 → 从昨天起算（当天还没开始阅读，不该把连击清零）。
+ */
+export function countCurrentReadingStreakFromDateKeys(
+    activeDateKeys: ReadonlySet<string>,
+    anchorMs: number = Date.now(),
+): number {
+    const cursor = atLocalDayStart(new Date(anchorMs))
+    if (!activeDateKeys.has(toLocalDateKey(cursor.getTime()))) {
+        cursor.setDate(cursor.getDate() - 1)
+    }
+
+    let streak = 0
+    while (activeDateKeys.has(toLocalDateKey(cursor.getTime()))) {
+        streak += 1
+        cursor.setDate(cursor.getDate() - 1)
+    }
+    return streak
+}
+
+export async function loadCurrentReadingStreak(anchorMs: number = Date.now()): Promise<number> {
+    // 取数范围用保留策略的截断日兜底：连击最长也不可能超过留存天数（400），天然封顶
+    const cutoffDateKey = resolveReadingStatsCutoffDateKey(anchorMs)
+    const rows = await db.readingStatsDaily.where('dateKey').aboveOrEqual(cutoffDateKey).toArray()
+    const activeDateKeys = new Set(
+        rows.filter((row) => normalizeStatsMs(row.activeMs) > 0).map((row) => row.dateKey),
+    )
+    return countCurrentReadingStreakFromDateKeys(activeDateKeys, anchorMs)
+}
+
