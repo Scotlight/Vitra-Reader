@@ -14,12 +14,15 @@ export type LibraryProgressMap = Record<string, number>
 
 export type ShelfChip =
     | { kind: 'all' }
+    | { kind: 'fav' }
     | { kind: 'unread' }
+    | { kind: 'trash' }
     | { kind: 'group'; groupId: string; name: string }
 
 /**
  * 构造书架 chips 数组。
- * 返回 [全部, ...真实分组按原顺序, 未读]。分组为空时只有 [全部, 未读]。
+ * 返回 [全部, ...真实分组按原顺序, 收藏, 未读, 回收站]。
+ * 回收站放最后：语义上是"垃圾桶"不是常用筛选，不该挤在分组前面。
  */
 export function buildShelfChips(
     groups: ReadonlyArray<{ id: string; name: string }>,
@@ -28,7 +31,7 @@ export function buildShelfChips(
     groups.forEach((g) => {
         chips.push({ kind: 'group', groupId: g.id, name: g.name })
     })
-    chips.push({ kind: 'unread' })
+    chips.push({ kind: 'fav' }, { kind: 'unread' }, { kind: 'trash' })
     return chips
 }
 
@@ -36,7 +39,9 @@ export function buildShelfChips(
  * 按 chip 过滤书架列表。
  *
  * - all: 全部非回收站，按 lastReadAt 降序（缺失沉底）
+ * - fav: 收藏 ∩ 非回收站（进回收站的收藏书隐藏，恢复后重新出现），按 lastReadAt 降序
  * - unread: progress === 0 或 undefined（新书 progressMap 里没键）
+ * - trash: 唯一显示回收站内书籍的 chip，按 lastReadAt 降序
  * - group: groupBookMap[groupId] 内的书，保持分组内已有顺序（用户拖拽排过）
  *
  * why groupBookMap 参数而不是 GroupCollection.books：
@@ -49,18 +54,27 @@ export function filterShelfBooks(
     progressMap: LibraryProgressMap,
     trashBookIdSet: ReadonlySet<string>,
     groupBookMap: Record<string, string[]>,
+    favoriteBookIdSet: ReadonlySet<string>,
 ): readonly BookMeta[] {
+    const byLastRead = (list: readonly BookMeta[]) =>
+        list.slice().sort((a, b) => (b.lastReadAt ?? 0) - (a.lastReadAt ?? 0))
+
+    if (chip.kind === 'trash') {
+        return byLastRead(books.filter((book) => trashBookIdSet.has(book.id)))
+    }
+
     const nonTrash = books.filter((book) => !trashBookIdSet.has(book.id))
 
     if (chip.kind === 'all') {
-        return nonTrash.slice().sort((a, b) => (b.lastReadAt ?? 0) - (a.lastReadAt ?? 0))
+        return byLastRead(nonTrash)
+    }
+
+    if (chip.kind === 'fav') {
+        return byLastRead(nonTrash.filter((book) => favoriteBookIdSet.has(book.id)))
     }
 
     if (chip.kind === 'unread') {
-        return nonTrash
-            .filter((book) => (progressMap[book.id] ?? 0) === 0)
-            .slice()
-            .sort((a, b) => (b.lastReadAt ?? 0) - (a.lastReadAt ?? 0))
+        return byLastRead(nonTrash.filter((book) => (progressMap[book.id] ?? 0) === 0))
     }
 
     // group: 保持 groupBookMap 内的顺序，不重排

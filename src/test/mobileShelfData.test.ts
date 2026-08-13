@@ -20,12 +20,17 @@ describe('mobileShelfData', () => {
     })
 
     describe('buildShelfChips', () => {
-        it('空库时返回 [全部, 未读]', () => {
+        it('空库时返回 [全部, 收藏, 未读, 回收站]', () => {
             const chips = buildShelfChips([])
-            expect(chips).toEqual([{ kind: 'all' }, { kind: 'unread' }])
+            expect(chips).toEqual([
+                { kind: 'all' },
+                { kind: 'fav' },
+                { kind: 'unread' },
+                { kind: 'trash' },
+            ])
         })
 
-        it('有分组时返回 [全部, ...分组, 未读]', () => {
+        it('有分组时返回 [全部, ...分组, 收藏, 未读, 回收站]', () => {
             const groups = [
                 { id: 'g1', name: '技术' },
                 { id: 'g2', name: '文学' },
@@ -35,7 +40,9 @@ describe('mobileShelfData', () => {
                 { kind: 'all' },
                 { kind: 'group', groupId: 'g1', name: '技术' },
                 { kind: 'group', groupId: 'g2', name: '文学' },
+                { kind: 'fav' },
                 { kind: 'unread' },
+                { kind: 'trash' },
             ])
         })
 
@@ -61,29 +68,30 @@ describe('mobileShelfData', () => {
         const books = [book1, book2, book3, trashedBook]
         const progressMap: LibraryProgressMap = { b1: 50, b2: 0, b3: 100 }
         const trashSet = new Set(['b4'])
+        const favSet = new Set(['b1', 'b4'])
         const groupBookMap = { g1: ['b2', 'b1'], g2: ['b3'] }
 
         it('空库时任何 chip 都返回空数组', () => {
             const chipAll: ShelfChip = { kind: 'all' }
-            const result = filterShelfBooks([], chipAll, progressMap, trashSet, {})
+            const result = filterShelfBooks([], chipAll, progressMap, trashSet, {}, new Set())
             expect(result).toEqual([])
         })
 
         it('全部 chip：排除回收站，按 lastReadAt 降序', () => {
             const chipAll: ShelfChip = { kind: 'all' }
-            const result = filterShelfBooks(books, chipAll, progressMap, trashSet, groupBookMap)
+            const result = filterShelfBooks(books, chipAll, progressMap, trashSet, groupBookMap, favSet)
             expect(result.map((b) => b.id)).toEqual(['b2', 'b3', 'b1'])
         })
 
         it('回收站书在任何 chip 下都不出现', () => {
             const chipAll: ShelfChip = { kind: 'all' }
-            const result = filterShelfBooks(books, chipAll, progressMap, trashSet, groupBookMap)
+            const result = filterShelfBooks(books, chipAll, progressMap, trashSet, groupBookMap, favSet)
             expect(result.some((b) => b.id === 'b4')).toBe(false)
         })
 
         it('未读 chip：progress === 0 或 undefined', () => {
             const chipUnread: ShelfChip = { kind: 'unread' }
-            const result = filterShelfBooks(books, chipUnread, progressMap, trashSet, groupBookMap)
+            const result = filterShelfBooks(books, chipUnread, progressMap, trashSet, groupBookMap, favSet)
             // b2 progress=0, trashedBook 在回收站不算
             expect(result.map((b) => b.id)).toEqual(['b2'])
         })
@@ -91,13 +99,13 @@ describe('mobileShelfData', () => {
         it('未读 chip：progress === 1 不算未读', () => {
             const progressWithOne: LibraryProgressMap = { b1: 1, b2: 0, b3: 50 }
             const chipUnread: ShelfChip = { kind: 'unread' }
-            const result = filterShelfBooks(books, chipUnread, progressWithOne, trashSet, groupBookMap)
+            const result = filterShelfBooks(books, chipUnread, progressWithOne, trashSet, groupBookMap, favSet)
             expect(result.map((b) => b.id)).toEqual(['b2'])
         })
 
         it('未读 chip：progress === 100 不算未读', () => {
             const chipUnread: ShelfChip = { kind: 'unread' }
-            const result = filterShelfBooks(books, chipUnread, progressMap, trashSet, groupBookMap)
+            const result = filterShelfBooks(books, chipUnread, progressMap, trashSet, groupBookMap, favSet)
             expect(result.some((b) => b.id === 'b3')).toBe(false)
         })
 
@@ -105,38 +113,63 @@ describe('mobileShelfData', () => {
             const newBook = mockBook({ id: 'b5', title: 'New' })
             const booksWithNew = [...books, newBook]
             const chipUnread: ShelfChip = { kind: 'unread' }
-            const result = filterShelfBooks(booksWithNew, chipUnread, progressMap, trashSet, groupBookMap)
+            const result = filterShelfBooks(booksWithNew, chipUnread, progressMap, trashSet, groupBookMap, favSet)
             expect(result.some((b) => b.id === 'b5')).toBe(true)
         })
 
         it('分组 chip：保持 groupBookMap 顺序，不重排', () => {
             const chipGroup: ShelfChip = { kind: 'group', groupId: 'g1', name: '技术' }
-            const result = filterShelfBooks(books, chipGroup, progressMap, trashSet, groupBookMap)
+            const result = filterShelfBooks(books, chipGroup, progressMap, trashSet, groupBookMap, favSet)
             // groupBookMap g1 = ['b2', 'b1']，不按 lastReadAt 排
             expect(result.map((b) => b.id)).toEqual(['b2', 'b1'])
         })
 
         it('分组内的书同时出现在"全部"里', () => {
             const chipAll: ShelfChip = { kind: 'all' }
-            const resultAll = filterShelfBooks(books, chipAll, progressMap, trashSet, groupBookMap)
+            const resultAll = filterShelfBooks(books, chipAll, progressMap, trashSet, groupBookMap, favSet)
             expect(resultAll.some((b) => b.id === 'b2')).toBe(true)
 
             const chipGroup: ShelfChip = { kind: 'group', groupId: 'g1', name: '技术' }
-            const resultGroup = filterShelfBooks(books, chipGroup, progressMap, trashSet, groupBookMap)
+            const resultGroup = filterShelfBooks(books, chipGroup, progressMap, trashSet, groupBookMap, favSet)
             expect(resultGroup.some((b) => b.id === 'b2')).toBe(true)
         })
 
         it('不存在的分组 ID 返回空数组', () => {
             const chipGroup: ShelfChip = { kind: 'group', groupId: 'nonexistent', name: 'X' }
-            const result = filterShelfBooks(books, chipGroup, progressMap, trashSet, groupBookMap)
+            const result = filterShelfBooks(books, chipGroup, progressMap, trashSet, groupBookMap, favSet)
             expect(result).toEqual([])
         })
 
         it('分组内某本书已删除时跳过', () => {
             const groupMapWithDeleted = { g1: ['b2', 'deleted-id', 'b1'] }
             const chipGroup: ShelfChip = { kind: 'group', groupId: 'g1', name: '技术' }
-            const result = filterShelfBooks(books, chipGroup, progressMap, trashSet, groupMapWithDeleted)
+            const result = filterShelfBooks(books, chipGroup, progressMap, trashSet, groupMapWithDeleted, favSet)
             expect(result.map((b) => b.id)).toEqual(['b2', 'b1'])
+        })
+
+        it('收藏 chip：收藏 ∩ 非回收站，按 lastReadAt 降序', () => {
+            // favSet = {b1, b4}，b4 在回收站 → 只剩 b1
+            const chipFav: ShelfChip = { kind: 'fav' }
+            const result = filterShelfBooks(books, chipFav, progressMap, trashSet, groupBookMap, favSet)
+            expect(result.map((b) => b.id)).toEqual(['b1'])
+        })
+
+        it('收藏 chip：收藏但在回收站的书不出现', () => {
+            const chipFav: ShelfChip = { kind: 'fav' }
+            const result = filterShelfBooks(books, chipFav, progressMap, trashSet, groupBookMap, favSet)
+            expect(result.some((b) => b.id === 'b4')).toBe(false)
+        })
+
+        it('回收站 chip：只显示回收站内的书', () => {
+            const chipTrash: ShelfChip = { kind: 'trash' }
+            const result = filterShelfBooks(books, chipTrash, progressMap, trashSet, groupBookMap, favSet)
+            expect(result.map((b) => b.id)).toEqual(['b4'])
+        })
+
+        it('回收站 chip：回收站空时返回空数组', () => {
+            const chipTrash: ShelfChip = { kind: 'trash' }
+            const result = filterShelfBooks(books, chipTrash, progressMap, new Set(), groupBookMap, favSet)
+            expect(result).toEqual([])
         })
     })
 })
