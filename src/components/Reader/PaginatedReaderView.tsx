@@ -7,6 +7,7 @@ import { useSelectionMenu } from '@/hooks/useSelectionMenu';
 import { ShadowRenderer, ReaderStyleConfig } from './ShadowRenderer';
 import { usePaginatedHighlights } from './paginatedReader/usePaginatedHighlights';
 import { usePaginatedNavigation } from './paginatedReader/usePaginatedNavigation';
+import { usePaginatedSwipeGesture } from './paginatedReader/usePaginatedSwipeGesture';
 import { usePaginatedProgress } from './paginatedReader/usePaginatedProgress';
 import { usePaginationMeasure } from './paginatedReader/usePaginationMeasure';
 import { usePaginatedChapterLoader } from './paginatedReader/usePaginatedChapterLoader';
@@ -142,7 +143,7 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         onLoadError: () => setChapterLoadError(true),
     });
 
-    const { isPageLikelyBlank } = usePaginatedNavigation({
+    const { isPageLikelyBlank, nextPage, prevPage } = usePaginatedNavigation({
         viewportRef,
         columnRef,
         pageBoundariesRef,
@@ -157,6 +158,20 @@ export const PaginatedReaderView = forwardRef<PaginatedReaderHandle, PaginatedRe
         hideSelectionMenu: () => setSelectionMenu((previous) => ({ ...previous, visible: false })),
         loadChapter,
         pageTurnAnimation,
+    });
+
+    usePaginatedSwipeGesture({
+        viewportRef,
+        columnRef,
+        getCurrentPage: () => currentPageRef.current,
+        // 边界判定含跨章：本章最后一页但后面还有章，仍算"可前进"（松手会翻章）
+        canGoPrev: () => currentPageRef.current > 0 || currentSpineIndexRef.current > 0,
+        canGoNext: () =>
+            currentPageRef.current < totalPagesRef.current - 1
+            || currentSpineIndexRef.current < spineItemsRef.current.length - 1,
+        onPrev: prevPage,
+        onNext: nextPage,
+        follow: pageTurnAnimation === 'slide' || pageTurnAnimation === 'realistic',
     });
 
     // Load initial chapter when spine is ready

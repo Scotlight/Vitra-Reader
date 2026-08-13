@@ -7,6 +7,8 @@
     overflow: hidden;
     /* 仿真翻页的 3D 舞台：无 perspective 的 rotateY 只是水平压缩，看不出翻页 */
     perspective: 1200px;
+    /* 横向手势归我们（pointermove 持续派发），纵向留给浏览器——分页模式本无纵向滚动 */
+    touch-action: pan-y;
 }
 
 .columnContainer {

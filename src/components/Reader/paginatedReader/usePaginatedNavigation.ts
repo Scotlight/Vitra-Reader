@@ -278,28 +278,35 @@ export function usePaginatedNavigation(options: UsePaginatedNavigationOptions) {
             downY = event.clientY;
         };
 
-        const handleMouseUp = (event: MouseEvent) => {
+        // 用 click 而不是 mouseup 做点击翻页：翻页命中时要 stopPropagation，
+        // 否则冒泡到 ImmersiveReaderShell 的整区点击会同时切 chrome 显隐（移动端一点两动）。
+        // 中央区域不拦，继续冒泡给 Shell 切 chrome——这就是"左右翻页 / 中央切 chrome"的划界。
+        const handleClick = (event: MouseEvent) => {
             if (Math.abs(event.clientX - downX) > 5 || Math.abs(event.clientY - downY) > 5) return;
             if (window.getSelection()?.toString()) return;
 
             const rect = viewport.getBoundingClientRect();
             const x = event.clientX - rect.left;
             if (x < rect.width * 0.15) {
+                event.stopPropagation();
                 prevPage();
             } else if (x > rect.width * 0.85) {
+                event.stopPropagation();
                 nextPage();
             }
         };
 
         viewport.addEventListener('mousedown', handleMouseDown);
-        viewport.addEventListener('mouseup', handleMouseUp);
+        viewport.addEventListener('click', handleClick);
         return () => {
             viewport.removeEventListener('mousedown', handleMouseDown);
-            viewport.removeEventListener('mouseup', handleMouseUp);
+            viewport.removeEventListener('click', handleClick);
         };
     }, [nextPage, prevPage, viewportRef]);
 
     return {
         isPageLikelyBlank,
+        nextPage,
+        prevPage,
     };
 }
