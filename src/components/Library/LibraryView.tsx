@@ -20,6 +20,7 @@ import { SettingsPanel } from './SettingsPanel'
 import { MobileLibraryChrome, type MobileLibraryDestination, type MobileLibraryTab } from './MobileLibraryChrome'
 import { MobileHomeView, type MobileHomeShortcut } from './mobileHome/MobileHomeView'
 import { MobileShelfView } from './mobileShelf/MobileShelfView'
+import { MobileTimeView } from './mobileTime/MobileTimeView'
 import type { ShelfChip } from './mobileShelf/mobileShelfData'
 import type { MobileSettingsPage } from './settingsPanel/mobileSettings'
 import styles from './LibraryView.module.css'
@@ -318,6 +319,12 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                                     groupBookMap={groupBookMap}
                                     initialChip={shelfEntryChip}
                                     onOpenBook={(id) => onOpenBook(id)}
+                                />
+                            ) : isMobileLayout && mobileTab === 'time' ? (
+                                <MobileTimeView
+                                    books={books}
+                                    progressMap={progressMap}
+                                    trashBookIdSet={trashBookIdSet}
                                 />
                             ) : activeNav === 'stats' ? (
                                 <ReadingStatsPanel />
