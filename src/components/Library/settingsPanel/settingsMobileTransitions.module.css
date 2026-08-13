@@ -3,33 +3,32 @@
    keyframes 放顶层：CSS Modules 下嵌进 media 块的 @keyframes 部分构建链会静默丢弃 */
 
 @media (max-width: 760px) {
-    /* 子页进入：display none→block 翻转会重播 animation，无需在 TSX 里管动画状态 */
+    /* 子页进入 = iOS push：整页从右推入。display none→block 翻转会重播 animation，
+       无需在 TSX 里管动画状态。24px 的"落定感"版本实测肉眼无感，改全宽位移 */
     .subpageEnter {
-        animation: settingsSubpageIn 240ms cubic-bezier(0.22, 1, 0.36, 1);
+        animation: settingsSubpageIn 320ms cubic-bezier(0.32, 0.72, 0, 1);
     }
 
-    /* 返回时组件重挂载即播。位移只给 12px：设置面板首次打开时它也会播一次，
-       幅度大了会跟面板自身的进入动画打架，小位移在两种场景下都只是"内容落定"感 */
+    /* 返回时组件重挂载即播。位移比子页小（-28px 视差感）：设置面板首次打开时
+       它也会播一次，全宽反向推入在那个场景下会像"页面倒着走" */
     .homeEnter {
-        animation: settingsHomeIn 240ms cubic-bezier(0.22, 1, 0.36, 1);
+        animation: settingsHomeIn 320ms cubic-bezier(0.32, 0.72, 0, 1);
     }
 }
 
 @keyframes settingsSubpageIn {
     from {
-        opacity: 0;
-        transform: translateX(24px);
+        transform: translateX(100%);
     }
     to {
-        opacity: 1;
         transform: translateX(0);
     }
 }
 
 @keyframes settingsHomeIn {
     from {
-        opacity: 0;
-        transform: translateX(-12px);
+        opacity: 0.4;
+        transform: translateX(-28px);
     }
     to {
         opacity: 1;
