@@ -2,7 +2,7 @@ import { motion } from 'framer-motion'
 import type { Highlight, Bookmark } from '@/services/storageService'
 import styles from './LibraryView.module.css'
 
-type AnnotationGroup<T> = {
+export type AnnotationGroup<T> = {
     bookId: string
     bookTitle: string
     items: T[]

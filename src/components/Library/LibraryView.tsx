@@ -21,6 +21,7 @@ import { MobileLibraryChrome, type MobileLibraryDestination, type MobileLibraryT
 import { MobileHomeView, type MobileHomeShortcut } from './mobileHome/MobileHomeView'
 import { MobileShelfView } from './mobileShelf/MobileShelfView'
 import { MobileTimeView } from './mobileTime/MobileTimeView'
+import { MobileNotesView } from './mobileNotes/MobileNotesView'
 import type { ShelfChip } from './mobileShelf/mobileShelfData'
 import type { MobileSettingsPage } from './settingsPanel/mobileSettings'
 import styles from './LibraryView.module.css'
@@ -325,6 +326,12 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                                     books={books}
                                     progressMap={progressMap}
                                     trashBookIdSet={trashBookIdSet}
+                                />
+                            ) : isMobileLayout && mobileTab === 'notes' ? (
+                                <MobileNotesView
+                                    groupedHighlights={groupedHighlights}
+                                    groupedBookmarks={groupedBookmarks}
+                                    onOpenBook={onOpenBook}
                                 />
                             ) : activeNav === 'stats' ? (
                                 <ReadingStatsPanel />
