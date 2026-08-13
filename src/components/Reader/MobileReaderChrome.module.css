@@ -12,132 +12,124 @@
         display: block;
         color: var(--reader-text-color, var(--reader-text));
         pointer-events: none;
-        transition: opacity 180ms ease, visibility 180ms ease;
     }
 
-    .mobileChromeVisible {
-        opacity: 1;
-        visibility: visible;
-    }
+    /* ═ 顶栏：返回 + 书名 + 书签/汉堡。隐藏态整条上滑出屏 ═ */
 
-    .mobileChromeHidden {
-        opacity: 0;
-        visibility: hidden;
-    }
-
-    .exitButton {
+    .topBar {
         position: absolute;
-        top: max(10px, env(safe-area-inset-top));
-        left: max(12px, env(safe-area-inset-left));
-        z-index: 2;
+        top: 0;
+        right: 0;
+        left: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        box-sizing: border-box;
+        padding: calc(6px + env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 6px max(10px, env(safe-area-inset-left));
+        border-bottom: 1px solid color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 8%, transparent);
+        background: color-mix(in srgb, var(--reader-bg-color, var(--reader-bg)) 84%, transparent);
+        backdrop-filter: blur(26px) saturate(132%);
+        -webkit-backdrop-filter: blur(26px) saturate(132%);
+        pointer-events: auto;
+        transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1), opacity 320ms cubic-bezier(0.32, 0.72, 0, 1);
+    }
+
+    .topBarTitle {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        font-size: 14px;
+        font-weight: 550;
+        line-height: 1.3;
+        text-align: center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .topBarActions {
+        display: flex;
+        gap: 4px;
+    }
+
+    .topBarButton {
         width: 40px;
         height: 40px;
+        flex: 0 0 auto;
         border: 0;
-        border-radius: 50%;
+        border-radius: 12px;
         display: grid;
         place-items: center;
         padding: 0;
         color: inherit;
-        background: color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 8%, transparent);
-        backdrop-filter: blur(18px);
-        -webkit-backdrop-filter: blur(18px);
-        pointer-events: auto;
-        transition: transform 120ms ease, background-color 160ms ease, opacity 120ms ease;
+        background: transparent;
+        transition: transform 120ms ease, background-color 160ms ease;
     }
 
-    .exitButton:active {
+    .topBarButton:active {
         transform: scale(0.92);
-        opacity: 0.85;
+        background: color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 7%, transparent);
     }
 
-    .exitButton img {
+    .topBarButton svg {
         width: 22px;
         height: 22px;
-        opacity: 0.85;
-        transform: rotate(90deg);
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
     }
 
-    .statusCapsule {
-        position: absolute;
-        right: max(10px, env(safe-area-inset-right));
-        bottom: calc(174px + env(safe-area-inset-bottom));
-        width: 74px;
-        max-height: 228px;
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-        overflow: hidden;
-        border: 1px solid color-mix(in srgb, var(--mobile-accent) 22%, transparent);
-        border-radius: 28px;
-        background: color-mix(in srgb, var(--reader-bg-color, var(--reader-bg)) 76%, transparent);
-        box-shadow: 0 12px 28px color-mix(in srgb, var(--reader-text-color, #000) 12%, transparent);
-        backdrop-filter: blur(20px) saturate(126%);
-        -webkit-backdrop-filter: blur(20px) saturate(126%);
-        pointer-events: auto;
-    }
-
-    .statusItem {
-        position: relative;
-        min-height: 58px;
+    /* 汉堡三线，抽屉开时纯 CSS 变 X */
+    .hamburger {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         gap: 4px;
-        box-sizing: border-box;
-        padding: 9px 7px;
-        font-size: 10px;
-        text-align: center;
     }
 
-    .statusItem + .statusItem::before {
-        content: '';
+    .hamburger span {
+        width: 16px;
+        height: 1.8px;
+        border-radius: 999px;
+        background: currentColor;
+        transition: transform 240ms cubic-bezier(0.32, 0.72, 0, 1), opacity 160ms ease;
+    }
+
+    .hamburgerOpen span:nth-child(1) {
+        transform: translateY(5.8px) rotate(45deg);
+    }
+
+    .hamburgerOpen span:nth-child(2) {
+        opacity: 0;
+    }
+
+    .hamburgerOpen span:nth-child(3) {
+        transform: translateY(-5.8px) rotate(-45deg);
+    }
+
+    /* ═ 底部工具坞：进度行 / meta 行 / 四工具，隐藏态整体下滑出屏 ═ */
+
+    .bottomDock {
         position: absolute;
-        top: 0;
-        left: 18px;
-        right: 18px;
-        height: 1px;
-        background: color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 13%, transparent);
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: flex;
+        flex-direction: column;
+        pointer-events: none;
+        transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1), opacity 320ms cubic-bezier(0.32, 0.72, 0, 1);
     }
 
-    .statusItem strong {
-        color: var(--mobile-accent);
-        font-size: 18px;
-        line-height: 1;
-    }
-
-    .statusItem b {
-        font-size: 13px;
-        line-height: 1;
-    }
-
-    .statusItem span:last-child {
-        color: color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 58%, transparent);
-    }
-
-    .chapterName {
-        width: 100%;
-        display: -webkit-box;
-        overflow: hidden;
-        font-size: 10px;
-        font-weight: 650;
-        line-height: 1.35;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
-    }
-
-    /* 进度滑条包一层 12px 圆角浅底容器：原直接浮在 bottomNav 上方缺承托，且按钮没有触控反馈 */
     .progressControls {
-        position: absolute;
-        right: 12px;
-        bottom: calc(76px + env(safe-area-inset-bottom));
-        left: 12px;
         height: 64px;
         display: grid;
-        grid-template-columns: auto minmax(90px, 1fr) auto;
+        grid-template-columns: auto auto minmax(60px, 1fr) auto auto;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
         box-sizing: border-box;
+        margin: 0 12px 10px;
         padding: 0 max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
         border-radius: 16px;
         background: color-mix(in srgb, var(--reader-bg-color, var(--reader-bg)) 78%, transparent);
@@ -154,6 +146,19 @@
         opacity: 1;
         transform: translateY(0);
         pointer-events: auto;
+    }
+
+    .progressPercentLabel {
+        color: var(--mobile-accent);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+    }
+
+    .remainingLabel {
+        color: color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 62%, transparent);
+        font-size: 11px;
+        white-space: nowrap;
     }
 
     .progressControls button {
@@ -182,17 +187,30 @@
         accent-color: var(--mobile-accent);
     }
 
+    /* 原 statusCapsule 三项降级成的一行小字，压在 bottomNav 上沿 */
+    .metaRow {
+        box-sizing: border-box;
+        padding: 7px 16px 6px;
+        border-top: 1px solid color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 8%, transparent);
+        background: color-mix(in srgb, var(--reader-bg-color, var(--reader-bg)) 84%, transparent);
+        backdrop-filter: blur(26px) saturate(132%);
+        -webkit-backdrop-filter: blur(26px) saturate(132%);
+        color: color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 62%, transparent);
+        font-size: 11px;
+        line-height: 1.3;
+        text-align: center;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        pointer-events: auto;
+    }
+
     .bottomNav {
-        position: absolute;
-        right: 0;
-        bottom: 0;
-        left: 0;
         height: calc(72px + env(safe-area-inset-bottom));
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
         box-sizing: border-box;
         padding: 6px max(8px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(8px, env(safe-area-inset-left));
-        border-top: 1px solid color-mix(in srgb, var(--reader-text-color, var(--reader-text)) 8%, transparent);
         background: color-mix(in srgb, var(--reader-bg-color, var(--reader-bg)) 84%, transparent);
         box-shadow: 0 -1px 2px color-mix(in srgb, var(--reader-text-color, #000) 3%, transparent);
         backdrop-filter: blur(26px) saturate(132%);
@@ -267,6 +285,51 @@
         font-size: 9px;
         font-weight: 700;
         letter-spacing: -0.02em;
+    }
+
+    /* ═ chrome 显隐（data-chrome-visible 驱动，不加第二套 state） ═ */
+
+    .mobileChrome[data-chrome-visible='false'] .topBar {
+        opacity: 0;
+        transform: translateY(-100%);
+    }
+
+    .mobileChrome[data-chrome-visible='false'] .bottomDock {
+        opacity: 0;
+        transform: translateY(100%);
+    }
+
+    /* pointer-events 子元素显式 auto 会穿透父层 none，隐藏态必须连子树一起关 */
+    .mobileChrome[data-chrome-visible='false'] .topBar,
+    .mobileChrome[data-chrome-visible='false'] .topBar *,
+    .mobileChrome[data-chrome-visible='false'] .bottomDock,
+    .mobileChrome[data-chrome-visible='false'] .bottomDock * {
+        pointer-events: none;
+    }
+
+    /* 唤出提示：chrome 每次隐藏时播一遍（保持 0.22 透明度约 2.2s 后淡出），无 JS 计时器 */
+    .tapHint {
+        position: absolute;
+        bottom: calc(26px + env(safe-area-inset-bottom));
+        left: 50%;
+        color: var(--reader-text-color, var(--reader-text));
+        font-size: 12px;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+        opacity: 0;
+        transform: translateX(-50%);
+        pointer-events: none;
+    }
+
+    .mobileChrome[data-chrome-visible='false'] .tapHint {
+        animation: tapHintFade 3s ease forwards;
+    }
+
+    @keyframes tapHintFade {
+        0% { opacity: 0; }
+        12% { opacity: 0.22; }
+        75% { opacity: 0.22; }
+        100% { opacity: 0; }
     }
 
     .drawerLayer {
@@ -399,13 +462,26 @@
 }
 
 @media (max-width: 420px) and (orientation: portrait) {
-    .statusCapsule {
-        right: max(7px, env(safe-area-inset-right));
-        width: 70px;
+    .progressControls {
+        gap: 8px;
+        padding-inline: 14px;
+    }
+}
+
+/* 减弱动态效果：显隐退化为纯透明度，不做位移 */
+@media (max-width: 850px) and (orientation: portrait) and (prefers-reduced-motion: reduce) {
+    .topBar,
+    .bottomDock {
+        transition: opacity 180ms ease;
     }
 
-    .progressControls {
-        gap: 10px;
-        padding-inline: 18px;
+    .mobileChrome[data-chrome-visible='false'] .topBar,
+    .mobileChrome[data-chrome-visible='false'] .bottomDock {
+        transform: none;
+    }
+
+    .mobileChrome[data-chrome-visible='false'] .tapHint {
+        animation: none;
+        opacity: 0.22;
     }
 }

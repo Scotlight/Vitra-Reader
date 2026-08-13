@@ -6,7 +6,7 @@ import { MobileReaderChrome } from './MobileReaderChrome'
 import { scheduleCenterActiveToc } from './tocAutoScroll'
 import { useReaderTabShortcut } from './useReaderTabShortcut'
 import { usePinnedSidebarResize } from './usePinnedSidebarResize'
-import { formatDurationLabel } from '@/services/readingStatsService'
+import { formatDurationLabel, estimateRemainingMsFromProgress } from '@/services/readingStatsService'
 import styles from './ImmersiveReaderShell.module.css'
 
 const MOBILE_LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 600px)'
@@ -180,6 +180,12 @@ export function ImmersiveReaderShell({
         showFooterTime,
     )
 
+    // 剩余时间：bookTotalActiveMs 与 currentProgress 都是 Shell 已有量（0~1 量纲一致可直接喂）。
+    // 不足 1 分钟不显示，避免"剩余 0 分"这种撒谎文案
+    const remainingMs = estimateRemainingMsFromProgress(bookTotalActiveMs, currentProgress)
+    const remainingMinutes = remainingMs === null ? null : Math.round(remainingMs / 60_000)
+    const remainingLabel = remainingMinutes !== null && remainingMinutes >= 1 ? `剩余 ${remainingMinutes} 分` : null
+
     return (
         <div
             className={styles.shell}
@@ -264,17 +270,22 @@ export function ImmersiveReaderShell({
 
             <MobileReaderChrome
                 activeTab={activeTab}
+                bookTitleText={bookTitleText}
                 chapterCount={toc.length}
                 chapterLabel={chapterLabel}
+                chromeVisible={chromeActive}
                 clockText={clockText}
                 currentProgress={currentProgress}
                 isNightMode={isNightMode}
+                onBack={onBack}
+                onBookmarkTap={() => {}}
                 onNextChapter={onNextChapter}
                 onPreviousChapter={onPreviousChapter}
                 onProgressCommit={onProgressCommit}
                 onTabChange={onTabChange}
                 onToggleNightMode={onToggleNightMode}
                 panelContent={panelContent}
+                remainingLabel={remainingLabel}
                 settingsOpen={settingsOpen}
                 showFooterChapter={showFooterChapter}
                 showFooterProgress={showFooterProgress}

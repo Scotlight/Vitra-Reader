@@ -5,17 +5,22 @@ import { MobileReaderChrome } from '@/components/Reader/MobileReaderChrome'
 function renderChrome(overrides: Partial<Parameters<typeof MobileReaderChrome>[0]> = {}) {
     const props: Parameters<typeof MobileReaderChrome>[0] = {
         activeTab: 'toc',
+        bookTitleText: '测试书',
         chapterCount: 12,
         chapterLabel: '第一章',
+        chromeVisible: true,
         clockText: '09:41',
         currentProgress: 0.03,
         isNightMode: false,
+        onBack: vi.fn(),
+        onBookmarkTap: vi.fn(),
         onNextChapter: vi.fn(),
         onPreviousChapter: vi.fn(),
         onProgressCommit: vi.fn(),
         onTabChange: vi.fn(),
         onToggleNightMode: vi.fn(),
         panelContent: <button data-reader-panel-navigation="true">第一章</button>,
+        remainingLabel: null,
         settingsOpen: false,
         showFooterChapter: true,
         showFooterProgress: true,
@@ -67,16 +72,78 @@ describe('MobileReaderChrome', () => {
         expect(props.onToggleNightMode).toHaveBeenCalledTimes(1)
     })
 
-    it('按用户设置隐藏状态胶囊字段', () => {
+    it('顶栏返回钮回调 onBack，书名可见', () => {
+        const { props, view } = renderChrome()
+
+        expect(view.getByText('测试书')).toBeInTheDocument()
+        fireEvent.click(view.getByRole('button', { name: '返回书库' }))
+        expect(props.onBack).toHaveBeenCalledTimes(1)
+    })
+
+    it('顶栏汉堡与目录钮共用抽屉开关', () => {
+        const { view } = renderChrome()
+
+        fireEvent.click(view.getByRole('button', { name: '目录抽屉' }))
+        expect(view.getByRole('complementary', { name: '阅读目录面板' })).toBeInTheDocument()
+        fireEvent.click(view.getByRole('button', { name: '目录抽屉' }))
+        expect(view.queryByRole('complementary', { name: '阅读目录面板' })).not.toBeInTheDocument()
+    })
+
+    it('chromeVisible 驱动 data-chrome-visible 属性（常驻 DOM 不卸载）', () => {
+        const { view } = renderChrome({ chromeVisible: false })
+
+        const root = view.container.querySelector('[data-mobile-reader-chrome="true"]')
+        expect(root?.getAttribute('data-chrome-visible')).toBe('false')
+        // 隐藏时顶栏与工具坞仍在 DOM（抽屉/进度 state 不能丢，退场动画要能播）
+        expect(view.getByRole('button', { name: '返回书库' })).toBeInTheDocument()
+    })
+
+    it('remainingLabel 空时不渲染，有值时显示', () => {
+        const { view } = renderChrome()
+        expect(view.queryByText(/剩余/)).not.toBeInTheDocument()
+        cleanup()
+
+        const { view: view2 } = renderChrome({ remainingLabel: '剩余 42 分' })
+        expect(view2.getByText('剩余 42 分')).toBeInTheDocument()
+    })
+
+    it('meta 行按用户设置隐藏对应字段', () => {
         const { view } = renderChrome({
             showFooterChapter: false,
             showFooterProgress: false,
             showFooterTime: true,
         })
 
-        const status = within(view.getByLabelText('阅读状态'))
-        expect(status.queryByText('第一章')).not.toBeInTheDocument()
-        expect(status.queryByText('进度')).not.toBeInTheDocument()
-        expect(status.getByText('09:41')).toBeInTheDocument()
+        const meta = view.getByLabelText('阅读状态')
+        expect(meta).not.toHaveTextContent('第一章')
+        expect(meta).not.toHaveTextContent('%')
+        expect(meta).toHaveTextContent('09:41')
+    })
+
+    it('三项 meta 全关时整行不渲染', () => {
+        const { view } = renderChrome({
+            showFooterChapter: false,
+            showFooterProgress: false,
+            showFooterTime: false,
+        })
+        expect(view.queryByLabelText('阅读状态')).not.toBeInTheDocument()
+    })
+
+    it('书签占位钮触发 onBookmarkTap', () => {
+        const { props, view } = renderChrome()
+        fireEvent.click(view.getByRole('button', { name: '书签（即将上线）' }))
+        expect(props.onBookmarkTap).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('MobileReaderChrome meta 组合', () => {
+    afterEach(() => {
+        cleanup()
+    })
+
+    it('meta 行以 · 连接章节/进度/时间', () => {
+        const { view } = renderChrome()
+        const meta = within(view.getByLabelText('阅读状态'))
+        expect(meta.getByText('第一章 · 3% · 09:41')).toBeInTheDocument()
     })
 })

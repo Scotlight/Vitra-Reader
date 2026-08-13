@@ -5,17 +5,24 @@ import styles from './MobileReaderChrome.module.css'
 
 interface MobileReaderChromeProps {
     readonly activeTab: ReaderPanelTab
+    readonly bookTitleText: string
     readonly chapterCount: number
     readonly chapterLabel: string
+    /** chrome 显隐由 Shell 的 chromeActive 驱动；常驻 DOM + CSS 位移，条件卸载会丢抽屉/进度 state */
+    readonly chromeVisible: boolean
     readonly clockText: string
     readonly currentProgress: number
     readonly isNightMode: boolean
+    readonly onBack: () => void
+    readonly onBookmarkTap: () => void
     readonly onNextChapter: () => void
     readonly onPreviousChapter: () => void
     readonly onProgressCommit: (progress: number) => void
     readonly onTabChange: (tab: ReaderPanelTab) => void
     readonly onToggleNightMode: () => void
     readonly panelContent: ReactNode
+    /** Shell 层用 0~1 量纲算好传入（禁止 chrome 自己从 progressMap 取数——那条链是 0~100） */
+    readonly remainingLabel: string | null
     readonly settingsOpen: boolean
     readonly showFooterChapter: boolean
     readonly showFooterProgress: boolean
@@ -30,17 +37,22 @@ function clampProgress(progress: number): number {
 
 export function MobileReaderChrome({
     activeTab,
+    bookTitleText,
     chapterCount,
     chapterLabel,
+    chromeVisible,
     clockText,
     currentProgress,
     isNightMode,
+    onBack,
+    onBookmarkTap,
     onNextChapter,
     onPreviousChapter,
     onProgressCommit,
     onTabChange,
     onToggleNightMode,
     panelContent,
+    remainingLabel,
     settingsOpen,
     showFooterChapter,
     showFooterProgress,
@@ -66,88 +78,126 @@ export function MobileReaderChrome({
         }
     }
     const commitProgress = () => onProgressCommit(draftProgress)
+    const toggleDrawer = () => {
+        onTabChange('toc')
+        setDrawerOpen((open) => !open)
+    }
+
+    // 一行 meta：原 statusCapsule 三项按用户设置降级为 "章节 · 47% · 09:41"
+    const metaParts: string[] = []
+    if (showFooterChapter) metaParts.push(chapterLabel || '章节加载中')
+    if (showFooterProgress) metaParts.push(`${progressPercent}%`)
+    if (showFooterTime) metaParts.push(clockText)
 
     return (
-        <div className={styles.mobileChrome} data-mobile-reader-chrome="true">
-            <aside className={styles.statusCapsule} aria-label="阅读状态">
-                {showFooterProgress && (
-                    <div className={styles.statusItem}>
-                        <strong>{progressPercent}%</strong>
-                        <span>进度</span>
-                    </div>
-                )}
-                {showFooterChapter && (
-                    <div className={styles.statusItem}>
-                        <span className={styles.chapterName}>{chapterLabel || '章节加载中'}</span>
-                        <span>章节</span>
-                    </div>
-                )}
-                {showFooterTime && (
-                    <div className={styles.statusItem}>
-                        <b>{clockText}</b>
-                        <span>时间</span>
-                    </div>
-                )}
-            </aside>
+        <div
+            className={styles.mobileChrome}
+            data-mobile-reader-chrome="true"
+            data-chrome-visible={chromeVisible ? 'true' : 'false'}
+        >
+            <header className={styles.topBar}>
+                <button type="button" className={styles.topBarButton} onClick={onBack} aria-label="返回书库">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M15 5l-7 7 7 7" />
+                    </svg>
+                </button>
+                <span className={styles.topBarTitle}>{bookTitleText}</span>
+                <div className={styles.topBarActions}>
+                    <button
+                        type="button"
+                        className={styles.topBarButton}
+                        onClick={onBookmarkTap}
+                        aria-label="书签（即将上线）"
+                    >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M7 4h10v16l-5-4-5 4V4Z" />
+                        </svg>
+                    </button>
+                    <button
+                        type="button"
+                        className={`${styles.topBarButton} ${styles.hamburger} ${drawerOpen ? styles.hamburgerOpen : ''}`}
+                        onClick={toggleDrawer}
+                        aria-label="目录抽屉"
+                        aria-expanded={drawerOpen}
+                    >
+                        <span aria-hidden="true" />
+                        <span aria-hidden="true" />
+                        <span aria-hidden="true" />
+                    </button>
+                </div>
+            </header>
 
-            <div className={`${styles.progressControls} ${progressOpen ? styles.progressControlsOpen : ''}`} aria-hidden={!progressOpen}>
-                <button type="button" onClick={onPreviousChapter}>上一章</button>
-                <input
-                    aria-label="阅读进度"
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={progressPercent}
-                    onChange={(event) => setDraftProgress(Number(event.target.value) / 100)}
-                    onPointerUp={commitProgress}
-                    onTouchEnd={commitProgress}
-                    onKeyUp={commitProgress}
-                />
-                <button type="button" onClick={onNextChapter}>下一章</button>
+            <div className={styles.bottomDock}>
+                <div
+                    className={`${styles.progressControls} ${progressOpen ? styles.progressControlsOpen : ''}`}
+                    aria-hidden={!progressOpen}
+                >
+                    <span className={styles.progressPercentLabel}>{progressPercent}%</span>
+                    <button type="button" onClick={onPreviousChapter}>上一章</button>
+                    <input
+                        aria-label="阅读进度"
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={progressPercent}
+                        onChange={(event) => setDraftProgress(Number(event.target.value) / 100)}
+                        onPointerUp={commitProgress}
+                        onTouchEnd={commitProgress}
+                        onKeyUp={commitProgress}
+                    />
+                    <button type="button" onClick={onNextChapter}>下一章</button>
+                    {remainingLabel && <span className={styles.remainingLabel}>{remainingLabel}</span>}
+                </div>
+
+                {metaParts.length > 0 && (
+                    <div className={styles.metaRow} aria-label="阅读状态">
+                        {metaParts.join(' · ')}
+                    </div>
+                )}
+
+                <nav className={styles.bottomNav} aria-label="移动端阅读工具栏">
+                    <button
+                        type="button"
+                        className={drawerOpen ? styles.activeAction : ''}
+                        onClick={toggleDrawer}
+                        aria-expanded={drawerOpen}
+                    >
+                        <MobileIcon name="toc" />
+                        <span>目录</span>
+                    </button>
+                    <button
+                        type="button"
+                        className={progressOpen ? styles.activeAction : ''}
+                        onClick={() => setProgressOpen((open) => !open)}
+                        aria-expanded={progressOpen}
+                    >
+                        <span className={styles.progressIcon}>{progressPercent}%</span>
+                        <span>进度</span>
+                    </button>
+                    <button
+                        type="button"
+                        className={settingsOpen ? styles.activeAction : ''}
+                        onClick={toggleSettingsPanel}
+                        aria-expanded={settingsOpen}
+                    >
+                        <MobileIcon name="settings" />
+                        <span>设置</span>
+                    </button>
+                    <button
+                        type="button"
+                        className={isNightMode ? styles.activeAction : ''}
+                        onClick={onToggleNightMode}
+                        aria-pressed={isNightMode}
+                    >
+                        <MobileIcon name="night" />
+                        <span>夜间</span>
+                    </button>
+                </nav>
             </div>
 
-            <nav className={styles.bottomNav} aria-label="移动端阅读工具栏">
-                <button
-                    type="button"
-                    className={drawerOpen ? styles.activeAction : ''}
-                    onClick={() => {
-                        onTabChange('toc')
-                        setDrawerOpen((open) => !open)
-                    }}
-                    aria-expanded={drawerOpen}
-                >
-                    <MobileIcon name="toc" />
-                    <span>目录</span>
-                </button>
-                <button
-                    type="button"
-                    className={progressOpen ? styles.activeAction : ''}
-                    onClick={() => setProgressOpen((open) => !open)}
-                    aria-expanded={progressOpen}
-                >
-                    <span className={styles.progressIcon}>{progressPercent}%</span>
-                    <span>进度</span>
-                </button>
-                <button
-                    type="button"
-                    className={settingsOpen ? styles.activeAction : ''}
-                    onClick={toggleSettingsPanel}
-                    aria-expanded={settingsOpen}
-                >
-                    <MobileIcon name="settings" />
-                    <span>设置</span>
-                </button>
-                <button
-                    type="button"
-                    className={isNightMode ? styles.activeAction : ''}
-                    onClick={onToggleNightMode}
-                    aria-pressed={isNightMode}
-                >
-                    <MobileIcon name="night" />
-                    <span>夜间</span>
-                </button>
-            </nav>
+            {/* chrome 隐藏时的唤出提示：纯 CSS 动画播完自动淡出，不挂 JS 计时器 */}
+            <span className={styles.tapHint} aria-hidden="true">轻点正文唤出工具栏</span>
 
             {drawerOpen && (
                 <div className={styles.drawerLayer}>
