@@ -22,8 +22,11 @@ interface MobileShelfViewProps {
     readonly books: readonly BookMeta[]
     readonly progressMap: LibraryProgressMap
     readonly trashBookIdSet: ReadonlySet<string>
+    readonly favoriteBookIdSet: ReadonlySet<string>
     readonly groups: ReadonlyArray<{ id: string; name: string }>
     readonly groupBookMap: Record<string, string[]>
+    /** 进入书架时预选的 chip（首页快捷入口直达用）。只影响初值，后续切换仍是内部自治 */
+    readonly initialChip?: ShelfChip
     readonly onOpenBook: (id: string) => void
 }
 
@@ -31,18 +34,18 @@ export function MobileShelfView({
     books,
     progressMap,
     trashBookIdSet,
+    favoriteBookIdSet,
     groups,
     groupBookMap,
+    initialChip,
     onOpenBook,
 }: MobileShelfViewProps) {
     const chips = useMemo(() => buildShelfChips(groups), [groups])
-    // buildShelfChips 永远至少返回 [全部, 未读]，但 noUncheckedIndexedAccess 下 chips[0]
-    // 类型上可能 undefined，用字面量兜底而不是 !，保持类型诚实
-    const [activeChip, setActiveChip] = useState<ShelfChip>({ kind: 'all' })
+    const [activeChip, setActiveChip] = useState<ShelfChip>(initialChip ?? { kind: 'all' })
 
     const filteredBooks = useMemo(
-        () => filterShelfBooks(books, activeChip, progressMap, trashBookIdSet, groupBookMap),
-        [books, activeChip, progressMap, trashBookIdSet, groupBookMap],
+        () => filterShelfBooks(books, activeChip, progressMap, trashBookIdSet, groupBookMap, favoriteBookIdSet),
+        [books, activeChip, progressMap, trashBookIdSet, groupBookMap, favoriteBookIdSet],
     )
 
     // 分组数据异步加载，chips 数组会从 [全部, 未读] 补成 [全部, ...分组, 未读]
@@ -59,7 +62,9 @@ export function MobileShelfView({
     }, [chips, activeChip])
 
     const getEmptyText = (): string => {
+        if (activeChip.kind === 'trash') return '回收站是空的'
         if (books.length === 0) return '书库为空，请添加书籍'
+        if (activeChip.kind === 'fav') return '还没有收藏的书籍'
         if (activeChip.kind === 'unread') return '所有书籍都已阅读'
         if (activeChip.kind === 'group') return `分组「${activeChip.name}」中没有书籍`
         return '没有书籍'
@@ -79,7 +84,9 @@ export function MobileShelfView({
                 {chips.map((chip) => {
                     const label =
                         chip.kind === 'all' ? '全部'
+                        : chip.kind === 'fav' ? '收藏'
                         : chip.kind === 'unread' ? '未读'
+                        : chip.kind === 'trash' ? '回收站'
                         : chip.name
                     const key =
                         chip.kind === 'group' ? `group-${chip.groupId}` : chip.kind

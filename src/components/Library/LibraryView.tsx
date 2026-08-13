@@ -20,6 +20,7 @@ import { SettingsPanel } from './SettingsPanel'
 import { MobileLibraryChrome, type MobileLibraryDestination, type MobileLibraryTab } from './MobileLibraryChrome'
 import { MobileHomeView, type MobileHomeShortcut } from './mobileHome/MobileHomeView'
 import { MobileShelfView } from './mobileShelf/MobileShelfView'
+import type { ShelfChip } from './mobileShelf/mobileShelfData'
 import type { MobileSettingsPage } from './settingsPanel/mobileSettings'
 import styles from './LibraryView.module.css'
 
@@ -31,6 +32,9 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
     const [mobileSettingsPage, setMobileSettingsPage] = useState<MobileSettingsPage | null>(null)
     // 移动端一级 tab 叠加层：只在移动布局下参与渲染决策，桌面端完全无感（chrome 隐藏 + 内容分支有 isMobileLayout 闸）
     const [mobileTab, setMobileTab] = useState<MobileLibraryTab>('home')
+    // 书架"入口意图"信使：只决定进入书架时预选哪个 chip（首页快捷入口直达用），
+    // chip 的选中态仍在 MobileShelfView 内部自治，这里不是把它上提成第 5 个导航维度
+    const [shelfEntryChip, setShelfEntryChip] = useState<ShelfChip>({ kind: 'all' })
     const {
         keyword,
         setKeyword,
@@ -72,6 +76,7 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
     } = useLibraryMetaState({ activeNav })
 
     const trashBookIdSet = useMemo(() => new Set(trashBookIds), [trashBookIds])
+    const favoriteBookIdSet = useMemo(() => new Set(favoriteBookIds), [favoriteBookIds])
 
     const group = useGroupManager({
         books,
@@ -195,6 +200,8 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         }
         setShowSettings(false)
         if (tab === 'shelf') {
+            // 底栏直接点书架 = 无预选意图，回到"全部"
+            setShelfEntryChip({ kind: 'all' })
             setActiveNav('all')
             setActiveGroupId(null)
         } else if (tab === 'time') {
@@ -213,9 +220,12 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
         setShowSettings(false)
         setActiveGroupId(null)
         if (shortcut === 'fav' || shortcut === 'trash') {
+            // 直达书架对应 chip；activeNav 旧映射保留（桌面派生链 statusText 还依赖它）
+            setShelfEntryChip({ kind: shortcut })
             setActiveNav(shortcut)
             return
         }
+        setShelfEntryChip({ kind: 'all' })
         setActiveNav('all')
         if (shortcut === 'recentlyAdded') setSortMode('addedAt')
         if (shortcut === 'recentlyRead') setSortMode('lastRead')
@@ -297,11 +307,16 @@ export const LibraryView = ({ onOpenBook }: { onOpenBook: (id: string, jump?: { 
                                 // 书架 tab 不吃 gridItems（showMixedHome 时那是混合分组卡片的 homeItems），
                                 // 自建窄派生 + chips 内部自治，见 mobileShelfData 头注释
                                 <MobileShelfView
+                                    // key 随入口意图变化，重挂载取新 initialChip——
+                                    // 避免给组件加受控/非受控双模式
+                                    key={`shelf-${shelfEntryChip.kind}`}
                                     books={books}
                                     progressMap={progressMap}
                                     trashBookIdSet={trashBookIdSet}
+                                    favoriteBookIdSet={favoriteBookIdSet}
                                     groups={groups}
                                     groupBookMap={groupBookMap}
+                                    initialChip={shelfEntryChip}
                                     onOpenBook={(id) => onOpenBook(id)}
                                 />
                             ) : activeNav === 'stats' ? (
