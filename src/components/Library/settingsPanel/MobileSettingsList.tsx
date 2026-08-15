@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { SelectControl } from './SelectControl'
 import styles from './MobileSettingsList.module.css'
 
 /**
@@ -109,7 +110,7 @@ export function MobileStepperRow({
     )
 }
 
-/** Select 行：label 在左，值 + chevron 在右，整行可点 */
+/** Select 行：label 在左，值 + chevron 在右，整行可点（自绘下拉，见 SelectControl 的 why） */
 interface MobileSelectRowProps {
     label: string
     value: string
@@ -119,25 +120,14 @@ interface MobileSelectRowProps {
 }
 
 export function MobileSelectRow({ label, value, options, onChange, hint }: MobileSelectRowProps) {
-    const displayValue = options.find((o) => o.value === value)?.label ?? value
     return (
         <MobileSettingsRow label={label} hint={hint}>
-            <label className={styles.selectWrapper}>
-                <span className={styles.selectValue}>{displayValue}</span>
-                <svg className={styles.selectChevron} viewBox="0 0 12 12" aria-hidden="true">
-                    <path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <select
-                    className={styles.selectNative}
-                    aria-label={label}
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                >
-                    {options.map((opt) => (
-                        <option key={opt.value} value={opt.value} disabled={opt.disabled}>{opt.label}</option>
-                    ))}
-                </select>
-            </label>
+            <SelectControl
+                label={label}
+                value={value}
+                options={[...options]}
+                onChange={onChange}
+            />
         </MobileSettingsRow>
     )
 }

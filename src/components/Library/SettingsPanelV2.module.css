@@ -745,27 +745,121 @@
     align-items: center;
 }
 
-.selectControl select {
+/* 自绘下拉触发器：接管原 select 的视觉位（胶囊行 + chevron），点击开菜单浮层 */
+.selectTrigger {
     width: 100%;
     height: 100%;
     border: 1px solid var(--settings-border);
     border-radius: var(--ui-radius-control);
-    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 12px;
     background: var(--settings-control-bg);
     color: var(--settings-ink);
     cursor: pointer;
+    font: inherit;
     font-size: 14px;
     font-weight: 700;
-    padding: 0 34px 0 12px;
+    text-align: left;
+    transition: border-color 140ms ease, background-color 140ms ease;
 }
 
-.selectChevron {
-    position: absolute;
-    right: 12px;
+.selectTrigger:hover {
+    border-color: color-mix(in srgb, var(--settings-accent) 55%, var(--settings-border));
+}
+
+.selectControlOpen .selectTrigger {
+    border-color: var(--settings-accent);
+}
+
+.selectValue {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* chevron 在 trigger flex 流内（不再 absolute），跟文本走同一行基线 */
+.selectChevronInner {
+    flex: 0 0 auto;
     width: 12px;
     height: 12px;
-    pointer-events: none;
     opacity: 0.72;
+    transition: transform 160ms ease;
+}
+
+.selectControlOpen .selectChevronInner {
+    transform: rotate(180deg);
+}
+
+/* 菜单浮层：视口下方放不下时向上翻（JS 侧不量高，CSS 顶/底双向各给一条出路） */
+.selectMenu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 30;
+    max-height: min(320px, 60vh);
+    margin: 0;
+    padding: 6px;
+    overflow-y: auto;
+    list-style: none;
+    border: 1px solid var(--settings-border);
+    border-radius: calc(var(--ui-radius-control) + 2px);
+    background: var(--settings-panel-solid, var(--panel-bg));
+    box-shadow: var(--settings-shadow);
+}
+
+/* 上翻分支：JS 量过下方空间不足时置 data-flip，菜单相对根向上弹 */
+.selectControl[data-flip='true'] .selectMenu {
+    top: auto;
+    bottom: calc(100% + 6px);
+}
+
+.selectMenuItem {
+    width: 100%;
+    min-height: 36px;
+    border: 0;
+    border-radius: var(--ui-radius-control);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 10px;
+    background: transparent;
+    color: var(--settings-ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+}
+
+.selectMenuItem:hover:not(:disabled) {
+    background: var(--settings-control-hover);
+}
+
+.selectMenuItemActive {
+    color: var(--settings-accent);
+    font-weight: 700;
+}
+
+.selectMenuItem:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.selectMenuItemLabel {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.selectMenuItemCheck {
+    flex: 0 0 auto;
+    font-size: 13px;
 }
 
 .stepperControl {

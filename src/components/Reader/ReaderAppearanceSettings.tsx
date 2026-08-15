@@ -7,6 +7,7 @@ import { formatFontDownloadSize } from './readerFontCatalog'
 import { toStoredReaderFontFamily } from './readerFontService'
 import { useIsCoarsePointer } from '@/hooks/useIsCoarsePointer'
 import { ReaderSettingsSection } from './ReaderSettingsSection'
+import { SelectControl } from '../Library/settingsPanel/SelectControl'
 import styles from './ReaderView.module.css'
 
 const THEME_IDS = ['light', 'dark', 'sepia', 'green'] as const
@@ -119,18 +120,21 @@ export function ReaderAppearanceSettings({ readingModeSlot }: { readonly reading
                     {loadingFonts ? (
                         <div className={styles.fontLoading}>加载字体列表中...</div>
                     ) : (
-                        <select
-                            className={styles.fontSelect}
+                        <SelectControl
+                            label="系统字体"
                             value={selectedStoredFont ? '' : currentFontName}
-                            onChange={(event) => settings.updateSetting('fontFamily', toReaderFontFamily(event.target.value))}
-                        >
-                            {selectedStoredFont && <option value="">当前：{selectedStoredFont.displayName}</option>}
-                            {systemFonts.map((fontName) => (
-                                <option key={fontName} value={fontName} style={{ fontFamily: fontName === '系统默认' ? 'inherit' : fontName }}>
-                                    {fontName}
-                                </option>
-                            ))}
-                        </select>
+                            options={
+                                selectedStoredFont
+                                    ? [{ value: '', label: `当前：${selectedStoredFont.displayName}` }, ...systemFonts.map((fontName) => ({ value: fontName, label: fontName }))]
+                                    : systemFonts.map((fontName) => ({ value: fontName, label: fontName }))
+                            }
+                            renderOption={(option) => (
+                                <span style={{ fontFamily: option.value === '' || option.label === '系统默认' ? 'inherit' : `"${option.value}"` }}>
+                                    {option.label}
+                                </span>
+                            )}
+                            onChange={(value) => settings.updateSetting('fontFamily', toReaderFontFamily(value))}
+                        />
                     )}
                 </div>
 

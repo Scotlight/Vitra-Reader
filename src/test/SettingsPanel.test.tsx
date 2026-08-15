@@ -152,7 +152,12 @@ describe('SettingsPanel', () => {
         fireEvent.click(view.getByRole('button', { name: '透明度减少' }))
         expect(settingsMocks.updateSetting).toHaveBeenCalledWith('uiOpacity', 0.8)
 
-        fireEvent.change(view.getByLabelText('界面材质'), { target: { value: 'acrylic' } })
+        // 自绘下拉：先开菜单再点选项文本（文本在内部 button 里，直接点 li
+        // 不会冒泡到 button 的 onClick——li 是 button 的父级不是祖先路径）
+        const materialTrigger = view.getAllByRole('button', { name: '界面材质' })[0]
+        fireEvent.click(materialTrigger!)
+        const materialMenu = view.getByRole('listbox', { name: '界面材质' })
+        fireEvent.click(within(materialMenu).getByText(/Acrylic/))
         expect(settingsMocks.updateSetting).toHaveBeenCalledWith('uiMaterial', 'acrylic')
     })
 

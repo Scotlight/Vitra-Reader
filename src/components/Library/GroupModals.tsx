@@ -1,4 +1,5 @@
 import type { GroupItem } from '@/hooks/groupManagerState'
+import { SelectControl } from './settingsPanel/SelectControl'
 import styles from './LibraryView.module.css'
 
 // ─── 新建分组弹窗 ───────────────────────────────────
@@ -81,19 +82,21 @@ export const ManageGroupModal = ({
                 <div className={styles.manageMovePanel}>
                     <label className={styles.settingRow}>
                         <span>来源分组</span>
-                        <select value={manageSourceGroupId} onChange={(event) => setManageSourceGroupId(event.target.value)}>
-                            {groups.map((group) => (
-                                <option key={group.id} value={group.id}>{group.name}</option>
-                            ))}
-                        </select>
+                        <SelectControl
+                            label="来源分组"
+                            value={manageSourceGroupId}
+                            options={groups.map((group) => ({ value: group.id, label: group.name }))}
+                            onChange={setManageSourceGroupId}
+                        />
                     </label>
                     <label className={styles.settingRow}>
                         <span>目标分组</span>
-                        <select value={manageTargetGroupId} onChange={(event) => setManageTargetGroupId(event.target.value)}>
-                            {groups.map((group) => (
-                                <option key={group.id} value={group.id}>{group.name}</option>
-                            ))}
-                        </select>
+                        <SelectControl
+                            label="目标分组"
+                            value={manageTargetGroupId}
+                            options={groups.map((group) => ({ value: group.id, label: group.name }))}
+                            onChange={setManageTargetGroupId}
+                        />
                     </label>
                     <div className={styles.rowActions}>
                         <button className={styles.syncPrimaryBtn} onClick={() => onMoveBooks(manageSourceGroupId, manageTargetGroupId)}>

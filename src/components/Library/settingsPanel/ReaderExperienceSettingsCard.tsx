@@ -66,6 +66,11 @@ export function ReaderExperienceSettingsCard({
                             label="字体"
                             value={selectedFontValue}
                             options={fontOptions}
+                            renderOption={(option) => (
+                                <span style={{ fontFamily: option.value === '系统默认' ? 'inherit' : `"${option.value}"` }}>
+                                    {option.label}
+                                </span>
+                            )}
                             onChange={(value) => {
                                 settings.updateSetting(
                                     'fontFamily',
