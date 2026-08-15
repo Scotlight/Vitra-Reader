@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-    formatRealisticFlipTransform,
     formatSlideStartTransform,
     resolvePageTurnDirection,
-    resolveRealisticFlipOrigin,
 } from '@/components/Reader/paginatedReader/paginatedPageTurnAnimation'
 
 describe('paginatedPageTurnAnimation', () => {
@@ -21,14 +19,8 @@ describe('paginatedPageTurnAnimation', () => {
         expect(formatSlideStartTransform(2, 600)).toBe(formatSlideStartTransform(2, 600))
     })
 
-    it('realistic 翻转帧合成分页位移与旋转角', () => {
-        expect(formatRealisticFlipTransform(2, 600, 0)).toBe('translateX(-1200px) rotateY(0deg)')
-        expect(formatRealisticFlipTransform(2, 600, -88)).toBe('translateX(-1200px) rotateY(-88deg)')
-        expect(formatRealisticFlipTransform(0, 600, -88)).toBe('translateX(0px) rotateY(-88deg)')
-    })
-
-    it('realistic 旋转轴是视口左缘在容器本地坐标的 x', () => {
-        expect(resolveRealisticFlipOrigin(0, 600)).toBe('0px 50%')
-        expect(resolveRealisticFlipOrigin(3, 600)).toBe('1800px 50%')
+    it('realistic 翻页时长为原型规格的整页翻转周期', async () => {
+        const { PAGE_TURN_REALISTIC_MS } = await import('@/components/Reader/paginatedReader/paginatedPageTurnAnimation')
+        expect(PAGE_TURN_REALISTIC_MS).toBe(520)
     })
 })

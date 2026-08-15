@@ -3,12 +3,10 @@ import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'reac
 import type { SpineItemInfo } from '@/engine/core/contentProvider';
 import type { PageBoundary } from '@/engine/types/pagination';
 import { shouldSkipPaginatedBlankCandidate } from './paginatedBlankDetection';
+import { playRealisticFlip } from './paginatedFlipLayer';
 import {
-    formatRealisticFlipTransform,
     formatSlideStartTransform,
     PAGE_TURN_FADE_MS,
-    PAGE_TURN_REALISTIC_MS,
-    resolveRealisticFlipOrigin,
     type PaginatedPageTurnAnimation,
 } from './paginatedPageTurnAnimation';
 
@@ -55,15 +53,14 @@ export function usePaginatedNavigation(options: UsePaginatedNavigationOptions) {
     const slideFrameRef = useRef<number | null>(null);
     const fadeTimerRef = useRef<number | null>(null);
     const fadeFrameRef = useRef<number | null>(null);
-    const realisticTimerRef = useRef<number | null>(null);
-    const realisticFrameRef = useRef<number | null>(null);
+    // 仿真翻页层的拆除句柄：新翻页开始或组件卸载时必须拆，防止层悬挂遮内容
+    const realisticFlipDisposeRef = useRef<(() => void) | null>(null);
 
     useEffect(() => () => {
         if (slideFrameRef.current !== null) window.cancelAnimationFrame(slideFrameRef.current);
         if (fadeTimerRef.current !== null) window.clearTimeout(fadeTimerRef.current);
         if (fadeFrameRef.current !== null) window.cancelAnimationFrame(fadeFrameRef.current);
-        if (realisticTimerRef.current !== null) window.clearTimeout(realisticTimerRef.current);
-        if (realisticFrameRef.current !== null) window.cancelAnimationFrame(realisticFrameRef.current);
+        realisticFlipDisposeRef.current?.();
     }, []);
 
     const isPageLikelyBlank = useCallback((pageIndex: number): boolean => {
@@ -143,54 +140,28 @@ export function usePaginatedNavigation(options: UsePaginatedNavigationOptions) {
         }
 
         if (animation === 'realistic') {
-            // 仿真半翻提交（详见 PAGE_TURN_REALISTIC_MS 注释）：
-            // 前进 = 旧页绕视口左缘掀到 -88° → 提交新页平铺（掀过背面的瞬间换页）；
-            // 后退 = 先提交新页 → 预置 -88° → 盖回 0°。
-            // -88° 封顶：越过 -90° 会露出内容镜像背面。
-            if (realisticTimerRef.current !== null) window.clearTimeout(realisticTimerRef.current);
-            if (realisticFrameRef.current !== null) window.cancelAnimationFrame(realisticFrameRef.current);
+            // 双面卡片翻页（paginatedFlipLayer 头注释有完整架构）：
+            // 同步先挂"旧页 0° 遮罩"（视觉与翻页前逐像素一致），再提交换页 —— 同一
+            // 任务内无绘制机会不会闪新页；掀页/盖页过程由克隆纸层完成，真容器无动画
+            if (!container || !viewport) return;
             container.style.opacity = '1';
             const width = viewport.clientWidth;
-
-            if (delta > 0) {
-                container.style.transformOrigin = resolveRealisticFlipOrigin(fromPage, width);
-                container.style.transition = 'none';
-                container.style.transform = formatRealisticFlipTransform(fromPage, width, 0);
-                realisticFrameRef.current = window.requestAnimationFrame(() => {
-                    realisticFrameRef.current = null;
-                    container.style.transition = `transform ${PAGE_TURN_REALISTIC_MS}ms cubic-bezier(0.3, 0.9, 0.25, 1)`;
-                    container.style.transform = formatRealisticFlipTransform(fromPage, width, -88);
-                });
-                realisticTimerRef.current = window.setTimeout(() => {
-                    realisticTimerRef.current = null;
-                    // 提交换页：React 渲染的 inline transform（纯 translateX）会覆盖掉旋转，
-                    // 新页自然平铺，无需手动回正
-                    container.style.transition = 'none';
-                    container.style.transformOrigin = '';
-                    setDisplayPage(page);
-                }, PAGE_TURN_REALISTIC_MS);
-                return;
-            }
-
-            // 后退：setDisplayPage 的提交发生在本轮任务的 React flush，首个 rAF 在
-            // 提交后、绘制前执行——预置 -88° 不会闪一帧平铺新页
-            setDisplayPage(page);
-            realisticFrameRef.current = window.requestAnimationFrame(() => {
-                realisticFrameRef.current = null;
-                container.style.transformOrigin = resolveRealisticFlipOrigin(page, width);
-                container.style.transition = 'none';
-                container.style.transform = formatRealisticFlipTransform(page, width, -88);
-                realisticFrameRef.current = window.requestAnimationFrame(() => {
-                    realisticFrameRef.current = null;
-                    container.style.transition = `transform ${PAGE_TURN_REALISTIC_MS}ms cubic-bezier(0.3, 0.9, 0.25, 1)`;
-                    container.style.transform = formatRealisticFlipTransform(page, width, 0);
-                });
+            realisticFlipDisposeRef.current?.();
+            realisticFlipDisposeRef.current = playRealisticFlip({
+                container,
+                viewport,
+                fromPage,
+                toPage: page,
+                pageWidth: width,
             });
-            realisticTimerRef.current = window.setTimeout(() => {
-                realisticTimerRef.current = null;
-                container.style.transition = '';
-                container.style.transformOrigin = '';
-            }, PAGE_TURN_REALISTIC_MS + 50);
+            // 前进：遮罩层旧页掀走的过程中容器换页即可；后退：rAF 后容器再换页
+            // （新页纸在越过 -90° 前必须就位，flipLayer 内已对齐该时序）
+            if (delta > 0) {
+                container.style.transform = `translateX(${-(fromPage + 1) * width}px)`;
+                window.setTimeout(() => setDisplayPage(page), 0);
+            } else {
+                setDisplayPage(page);
+            }
             return;
         }
 
