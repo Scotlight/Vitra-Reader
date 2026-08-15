@@ -1,9 +1,10 @@
 import type { CSSProperties, ReactNode } from 'react'
 import {
     MobileColorRow,
-    MobileSelectRow,
+    MobileSegmentedRow,
     MobileSettingsGroup,
     MobileSettingsRow,
+    MobileSelectRow,
     MobileStepperRow,
     MobileToggleRow,
 } from './MobileSettingsList'
@@ -256,7 +257,7 @@ export function MobileReaderSettingsSubpage({
                             checked={settings.paragraphIndentEnabled}
                             onChange={(checked) => settings.updateSetting('paragraphIndentEnabled', checked)}
                         />
-                        <MobileSelectRow
+                        <MobileSegmentedRow
                             label="文字对齐"
                             value={settings.textAlign}
                             options={TEXT_ALIGN_OPTIONS}
@@ -327,7 +328,7 @@ export function MobileReaderSettingsSubpage({
                     </MobileSettingsGroup>
 
                     <MobileSettingsGroup label="翻页动画">
-                        <MobileSelectRow
+                        <MobileSegmentedRow
                             label="动画效果"
                             value={settings.pageTurnAnimation}
                             options={PAGE_TURN_ANIMATION_OPTIONS.map((option) => ({

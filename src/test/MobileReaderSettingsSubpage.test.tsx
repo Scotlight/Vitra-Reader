@@ -103,7 +103,7 @@ describe('MobileReaderSettingsSubpage', () => {
         expect(settings.updateSetting).toHaveBeenCalledWith('themeId', 'light')
     })
 
-    it('阅读方式页：翻页模式 3 个可视化 radio + 翻页动画 select', () => {
+    it('阅读方式页：翻页模式 3 个可视化 radio + 翻页动画分段控件', () => {
         const settings = createSettingsMock()
         render(
             <MobileReaderSettingsSubpage
@@ -127,9 +127,25 @@ describe('MobileReaderSettingsSubpage', () => {
         fireEvent.click(scrollRadio)
         expect(settings.updateSetting).toHaveBeenCalledWith('pageTurnMode', 'scrolled-continuous')
 
-        // 翻页动画 select 还在
-        const animationSelect = screen.getByLabelText('动画效果') as HTMLSelectElement
-        fireEvent.change(animationSelect, { target: { value: 'fade' } })
+        // 翻页动画是分段控件：点"渐变"直接写入，不再有原生 select
+        const fadeButton = screen.getByRole('radio', { name: '渐变' })
+        fireEvent.click(fadeButton)
         expect(settings.updateSetting).toHaveBeenCalledWith('pageTurnAnimation', 'fade')
+    })
+
+    it('阅读方式页：双页模式下"仿真"动画置灰不可选', () => {
+        const settings = createSettingsMock({ pageTurnMode: 'paginated-double' })
+        render(
+            <MobileReaderSettingsSubpage
+                page="readingMode"
+                settings={settings}
+                systemFonts={[]}
+                loadingFonts={false}
+                tempTextColor={null}
+                onTempTextColorChange={() => {}}
+            />,
+        )
+        const realisticButton = screen.getByRole('radio', { name: '仿真' }) as HTMLButtonElement
+        expect(realisticButton.disabled).toBe(true)
     })
 })

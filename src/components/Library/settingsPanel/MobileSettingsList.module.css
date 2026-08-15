@@ -246,3 +246,43 @@
 .colorReset:active {
     background: color-mix(in srgb, var(--accent-color, #269654) 10%, transparent);
 }
+
+/* ── 分段控件（替代原生 select 的短选项集） ─────────────────────── */
+
+.segmented {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 4px;
+    padding: 3px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--settings-ink, #1f2937) 7%, transparent);
+}
+
+.segmentedItem {
+    min-height: 30px;
+    border: 0;
+    border-radius: 8px;
+    padding: 0 12px;
+    color: var(--settings-muted, #6b7280);
+    background: transparent;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background-color 160ms ease, color 160ms ease, transform 120ms ease;
+}
+
+.segmentedItem:active {
+    transform: scale(0.96);
+}
+
+.segmentedItemActive {
+    color: var(--settings-ink, #1f2937);
+    background: var(--panel-bg, #fff);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    font-weight: 600;
+}
+
+.segmentedItem:disabled {
+    opacity: 0.35;
+}

@@ -196,3 +196,41 @@ export function MobileColorRow({ label, value, onChange, onReset, hint }: Mobile
         </MobileSettingsRow>
     )
 }
+
+/**
+ * 分段控件行：短选项集（≤4 项）直接铺成胶囊组，替代原生 select——
+ * Electron/Windows 下原生下拉弹的是系统方框列表，与 iOS 风格设置列严重割裂。
+ * 长列表（字体那种几十项）不适用，走推入式子页。
+ */
+interface MobileSegmentedRowProps {
+    label: string
+    value: string
+    options: ReadonlyArray<{ value: string; label: string; disabled?: boolean }>
+    onChange: (value: string) => void
+    hint?: string
+}
+
+export function MobileSegmentedRow({ label, value, options, onChange, hint }: MobileSegmentedRowProps) {
+    return (
+        <MobileSettingsRow label={label} hint={hint}>
+            <div className={styles.segmented} role="radiogroup" aria-label={label}>
+                {options.map((opt) => {
+                    const active = opt.value === value
+                    return (
+                        <button
+                            key={opt.value}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            disabled={opt.disabled}
+                            className={`${styles.segmentedItem} ${active ? styles.segmentedItemActive : ''}`}
+                            onClick={() => onChange(opt.value)}
+                        >
+                            {opt.label}
+                        </button>
+                    )
+                })}
+            </div>
+        </MobileSettingsRow>
+    )
+}
