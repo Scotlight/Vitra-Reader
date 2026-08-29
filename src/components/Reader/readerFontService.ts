@@ -49,7 +49,9 @@ async function assertStorageCapacity(sizeBytes: number): Promise<void> {
 
 async function calculateSha256(data: ArrayBuffer): Promise<string | null> {
     if (!crypto.subtle) return null
-    const digest = await crypto.subtle.digest('SHA-256', data)
+    // webcrypto 对 buffer 做内部品牌校验：跨 VM 上下文（如 jsdom 测试环境）来的
+    // ArrayBuffer 能过 instanceof 却过不了该校验；包一层本 realm 的 Uint8Array 视图（零拷贝）再哈希。
+    const digest = await crypto.subtle.digest('SHA-256', new Uint8Array(data))
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
