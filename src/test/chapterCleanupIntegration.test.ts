@@ -32,7 +32,7 @@ function createBook(format: EngineBookFormat, html: string): ParsedBook {
         resolveHref: (href) => (href === 'section-0' ? { index: 0 } : null),
         getCover: async () => null,
         destroy: () => {},
-        search: () => [],
+        search: async () => [],
     }
 }
 

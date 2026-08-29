@@ -45,7 +45,7 @@ export class DocxParser extends BaseParser {
       direction: 'auto',
       resolveHref: (href: string) => this.resolveHref(href, sections),
       getCover: async () => null,
-      search: (keyword: string): BookSearchResult[] => searchBookIndex(bookId, keyword),
+      search: async (keyword: string): Promise<BookSearchResult[]> => searchBookIndex(bookId, keyword),
       destroy: () => {
         clearBookIndex(bookId);
         destroy();

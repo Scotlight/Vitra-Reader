@@ -69,5 +69,5 @@ export interface ParsedBook {
   readonly isAssetUrlAvailable?: (url: string) => boolean;
   readonly releaseAssetSession?: () => void;
   readonly destroy: () => void;
-  readonly search: (keyword: string) => BookSearchResult[];
+  readonly search: (keyword: string) => Promise<BookSearchResult[]>;
 }

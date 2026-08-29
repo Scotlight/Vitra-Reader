@@ -90,7 +90,7 @@ export class ProviderBackedParser extends BaseParser {
     const spineItems = provider.getSpineItems();
     const toc = buildTocWithFallback(provider.getToc(), spineItems);
     const bookId = `parsed-${this.filename}`;
-    const { sections, releaseAll } = createProviderSections({
+    const { sections, releaseAll, ensureSearchIndexed } = createProviderSections({
       spineItems,
       provider,
       bookId,
@@ -105,6 +105,7 @@ export class ProviderBackedParser extends BaseParser {
       provider,
       coverBlob,
       releaseSections: releaseAll,
+      ensureSearchIndexed,
       bookId,
     });
   }
@@ -214,6 +215,7 @@ interface CreateBookObjectInput {
   readonly provider: ContentProvider;
   readonly coverBlob: Blob | null;
   readonly releaseSections: () => void;
+  readonly ensureSearchIndexed: () => Promise<void>;
   readonly bookId: string;
 }
 
@@ -236,7 +238,10 @@ function createBookObject(input: CreateBookObjectInput): ParsedBook {
     getCover: async () => input.coverBlob,
     isAssetUrlAvailable,
     releaseAssetSession,
-    search: (keyword: string): BookSearchResult[] => searchBookIndex(input.bookId, keyword),
+    search: async (keyword: string): Promise<BookSearchResult[]> => {
+      await input.ensureSearchIndexed();
+      return searchBookIndex(input.bookId, keyword);
+    },
     destroy: () => {
       input.releaseSections();
       clearBookIndex(input.bookId);

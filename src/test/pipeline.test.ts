@@ -64,7 +64,7 @@ function createBook(sections: readonly BookSection[]): ParsedBook {
     resolveHref: () => null,
     getCover: async () => null,
     destroy: () => undefined,
-    search: () => [],
+    search: async () => [],
   }
 }
 

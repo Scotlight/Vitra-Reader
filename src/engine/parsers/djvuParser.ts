@@ -63,7 +63,7 @@ export class DjvuParser extends BaseParser {
         return null;
       },
       getCover: async () => null,
-      search: () => [],
+      search: async () => [],
       destroy,
     };
   }

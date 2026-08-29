@@ -71,7 +71,7 @@ abstract class ComicParserBase extends BaseParser {
       direction,
       resolveHref: (href: string) => this.resolveHref(href, imageEntries),
       getCover: async () => coverBlob,
-      search: () => [],
+      search: async () => [],
       destroy: () => {
         destroy();
         loader.destroy();

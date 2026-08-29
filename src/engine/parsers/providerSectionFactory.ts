@@ -2,7 +2,7 @@ import type {
     ContentProvider,
     SpineItemInfo,
 } from '../core/contentProvider'
-import { upsertChapterIndex } from '../cache/searchIndexCache'
+import { upsertChapterIndex, hasChapterIndex } from '../cache/searchIndexCache'
 import type {
     EngineBookFormat,
     BookSection,
@@ -12,6 +12,8 @@ import { cleanChapterHtmlForFormat } from '../render/chapterHtmlCleanup'
 export interface ProviderSectionFactoryResult {
     readonly sections: readonly BookSection[]
     readonly releaseAll: () => void
+    /** 整书搜索前置：把尚未被阅读触达的章节补进全文索引 */
+    readonly ensureSearchIndexed: () => Promise<void>
 }
 
 interface ProviderSectionCaches {
@@ -54,8 +56,20 @@ export function createProviderSections(
         releaseSection,
     }))
 
+    // 搜索索引平时只随章节加载增量建立；搜索时未读过的章节必须临时加载补索引，
+    // 补完即释放，内存回到搜索前水平（已在读的章节有索引，不会被动到）。
+    const ensureSearchIndexed = async (): Promise<void> => {
+        for (const spine of input.spineItems) {
+            if (hasChapterIndex(input.bookId, spine.index)) continue
+            const wasLoaded = caches.html.has(spine.index)
+            await loadProviderSection(spine, input, caches)
+            if (!wasLoaded) releaseSection(spine.index)
+        }
+    }
+
     return {
         sections,
+        ensureSearchIndexed,
         releaseAll: () => {
             Array.from(caches.html.keys()).forEach((spineIndex) => releaseSection(spineIndex))
         },
