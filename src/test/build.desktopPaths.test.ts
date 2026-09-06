@@ -1,9 +1,9 @@
 // @vitest-environment node
-import path from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { loadConfigFromFile } from 'vite'
 
-const configFile = path.resolve('vite.config.ts')
+// Vite 会按 cwd 解析配置路径；避免 Node 导入被 Electron renderer 插件改写。
+const configFile = 'vite.config.ts'
 const assets = ['assets/index.js', 'assets/react-vendor.js', 'assets/index.css']
 
 describe('desktop build asset paths', () => {
