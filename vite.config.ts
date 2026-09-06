@@ -31,7 +31,8 @@ function includesAnyPackage(id: string, packages: readonly string[]): boolean {
 }
 
 export default defineConfig(({ mode }) => ({
-    base: mode === 'web' ? '/Vitra-Reader/' : '/',
+    // 桌面通过 file:// 加载，绝对资源路径会落到磁盘根目录而非安装目录。
+    base: mode === 'web' ? '/Vitra-Reader/' : './',
     test: {
         environment: 'jsdom',
         globals: true,
